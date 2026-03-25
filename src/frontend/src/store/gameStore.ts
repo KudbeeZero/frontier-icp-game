@@ -181,19 +181,55 @@ function generateCombatLog(): CombatEntry[] {
 
 const ALL_PLOTS = generatePlots();
 
+// Standalone backend call — uses window.__backendActor if available, falls back to mock
+export async function launchMissileBackend(
+  fromPlotId: number,
+  toPlotId: number,
+  weaponType: string,
+): Promise<{ success: boolean; error?: string }> {
+  const actor = (window as any).__backendActor;
+  if (!actor) {
+    // Mock success for local/draft mode
+    return { success: true };
+  }
+  try {
+    const normalizedWeapon = weaponType.replace(/ /g, "_").toUpperCase();
+    const result = await actor.launchMissile(
+      BigInt(fromPlotId),
+      BigInt(toPlotId),
+      normalizedWeapon,
+    );
+    if (result.__kind__ === "err") {
+      return { success: false, error: result.err };
+    }
+    return { success: true };
+  } catch (e: any) {
+    return { success: false, error: e?.message ?? "Unknown error" };
+  }
+}
+
 interface GameState {
   plots: PlotData[];
   player: PlayerData;
   selectedPlotId: number | null;
+  activeWeapon: string | null;
+  targetPlotId: number | null;
   combatLog: CombatEntry[];
   leaderboard: LeaderEntry[];
   orbitalEvent: OrbitalEvent | null;
 
   selectPlot: (id: number | null) => void;
+  setActiveWeapon: (weapon: string) => void;
+  setTargetPlotId: (id: number | null) => void;
   purchasePlot: (id: number) => void;
   claimResources: (id: number) => void;
   attack: (fromId: number, toId: number) => void;
   setAuth: (principal: string | null) => void;
+  launchMissile: (
+    fromPlotId: number,
+    toPlotId: number,
+    weaponType: string,
+  ) => Promise<{ success: boolean; error?: string }>;
 }
 
 export const useGameStore = create<GameState>((set, get) => ({
@@ -210,6 +246,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     commanderDef: 0,
   },
   selectedPlotId: null,
+  activeWeapon: null,
+  targetPlotId: null,
   combatLog: generateCombatLog(),
   leaderboard: generateLeaderboard(),
   orbitalEvent: {
@@ -219,6 +257,8 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   selectPlot: (id) => set({ selectedPlotId: id }),
+  setActiveWeapon: (weapon) => set({ activeWeapon: weapon }),
+  setTargetPlotId: (id) => set({ targetPlotId: id }),
 
   purchasePlot: (id) =>
     set((state) => {
@@ -295,9 +335,6 @@ export const useGameStore = create<GameState>((set, get) => ({
         ? {
             ...s.player,
             plotsOwned: [...s.player.plotsOwned, toId],
-            combatVictories:
-              (s.player as PlayerData & { combatVictories?: number })
-                .combatVictories ?? 0,
           }
         : s.player,
     }));
@@ -307,4 +344,23 @@ export const useGameStore = create<GameState>((set, get) => ({
     set((state) => ({
       player: { ...state.player, principal },
     })),
+
+  launchMissile: async (fromPlotId, toPlotId, weaponType) => {
+    const result = await launchMissileBackend(fromPlotId, toPlotId, weaponType);
+    if (result.success) {
+      const state = get();
+      const to = state.plots.find((p) => p.id === toPlotId);
+      const entry: CombatEntry = {
+        id: Date.now(),
+        timestamp: Date.now(),
+        attacker: state.player.principal ?? "You",
+        defender: to?.owner ?? "Unclaimed",
+        fromPlot: fromPlotId,
+        toPlot: toPlotId,
+        success: true,
+      };
+      set((s) => ({ combatLog: [entry, ...s.combatLog.slice(0, 49)] }));
+    }
+    return result;
+  },
 }));

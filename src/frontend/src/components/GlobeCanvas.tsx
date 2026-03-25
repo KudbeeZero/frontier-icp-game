@@ -110,6 +110,7 @@ function EarthSphere() {
   const globeRef = useRef<THREE.Group>(null);
   const cloudsRef = useRef<THREE.Mesh>(null);
   const selectPlot = useGameStore((s) => s.selectPlot);
+  const setTargetPlotId = useGameStore((s) => s.setTargetPlotId);
   const plots = useGameStore((s) => s.plots);
 
   const atmosphereUniforms = useMemo(
@@ -122,7 +123,6 @@ function EarthSphere() {
     if (cloudsRef.current) cloudsRef.current.rotation.y += 0.0003;
   });
 
-  // biome-ignore lint/a11y/useKeyWithClickEvents: 3D canvas object
   const handleClick = (e: any) => {
     e.stopPropagation();
     const point: THREE.Vector3 = e.point;
@@ -142,6 +142,7 @@ function EarthSphere() {
       }
     }
     selectPlot(nearest);
+    setTargetPlotId(nearest);
   };
 
   return (
@@ -200,16 +201,30 @@ function Starfield() {
 interface MissileProps {
   active: boolean;
   onComplete: () => void;
+  fromLat: number;
+  fromLng: number;
+  toLat: number;
+  toLng: number;
 }
 
-function MissileAnimation({ active, onComplete }: MissileProps) {
+function MissileAnimation({
+  active,
+  onComplete,
+  fromLat,
+  fromLng,
+  toLat,
+  toLng,
+}: MissileProps) {
   const progressRef = useRef(0);
   const headRef = useRef<THREE.Mesh>(null);
   const flashRef = useRef<THREE.Mesh>(null);
   const completedRef = useRef(false);
 
-  const srcPlot = useMemo(() => latLngToXYZ(40.7, -74, 1.0), []);
-  const dstPlot = useMemo(() => latLngToXYZ(51.5, 0, 1.0), []);
+  const srcPlot = useMemo(
+    () => latLngToXYZ(fromLat, fromLng, 1.0),
+    [fromLat, fromLng],
+  );
+  const dstPlot = useMemo(() => latLngToXYZ(toLat, toLng, 1.0), [toLat, toLng]);
 
   useFrame((_, delta) => {
     if (!active) {
@@ -275,12 +290,16 @@ interface SceneProps {
   controlsRef: React.MutableRefObject<any>;
   missileActive: boolean;
   onMissileComplete: () => void;
+  missileFrom: { lat: number; lng: number };
+  missileTo: { lat: number; lng: number };
 }
 
 function GlobeScene({
   controlsRef,
   missileActive,
   onMissileComplete,
+  missileFrom,
+  missileTo,
 }: SceneProps) {
   return (
     <>
@@ -307,7 +326,14 @@ function GlobeScene({
         autoRotateSpeed={0.2}
       />
 
-      <MissileAnimation active={missileActive} onComplete={onMissileComplete} />
+      <MissileAnimation
+        active={missileActive}
+        onComplete={onMissileComplete}
+        fromLat={missileFrom.lat}
+        fromLng={missileFrom.lng}
+        toLat={missileTo.lat}
+        toLng={missileTo.lng}
+      />
     </>
   );
 }
@@ -316,12 +342,16 @@ interface GlobeCanvasProps {
   controlsRef: React.MutableRefObject<any>;
   missileActive?: boolean;
   onMissileComplete?: () => void;
+  missileFrom?: { lat: number; lng: number };
+  missileTo?: { lat: number; lng: number };
 }
 
 export default function GlobeCanvas({
   controlsRef,
   missileActive = false,
   onMissileComplete = () => {},
+  missileFrom = { lat: 40.7, lng: -74 },
+  missileTo = { lat: 51.5, lng: 0 },
 }: GlobeCanvasProps) {
   return (
     <Canvas
@@ -333,6 +363,8 @@ export default function GlobeCanvas({
         controlsRef={controlsRef}
         missileActive={missileActive}
         onMissileComplete={onMissileComplete}
+        missileFrom={missileFrom}
+        missileTo={missileTo}
       />
     </Canvas>
   );

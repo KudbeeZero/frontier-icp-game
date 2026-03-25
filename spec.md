@@ -1,46 +1,34 @@
 # Frontier: Missile Horizon
 
 ## Current State
-The project has a basic Three.js globe (raw canvas, no textures) with a dark sci-fi HUD using a top Navbar and left/right sidebars. The globe renders colored hex cylinders over a plain dark sphere with a simple atmospheric glow. No mobile layout. No bottom navigation. No FIRE button or joystick.
+- `gameStore.ts`: Has `selectedPlotId` but no `activeWeapon` or `targetPlotId`. The `attack()` method is fully local/mock — no backend call.
+- `Play.tsx`: `handleFire` only sets local `missileActive=true`. `selectedWeapon` is local component state (not in store). No error banners. LOCK label is static.
+- `GlobeCanvas.tsx`: `MissileAnimation` uses hardcoded NYC→London coords. Hex grid is all-cyan — no ownership coloring.
+- `backend.d.ts`: Only exposes `getAdjacentPlots` and `purchasePlot`. No `launchMissile` typed.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Photorealistic Earth globe: day texture map (continents/oceans), specular map, cloud layer (animated rotation), blue Fresnel atmospheric rim shader, star field + faint nebula background
-- Hex grid wireframe overlay: neon-cyan glowing lines always visible, thickens and shows ownership color on zoom-in
-- Full mobile-first HUD overlay:
-  - Left sliding panel: scrollable weapon/missile selection cards (icon, name, quantity, EQUIP button)
-  - Right panel: Quick Inventory grid of missile/drone icons
-  - Bottom navigation bar: 7 icons — Resources, Inventory, Build, Map, Combat, Shop/Parts, Settings (glowing cyan/blue, active tab highlighted), each tapping slides up a bottom sheet panel covering 40-60% of screen with globe dimmed behind
-  - Central area: large circular red/gold FIRE button with "TARGET IN FORMATION" and "LOCK" labels
-  - Left virtual joystick for globe orbit control
-  - Right circular control buttons (Scope, Devices, Radar)
-  - Top bar: mini-map thumbnail + "QUICK INVENTORY" label
-- App.tsx: default route renders Play directly (no splash/landing screen)
-- Missile launch animation: ballistic arc with contrail particle trail and explosion flash at impact
+- `activeWeapon: string | null` and `targetPlotId: number | null` to gameStore state
+- `setActiveWeapon(weapon: string)` and `setTargetPlotId(id: number | null)` actions in gameStore
+- `launchMissile(fromPlotId: number, toPlotId: number, weaponType: string)` async action in gameStore that calls backend (falls back to mock if backend unavailable)
+- `launchMissile` method signature in `backend.d.ts`
+- Error banner state in Play.tsx (`NO SILO`, `ON COOLDOWN`, generic error) — shows for 3s then auto-dismisses
+- LOCK label turns yellow when targetPlotId is set, dim when not
+- "TARGET IN FORMATION" text pulses when target is locked
 
 ### Modify
-- GlobeCanvas.tsx: completely rewrite using React Three Fiber + @react-three/drei for texture loading, atmosphere shader, cloud mesh, and hex wireframe grid
-- Play.tsx: restructure layout for horizontal mobile, integrate new HUD components
-- App.tsx: set "/" route to Play component directly
-- index.css: add touch-action none on canvas, prevent scroll bounce
+- `Play.tsx` EQUIP button: calls `setActiveWeapon(weapon.name)` in store instead of local state
+- `Play.tsx` FIRE button (`handleFire`): reads `activeWeapon` + `targetPlotId` from store, calls `store.launchMissile`, on success triggers missile animation with real plot coords
+- `GlobeCanvas.tsx` `MissileAnimation`: accept `fromLat/fromLng/toLat/toLng` as props instead of hardcoded values
+- `GlobeCanvas.tsx` globe click: calls `store.setTargetPlotId(plotId)` in addition to `store.selectPlot(plotId)`
+- `Play.tsx`: pass real from/to coords to `GlobeCanvas` when firing (derive from plot data using plotId → lat/lng)
 
 ### Remove
-- Old Navbar.tsx top nav (replaced by top bar in HUD)
-- Old left/right sidebar layout in Play.tsx
-- Landing page as default route
+- Hardcoded NYC/London coordinates from `MissileAnimation`
 
 ## Implementation Plan
-1. Rewrite GlobeCanvas as a React Three Fiber Canvas with: EarthGlobe mesh (sphere + day texture + specular + normal), CloudLayer (slightly larger sphere, cloud texture, slow rotation), AtmosphereGlow (custom ShaderMaterial with Fresnel), StarField (Points geometry), NebulaBackground (large inverted sphere with gradient texture or vertex colors), HexGrid (LineSegments over sphere surface for all 10,000 plots)
-2. Build HUD overlay components:
-   - TopBar: mini-map + QUICK INVENTORY label
-   - LeftWeaponPanel: slide-in from left, weapon cards
-   - RightInventoryPanel: grid of icons
-   - CentralFireButton: large circle, glowing red/gold, TARGET/LOCK labels
-   - VirtualJoystick: touch-controlled left side
-   - RightControlButtons: Scope/Devices/Radar circles
-   - BottomNavBar: 7 icon tabs with labels
-   - BottomSheet: animated slide-up panel per tab
-3. Update App.tsx so "/" renders Play directly
-4. Wire joystick to camera orbit controls via ref
-5. Add basic ballistic missile animation (Three.js arc path + particle contrail)
+1. Update `backend.d.ts` — add `launchMissile(fromPlotId: bigint, toPlotId: bigint, weaponType: string): Promise<{__kind__: 'ok', ok: string} | {__kind__: 'err', err: string}>`
+2. Update `gameStore.ts` — add `activeWeapon`, `targetPlotId`, `setActiveWeapon`, `setTargetPlotId`, `launchMissile` async action (try backend call, catch and use local mock fallback)
+3. Update `GlobeCanvas.tsx` — parameterize `MissileAnimation` coords via props; globe click sets targetPlotId in store
+4. Update `Play.tsx` — wire EQUIP to store, FIRE to store action with real coords, add error banners, update LOCK label reactivity

@@ -12,7 +12,7 @@ import {
   Swords,
   Zap,
 } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import GlobeCanvas from "../components/GlobeCanvas";
 import { useGameStore } from "../store/gameStore";
 
@@ -167,7 +167,7 @@ function TopBar() {
 }
 
 interface WeaponPanelProps {
-  selected: string;
+  selected: string | null;
   onSelect: (name: string) => void;
 }
 
@@ -314,7 +314,7 @@ function RightInventoryPanel() {
     "C",
     "E",
     "I",
-  ];
+  ].map((label, idx) => ({ label, key: `slot-${idx}` }));
   return (
     <div
       data-ocid="inventory_panel.panel"
@@ -347,10 +347,10 @@ function RightInventoryPanel() {
       >
         LOADOUT
       </div>
-      {SLOTS.map((s, i) => (
+      {SLOTS.map(({ label, key }, idx) => (
         <div
-          key={s}
-          data-ocid={`inventory_panel.item.${i + 1}`}
+          key={key}
+          data-ocid={`inventory_panel.item.${idx + 1}`}
           style={{
             width: 40,
             height: 40,
@@ -367,7 +367,7 @@ function RightInventoryPanel() {
             flexShrink: 0,
           }}
         >
-          {s}
+          {label}
         </div>
       ))}
     </div>
@@ -377,9 +377,10 @@ function RightInventoryPanel() {
 interface FireButtonProps {
   onFire: () => void;
   active: boolean;
+  targetLocked: boolean;
 }
 
-function CentralFireButton({ onFire, active }: FireButtonProps) {
+function CentralFireButton({ onFire, active, targetLocked }: FireButtonProps) {
   return (
     <div
       className="fixed z-30"
@@ -401,6 +402,9 @@ function CentralFireButton({ onFire, active }: FireButtonProps) {
           letterSpacing: 2,
           textShadow: `0 0 8px ${CYAN}`,
           pointerEvents: "none",
+          animation: targetLocked
+            ? "pulse-hud 1.4s ease-in-out infinite"
+            : "none",
         }}
       >
         TARGET IN FORMATION
@@ -446,10 +450,11 @@ function CentralFireButton({ onFire, active }: FireButtonProps) {
       <div
         style={{
           fontSize: 8,
-          color: GOLD,
+          color: targetLocked ? GOLD : "rgba(255,215,0,0.3)",
           letterSpacing: 2,
-          textShadow: `0 0 8px ${GOLD}`,
+          textShadow: targetLocked ? `0 0 8px ${GOLD}` : "none",
           pointerEvents: "none",
+          transition: "color 0.3s, text-shadow 0.3s",
         }}
       >
         LOCK
@@ -1159,14 +1164,85 @@ function BottomSheet({ activeTab, onClose }: BottomSheetProps) {
 export default function Play() {
   const controlsRef = useRef<any>(null);
   const [activeTab, setActiveTab] = useState<string | null>(null);
-  const [selectedWeapon, setSelectedWeapon] = useState("BALLISTIC ICBM");
   const [missileActive, setMissileActive] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [missileFrom, setMissileFrom] = useState({ lat: 40.7, lng: -74 });
+  const [missileTo, setMissileTo] = useState({ lat: 51.5, lng: 0 });
+
+  const store = useGameStore();
+  const activeWeapon = useGameStore((s) => s.activeWeapon);
+  const targetPlotId = useGameStore((s) => s.targetPlotId);
+  const setActiveWeapon = useGameStore((s) => s.setActiveWeapon);
+  const plots = useGameStore((s) => s.plots);
+  const player = useGameStore((s) => s.player);
+
+  // Auto-dismiss error banner after 3 seconds
+  useEffect(() => {
+    if (!errorMsg) return;
+    const t = setTimeout(() => setErrorMsg(null), 3000);
+    return () => clearTimeout(t);
+  }, [errorMsg]);
 
   const handleTabClick = (id: string) =>
     setActiveTab((prev) => (prev === id ? null : id));
-  const handleFire = () => {
-    if (!missileActive) setMissileActive(true);
+
+  const handleFire = async () => {
+    if (missileActive) return;
+
+    if (targetPlotId === null) {
+      setErrorMsg("SELECT A TARGET FIRST");
+      return;
+    }
+
+    const targetPlot = plots.find((p) => p.id === targetPlotId);
+    if (!targetPlot) {
+      setErrorMsg("INVALID TARGET");
+      return;
+    }
+
+    // Find player's launch plot: selectedPlotId if owned, else first in plotsOwned
+    let fromPlotId: number | null = null;
+    const selectedPlotId = store.selectedPlotId;
+    if (
+      selectedPlotId !== null &&
+      (player.plotsOwned.includes(selectedPlotId) ||
+        plots[selectedPlotId]?.owner === (player.principal ?? "You"))
+    ) {
+      fromPlotId = selectedPlotId;
+    } else if (player.plotsOwned.length > 0) {
+      fromPlotId = player.plotsOwned[0];
+    } else {
+      // Fallback: use any plot for demo purposes
+      fromPlotId = 5000;
+    }
+
+    const fromPlot = plots.find((p) => p.id === fromPlotId);
+    const weaponType = activeWeapon ?? "BALLISTIC_ICBM";
+
+    const result = await store.launchMissile(
+      fromPlotId!,
+      targetPlotId,
+      weaponType,
+    );
+
+    if (!result.success) {
+      const err = result.error ?? "";
+      if (/silo/i.test(err)) {
+        setErrorMsg("NO MISSILE SILO ON THIS PLOT");
+      } else if (/cooldown/i.test(err)) {
+        setErrorMsg("TARGET ON COOLDOWN");
+      } else {
+        setErrorMsg(err || "LAUNCH FAILED");
+      }
+      return;
+    }
+
+    // Success — set real coords and trigger animation
+    setMissileFrom({ lat: fromPlot?.lat ?? 40.7, lng: fromPlot?.lng ?? -74 });
+    setMissileTo({ lat: targetPlot.lat, lng: targetPlot.lng });
+    setMissileActive(true);
   };
+
   const handleMissileComplete = () => setMissileActive(false);
 
   return (
@@ -1178,22 +1254,64 @@ export default function Play() {
         background: "#020509",
       }}
     >
+      <style>{`
+        @keyframes pulse-hud {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+      `}</style>
+
       <div style={{ position: "absolute", inset: 0 }}>
         <GlobeCanvas
           controlsRef={controlsRef}
           missileActive={missileActive}
           onMissileComplete={handleMissileComplete}
+          missileFrom={missileFrom}
+          missileTo={missileTo}
         />
       </div>
 
       <TopBar />
-      <LeftWeaponPanel selected={selectedWeapon} onSelect={setSelectedWeapon} />
+      <LeftWeaponPanel selected={activeWeapon} onSelect={setActiveWeapon} />
       <RightInventoryPanel />
-      <CentralFireButton onFire={handleFire} active={missileActive} />
+      <CentralFireButton
+        onFire={handleFire}
+        active={missileActive}
+        targetLocked={targetPlotId !== null}
+      />
       <VirtualJoystick controlsRef={controlsRef} />
       <RightControlButtons />
       <BottomNavBar activeTab={activeTab} onTabClick={handleTabClick} />
       <BottomSheet activeTab={activeTab} onClose={() => setActiveTab(null)} />
+
+      {/* Error banner */}
+      {errorMsg && (
+        <div
+          data-ocid="combat.error_state"
+          style={{
+            position: "fixed",
+            top: 60,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 60,
+            background: "rgba(180,0,0,0.9)",
+            border: "1px solid #ff4444",
+            borderRadius: 6,
+            padding: "8px 20px",
+            color: "#fff",
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: 2,
+            textShadow: "0 0 10px #ff0000",
+            boxShadow: "0 0 20px rgba(255,0,0,0.4)",
+            whiteSpace: "nowrap",
+            pointerEvents: "none",
+            animation: "pulse-hud 0.6s ease-in-out",
+          }}
+        >
+          ⚠ {errorMsg}
+        </div>
+      )}
 
       <div
         style={{

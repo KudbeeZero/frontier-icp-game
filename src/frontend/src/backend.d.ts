@@ -16,4 +16,11 @@ export interface backendInterface {
         __kind__: "err";
         err: string;
     }>;
+    launchMissile(fromPlotId: bigint, toPlotId: bigint, weaponType: string): Promise<{
+        __kind__: "ok";
+        ok: string;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
 }
