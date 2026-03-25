@@ -1,6 +1,10 @@
 import { X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { TIER_COLORS, getCommander } from "../constants/commanders";
+import {
+  TIER_COLORS,
+  commanderHasWings,
+  getCommander,
+} from "../constants/commanders";
 import { useGameStore } from "../store/gameStore";
 
 const CYAN = "#00ffcc";
@@ -24,7 +28,7 @@ export default function PlotHoverCard({
 }: PlotHoverCardProps) {
   const [visible, setVisible] = useState(false);
   const commanderAssignments = useGameStore((s) => s.commanderAssignments);
-  const commanderUpgrades = useGameStore((s) => s.commanderUpgrades);
+  const ownedCommanders = useGameStore((s) => s.ownedCommanders);
 
   useEffect(() => {
     const t = setTimeout(() => setVisible(true), 20);
@@ -35,12 +39,15 @@ export default function PlotHoverCard({
   const isOwned = action === "TERRITORY ACQUIRED" || action === "YOU OWN THIS";
   const actionColor = isTarget ? "#ef4444" : CYAN;
 
-  const assignedId = commanderAssignments[plotId];
-  const commander = assignedId ? getCommander(assignedId) : null;
-  const upgradeLevel = assignedId ? (commanderUpgrades[assignedId] ?? 0) : 0;
-  const effectiveAtk = commander ? commander.atk + upgradeLevel * 5 : 0;
-  const effectiveDef = commander ? commander.def + upgradeLevel * 5 : 0;
-  const tierColor = commander ? TIER_COLORS[commander.tier] : CYAN;
+  const assignedInstanceId = commanderAssignments[plotId];
+  const commander = assignedInstanceId
+    ? getCommander(assignedInstanceId)
+    : null;
+  const ownedInstance = ownedCommanders.find(
+    (c) => c.instanceId === assignedInstanceId,
+  );
+  const hasWings = ownedInstance ? commanderHasWings(ownedInstance) : false;
+  const tierColor = commander ? (TIER_COLORS[commander.tier] ?? CYAN) : CYAN;
 
   return (
     <div
@@ -66,7 +73,7 @@ export default function PlotHoverCard({
         pointerEvents: "auto",
       }}
     >
-      {/* Top row: plot badge + action label + close */}
+      {/* Top row */}
       <div
         style={{
           display: "flex",
@@ -123,7 +130,6 @@ export default function PlotHoverCard({
         </button>
       </div>
 
-      {/* Divider */}
       <div
         style={{
           height: 1,
@@ -179,24 +185,23 @@ export default function PlotHoverCard({
             gap: 6,
           }}
         >
-          {/* Portrait + name + tier */}
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div
               style={{
-                width: 40,
-                height: 40,
+                width: 44,
+                height: 44,
                 flexShrink: 0,
-                clipPath:
-                  "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)",
+                borderRadius: 6,
                 overflow: "hidden",
                 background: "rgba(0,0,0,0.6)",
                 boxShadow: `0 0 8px ${tierColor}55`,
+                border: `1px solid ${tierColor}44`,
               }}
             >
               <img
                 src={commander.badge}
                 alt={commander.name}
-                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                style={{ width: "100%", height: "100%", objectFit: "contain" }}
               />
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -208,18 +213,18 @@ export default function PlotHoverCard({
                   fontFamily: "monospace",
                   letterSpacing: 1,
                   marginBottom: 3,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 5,
                 }}
               >
                 {commander.name}
-                {upgradeLevel > 0 && (
+                {hasWings && (
                   <span
-                    style={{
-                      marginLeft: 5,
-                      fontSize: 7.5,
-                      color: "#f59e0b",
-                    }}
+                    style={{ fontSize: 10 }}
+                    title="Wings Earned — F-16 Eligible"
                   >
-                    LVL {upgradeLevel}
+                    ✈
                   </span>
                 )}
               </div>
@@ -236,12 +241,10 @@ export default function PlotHoverCard({
                   fontFamily: "monospace",
                 }}
               >
-                {commander.tier}
+                {commander.tier.replace(/_/g, " ")}
               </span>
             </div>
           </div>
-
-          {/* Stat pills */}
           <div style={{ display: "flex", gap: 6 }}>
             <span
               style={{
@@ -256,7 +259,7 @@ export default function PlotHoverCard({
                 letterSpacing: 0.5,
               }}
             >
-              ATK +{effectiveAtk}
+              ATK +{commander.atk}
             </span>
             <span
               style={{
@@ -271,11 +274,9 @@ export default function PlotHoverCard({
                 letterSpacing: 0.5,
               }}
             >
-              DEF +{effectiveDef}
+              DEF +{commander.def}
             </span>
           </div>
-
-          {/* FRNTR bonus */}
           <div
             style={{
               fontSize: 8,
@@ -332,7 +333,7 @@ export default function PlotHoverCard({
         </span>
       </div>
 
-      {/* Owner action buttons */}
+      {/* Owner action */}
       {isOwned && (
         <div
           style={{
