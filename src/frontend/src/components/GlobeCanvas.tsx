@@ -1,9 +1,8 @@
-import { useEffect, useRef } from "react";
+import { OrbitControls, useTexture } from "@react-three/drei";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { Suspense, useMemo, useRef } from "react";
 import * as THREE from "three";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { BIOME_COLORS, FACTION_COLORS, useGameStore } from "../store/gameStore";
-
-const FACTION_KEYS = Object.keys(FACTION_COLORS);
+import { useGameStore } from "../store/gameStore";
 
 function latLngToXYZ(lat: number, lng: number, r: number): THREE.Vector3 {
   const phi = (90 - lat) * (Math.PI / 180);
@@ -15,343 +14,326 @@ function latLngToXYZ(lat: number, lng: number, r: number): THREE.Vector3 {
   );
 }
 
-function getPlotColor(
-  owner: string | null,
-  biome: string,
-  playerPrincipal: string | null,
-  playerPlots: number[],
-  plotId: number,
-): THREE.Color {
-  if (owner === null) {
-    const biomeHex =
-      BIOME_COLORS[biome as keyof typeof BIOME_COLORS] ?? "#1a2030";
-    const c = new THREE.Color(biomeHex);
-    c.multiplyScalar(0.4);
-    return c;
+function getHexCorners(center: THREE.Vector3, radius: number): THREE.Vector3[] {
+  const up = center.clone().normalize();
+  let right = new THREE.Vector3(0, 1, 0).cross(up).normalize();
+  if (right.lengthSq() < 0.001) right = new THREE.Vector3(1, 0, 0);
+  const fwd = up.clone().cross(right).normalize();
+  const corners: THREE.Vector3[] = [];
+  for (let i = 0; i < 6; i++) {
+    const angle = (i / 6) * Math.PI * 2;
+    corners.push(
+      center
+        .clone()
+        .add(right.clone().multiplyScalar(Math.cos(angle) * radius))
+        .add(fwd.clone().multiplyScalar(Math.sin(angle) * radius))
+        .normalize(),
+    );
   }
-  if (FACTION_KEYS.includes(owner)) {
-    return new THREE.Color(FACTION_COLORS[owner]);
-  }
-  if (owner === playerPrincipal || playerPlots.includes(plotId)) {
-    return new THREE.Color("#35E7FF");
-  }
-  return new THREE.Color("#334455");
+  return corners;
 }
 
-export default function GlobeCanvas() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+const atmosphereVert = /* glsl */ `
+  varying vec3 vNormal;
+  varying vec3 vViewPosition;
+  void main() {
+    vNormal = normalize(normalMatrix * normal);
+    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    vViewPosition = -mvPosition.xyz;
+    gl_Position = projectionMatrix * mvPosition;
+  }
+`;
+
+const atmosphereFrag = /* glsl */ `
+  uniform vec3 glowColor;
+  varying vec3 vNormal;
+  varying vec3 vViewPosition;
+  void main() {
+    float intensity = pow(0.65 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 3.0);
+    intensity = clamp(intensity, 0.0, 1.0);
+    gl_FragColor = vec4(glowColor * intensity, intensity * 0.8);
+  }
+`;
+
+function HexGrid() {
   const plots = useGameStore((s) => s.plots);
-  const player = useGameStore((s) => s.player);
-  const selectPlot = useGameStore((s) => s.selectPlot);
-  const selectedPlotId = useGameStore((s) => s.selectedPlotId);
+  const { camera } = useThree();
+  const lineRef = useRef<THREE.LineSegments>(null);
 
-  // Keep refs for live state access inside animation loop
-  const playerRef = useRef(player);
-  const selectedRef = useRef(selectedPlotId);
-  playerRef.current = player;
-  selectedRef.current = selectedPlotId;
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    // Renderer
-    const renderer = new THREE.WebGLRenderer({
-      canvas,
-      antialias: true,
-      alpha: false,
-    });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setSize(canvas.clientWidth, canvas.clientHeight);
-    renderer.setClearColor(0x04070d, 1);
-
-    // Scene & camera
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(
-      60,
-      canvas.clientWidth / canvas.clientHeight,
-      0.1,
-      1000,
-    );
-    camera.position.set(0, 0, 2.8);
-
-    // Controls
-    const controls = new OrbitControls(camera, canvas);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    controls.minDistance = 1.5;
-    controls.maxDistance = 5;
-    controls.autoRotate = true;
-    controls.autoRotateSpeed = 0.3;
-
-    // Stars
-    {
-      const geo = new THREE.BufferGeometry();
-      const positions = new Float32Array(4000 * 3);
-      for (let i = 0; i < 4000; i++) {
-        const theta = Math.random() * Math.PI * 2;
-        const phi = Math.acos(2 * Math.random() - 1);
-        const r = 30 + Math.random() * 70;
-        positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-        positions[i * 3 + 1] = r * Math.cos(phi);
-        positions[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+  const geometry = useMemo(() => {
+    const HEX_RADIUS = 0.018;
+    const positions = new Float32Array(plots.length * 6 * 2 * 3);
+    let idx = 0;
+    for (const plot of plots) {
+      const center = latLngToXYZ(plot.lat, plot.lng, 1.001);
+      const corners = getHexCorners(center, HEX_RADIUS);
+      for (let e = 0; e < 6; e++) {
+        const a = corners[e];
+        const b = corners[(e + 1) % 6];
+        positions[idx++] = a.x;
+        positions[idx++] = a.y;
+        positions[idx++] = a.z;
+        positions[idx++] = b.x;
+        positions[idx++] = b.y;
+        positions[idx++] = b.z;
       }
-      geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-      const mat = new THREE.PointsMaterial({
-        color: 0xaaccff,
-        size: 0.08,
-        sizeAttenuation: true,
-      });
-      scene.add(new THREE.Points(geo, mat));
     }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    return geo;
+  }, [plots]);
 
-    // Globe group
-    const globeGroup = new THREE.Group();
-    scene.add(globeGroup);
-
-    // Planet sphere
-    const planetGeo = new THREE.SphereGeometry(1, 64, 64);
-    const planetMat = new THREE.MeshStandardMaterial({
-      color: 0x0a1628,
-      roughness: 0.8,
-      metalness: 0.2,
-    });
-    const planet = new THREE.Mesh(planetGeo, planetMat);
-    globeGroup.add(planet);
-
-    // Atmosphere
-    const atmosGeo = new THREE.SphereGeometry(1.02, 32, 32);
-    const atmosMat = new THREE.MeshBasicMaterial({
-      color: 0x1a4080,
-      transparent: true,
-      opacity: 0.12,
-      side: THREE.BackSide,
-    });
-    globeGroup.add(new THREE.Mesh(atmosGeo, atmosMat));
-
-    // Glow halo
-    const haloGeo = new THREE.SphereGeometry(1.08, 32, 32);
-    const haloMat = new THREE.MeshBasicMaterial({
-      color: 0x2288aa,
-      transparent: true,
-      opacity: 0.04,
-      side: THREE.BackSide,
-    });
-    globeGroup.add(new THREE.Mesh(haloGeo, haloMat));
-
-    // Orbital rings
-    for (let i = 0; i < 2; i++) {
-      const ringGeo = new THREE.TorusGeometry(1.3 + i * 0.15, 0.002, 8, 128);
-      const ringMat = new THREE.MeshBasicMaterial({
-        color: 0x2244aa,
-        transparent: true,
-        opacity: 0.3,
-      });
-      const ring = new THREE.Mesh(ringGeo, ringMat);
-      ring.rotation.x = Math.PI / 2 + i * 0.4;
-      ring.rotation.y = i * 0.3;
-      globeGroup.add(ring);
-    }
-
-    // Ambient + directional light
-    scene.add(new THREE.AmbientLight(0x112244, 1.5));
-    const dirLight = new THREE.DirectionalLight(0x88ccff, 2);
-    dirLight.position.set(5, 3, 5);
-    scene.add(dirLight);
-
-    // Hex tiles (instanced)
-    const HEX_RADIUS = 0.022;
-    const HEX_HEIGHT = 0.007;
-    const hexGeo = new THREE.CylinderGeometry(
-      HEX_RADIUS,
-      HEX_RADIUS,
-      HEX_HEIGHT,
-      6,
-    );
-    // Close the top/bottom faces
-    const hexMat = new THREE.MeshStandardMaterial({
-      vertexColors: true,
-      roughness: 0.5,
-      metalness: 0.4,
-    });
-
-    const COUNT = plots.length;
-    const instancedMesh = new THREE.InstancedMesh(hexGeo, hexMat, COUNT);
-    instancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    globeGroup.add(instancedMesh);
-
-    const dummy = new THREE.Object3D();
-    const color = new THREE.Color();
-
-    for (let i = 0; i < COUNT; i++) {
-      const plot = plots[i];
-      const pos = latLngToXYZ(plot.lat, plot.lng, 1.0);
-
-      dummy.position.copy(pos);
-      dummy.lookAt(pos.clone().multiplyScalar(2));
-      dummy.rotateX(Math.PI / 2);
-      dummy.updateMatrix();
-      instancedMesh.setMatrixAt(i, dummy.matrix);
-
-      const c = getPlotColor(
-        plot.owner,
-        plot.biome,
-        playerRef.current.principal,
-        playerRef.current.plotsOwned,
-        plot.id,
-      );
-      instancedMesh.setColorAt(i, c);
-    }
-
-    instancedMesh.instanceMatrix.needsUpdate = true;
-    if (instancedMesh.instanceColor)
-      instancedMesh.instanceColor.needsUpdate = true;
-
-    // Raycasting
-    const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2();
-
-    const handleClick = (e: MouseEvent) => {
-      const rect = canvas.getBoundingClientRect();
-      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-      raycaster.setFromCamera(mouse, camera);
-      const intersects = raycaster.intersectObject(instancedMesh);
-      if (intersects.length > 0 && intersects[0].instanceId !== undefined) {
-        selectPlot(intersects[0].instanceId);
-      } else {
-        // Check if click was on planet (not on a hex)
-        const planetIntersects = raycaster.intersectObject(planet);
-        if (planetIntersects.length > 0) {
-          // deselect or do nothing
-        }
-      }
-    };
-
-    canvas.addEventListener("click", handleClick);
-
-    // Highlight hovered hex
-    let hoveredId = -1;
-    const handleMouseMove = (e: MouseEvent) => {
-      const rect = canvas.getBoundingClientRect();
-      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-      raycaster.setFromCamera(mouse, camera);
-      const intersects = raycaster.intersectObject(instancedMesh);
-      if (intersects.length > 0 && intersects[0].instanceId !== undefined) {
-        const newId = intersects[0].instanceId;
-        if (newId !== hoveredId) {
-          // Restore old
-          if (hoveredId >= 0 && hoveredId !== selectedRef.current) {
-            const p = plots[hoveredId];
-            const c = getPlotColor(
-              p.owner,
-              p.biome,
-              playerRef.current.principal,
-              playerRef.current.plotsOwned,
-              p.id,
-            );
-            instancedMesh.setColorAt(hoveredId, c);
-            if (instancedMesh.instanceColor)
-              instancedMesh.instanceColor.needsUpdate = true;
-          }
-          hoveredId = newId;
-          // Set hover color
-          instancedMesh.setColorAt(newId, color.set(0xffffff));
-          if (instancedMesh.instanceColor)
-            instancedMesh.instanceColor.needsUpdate = true;
-          canvas.style.cursor = "pointer";
-        }
-      } else {
-        if (hoveredId >= 0) {
-          const p = plots[hoveredId];
-          const c = getPlotColor(
-            p.owner,
-            p.biome,
-            playerRef.current.principal,
-            playerRef.current.plotsOwned,
-            p.id,
-          );
-          instancedMesh.setColorAt(hoveredId, c);
-          if (instancedMesh.instanceColor)
-            instancedMesh.instanceColor.needsUpdate = true;
-          hoveredId = -1;
-          canvas.style.cursor = "default";
-        }
-      }
-    };
-
-    canvas.addEventListener("mousemove", handleMouseMove);
-
-    // Highlight selected
-    let prevSelected = -1;
-    const updateSelected = (selId: number | null) => {
-      if (prevSelected >= 0) {
-        const p = plots[prevSelected];
-        const c = getPlotColor(
-          p.owner,
-          p.biome,
-          playerRef.current.principal,
-          playerRef.current.plotsOwned,
-          p.id,
-        );
-        instancedMesh.setColorAt(prevSelected, c);
-        if (instancedMesh.instanceColor)
-          instancedMesh.instanceColor.needsUpdate = true;
-      }
-      if (selId !== null && selId >= 0) {
-        instancedMesh.setColorAt(selId, color.set(0x00ffff));
-        if (instancedMesh.instanceColor)
-          instancedMesh.instanceColor.needsUpdate = true;
-      }
-      prevSelected = selId ?? -1;
-    };
-
-    // Resize
-    const handleResize = () => {
-      const w = canvas.clientWidth;
-      const h = canvas.clientHeight;
-      renderer.setSize(w, h);
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-    };
-    window.addEventListener("resize", handleResize);
-
-    // Animation loop
-    let rafId: number;
-    let lastSelected = selectedRef.current;
-
-    const animate = () => {
-      rafId = requestAnimationFrame(animate);
-      controls.update();
-
-      // Sync selected highlight
-      if (selectedRef.current !== lastSelected) {
-        updateSelected(selectedRef.current);
-        lastSelected = selectedRef.current;
-      }
-
-      renderer.render(scene, camera);
-    };
-    animate();
-
-    return () => {
-      cancelAnimationFrame(rafId);
-      canvas.removeEventListener("click", handleClick);
-      canvas.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("resize", handleResize);
-      controls.dispose();
-      renderer.dispose();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useFrame(() => {
+    if (!lineRef.current) return;
+    const dist = camera.position.length();
+    const mat = lineRef.current.material as THREE.LineBasicMaterial;
+    mat.opacity = dist < 2.2 ? 0.5 : 0.15;
+  });
 
   return (
-    <canvas
-      ref={canvasRef}
-      className="w-full h-full block"
-      style={{ background: "#04070d" }}
-    />
+    <lineSegments ref={lineRef} geometry={geometry}>
+      <lineBasicMaterial
+        color={0x00ffcc}
+        transparent
+        opacity={0.15}
+        depthWrite={false}
+      />
+    </lineSegments>
+  );
+}
+
+function EarthSphere() {
+  const dayTex = useTexture("/assets/generated/earth-day.dim_4096x2048.jpg");
+  const cloudsTex = useTexture(
+    "/assets/generated/earth-clouds.dim_2048x1024.jpg",
+  );
+  const globeRef = useRef<THREE.Group>(null);
+  const cloudsRef = useRef<THREE.Mesh>(null);
+  const selectPlot = useGameStore((s) => s.selectPlot);
+  const plots = useGameStore((s) => s.plots);
+
+  const atmosphereUniforms = useMemo(
+    () => ({ glowColor: { value: new THREE.Color(0.1, 0.5, 1.0) } }),
+    [],
+  );
+
+  useFrame(() => {
+    if (globeRef.current) globeRef.current.rotation.y += 0.0001;
+    if (cloudsRef.current) cloudsRef.current.rotation.y += 0.0003;
+  });
+
+  // biome-ignore lint/a11y/useKeyWithClickEvents: 3D canvas object
+  const handleClick = (e: any) => {
+    e.stopPropagation();
+    const point: THREE.Vector3 = e.point;
+    const n = point.clone().normalize();
+    const phi = Math.acos(n.y);
+    const theta = Math.atan2(n.z, -n.x);
+    const lat = 90 - (phi * 180) / Math.PI;
+    const lng = (theta * 180) / Math.PI - 180;
+    let nearest = 0;
+    let minDist = Number.POSITIVE_INFINITY;
+    for (let i = 0; i < plots.length; i++) {
+      const p = plots[i];
+      const d = Math.hypot(p.lat - lat, p.lng - lng);
+      if (d < minDist) {
+        minDist = d;
+        nearest = i;
+      }
+    }
+    selectPlot(nearest);
+  };
+
+  return (
+    <group ref={globeRef}>
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: 3D canvas mesh */}
+      <mesh onClick={handleClick}>
+        <sphereGeometry args={[1, 64, 64]} />
+        <meshPhongMaterial
+          map={dayTex}
+          shininess={15}
+          specular={new THREE.Color(0x333333)}
+        />
+      </mesh>
+
+      <mesh ref={cloudsRef}>
+        <sphereGeometry args={[1.008, 64, 64]} />
+        <meshPhongMaterial
+          map={cloudsTex}
+          transparent
+          opacity={0.4}
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+        />
+      </mesh>
+
+      <mesh>
+        <sphereGeometry args={[1.15, 32, 32]} />
+        <shaderMaterial
+          vertexShader={atmosphereVert}
+          fragmentShader={atmosphereFrag}
+          uniforms={atmosphereUniforms}
+          side={THREE.BackSide}
+          transparent
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+        />
+      </mesh>
+
+      <HexGrid />
+    </group>
+  );
+}
+
+function Starfield() {
+  const tex = useTexture(
+    "/assets/generated/starfield-nebula.dim_2048x1024.jpg",
+  );
+  return (
+    <mesh>
+      <sphereGeometry args={[90, 32, 32]} />
+      <meshBasicMaterial map={tex} side={THREE.BackSide} />
+    </mesh>
+  );
+}
+
+interface MissileProps {
+  active: boolean;
+  onComplete: () => void;
+}
+
+function MissileAnimation({ active, onComplete }: MissileProps) {
+  const progressRef = useRef(0);
+  const headRef = useRef<THREE.Mesh>(null);
+  const flashRef = useRef<THREE.Mesh>(null);
+  const completedRef = useRef(false);
+
+  const srcPlot = useMemo(() => latLngToXYZ(40.7, -74, 1.0), []);
+  const dstPlot = useMemo(() => latLngToXYZ(51.5, 0, 1.0), []);
+
+  useFrame((_, delta) => {
+    if (!active) {
+      progressRef.current = 0;
+      completedRef.current = false;
+      if (headRef.current) headRef.current.visible = false;
+      if (flashRef.current) flashRef.current.visible = false;
+      return;
+    }
+
+    progressRef.current = Math.min(progressRef.current + delta / 3.0, 1.0);
+    const t = progressRef.current;
+
+    const mid = srcPlot
+      .clone()
+      .lerp(dstPlot, 0.5)
+      .normalize()
+      .multiplyScalar(1.5);
+    const p1 = new THREE.Vector3().lerpVectors(srcPlot, mid, t);
+    const p2 = new THREE.Vector3().lerpVectors(mid, dstPlot, t);
+    const pos = new THREE.Vector3().lerpVectors(p1, p2, t);
+
+    if (headRef.current) {
+      headRef.current.visible = t < 0.95;
+      headRef.current.position.copy(pos);
+    }
+
+    if (flashRef.current) {
+      if (t >= 0.95) {
+        flashRef.current.visible = true;
+        flashRef.current.position.copy(dstPlot);
+        flashRef.current.scale.setScalar((t - 0.95) * 6);
+        const mat = flashRef.current.material as THREE.MeshBasicMaterial;
+        mat.opacity = Math.max(0, 1 - (t - 0.95) * 20);
+      } else {
+        flashRef.current.visible = false;
+      }
+    }
+
+    if (t >= 1.0 && !completedRef.current) {
+      completedRef.current = true;
+      onComplete();
+    }
+  });
+
+  if (!active) return null;
+
+  return (
+    <group>
+      <mesh ref={headRef}>
+        <sphereGeometry args={[0.012, 8, 8]} />
+        <meshBasicMaterial color={0xff8800} />
+      </mesh>
+      <mesh ref={flashRef}>
+        <sphereGeometry args={[0.05, 12, 12]} />
+        <meshBasicMaterial color={0xff4400} transparent opacity={1} />
+      </mesh>
+    </group>
+  );
+}
+
+interface SceneProps {
+  controlsRef: React.MutableRefObject<any>;
+  missileActive: boolean;
+  onMissileComplete: () => void;
+}
+
+function GlobeScene({
+  controlsRef,
+  missileActive,
+  onMissileComplete,
+}: SceneProps) {
+  return (
+    <>
+      <ambientLight color={0x223344} intensity={0.8} />
+      <directionalLight color={0xffffff} intensity={1.5} position={[5, 3, 5]} />
+      <directionalLight
+        color={0x1144aa}
+        intensity={0.3}
+        position={[-3, -1, -2]}
+      />
+
+      <Suspense fallback={null}>
+        <Starfield />
+        <EarthSphere />
+      </Suspense>
+
+      <OrbitControls
+        ref={controlsRef}
+        enableDamping
+        dampingFactor={0.05}
+        minDistance={1.5}
+        maxDistance={5}
+        autoRotate
+        autoRotateSpeed={0.2}
+      />
+
+      <MissileAnimation active={missileActive} onComplete={onMissileComplete} />
+    </>
+  );
+}
+
+interface GlobeCanvasProps {
+  controlsRef: React.MutableRefObject<any>;
+  missileActive?: boolean;
+  onMissileComplete?: () => void;
+}
+
+export default function GlobeCanvas({
+  controlsRef,
+  missileActive = false,
+  onMissileComplete = () => {},
+}: GlobeCanvasProps) {
+  return (
+    <Canvas
+      camera={{ fov: 60, position: [0, 0, 2.8], near: 0.1, far: 200 }}
+      gl={{ antialias: true, alpha: false }}
+      style={{ background: "#020509", touchAction: "none" }}
+    >
+      <GlobeScene
+        controlsRef={controlsRef}
+        missileActive={missileActive}
+        onMissileComplete={onMissileComplete}
+      />
+    </Canvas>
   );
 }

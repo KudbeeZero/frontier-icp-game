@@ -7,7 +7,6 @@ import {
   createRouter,
 } from "@tanstack/react-router";
 import Inventory from "./pages/Inventory";
-import Landing from "./pages/Landing";
 import Leaderboard from "./pages/Leaderboard";
 import Manual from "./pages/Manual";
 import Play from "./pages/Play";
@@ -19,7 +18,7 @@ const rootRoute = createRootRoute({
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
-  component: Landing,
+  component: Play,
 });
 
 const playRoute = createRoute({

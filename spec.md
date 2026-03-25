@@ -1,75 +1,46 @@
-# Frontier ICP Game
+# Frontier: Missile Horizon
 
 ## Current State
-New project — no existing files.
+The project has a basic Three.js globe (raw canvas, no textures) with a dark sci-fi HUD using a top Navbar and left/right sidebars. The globe renders colored hex cylinders over a plain dark sphere with a simple atmospheric glow. No mobile layout. No bottom navigation. No FIRE button or joystick.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Full multi-canister ICP strategy game with 3D hexagonal globe
-- Token canister: ICRC-1/ICRC-2 FRNTR fungible token
-- NFT canister: Plot NFTs + Commander avatar NFTs
-- Game canister: 10,000 hex plots, 8 biomes, resource system, combat, AI factions, leaderboard, orbital events
-- Frontend: Three.js hex globe, React UI, Internet Identity auth
+- Photorealistic Earth globe: day texture map (continents/oceans), specular map, cloud layer (animated rotation), blue Fresnel atmospheric rim shader, star field + faint nebula background
+- Hex grid wireframe overlay: neon-cyan glowing lines always visible, thickens and shows ownership color on zoom-in
+- Full mobile-first HUD overlay:
+  - Left sliding panel: scrollable weapon/missile selection cards (icon, name, quantity, EQUIP button)
+  - Right panel: Quick Inventory grid of missile/drone icons
+  - Bottom navigation bar: 7 icons — Resources, Inventory, Build, Map, Combat, Shop/Parts, Settings (glowing cyan/blue, active tab highlighted), each tapping slides up a bottom sheet panel covering 40-60% of screen with globe dimmed behind
+  - Central area: large circular red/gold FIRE button with "TARGET IN FORMATION" and "LOCK" labels
+  - Left virtual joystick for globe orbit control
+  - Right circular control buttons (Scope, Devices, Radar)
+  - Top bar: mini-map thumbnail + "QUICK INVENTORY" label
+- App.tsx: default route renders Play directly (no splash/landing screen)
+- Missile launch animation: ballistic arc with contrail particle trail and explosion flash at impact
 
 ### Modify
-- Plot count changed from 21,000 to 10,000
-- Plot geometry changed from point-based Fibonacci sphere to hexagon tiles on sphere surface
+- GlobeCanvas.tsx: completely rewrite using React Three Fiber + @react-three/drei for texture loading, atmosphere shader, cloud mesh, and hex wireframe grid
+- Play.tsx: restructure layout for horizontal mobile, integrate new HUD components
+- App.tsx: set "/" route to Play component directly
+- index.css: add touch-action none on canvas, prevent scroll bounce
 
 ### Remove
-- N/A
+- Old Navbar.tsx top nav (replaced by top bar in HUD)
+- Old left/right sidebar layout in Play.tsx
+- Landing page as default route
 
 ## Implementation Plan
-
-### Backend (Motoko)
-1. **Token canister** (`src/backend/token.mo`)
-   - ICRC-1/ICRC-2 compliant FRNTR token
-   - mint/burn callable only by game canister
-   - Stable ledger, preupgrade/postupgrade
-
-2. **NFT canister** (`src/backend/nft.mo`)
-   - mintPlotNFT, mintCommanderNFT called by game canister
-   - transfer on conquest
-   - ownerOf, tokenMetadata queries
-   - Stable storage, upgrade hooks
-
-3. **Game canister** (`src/backend/main.mo`)
-   - 10,000 hex plots in TrieMap, 8 biomes with resource rates
-   - Hex adjacency computed via spherical neighbor lookup (each hex has ~6 neighbors)
-   - Player registry with resources, FRNTR balance, commander
-   - Resource tick timer (~60s): accumulate Iron/Fuel/Crystal per owned plot
-   - AI faction timer (~5min): NEXUS-7, KRONOS, VANGUARD, SPECTRE actions
-   - Orbital events timer (~2hr): Meteor Shower, Solar Flare, Void Rift, Cosmic Storm
-   - purchasePlot, claimResources, attack, buildFacility, useAbility
-   - Combat: ATK vs DEF+defenses, morale, 5min cooldown, NFT transfer on win
-   - Leaderboard: top players by plots/FRNTR/victories
-   - getPlot, getPlayer, getLeaderboard, getAdjacentPlots, getPlotRange
-   - Inter-canister calls to token and NFT canisters
-   - Stable memory with preupgrade/postupgrade
-
-### Frontend (React/TypeScript)
-1. **Globe** (`GlobeCanvas.tsx`)
-   - Three.js WebGL, 10,000 hexagonal tiles on sphere surface
-   - Each hex tile is a flat hexagon mesh extruded slightly from the sphere
-   - Plot coloring by ownership/biome, raycasting click/hover on hex meshes
-   - Orbital event visual overlays, particle systems
-   - Smooth rotation, zoom, pan
-
-2. **Pages**
-   - `/` Landing: animated globe preview, Internet Identity login CTA
-   - `/play` Main game: fullscreen globe + sidebars
-   - `/inventory` Player assets: plots, commanders, resources, FRNTR
-   - `/leaderboard` Top players table
-   - `/manual` Game mechanics documentation
-
-3. **UI Components**
-   - PlotInfoPanel: biome, owner, resources, defenses, action buttons
-   - PlayerHUD: FRNTR balance, resource counts, active commander
-   - CombatLog: recent attacks feed
-   - Notifications: Framer Motion toasts
-
-4. **ICP Integration**
-   - AuthClient for Internet Identity
-   - Actor factory for game/token/nft canisters
-   - TanStack Query polling every 5-10s
-   - Loading states on all update calls
+1. Rewrite GlobeCanvas as a React Three Fiber Canvas with: EarthGlobe mesh (sphere + day texture + specular + normal), CloudLayer (slightly larger sphere, cloud texture, slow rotation), AtmosphereGlow (custom ShaderMaterial with Fresnel), StarField (Points geometry), NebulaBackground (large inverted sphere with gradient texture or vertex colors), HexGrid (LineSegments over sphere surface for all 10,000 plots)
+2. Build HUD overlay components:
+   - TopBar: mini-map + QUICK INVENTORY label
+   - LeftWeaponPanel: slide-in from left, weapon cards
+   - RightInventoryPanel: grid of icons
+   - CentralFireButton: large circle, glowing red/gold, TARGET/LOCK labels
+   - VirtualJoystick: touch-controlled left side
+   - RightControlButtons: Scope/Devices/Radar circles
+   - BottomNavBar: 7 icon tabs with labels
+   - BottomSheet: animated slide-up panel per tab
+3. Update App.tsx so "/" renders Play directly
+4. Wire joystick to camera orbit controls via ref
+5. Add basic ballistic missile animation (Three.js arc path + particle contrail)
