@@ -74,6 +74,8 @@ export interface PlayerData {
   commanderType: string | null;
   commanderAtk: number;
   commanderDef: number;
+  faction: string | null;
+  weaponInventory: Record<string, number>;
 }
 
 export interface CombatEntry {
@@ -107,6 +109,13 @@ export interface SubParcel {
   purchaseTime: number;
   buildingType: string | null;
   durability: number;
+}
+
+export interface PlotHoverCard {
+  plotId: number;
+  owner: string;
+  action: string;
+  nextStep: string;
 }
 
 function generateSubParcels(plotId: number): SubParcel[] {
@@ -255,15 +264,19 @@ interface GameState {
   plots: PlotData[];
   player: PlayerData;
   selectedPlotId: number | null;
+  targetPlotId: number | null;
   combatLog: CombatEntry[];
   leaderboard: LeaderEntry[];
   orbitalEvent: OrbitalEvent | null;
   subParcels: Record<number, SubParcel[]>;
   activeWeapon: string | null;
+  hoveredPlotId: number | null;
+  plotHoverCard: PlotHoverCard | null;
 
   selectPlot: (id: number | null) => void;
   purchasePlot: (id: number) => void;
   claimResources: (id: number) => void;
+  claimAllFrntr: (amount: number) => void;
   attack: (fromId: number, toId: number) => void;
   setAuth: (principal: string | null) => void;
   getSubParcels: (plotId: number) => SubParcel[];
@@ -274,6 +287,11 @@ interface GameState {
     cost: number,
   ) => void;
   setActiveWeapon: (weapon: string | null) => void;
+  setTargetPlotId: (id: number | null) => void;
+  setPlotHoverCard: (card: PlotHoverCard | null) => void;
+  setHoveredPlotId: (id: number | null) => void;
+  setFaction: (faction: string | null) => void;
+  buyWeapon: (weaponName: string) => void;
 }
 
 export const useGameStore = create<GameState>((set, get) => ({
@@ -288,8 +306,18 @@ export const useGameStore = create<GameState>((set, get) => ({
     commanderType: null,
     commanderAtk: 0,
     commanderDef: 0,
+    faction: null,
+    weaponInventory: {
+      "BALLISTIC ICBM": 8,
+      "CRUISE MISSILE": 12,
+      "EMP WARHEAD": 3,
+      "MIRV STRIKE": 2,
+      INTERCEPTOR: 15,
+      "ORBITAL RAIL": 1,
+    },
   },
   selectedPlotId: null,
+  targetPlotId: null,
   combatLog: generateCombatLog(),
   leaderboard: generateLeaderboard(),
   orbitalEvent: {
@@ -299,10 +327,43 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
   subParcels: {},
   activeWeapon: null,
+  hoveredPlotId: null,
+  plotHoverCard: null,
 
   selectPlot: (id) => set({ selectedPlotId: id }),
 
   setActiveWeapon: (weapon) => set({ activeWeapon: weapon }),
+
+  setTargetPlotId: (id) => set({ targetPlotId: id }),
+
+  setPlotHoverCard: (card) => set({ plotHoverCard: card }),
+  setHoveredPlotId: (id) => set({ hoveredPlotId: id }),
+
+  setFaction: (faction) =>
+    set((state) => ({ player: { ...state.player, faction } })),
+
+  buyWeapon: (weaponName) =>
+    set((state) => {
+      const costs: Record<string, number> = {
+        "BALLISTIC ICBM": 300,
+        "CRUISE MISSILE": 150,
+        "EMP WARHEAD": 200,
+        "MIRV STRIKE": 500,
+        INTERCEPTOR: 80,
+        "ORBITAL RAIL": 800,
+      };
+      const cost = costs[weaponName] ?? 0;
+      if (state.player.frntBalance < cost) return state;
+      const inv = { ...state.player.weaponInventory };
+      inv[weaponName] = (inv[weaponName] ?? 0) + 1;
+      return {
+        player: {
+          ...state.player,
+          frntBalance: state.player.frntBalance - cost,
+          weaponInventory: inv,
+        },
+      };
+    }),
 
   getSubParcels: (plotId) => {
     const state = get();
@@ -344,6 +405,15 @@ export const useGameStore = create<GameState>((set, get) => ({
         },
       };
     }),
+
+  claimAllFrntr: (amount: number) =>
+    set((state) => ({
+      player: {
+        ...state.player,
+        frntBalance:
+          state.player.frntBalance + (Number.isNaN(amount) ? 0 : amount),
+      },
+    })),
 
   claimResources: (id) =>
     set((state) => {

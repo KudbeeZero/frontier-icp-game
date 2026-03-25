@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { Pickaxe, Radio, Shield, ShieldCheck, X, Zap } from "lucide-react";
+import { Cpu, Pickaxe, Radio, Shield, ShieldCheck, X, Zap } from "lucide-react";
 import { useGameStore } from "../store/gameStore";
 
 const CYAN = "#00ffcc";
@@ -50,6 +50,13 @@ const BUILDINGS: BuildingDef[] = [
     icon: ShieldCheck,
     cost: 400,
     desc: "Orbital shield layer",
+  },
+  {
+    type: "CYCLES_REACTOR",
+    name: "Cycles Reactor",
+    icon: Cpu,
+    cost: 200,
+    desc: "Enables mineral extraction from this plot",
   },
 ];
 

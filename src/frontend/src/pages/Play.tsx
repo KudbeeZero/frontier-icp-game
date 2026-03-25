@@ -1,34 +1,30 @@
 import {
   ChevronDown,
-  Gem,
-  Hammer,
+  Crosshair,
+  Grid2x2,
   Map as MapIcon,
+  MoreHorizontal,
   Package,
-  Settings,
-  ShoppingCart,
-  Swords,
+  Radio,
+  Shield,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import CombatLog from "../components/CombatLog";
+import CommandCenter from "../components/CommandCenter";
 import CommandPanel from "../components/CommandPanel";
+import CountdownOverlay from "../components/CountdownOverlay";
 import GlobeCanvas from "../components/GlobeCanvas";
 import LeftSidebarHUD from "../components/LeftSidebarHUD";
+import MapBottomSheet from "../components/MapBottomSheet";
 import Navbar from "../components/Navbar";
+import PlotHoverCard from "../components/PlotHoverCard";
 import { useGameStore } from "../store/gameStore";
 
 const CYAN = "#00ffcc";
 const CYAN_DIM = "rgba(0,255,204,0.35)";
 const GOLD = "#ffd700";
-const BG = "rgba(2,10,20,0.9)";
 const BORDER = "rgba(0,255,204,0.22)";
 const TEXT = "#e0f4ff";
-
-const glass: React.CSSProperties = {
-  background: BG,
-  backdropFilter: "blur(10px)",
-  WebkitBackdropFilter: "blur(10px)",
-  border: `1px solid ${BORDER}`,
-};
 
 const WEAPONS = [
   { name: "BALLISTIC ICBM", abbr: "B", qty: 8, color: "#ef4444" },
@@ -40,31 +36,25 @@ const WEAPONS = [
 ];
 
 const NAV_ITEMS = [
-  { id: "resources", label: "RESOURCES", Icon: Gem },
-  { id: "inventory", label: "INVENTORY", Icon: Package },
-  { id: "build", label: "BUILD", Icon: Hammer },
   { id: "map", label: "MAP", Icon: MapIcon },
-  { id: "combat", label: "COMBAT", Icon: Swords },
-  { id: "shop", label: "SHOP", Icon: ShoppingCart },
-  { id: "settings", label: "SETTINGS", Icon: Settings },
+  { id: "inventory", label: "INVENTORY", Icon: Package },
+  { id: "intel", label: "INTEL", Icon: Radio },
+  { id: "commander", label: "COMMANDER", Icon: Shield },
+  { id: "more", label: "MORE", Icon: MoreHorizontal },
 ];
 
-function useWindowWidth() {
-  const [width, setWidth] = useState(() =>
-    typeof window !== "undefined" ? window.innerWidth : 1024,
-  );
-  useEffect(() => {
-    const handler = () => setWidth(window.innerWidth);
-    window.addEventListener("resize", handler);
-    return () => window.removeEventListener("resize", handler);
-  }, []);
-  return width;
+const COMMANDERS = [
+  { name: "NOVA PRIME", atk: 85, def: 72, rarity: "LEGENDARY" },
+  { name: "IRON CLAW", atk: 70, def: 90, rarity: "EPIC" },
+  { name: "PHANTOM OPS", atk: 95, def: 55, rarity: "LEGENDARY" },
+  { name: "VOID HUNTER", atk: 62, def: 81, rarity: "RARE" },
+];
+
+interface TopBarProps {
+  onOpenCommandCenter?: () => void;
 }
 
-// ~220px is the natural height of the LeftSidebarHUD
-const SIDEBAR_HEIGHT = 220;
-
-function TopBar() {
+function TopBar({ onOpenCommandCenter }: TopBarProps) {
   return (
     <div
       data-ocid="topbar.panel"
@@ -77,6 +67,27 @@ function TopBar() {
       }}
     >
       <div className="flex items-center gap-1.5">
+        {/* Command Center toggle button */}
+        <button
+          type="button"
+          data-ocid="command_center.open_modal_button"
+          onClick={onOpenCommandCenter}
+          style={{
+            width: 36,
+            height: 36,
+            background: "rgba(0,255,204,0.08)",
+            border: `1px solid ${BORDER}`,
+            borderRadius: 4,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+          title="Command Center"
+        >
+          <Grid2x2 size={15} color={CYAN} />
+        </button>
         <div
           style={{
             width: 40,
@@ -151,242 +162,6 @@ function TopBar() {
       >
         FRONTIER: MISSILE HORIZON
       </div>
-
-      <div className="flex items-center gap-1">
-        <span style={{ fontSize: 7, color: GOLD, letterSpacing: 1 }}>
-          QUICK INV
-        </span>
-        {["B", "C", "I"].map((l) => (
-          <div
-            key={l}
-            style={{
-              width: 22,
-              height: 22,
-              background: "rgba(0,255,204,0.08)",
-              border: `1px solid ${BORDER}`,
-              borderRadius: 3,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 9,
-              fontWeight: 700,
-              color: CYAN,
-            }}
-          >
-            {l}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-interface WeaponPanelProps {
-  selected: string;
-  onSelect: (name: string) => void;
-  topOffset: number;
-}
-
-function LeftWeaponPanel({ selected, onSelect, topOffset }: WeaponPanelProps) {
-  return (
-    <div
-      data-ocid="weapon_panel.panel"
-      className="fixed left-0 z-20 overflow-y-auto"
-      style={{
-        top: topOffset,
-        bottom: 80,
-        width: 152,
-        ...glass,
-        borderRight: `1px solid ${BORDER}`,
-        borderTop: "none",
-        borderBottom: "none",
-        borderLeft: "none",
-        scrollbarWidth: "none",
-      }}
-    >
-      <div className="p-1.5 flex flex-col gap-1">
-        <div
-          style={{
-            fontSize: 7,
-            color: CYAN_DIM,
-            letterSpacing: 2,
-            padding: "4px 4px 6px",
-            borderBottom: `1px solid ${BORDER}`,
-            marginBottom: 2,
-          }}
-        >
-          WEAPON SELECT
-        </div>
-        {WEAPONS.map((w) => (
-          <button
-            type="button"
-            key={w.name}
-            data-ocid={`weapon_panel.${w.abbr.toLowerCase()}.button`}
-            onClick={() => onSelect(w.name)}
-            style={{
-              width: "100%",
-              padding: "6px 6px",
-              background:
-                selected === w.name
-                  ? "rgba(0,255,204,0.12)"
-                  : "rgba(0,255,204,0.04)",
-              border:
-                selected === w.name
-                  ? `1px solid ${CYAN}`
-                  : `1px solid ${BORDER}`,
-              borderRadius: 4,
-              cursor: "pointer",
-              textAlign: "left",
-              boxShadow:
-                selected === w.name ? "0 0 12px rgba(0,255,204,0.2)" : "none",
-            }}
-          >
-            <div className="flex items-center justify-between mb-0.5">
-              <div
-                style={{
-                  width: 22,
-                  height: 22,
-                  background: `${w.color}22`,
-                  border: `1px solid ${w.color}66`,
-                  borderRadius: 3,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 10,
-                  fontWeight: 700,
-                  color: w.color,
-                }}
-              >
-                {w.abbr}
-              </div>
-              <span
-                style={{
-                  fontSize: 10,
-                  fontWeight: 700,
-                  color: CYAN,
-                  background: "rgba(0,255,204,0.1)",
-                  padding: "1px 5px",
-                  borderRadius: 2,
-                  border: `1px solid ${BORDER}`,
-                }}
-              >
-                ×{w.qty}
-              </span>
-            </div>
-            <div
-              style={{
-                fontSize: 7.5,
-                color: selected === w.name ? TEXT : CYAN_DIM,
-                letterSpacing: 0.8,
-                margin: "3px 0",
-              }}
-            >
-              {w.name}
-            </div>
-            <button
-              type="button"
-              style={{
-                width: "100%",
-                fontSize: 7,
-                letterSpacing: 1,
-                padding: "2px 0",
-                background:
-                  selected === w.name
-                    ? "rgba(0,255,204,0.2)"
-                    : "rgba(0,255,204,0.06)",
-                border: `1px solid ${BORDER}`,
-                borderRadius: 2,
-                color: CYAN,
-                cursor: "pointer",
-              }}
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelect(w.name);
-                useGameStore.getState().setActiveWeapon(w.name);
-              }}
-            >
-              EQUIP
-            </button>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function RightInventoryPanel() {
-  const SLOTS = [
-    "B",
-    "C",
-    "E",
-    "M",
-    "I",
-    "B",
-    "C",
-    "I",
-    "M",
-    "O",
-    "I",
-    "B",
-    "C",
-    "E",
-    "I",
-  ];
-  return (
-    <div
-      data-ocid="inventory_panel.panel"
-      className="fixed right-0 z-20"
-      style={{
-        top: 48,
-        bottom: 80,
-        width: 56,
-        ...glass,
-        borderLeft: `1px solid ${BORDER}`,
-        borderTop: "none",
-        borderBottom: "none",
-        borderRight: "none",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        paddingTop: 6,
-        gap: 3,
-      }}
-    >
-      <div
-        style={{
-          fontSize: 6,
-          color: CYAN_DIM,
-          letterSpacing: 1.5,
-          marginBottom: 4,
-          writingMode: "vertical-rl",
-          transform: "rotate(180deg)",
-        }}
-      >
-        LOADOUT
-      </div>
-      {SLOTS.map((s, i) => (
-        <div
-          key={s}
-          data-ocid={`inventory_panel.item.${i + 1}`}
-          style={{
-            width: 40,
-            height: 40,
-            background: "rgba(0,255,204,0.05)",
-            border: `1px solid ${BORDER}`,
-            borderRadius: 3,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 11,
-            fontWeight: 700,
-            color: CYAN,
-            cursor: "pointer",
-            flexShrink: 0,
-          }}
-        >
-          {s}
-        </div>
-      ))}
     </div>
   );
 }
@@ -583,51 +358,127 @@ function BottomNavBar({ activeTab, onTabClick }: BottomNavProps) {
   );
 }
 
-function SheetContent({ tab }: { tab: string }) {
-  const player = useGameStore((s) => s.player);
-  const combatLog = useGameStore((s) => s.combatLog);
-  const selectedPlotId = useGameStore((s) => s.selectedPlotId);
-  const plots = useGameStore((s) => s.plots);
-  const selectedPlot = selectedPlotId !== null ? plots[selectedPlotId] : null;
-
-  const statCard = (label: string, value: number | string, color = CYAN) => (
-    <div
-      style={{
-        background: "rgba(0,255,204,0.05)",
-        border: `1px solid ${BORDER}`,
-        borderRadius: 6,
-        padding: "10px 12px",
-        flex: 1,
-        minWidth: 0,
-      }}
-    >
+function CommanderSheet() {
+  return (
+    <div style={{ padding: 12 }}>
       <div
         style={{
-          fontSize: 7,
+          fontSize: 8.5,
           color: CYAN_DIM,
           letterSpacing: 1.5,
-          marginBottom: 4,
+          marginBottom: 12,
         }}
       >
-        {label}
+        SELECT ACTIVE COMMANDER NFT
       </div>
-      <div style={{ fontSize: 22, fontWeight: 700, color }}>{value}</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        {COMMANDERS.map((c, i) => (
+          <div
+            key={c.name}
+            data-ocid={`commander.item.${i + 1}`}
+            style={{
+              background: "rgba(0,255,204,0.04)",
+              border: `1px solid ${BORDER}`,
+              borderRadius: 8,
+              padding: "10px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 7,
+              alignItems: "center",
+            }}
+          >
+            {/* Hex avatar placeholder */}
+            <div
+              style={{
+                width: 60,
+                height: 60,
+                clipPath:
+                  "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)",
+                background:
+                  "linear-gradient(135deg, rgba(0,255,204,0.15), rgba(0,100,80,0.3))",
+                border: `1px solid ${CYAN}44`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 22,
+              }}
+            >
+              👤
+            </div>
+            <div
+              style={{
+                fontSize: 9,
+                fontWeight: 700,
+                color: TEXT,
+                letterSpacing: 0.5,
+                textAlign: "center",
+              }}
+            >
+              {c.name}
+            </div>
+            <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
+              <span style={{ fontSize: 8, color: "#ef4444" }}>ATK {c.atk}</span>
+              <span style={{ fontSize: 8, color: "#3b82f6" }}>DEF {c.def}</span>
+            </div>
+            <div
+              style={{
+                fontSize: 7.5,
+                padding: "2px 8px",
+                borderRadius: 3,
+                background:
+                  c.rarity === "LEGENDARY"
+                    ? "rgba(255,215,0,0.1)"
+                    : "rgba(168,85,247,0.1)",
+                border: `1px solid ${c.rarity === "LEGENDARY" ? `${GOLD}66` : "#a855f766"}`,
+                color: c.rarity === "LEGENDARY" ? GOLD : "#a855f7",
+                letterSpacing: 0.5,
+              }}
+            >
+              {c.rarity}
+            </div>
+            <div
+              style={{ fontSize: 7.5, color: "#22c55e", letterSpacing: 0.5 }}
+            >
+              • NFT IN WALLET
+            </div>
+            <button
+              type="button"
+              data-ocid={`commander.item.${i + 1}.button`}
+              style={{
+                width: "100%",
+                padding: "5px",
+                background: "transparent",
+                border: "1px solid #ef444466",
+                borderRadius: 4,
+                color: "#ef4444",
+                fontSize: 8,
+                fontWeight: 700,
+                letterSpacing: 1,
+                cursor: "pointer",
+              }}
+            >
+              SELECT TO PLAY
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   );
+}
 
-  if (tab === "resources") {
-    return (
-      <div style={{ padding: 12 }}>
-        <div className="flex gap-2 mb-3">
-          {statCard("IRON", player.iron, "#94a3b8")}
-          {statCard("FUEL", player.fuel, "#f97316")}
-        </div>
-        <div className="flex gap-2">
-          {statCard("CRYSTAL", player.crystal, "#3b82f6")}
-          {statCard("FRNTR", player.frntBalance, GOLD)}
-        </div>
-      </div>
-    );
+function SheetContent({
+  tab,
+  onClose,
+  controlsRef,
+}: {
+  tab: string;
+  onClose: () => void;
+  controlsRef: React.RefObject<any>;
+}) {
+  const combatLog = useGameStore((s) => s.combatLog);
+
+  if (tab === "map") {
+    return <MapBottomSheet onClose={onClose} controlsRef={controlsRef} />;
   }
 
   if (tab === "inventory") {
@@ -681,109 +532,8 @@ function SheetContent({ tab }: { tab: string }) {
     );
   }
 
-  if (tab === "build") {
-    const items = [
-      { name: "MISSILE SILO", cost: 500, icon: "🚀" },
-      { name: "AIR BASE", cost: 800, icon: "✈️" },
-      { name: "SAM BATTERY", cost: 300, icon: "🛡️" },
-      { name: "NEXUS NODE", cost: 1200, icon: "⚡" },
-    ];
-    return (
-      <div style={{ padding: 12 }}>
-        <div className="grid gap-2" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          {items.map((item) => (
-            <div
-              key={item.name}
-              data-ocid={`build.${item.name.toLowerCase().replace(/ /g, "_")}.card`}
-              style={{
-                background: "rgba(0,255,204,0.05)",
-                border: `1px solid ${BORDER}`,
-                borderRadius: 6,
-                padding: "10px",
-                display: "flex",
-                flexDirection: "column",
-                gap: 6,
-              }}
-            >
-              <div style={{ fontSize: 20 }}>{item.icon}</div>
-              <div style={{ fontSize: 9, color: TEXT, letterSpacing: 0.5 }}>
-                {item.name}
-              </div>
-              <div style={{ fontSize: 10, color: GOLD }}>{item.cost} FRNTR</div>
-              <button
-                type="button"
-                data-ocid={`build.${item.name.toLowerCase().replace(/ /g, "_")}.button`}
-                style={{
-                  padding: "4px",
-                  background: "rgba(0,255,204,0.12)",
-                  border: `1px solid ${BORDER}`,
-                  borderRadius: 3,
-                  color: CYAN,
-                  fontSize: 8,
-                  letterSpacing: 1,
-                  cursor: "pointer",
-                }}
-              >
-                BUILD
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (tab === "map") {
-    return (
-      <div style={{ padding: 16 }}>
-        {selectedPlot ? (
-          <div>
-            <div
-              style={{
-                fontSize: 11,
-                color: CYAN,
-                letterSpacing: 1,
-                marginBottom: 12,
-              }}
-            >
-              PLOT #{selectedPlot.id} — {selectedPlot.biome.toUpperCase()}
-            </div>
-            <div
-              className="grid gap-2"
-              style={{ gridTemplateColumns: "1fr 1fr 1fr" }}
-            >
-              {statCard("IRON", selectedPlot.iron)}
-              {statCard("FUEL", selectedPlot.fuel, "#f97316")}
-              {statCard("CRYSTAL", selectedPlot.crystal, "#3b82f6")}
-            </div>
-            <div style={{ marginTop: 10, fontSize: 9, color: CYAN_DIM }}>
-              OWNER: {selectedPlot.owner ?? "UNCLAIMED"}
-            </div>
-            <div style={{ fontSize: 9, color: CYAN_DIM }}>
-              RICHNESS: {selectedPlot.richness}/10
-            </div>
-          </div>
-        ) : (
-          <div
-            data-ocid="map.empty_state"
-            style={{
-              textAlign: "center",
-              padding: "20px 0",
-              color: CYAN_DIM,
-              fontSize: 10,
-              letterSpacing: 1,
-            }}
-          >
-            SELECT A HEX ON THE GLOBE
-            <br />
-            TO VIEW PLOT DETAILS
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  if (tab === "combat") {
+  // INTEL = combat log
+  if (tab === "intel") {
     return (
       <div
         style={{
@@ -795,7 +545,7 @@ function SheetContent({ tab }: { tab: string }) {
         {combatLog.slice(0, 10).map((entry, i) => (
           <div
             key={entry.id}
-            data-ocid={`combat.item.${i + 1}`}
+            data-ocid={`intel.item.${i + 1}`}
             style={{
               padding: "6px 8px",
               marginBottom: 4,
@@ -832,61 +582,12 @@ function SheetContent({ tab }: { tab: string }) {
     );
   }
 
-  if (tab === "shop") {
-    const upgrades = [
-      { name: "ADVANCED WARHEAD", cost: 400, desc: "+50% blast radius" },
-      { name: "STEALTH COATING", cost: 600, desc: "Evade 30% intercepts" },
-      { name: "HYPERSONIC BOOST", cost: 350, desc: "3× missile speed" },
-    ];
-    return (
-      <div style={{ padding: 12 }}>
-        {upgrades.map((u, i) => (
-          <div
-            key={u.name}
-            data-ocid={`shop.item.${i + 1}`}
-            style={{
-              padding: "10px 12px",
-              marginBottom: 6,
-              background: "rgba(0,255,204,0.05)",
-              border: `1px solid ${BORDER}`,
-              borderRadius: 6,
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <div>
-              <div style={{ fontSize: 10, color: TEXT, letterSpacing: 0.5 }}>
-                {u.name}
-              </div>
-              <div style={{ fontSize: 8, color: CYAN_DIM }}>{u.desc}</div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span style={{ fontSize: 9, color: GOLD }}>{u.cost}</span>
-              <button
-                type="button"
-                data-ocid={`shop.item.${i + 1}.button`}
-                style={{
-                  padding: "4px 10px",
-                  background: "rgba(255,215,0,0.1)",
-                  border: "1px solid rgba(255,215,0,0.4)",
-                  borderRadius: 3,
-                  color: GOLD,
-                  fontSize: 8,
-                  letterSpacing: 1,
-                  cursor: "pointer",
-                }}
-              >
-                BUY
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-    );
+  if (tab === "commander") {
+    return <CommanderSheet />;
   }
 
-  if (tab === "settings") {
+  // MORE = settings
+  if (tab === "more") {
     const toggles = [
       { label: "AUTO-ROTATE GLOBE", id: "autorotate", def: true },
       { label: "SOUND EFFECTS", id: "sound", def: false },
@@ -947,11 +648,14 @@ function SheetContent({ tab }: { tab: string }) {
 interface BottomSheetProps {
   activeTab: string | null;
   onClose: () => void;
+  controlsRef: React.RefObject<any>;
 }
 
-function BottomSheet({ activeTab, onClose }: BottomSheetProps) {
+function BottomSheet({ activeTab, onClose, controlsRef }: BottomSheetProps) {
   const isOpen = activeTab !== null;
   const tabLabel = NAV_ITEMS.find((n) => n.id === activeTab)?.label ?? "";
+  const isMapTab = activeTab === "map";
+  const sheetHeight = isMapTab ? "75vh" : "55vh";
 
   return (
     <>
@@ -972,18 +676,22 @@ function BottomSheet({ activeTab, onClose }: BottomSheetProps) {
         data-ocid="nav.sheet"
         style={{
           position: "fixed",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: "55vh",
+          bottom: 64,
+          left: "50%",
+          transform: isOpen ? "translate(-50%, 0)" : "translate(-50%, 100%)",
+          width: "min(100%, 480px)",
+          height: sheetHeight,
           zIndex: 50,
           background: "rgba(4,12,24,0.97)",
           borderTop: `1px solid ${BORDER}`,
+          borderLeft: `1px solid ${BORDER}`,
+          borderRight: `1px solid ${BORDER}`,
           borderRadius: "16px 16px 0 0",
-          transform: isOpen ? "translateY(0)" : "translateY(100%)",
-          transition: "transform 0.3s ease-out",
+          transition: "transform 0.3s ease-out, height 0.3s ease-out",
           display: "flex",
           flexDirection: "column",
+          backdropFilter: "blur(16px)",
+          WebkitBackdropFilter: "blur(16px)",
         }}
       >
         {/* biome-ignore lint/a11y/useKeyWithClickEvents: drag handle */}
@@ -1042,8 +750,23 @@ function BottomSheet({ activeTab, onClose }: BottomSheetProps) {
             <ChevronDown size={16} />
           </button>
         </div>
-        <div style={{ overflowY: "auto", flex: 1 }}>
-          {activeTab && <SheetContent tab={activeTab} />}
+        <div
+          style={{
+            overflowY: isMapTab ? "hidden" : "auto",
+            flex: 1,
+            minHeight: 0,
+            height: "100%",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          {activeTab && (
+            <SheetContent
+              tab={activeTab}
+              onClose={onClose}
+              controlsRef={controlsRef}
+            />
+          )}
         </div>
       </div>
     </>
@@ -1053,23 +776,34 @@ function BottomSheet({ activeTab, onClose }: BottomSheetProps) {
 export default function Play() {
   const controlsRef = useRef<any>(null);
   const [activeTab, setActiveTab] = useState<string | null>(null);
-  const [selectedWeapon, setSelectedWeapon] = useState("BALLISTIC ICBM");
   const [missileActive, setMissileActive] = useState(false);
-  const windowWidth = useWindowWidth();
-  const isMobile = windowWidth < 768;
+  const [showCountdown, setShowCountdown] = useState(false);
+  const [showStrikeBanner, setShowStrikeBanner] = useState(false);
+  const [commandCenterOpen, setCommandCenterOpen] = useState(false);
+  const bannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const activeWeapon = useGameStore((s) => s.activeWeapon);
   const selectedPlotId = useGameStore((s) => s.selectedPlotId);
-
-  // On desktop, push weapon panel below the sidebar (~220px height)
-  const weaponPanelTop = isMobile ? 48 : 48 + SIDEBAR_HEIGHT;
+  const plotHoverCard = useGameStore((s) => s.plotHoverCard);
+  const setPlotHoverCard = useGameStore((s) => s.setPlotHoverCard);
 
   const handleTabClick = (id: string) =>
     setActiveTab((prev) => (prev === id ? null : id));
+
   const handleFire = () => {
-    if (!missileActive) setMissileActive(true);
+    if (!missileActive && !showCountdown) setShowCountdown(true);
   };
-  const handleMissileComplete = () => setMissileActive(false);
+
+  const handleLaunchReady = useCallback(() => {
+    setShowCountdown(false);
+    setMissileActive(true);
+  }, []);
+
+  const handleMissileComplete = useCallback(() => {
+    setMissileActive(false);
+    setShowStrikeBanner(true);
+    if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
+    bannerTimerRef.current = setTimeout(() => setShowStrikeBanner(false), 2500);
+  }, []);
 
   return (
     <div
@@ -1089,24 +823,117 @@ export default function Play() {
       </div>
 
       <Navbar />
-      <TopBar />
+      <TopBar onOpenCommandCenter={() => setCommandCenterOpen(true)} />
       <LeftSidebarHUD />
-      <LeftWeaponPanel
-        selected={selectedWeapon}
-        onSelect={setSelectedWeapon}
-        topOffset={weaponPanelTop}
-      />
-      <RightInventoryPanel />
       <VirtualJoystick controlsRef={controlsRef} />
       <CommandPanel
         onFire={handleFire}
-        fireDisabled={missileActive || !activeWeapon || selectedPlotId === null}
+        fireDisabled={missileActive || showCountdown || selectedPlotId === null}
         onOpenTab={(tab) => setActiveTab(tab)}
         onToggleCombatLog={() => {}}
       />
       <BottomNavBar activeTab={activeTab} onTabClick={handleTabClick} />
       <CombatLog />
-      <BottomSheet activeTab={activeTab} onClose={() => setActiveTab(null)} />
+      <BottomSheet
+        activeTab={activeTab}
+        onClose={() => setActiveTab(null)}
+        controlsRef={controlsRef}
+      />
+
+      <CommandCenter
+        open={commandCenterOpen}
+        onClose={() => setCommandCenterOpen(false)}
+      />
+
+      {showCountdown && <CountdownOverlay onLaunchReady={handleLaunchReady} />}
+
+      {showStrikeBanner && (
+        <div
+          data-ocid="missile.success_state"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 9000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            pointerEvents: "none",
+          }}
+        >
+          <div
+            style={{
+              background: "rgba(2,10,20,0.92)",
+              backdropFilter: "blur(12px)",
+              WebkitBackdropFilter: "blur(12px)",
+              border: "1px solid rgba(0,255,204,0.3)",
+              borderRadius: 8,
+              padding: "24px 48px",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 8,
+              animation: "strikeFadeIn 0.3s ease-out",
+            }}
+          >
+            <div
+              style={{
+                fontSize: 9,
+                letterSpacing: 4,
+                color: "rgba(0,255,204,0.6)",
+                fontFamily: "'Courier New', monospace",
+              }}
+            >
+              BALLISTIC ICBM
+            </div>
+            <div
+              style={{
+                fontSize: 32,
+                fontWeight: 900,
+                letterSpacing: 6,
+                color: "#00ffcc",
+                textShadow: "0 0 24px #00ffcc, 0 0 48px #00ffcc44",
+                fontFamily: "'Courier New', monospace",
+              }}
+            >
+              STRIKE SUCCESSFUL
+            </div>
+            <div
+              style={{
+                width: 160,
+                height: 1,
+                background:
+                  "linear-gradient(90deg, transparent, rgba(0,255,204,0.6), transparent)",
+              }}
+            />
+            <div
+              style={{
+                fontSize: 8,
+                letterSpacing: 2,
+                color: "rgba(255,100,0,0.7)",
+                fontFamily: "'Courier New', monospace",
+              }}
+            >
+              TARGET NEUTRALISED
+            </div>
+          </div>
+          <style>{`
+            @keyframes strikeFadeIn {
+              from { opacity: 0; transform: scale(0.9); }
+              to { opacity: 1; transform: scale(1); }
+            }
+          `}</style>
+        </div>
+      )}
+
+      {plotHoverCard && (
+        <PlotHoverCard
+          plotId={plotHoverCard.plotId}
+          owner={plotHoverCard.owner}
+          action={plotHoverCard.action}
+          nextStep={plotHoverCard.nextStep}
+          onDismiss={() => setPlotHoverCard(null)}
+        />
+      )}
 
       <div
         style={{

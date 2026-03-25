@@ -24,7 +24,7 @@ function truncate(s: string, max: number): string {
 
 export default function CombatLog() {
   const entries = useCombatLog();
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom on new entries

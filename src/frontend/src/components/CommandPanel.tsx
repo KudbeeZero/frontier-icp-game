@@ -7,15 +7,6 @@ const CYAN_DIM = "rgba(0,255,204,0.35)";
 const GOLD = "#ffd700";
 const BORDER = "rgba(0,255,204,0.22)";
 
-const WEAPONS = [
-  { name: "BALLISTIC ICBM", abbr: "B", qty: 8, color: "#ef4444" },
-  { name: "CRUISE MISSILE", abbr: "C", qty: 12, color: "#f97316" },
-  { name: "EMP WARHEAD", abbr: "E", qty: 3, color: "#3b82f6" },
-  { name: "MIRV STRIKE", abbr: "M", qty: 2, color: "#a855f7" },
-  { name: "INTERCEPTOR", abbr: "I", qty: 15, color: "#22c55e" },
-  { name: "ORBITAL RAIL", abbr: "O", qty: 1, color: "#ffd700" },
-];
-
 interface CommandPanelProps {
   onFire: () => void;
   fireDisabled: boolean;
@@ -29,7 +20,6 @@ export default function CommandPanel({
   onOpenTab,
   onToggleCombatLog,
 }: CommandPanelProps) {
-  const activeWeapon = useGameStore((s) => s.activeWeapon);
   const selectedPlotId = useGameStore((s) => s.selectedPlotId);
   const [expanded, setExpanded] = useState(false);
   const [devicesTooltip, setDevicesTooltip] = useState(false);
@@ -37,7 +27,6 @@ export default function CommandPanel({
 
   const isDesktop = typeof window !== "undefined" && window.innerWidth >= 768;
   const targetLocked = selectedPlotId !== null;
-  const weapon = WEAPONS.find((w) => w.name === activeWeapon) ?? null;
 
   // Auto-collapse on outside tap (mobile only)
   useEffect(() => {
@@ -63,65 +52,6 @@ export default function CommandPanel({
     WebkitBackdropFilter: "blur(10px)",
     border: `1px solid ${BORDER}`,
   };
-
-  // ── WEAPON INFO ROW ──────────────────────────────────────────────
-  const weaponInfo = (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
-        flex: 1,
-        minWidth: 0,
-      }}
-    >
-      <div
-        style={{
-          width: 22,
-          height: 22,
-          background: weapon ? `${weapon.color}22` : "rgba(100,100,100,0.2)",
-          border: `1px solid ${
-            weapon ? `${weapon.color}66` : "rgba(100,100,100,0.4)"
-          }`,
-          borderRadius: 3,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontSize: 10,
-          fontWeight: 700,
-          color: weapon ? weapon.color : "#666",
-          flexShrink: 0,
-        }}
-      >
-        {weapon ? weapon.abbr : "—"}
-      </div>
-      <div style={{ minWidth: 0 }}>
-        <div
-          style={{
-            fontSize: 8,
-            color: weapon ? CYAN : CYAN_DIM,
-            letterSpacing: 1,
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
-        >
-          {weapon ? weapon.name : "NO WEAPON"}
-        </div>
-        {weapon && (
-          <div
-            style={{
-              fontSize: 7,
-              color: CYAN_DIM,
-              letterSpacing: 0.5,
-            }}
-          >
-            ×{weapon.qty}
-          </div>
-        )}
-      </div>
-    </div>
-  );
 
   // ── LOCK INDICATOR ───────────────────────────────────────────────
   const lockIndicator = (
@@ -341,11 +271,6 @@ export default function CommandPanel({
           @keyframes lockPulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
         `}</style>
 
-        {/* Weapon row */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          {weaponInfo}
-        </div>
-
         {/* Lock indicator */}
         <div style={{ display: "flex", justifyContent: "center" }}>
           {lockIndicator}
@@ -408,7 +333,17 @@ export default function CommandPanel({
           cursor: "pointer",
         }}
       >
-        {weaponInfo}
+        <div
+          style={{
+            flex: 1,
+            fontSize: 8,
+            letterSpacing: 2,
+            color: "rgba(0,255,204,0.5)",
+            fontFamily: "monospace",
+          }}
+        >
+          COMMAND PANEL
+        </div>
         {lockIndicator}
         <button
           type="button"
