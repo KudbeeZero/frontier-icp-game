@@ -2,13 +2,11 @@ import { create } from "zustand";
 import {
   type MilitaryBranch,
   type OwnedCommander,
-  commanderEffectiveAtk,
-  commanderEffectiveDef,
-  commanderFrntrBonus,
   getArchetype,
   getCommander,
-  getCurrentRank,
 } from "../constants/commanders";
+import { MISSILE_CONFIGS } from "../constants/missiles";
+import { GEODESIC_TILES } from "../utils/geodesicGrid";
 
 export type Biome =
   | "Arctic"
@@ -203,26 +201,34 @@ function randomBiome(seed: number): Biome {
 }
 
 function generatePlots(): PlotData[] {
-  const plots: PlotData[] = [];
-  for (let i = 0; i < 200; i++) {
-    plots.push({
-      id: i,
-      lat: Math.sin(i * 0.37) * 0.9 * 90,
-      lng: ((i * 137.508) % 360) - 180,
-      biome: randomBiome(i),
-      richness: 1 + (i % 5),
-      owner: i % 17 === 0 ? "NEXUS-7" : i % 13 === 0 ? "KRONOS" : null,
-      iron: 0,
-      fuel: 0,
-      crystal: 0,
-      defenses: {
-        turrets: i % 17 === 0 ? 2 : 0,
-        shields: i % 23 === 0 ? 1 : 0,
-        walls: 0,
-      },
-    });
-  }
-  return plots;
+  // Uses icosahedral geodesic subdivision (freq=32) → 10,242 near-equal-area tiles.
+  // Built once at module load in geodesicGrid.ts.
+  return GEODESIC_TILES.map((tile, i) => ({
+    id: i,
+    lat: tile.lat,
+    lng: tile.lng,
+    biome: randomBiome(i),
+    richness: 1 + (i % 5),
+    // Spread AI faction ownership proportionally across the globe
+    owner:
+      i % 853 === 0
+        ? "NEXUS-7"
+        : i % 787 === 0
+          ? "KRONOS"
+          : i % 1021 === 0
+            ? "VANGUARD"
+            : i % 947 === 0
+              ? "SPECTRE"
+              : null,
+    iron: 0,
+    fuel: 0,
+    crystal: 0,
+    defenses: {
+      turrets: 0,
+      shields: 0,
+      walls: 0,
+    },
+  }));
 }
 
 function generateCombatLog(): CombatEntry[] {
@@ -274,6 +280,10 @@ function generateLeaderboard(): LeaderEntry[] {
 
 const ALL_PLOTS = generatePlots();
 
+const INITIAL_ARSENAL_INVENTORY: Record<string, number> = Object.fromEntries(
+  MISSILE_CONFIGS.map((m) => [m.id, m.qty]),
+);
+
 interface GameState {
   plots: PlotData[];
   player: PlayerData;
@@ -289,6 +299,9 @@ interface GameState {
   commanderAssignments: Record<number, string>; // plotId -> instanceId
   plotPurchaseTimes: Record<number, number>;
   rankStats: RankStats;
+  // Arsenal
+  equippedMissileId: string | null;
+  arsenalInventory: Record<string, number>;
   // New archetype system
   ownedCommanders: OwnedCommander[]; // replaces ownedCommanderIds
   ownedCommanderIds: string[]; // legacy compat: instanceIds
@@ -317,6 +330,9 @@ interface GameState {
   selectCommander: (id: string, atk: number, def: number) => void;
   assignCommanderToPlot: (plotId: number, instanceId: string) => void;
   removeCommanderFromPlot: (plotId: number) => void;
+  // Arsenal actions
+  setEquippedMissile: (id: string) => void;
+  fireArsenalMissile: (missileId: string) => void;
   // New archetype actions
   purchaseArchetype: (archetypeId: MilitaryBranch) => boolean;
   promoteCommander: (instanceId: string) => boolean;
@@ -364,6 +380,8 @@ export const useGameStore = create<GameState>((set, get) => ({
   commanderAssignments: {},
   plotPurchaseTimes: {},
   rankStats: { missionsLaunched: 0, plotsOwned: 0, combatWins: 0 },
+  equippedMissileId: "ICBM_PHANTOM",
+  arsenalInventory: { ...INITIAL_ARSENAL_INVENTORY },
   ownedCommanders: [],
   ownedCommanderIds: [],
   commanderUpgrades: {},
@@ -375,6 +393,20 @@ export const useGameStore = create<GameState>((set, get) => ({
   setHoveredPlotId: (id) => set({ hoveredPlotId: id }),
   setFaction: (faction) =>
     set((state) => ({ player: { ...state.player, faction } })),
+
+  setEquippedMissile: (id) => set({ equippedMissileId: id }),
+
+  fireArsenalMissile: (missileId) =>
+    set((s) => ({
+      arsenalInventory: {
+        ...s.arsenalInventory,
+        [missileId]: Math.max(0, (s.arsenalInventory[missileId] ?? 0) - 1),
+      },
+      rankStats: {
+        ...s.rankStats,
+        missionsLaunched: s.rankStats.missionsLaunched + 1,
+      },
+    })),
 
   selectCommander: (id, atk, def) =>
     set((state) => ({

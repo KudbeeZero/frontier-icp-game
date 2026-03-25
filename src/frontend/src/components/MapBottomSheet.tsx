@@ -13,6 +13,9 @@ import {
 import type { LucideIcon } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
+import type { MissileConfig } from "../constants/missiles";
+import { MISSILE_CONFIGS } from "../constants/missiles";
+import { useArsenalAudio } from "../hooks/useArsenalAudio";
 import { type SubParcel, useGameStore } from "../store/gameStore";
 import BuildingPicker from "./BuildingPicker";
 
@@ -260,14 +263,131 @@ function SlotRow({
   );
 }
 
+function QuickLaunchPanel({
+  onFireMissile,
+}: {
+  onFireMissile: (missile: MissileConfig) => void;
+}) {
+  const arsenalInventory = useGameStore((s) => s.arsenalInventory);
+  const { playMissileAudio } = useArsenalAudio();
+  const fireArsenalMissile = useGameStore((s) => s.fireArsenalMissile);
+
+  const available = MISSILE_CONFIGS.filter(
+    (m) => (arsenalInventory[m.id] ?? 0) > 0,
+  ).slice(0, 3);
+
+  if (available.length === 0) return null;
+
+  return (
+    <div
+      data-ocid="map.quicklaunch.panel"
+      style={{
+        padding: "10px 14px",
+        borderTop: `1px solid ${BORDER}`,
+        flexShrink: 0,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 8,
+          color: CYAN_DIM,
+          letterSpacing: 2,
+          marginBottom: 8,
+          fontFamily: "monospace",
+          display: "flex",
+          alignItems: "center",
+          gap: 4,
+        }}
+      >
+        <Zap size={10} color={"#f97316"} />
+        QUICK LAUNCH
+      </div>
+      <div
+        style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2 }}
+      >
+        {available.map((missile) => (
+          <div
+            key={missile.id}
+            style={{
+              flexShrink: 0,
+              background: "rgba(0,0,0,0.3)",
+              border: `1px solid ${missile.accentColor}55`,
+              borderRadius: 6,
+              padding: "6px 8px",
+              minWidth: 90,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 8,
+                fontWeight: 700,
+                color: missile.accentColor,
+                letterSpacing: 0.5,
+                fontFamily: "monospace",
+                marginBottom: 4,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {missile.name}
+            </div>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 4,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 8,
+                  color: CYAN_DIM,
+                  fontFamily: "monospace",
+                }}
+              >
+                ×{arsenalInventory[missile.id] ?? 0}
+              </span>
+              <button
+                type="button"
+                data-ocid={`map.quicklaunch.${missile.id.toLowerCase()}.button`}
+                onClick={() => {
+                  fireArsenalMissile(missile.id);
+                  playMissileAudio(missile.id, "launch");
+                  onFireMissile(missile);
+                }}
+                style={{
+                  fontSize: 7,
+                  fontWeight: 700,
+                  letterSpacing: 1,
+                  padding: "3px 6px",
+                  borderRadius: 3,
+                  background: "rgba(239,68,68,0.15)",
+                  border: "1px solid #ef4444",
+                  color: "#ef4444",
+                  cursor: "pointer",
+                  fontFamily: "monospace",
+                }}
+              >
+                FIRE
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 interface MapBottomSheetProps {
   onClose: () => void;
   controlsRef?: React.RefObject<any>;
+  onFireMissile?: (missile: MissileConfig) => void;
 }
 
 export default function MapBottomSheet({
   onClose,
   controlsRef,
+  onFireMissile,
 }: MapBottomSheetProps) {
   const [pickerSlot, setPickerSlot] = useState<number | null>(null);
   const [purchasing, setPurchasing] = useState(false);
@@ -298,6 +418,8 @@ export default function MapBottomSheet({
   const hasEmptySlot = subParcels.some(
     (sp) => sp.subId !== 0 && sp.unlocked && !sp.buildingType,
   );
+
+  const hasSilo = subParcels.some((sp) => sp.buildingType === "MISSILE_SILO");
 
   function handlePurchase() {
     if (!plot || purchasing) return;
@@ -552,6 +674,11 @@ export default function MapBottomSheet({
             </>
           )}
         </div>
+
+        {/* QUICK LAUNCH — only if plot has a silo and handler is provided */}
+        {plot && isOwnPlot && hasSilo && onFireMissile && (
+          <QuickLaunchPanel onFireMissile={onFireMissile} />
+        )}
 
         {/* DECISION LAYER */}
         {plot && (

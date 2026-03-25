@@ -1,5 +1,6 @@
 import {
   ChevronDown,
+  Crosshair,
   Grid2x2,
   Map as MapIcon,
   MoreHorizontal,
@@ -8,6 +9,7 @@ import {
   Shield,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import ArsenalSheet from "../components/ArsenalSheet";
 import CommandCenter from "../components/CommandCenter";
 import CommandPanel from "../components/CommandPanel";
 import CommanderStore from "../components/CommanderStore";
@@ -18,6 +20,7 @@ import MapBottomSheet from "../components/MapBottomSheet";
 import Navbar from "../components/Navbar";
 import PlotHoverCard from "../components/PlotHoverCard";
 import SmokeTestPanel from "../components/SmokeTestPanel";
+import type { MissileConfig } from "../constants/missiles";
 import { useGameStore } from "../store/gameStore";
 
 const CYAN = "#00ffcc";
@@ -38,6 +41,7 @@ const WEAPONS = [
 const NAV_ITEMS = [
   { id: "map", label: "MAP", Icon: MapIcon },
   { id: "inventory", label: "INVENTORY", Icon: Package },
+  { id: "arsenal", label: "ARSENAL", Icon: Crosshair },
   { id: "intel", label: "INTEL", Icon: Radio },
   { id: "commander", label: "COMMANDER", Icon: Shield },
   { id: "more", label: "MORE", Icon: MoreHorizontal },
@@ -60,7 +64,6 @@ function TopBar({ onOpenCommandCenter }: TopBarProps) {
       }}
     >
       <div className="flex items-center gap-1.5">
-        {/* Command Center toggle button */}
         <button
           type="button"
           data-ocid="command_center.open_modal_button"
@@ -269,15 +272,23 @@ function SheetContent({
   tab,
   onClose,
   controlsRef,
+  onFireMissile,
 }: {
   tab: string;
   onClose: () => void;
   controlsRef: React.RefObject<any>;
+  onFireMissile: (missile: MissileConfig) => void;
 }) {
   const combatLog = useGameStore((s) => s.combatLog);
 
   if (tab === "map") {
-    return <MapBottomSheet onClose={onClose} controlsRef={controlsRef} />;
+    return (
+      <MapBottomSheet
+        onClose={onClose}
+        controlsRef={controlsRef}
+        onFireMissile={onFireMissile}
+      />
+    );
   }
 
   if (tab === "inventory") {
@@ -331,7 +342,10 @@ function SheetContent({
     );
   }
 
-  // INTEL = combat log
+  if (tab === "arsenal") {
+    return <ArsenalSheet onFireMissile={onFireMissile} />;
+  }
+
   if (tab === "intel") {
     return (
       <div
@@ -385,7 +399,6 @@ function SheetContent({
     return <CommanderStore />;
   }
 
-  // MORE = settings
   if (tab === "more") {
     const toggles = [
       { label: "AUTO-ROTATE GLOBE", id: "autorotate", def: true },
@@ -448,13 +461,20 @@ interface BottomSheetProps {
   activeTab: string | null;
   onClose: () => void;
   controlsRef: React.RefObject<any>;
+  onFireMissile: (missile: MissileConfig) => void;
 }
 
-function BottomSheet({ activeTab, onClose, controlsRef }: BottomSheetProps) {
+function BottomSheet({
+  activeTab,
+  onClose,
+  controlsRef,
+  onFireMissile,
+}: BottomSheetProps) {
   const isOpen = activeTab !== null;
   const tabLabel = NAV_ITEMS.find((n) => n.id === activeTab)?.label ?? "";
   const isMapTab = activeTab === "map";
-  const sheetHeight = isMapTab ? "75vh" : "55vh";
+  const isArsenalTab = activeTab === "arsenal";
+  const sheetHeight = isMapTab || isArsenalTab ? "75vh" : "55vh";
 
   const [windowWidth, setWindowWidth] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth : 1024,
@@ -477,7 +497,6 @@ function BottomSheet({ activeTab, onClose, controlsRef }: BottomSheetProps) {
   const isMobile = windowWidth < 768;
   const isLandscape = windowHeight < 500;
   const navHeight = isLandscape ? 44 : 64;
-  // On mobile MAP tab, offset sheet above the 60px collapsed CommandPanel + navHeight
   const sheetBottom = isMapTab && isMobile ? navHeight + 64 : navHeight;
 
   return (
@@ -579,7 +598,7 @@ function BottomSheet({ activeTab, onClose, controlsRef }: BottomSheetProps) {
         </div>
         <div
           style={{
-            overflowY: isMapTab ? "hidden" : "auto",
+            overflowY: isMapTab || isArsenalTab ? "hidden" : "auto",
             flex: 1,
             minHeight: 0,
             height: "100%",
@@ -592,6 +611,7 @@ function BottomSheet({ activeTab, onClose, controlsRef }: BottomSheetProps) {
               tab={activeTab}
               onClose={onClose}
               controlsRef={controlsRef}
+              onFireMissile={onFireMissile}
             />
           )}
         </div>
@@ -607,6 +627,8 @@ export default function Play() {
   const [showCountdown, setShowCountdown] = useState(false);
   const [showStrikeBanner, setShowStrikeBanner] = useState(false);
   const [commandCenterOpen, setCommandCenterOpen] = useState(false);
+  const [activeMissileConfig, setActiveMissileConfig] =
+    useState<MissileConfig | null>(null);
   const bannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const selectedPlotId = useGameStore((s) => s.selectedPlotId);
@@ -629,6 +651,15 @@ export default function Play() {
     if (!missileActive && !showCountdown) setShowCountdown(true);
   };
 
+  const handleArsenalFire = useCallback(
+    (missile: MissileConfig) => {
+      setActiveMissileConfig(missile);
+      setActiveTab(null);
+      if (!missileActive && !showCountdown) setShowCountdown(true);
+    },
+    [missileActive, showCountdown],
+  );
+
   const handleLaunchReady = useCallback(() => {
     setShowCountdown(false);
     setMissileActive(true);
@@ -638,7 +669,10 @@ export default function Play() {
     setMissileActive(false);
     setShowStrikeBanner(true);
     if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
-    bannerTimerRef.current = setTimeout(() => setShowStrikeBanner(false), 2500);
+    bannerTimerRef.current = setTimeout(() => {
+      setShowStrikeBanner(false);
+      setActiveMissileConfig(null);
+    }, 2500);
   }, []);
 
   useEffect(() => {
@@ -670,6 +704,7 @@ export default function Play() {
           controlsRef={controlsRef}
           missileActive={missileActive}
           onMissileComplete={handleMissileComplete}
+          missileConfig={activeMissileConfig ?? undefined}
         />
       </div>
 
@@ -687,6 +722,7 @@ export default function Play() {
         activeTab={activeTab}
         onClose={() => setActiveTab(null)}
         controlsRef={controlsRef}
+        onFireMissile={handleArsenalFire}
       />
 
       <CommandCenter
@@ -732,7 +768,7 @@ export default function Play() {
                 fontFamily: "'Courier New', monospace",
               }}
             >
-              BALLISTIC ICBM
+              {activeMissileConfig?.name ?? "BALLISTIC ICBM"}
             </div>
             <div
               style={{
@@ -758,7 +794,9 @@ export default function Play() {
               style={{
                 fontSize: 8,
                 letterSpacing: 2,
-                color: "rgba(255,100,0,0.7)",
+                color: activeMissileConfig
+                  ? `${activeMissileConfig.accentColor}bb`
+                  : "rgba(255,100,0,0.7)",
                 fontFamily: "'Courier New', monospace",
               }}
             >
@@ -784,7 +822,6 @@ export default function Play() {
         />
       )}
 
-      {/* Purchase success toast */}
       {purchaseToast && (
         <div
           data-ocid="map.success_state"
