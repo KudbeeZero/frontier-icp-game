@@ -1,69 +1,178 @@
-import { useEffect, useRef } from "react";
-import { useGameStore } from "../store/gameStore";
+import { Terminal, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { useCombatLog } from "../hooks/useCombatLog";
+
+const PANEL_STYLE: React.CSSProperties = {
+  background: "rgba(2,10,20,0.92)",
+  border: "1px solid rgba(0,255,204,0.22)",
+  borderRadius: 8,
+  backdropFilter: "blur(10px)",
+  WebkitBackdropFilter: "blur(10px)",
+};
+
+function fmtTime(ts: number): string {
+  const d = new Date(ts);
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  const ss = String(d.getSeconds()).padStart(2, "0");
+  return `${hh}:${mm}:${ss}`;
+}
+
+function truncate(s: string, max: number): string {
+  return s.length > max ? `${s.slice(0, max)}\u2026` : s;
+}
 
 export default function CombatLog() {
-  const combatLog = useGameStore((s) => s.combatLog);
+  const entries = useCombatLog();
+  const [open, setOpen] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: ref-based
+  // Auto-scroll to bottom on new entries
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional scroll-on-update
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollLeft = 0;
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [combatLog]);
+  }, [entries]);
 
-  const fmt = (ts: number) => {
-    const diff = Date.now() - ts;
-    if (diff < 60000) return `${Math.floor(diff / 1000)}s ago`;
-    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
-    return `${Math.floor(diff / 3600000)}h ago`;
-  };
+  if (!open) {
+    return (
+      <button
+        type="button"
+        data-ocid="combat_log.open_modal_button"
+        onClick={() => setOpen(true)}
+        className="fixed z-40 flex items-center justify-center rounded-lg w-9 h-9 transition-all hover:scale-110"
+        style={{
+          bottom: 84,
+          left: 16,
+          ...PANEL_STYLE,
+          border: "1px solid rgba(0,255,204,0.35)",
+        }}
+        title="Open Combat Log"
+      >
+        <Terminal size={14} style={{ color: "#00ffcc" }} />
+      </button>
+    );
+  }
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-40 h-20 glass-dark border-t border-border/50">
-      <div className="flex items-center h-full px-4 gap-4">
-        <div className="text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground whitespace-nowrap flex-shrink-0">
-          Real Time
-          <br />
-          Combat Log
-        </div>
-        <div className="w-px h-8 bg-border/50" />
-        <div
-          ref={scrollRef}
-          className="flex gap-3 overflow-x-auto pb-1 flex-1"
-          style={{ scrollbarWidth: "thin" }}
+    <div
+      data-ocid="combat_log.panel"
+      className="fixed z-40 flex flex-col"
+      style={{
+        bottom: 84,
+        left: 16,
+        width: 280,
+        maxHeight: 320,
+        ...PANEL_STYLE,
+      }}
+    >
+      {/* Header */}
+      <div
+        className="flex items-center justify-between px-3 py-2 flex-shrink-0"
+        style={{ borderBottom: "1px solid rgba(0,255,204,0.15)" }}
+      >
+        <span
+          className="text-xs font-bold uppercase tracking-[0.15em]"
+          style={{
+            color: "#00ffcc",
+            textShadow: "0 0 8px rgba(0,255,204,0.5)",
+            letterSpacing: "0.15em",
+          }}
         >
-          {combatLog.map((entry) => (
-            <div
-              key={entry.id}
-              className="flex-shrink-0 flex items-center gap-2 glass rounded-lg px-3 py-2"
-            >
+          Real Time Combat Log
+        </span>
+        <button
+          type="button"
+          data-ocid="combat_log.close_button"
+          onClick={() => setOpen(false)}
+          className="rounded p-0.5 transition-all hover:bg-white/10"
+          style={{ color: "rgba(180,220,220,0.6)" }}
+        >
+          <X size={13} />
+        </button>
+      </div>
+
+      {/* Scrollable log */}
+      <div
+        ref={scrollRef}
+        className="overflow-y-auto flex-1"
+        style={{
+          scrollbarWidth: "thin",
+          scrollbarColor: "rgba(0,255,204,0.2) transparent",
+        }}
+      >
+        {entries.length === 0 ? (
+          <div
+            data-ocid="combat_log.empty_state"
+            className="text-center py-6 text-xs"
+            style={{ color: "rgba(180,220,220,0.4)" }}
+          >
+            No combat events yet
+          </div>
+        ) : (
+          entries.map((entry, i) => {
+            const isCapture = entry.success;
+            const eventColor = isCapture ? "#22c55e" : "#ef4444";
+            const eventLabel = isCapture ? "CAPTURED" : "ATTACK";
+            return (
               <div
-                className="w-1 h-8 rounded-full"
-                style={{ background: entry.success ? "#22C55E" : "#EF4444" }}
-              />
-              <div>
-                <div className="text-xs font-medium text-foreground whitespace-nowrap">
-                  <span style={{ color: "#EF4444" }}>
-                    {entry.attacker.slice(0, 8)}
-                  </span>
-                  <span className="text-muted-foreground"> → </span>
-                  <span style={{ color: "#22C3C9" }}>
-                    {entry.defender.slice(0, 8)}
-                  </span>
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  Plot #{entry.toPlot} · {fmt(entry.timestamp)} ·{" "}
-                  <span
-                    style={{ color: entry.success ? "#22C55E" : "#EF4444" }}
-                  >
-                    {entry.success ? "WIN" : "LOSS"}
-                  </span>
+                key={entry.id}
+                data-ocid={`combat_log.item.${i + 1}`}
+                className="flex items-start gap-2 px-3 py-2"
+                style={{ borderBottom: "1px solid rgba(0,255,204,0.06)" }}
+              >
+                {/* Colored indicator bar */}
+                <div
+                  className="w-0.5 rounded-full mt-0.5 flex-shrink-0"
+                  style={{ background: eventColor, height: 36 }}
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span
+                      className="text-xs font-medium truncate"
+                      style={{ color: eventColor, maxWidth: 80 }}
+                    >
+                      {truncate(entry.attacker, 10)}
+                    </span>
+                    <span
+                      className="text-xs"
+                      style={{ color: "rgba(180,220,220,0.4)" }}
+                    >
+                      →
+                    </span>
+                    <span
+                      className="text-xs truncate"
+                      style={{ color: "rgba(180,220,220,0.75)", maxWidth: 80 }}
+                    >
+                      {truncate(entry.defender, 10)}
+                    </span>
+                    <span
+                      className="text-xs font-bold ml-auto flex-shrink-0"
+                      style={{ color: eventColor }}
+                    >
+                      {eventLabel}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span
+                      className="text-xs font-mono"
+                      style={{ color: "rgba(180,220,220,0.35)" }}
+                    >
+                      {fmtTime(entry.timestamp)}
+                    </span>
+                    <span
+                      className="text-xs"
+                      style={{ color: "rgba(180,220,220,0.3)" }}
+                    >
+                      #{entry.toPlot}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            );
+          })
+        )}
       </div>
     </div>
   );

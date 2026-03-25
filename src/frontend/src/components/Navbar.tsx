@@ -1,75 +1,129 @@
 import { Link } from "@tanstack/react-router";
 import { Zap } from "lucide-react";
-import { useAuth } from "../hooks/useAuth";
-import { useGameStore } from "../store/gameStore";
+import { useInternetIdentity } from "../hooks/useInternetIdentity";
+import { useTokenBalance } from "../hooks/useTokenBalance";
 
 const NAV_LINKS = [
   { label: "Home", to: "/" },
   { label: "Universe", to: "/play" },
-  { label: "Inventory", to: "/inventory" },
-  { label: "Leaderboard", to: "/leaderboard" },
+  { label: "Factions", to: "/factions" },
+  { label: "Marketplace", to: "/marketplace" },
 ];
 
 export default function Navbar() {
-  const { login, logout, isAuthenticated } = useAuth();
-  const frntBalance = useGameStore((s) => s.player.frntBalance);
+  const { login, clear, identity } = useInternetIdentity();
+  const isAuthenticated = !!identity;
+  const balance = useTokenBalance();
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 h-14 glass-dark border-b border-border/50">
-      <div className="flex items-center justify-between h-full px-6">
-        {/* Logo */}
-        <Link
-          to="/"
-          className="font-display font-bold text-xl tracking-[0.2em] text-primary glow-text uppercase"
-        >
-          FRONTIER
-        </Link>
+    <header
+      data-ocid="navbar.panel"
+      className="hidden md:flex fixed top-0 left-0 right-0 z-50 h-14 items-center justify-between px-6"
+      style={{
+        background: "rgba(2,10,20,0.88)",
+        borderBottom: "1px solid rgba(0,255,204,0.22)",
+        backdropFilter: "blur(10px)",
+        WebkitBackdropFilter: "blur(10px)",
+      }}
+    >
+      {/* Logo */}
+      <Link
+        to="/"
+        data-ocid="navbar.link"
+        className="font-bold text-xl tracking-[0.25em] uppercase"
+        style={{
+          color: "#00ffcc",
+          textShadow:
+            "0 0 12px rgba(0,255,204,0.7), 0 0 24px rgba(0,255,204,0.3)",
+          letterSpacing: "0.25em",
+        }}
+      >
+        FRONTIER
+      </Link>
 
-        {/* Nav pill */}
-        <nav className="hidden md:flex items-center gap-1 glass rounded-full px-2 py-1">
-          {NAV_LINKS.map((link) => (
-            <Link
-              key={link.to}
-              to={link.to}
-              className="px-4 py-1.5 text-xs font-medium uppercase tracking-wider rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all"
-              activeProps={{
-                className:
-                  "px-4 py-1.5 text-xs font-medium uppercase tracking-wider rounded-full text-primary bg-primary/15",
-              }}
-            >
-              {link.label}
-            </Link>
-          ))}
+      {/* Center nav pill */}
+      <nav
+        className="flex items-center gap-1 rounded-full px-2 py-1"
+        style={{
+          background: "rgba(0,255,204,0.06)",
+          border: "1px solid rgba(0,255,204,0.18)",
+          backdropFilter: "blur(8px)",
+        }}
+      >
+        {NAV_LINKS.map((link) => (
           <Link
-            to="/play"
-            className="ml-2 px-4 py-1.5 text-xs font-bold uppercase tracking-wider rounded-full bg-secondary/80 text-secondary-foreground border border-primary/30 hover:bg-secondary transition-all"
+            key={link.to}
+            to={link.to}
+            data-ocid="navbar.link"
+            className="px-4 py-1.5 text-xs font-medium uppercase tracking-wider rounded-full transition-all"
+            style={{ color: "rgba(180,220,220,0.7)" }}
+            activeProps={{
+              style: {
+                color: "#00ffcc",
+                background: "rgba(0,255,204,0.12)",
+                textShadow: "0 0 8px rgba(0,255,204,0.5)",
+              },
+            }}
+            inactiveProps={{}}
           >
-            Play Now
+            {link.label}
           </Link>
-        </nav>
+        ))}
+        <Link
+          to="/play"
+          data-ocid="navbar.primary_button"
+          className="ml-2 px-4 py-1.5 text-xs font-bold uppercase tracking-wider rounded-full transition-all"
+          style={{
+            background: "rgba(0,255,204,0.15)",
+            border: "1px solid rgba(0,255,204,0.4)",
+            color: "#00ffcc",
+            boxShadow: "0 0 10px rgba(0,255,204,0.2)",
+          }}
+        >
+          Play Now
+        </Link>
+      </nav>
 
-        {/* Right */}
-        <div className="flex items-center gap-3">
-          {/* FRNTR balance */}
-          <div className="hidden sm:flex items-center gap-2 glass rounded-full px-3 py-1.5">
-            <div className="w-5 h-5 rounded-full bg-secondary/60 border border-primary/40 flex items-center justify-center">
-              <Zap size={10} className="text-primary" />
-            </div>
-            <span className="text-xs text-muted-foreground">FRNTR</span>
-            <span className="text-xs font-bold text-primary">
-              {frntBalance.toLocaleString()}
-            </span>
-          </div>
-
-          {/* Auth button */}
-          <button
-            type="button"
-            onClick={isAuthenticated ? logout : login}
-            className="px-4 py-1.5 text-xs font-bold uppercase tracking-wider rounded-full border border-primary/50 text-primary hover:bg-primary/15 transition-all"
+      {/* Right: balance + auth */}
+      <div className="flex items-center gap-3">
+        {/* FRNTR balance chip */}
+        <div
+          className="flex items-center gap-2 rounded-full px-3 py-1.5"
+          style={{
+            background: "rgba(0,255,204,0.06)",
+            border: "1px solid rgba(0,255,204,0.22)",
+          }}
+        >
+          <div
+            className="w-5 h-5 rounded-full flex items-center justify-center"
+            style={{
+              background: "rgba(0,255,204,0.15)",
+              border: "1px solid rgba(0,255,204,0.4)",
+            }}
           >
-            {isAuthenticated ? "Disconnect" : "Connect"}
-          </button>
+            <Zap size={10} style={{ color: "#00ffcc" }} />
+          </div>
+          <span className="text-xs" style={{ color: "rgba(180,220,220,0.6)" }}>
+            FRNTR
+          </span>
+          <span className="text-xs font-bold" style={{ color: "#00ffcc" }}>
+            {balance}
+          </span>
         </div>
+
+        {/* Auth button */}
+        <button
+          type="button"
+          data-ocid="navbar.button"
+          onClick={isAuthenticated ? clear : login}
+          className="px-4 py-1.5 text-xs font-bold uppercase tracking-wider rounded-full transition-all"
+          style={{
+            border: "1px solid rgba(0,255,204,0.5)",
+            color: "#00ffcc",
+          }}
+        >
+          {isAuthenticated ? "Disconnect" : "Connect"}
+        </button>
       </div>
     </header>
   );
