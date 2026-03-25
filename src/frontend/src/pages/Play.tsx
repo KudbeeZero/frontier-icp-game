@@ -1,23 +1,19 @@
 import {
   ChevronDown,
-  Cpu,
-  Crosshair,
   Gem,
   Hammer,
   Map as MapIcon,
   Package,
-  Radio,
   Settings,
   ShoppingCart,
   Swords,
-  Zap,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import CombatLog from "../components/CombatLog";
+import CommandPanel from "../components/CommandPanel";
 import GlobeCanvas from "../components/GlobeCanvas";
 import LeftSidebarHUD from "../components/LeftSidebarHUD";
 import Navbar from "../components/Navbar";
-import PlotInfoPanel from "../components/PlotInfoPanel";
 import { useGameStore } from "../store/gameStore";
 
 const CYAN = "#00ffcc";
@@ -306,6 +302,7 @@ function LeftWeaponPanel({ selected, onSelect, topOffset }: WeaponPanelProps) {
               onClick={(e) => {
                 e.stopPropagation();
                 onSelect(w.name);
+                useGameStore.getState().setActiveWeapon(w.name);
               }}
             >
               EQUIP
@@ -390,90 +387,6 @@ function RightInventoryPanel() {
           {s}
         </div>
       ))}
-    </div>
-  );
-}
-
-interface FireButtonProps {
-  onFire: () => void;
-  active: boolean;
-}
-
-function CentralFireButton({ onFire, active }: FireButtonProps) {
-  return (
-    <div
-      className="fixed z-30"
-      style={{
-        left: "50%",
-        bottom: 110,
-        transform: "translateX(-50%)",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 4,
-        pointerEvents: "none",
-      }}
-    >
-      <div
-        style={{
-          fontSize: 8,
-          color: CYAN,
-          letterSpacing: 2,
-          textShadow: `0 0 8px ${CYAN}`,
-          pointerEvents: "none",
-        }}
-      >
-        TARGET IN FORMATION
-      </div>
-      <button
-        type="button"
-        data-ocid="combat.fire.button"
-        onClick={onFire}
-        disabled={active}
-        style={{
-          pointerEvents: "auto",
-          width: 88,
-          height: 88,
-          borderRadius: "50%",
-          background:
-            "radial-gradient(circle at 40% 35%, #ff4400, #cc0000, #880000)",
-          border: active ? "3px solid #ff8800" : "3px solid #ff6600",
-          boxShadow: active
-            ? "0 0 30px #ff4400cc, 0 0 60px #ff220044"
-            : "0 0 18px #ff440088",
-          cursor: active ? "not-allowed" : "pointer",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexDirection: "column",
-          gap: 1,
-          transition: "all 0.2s",
-        }}
-      >
-        <Zap size={18} color="white" />
-        <span
-          style={{
-            fontSize: 12,
-            fontWeight: 900,
-            color: "white",
-            letterSpacing: 3,
-            textShadow: "0 0 10px white",
-          }}
-        >
-          FIRE
-        </span>
-      </button>
-      <div
-        style={{
-          fontSize: 8,
-          color: GOLD,
-          letterSpacing: 2,
-          textShadow: `0 0 8px ${GOLD}`,
-          pointerEvents: "none",
-        }}
-      >
-        LOCK
-      </div>
     </div>
   );
 }
@@ -584,45 +497,6 @@ function VirtualJoystick({ controlsRef }: JoystickProps) {
           transition: "transform 0.15s ease-out",
         }}
       />
-    </div>
-  );
-}
-
-function RightControlButtons() {
-  const buttons = [
-    { id: "scope", label: "SCOPE", Icon: Crosshair },
-    { id: "radar", label: "RADAR", Icon: Radio },
-    { id: "devices", label: "DEVICES", Icon: Cpu },
-  ];
-  return (
-    <div
-      className="fixed z-30 flex flex-col gap-2"
-      style={{ right: 68, bottom: 96 }}
-    >
-      {buttons.map(({ id, label, Icon }) => (
-        <div key={id} className="flex flex-col items-center gap-0.5">
-          <button
-            type="button"
-            data-ocid={`combat.${id}.button`}
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: "50%",
-              background: "rgba(2,10,20,0.85)",
-              border: `1px solid ${BORDER}`,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-            }}
-          >
-            <Icon size={16} color={CYAN} />
-          </button>
-          <span style={{ fontSize: 6, color: CYAN_DIM, letterSpacing: 1 }}>
-            {label}
-          </span>
-        </div>
-      ))}
     </div>
   );
 }
@@ -1184,6 +1058,9 @@ export default function Play() {
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth < 768;
 
+  const activeWeapon = useGameStore((s) => s.activeWeapon);
+  const selectedPlotId = useGameStore((s) => s.selectedPlotId);
+
   // On desktop, push weapon panel below the sidebar (~220px height)
   const weaponPanelTop = isMobile ? 48 : 48 + SIDEBAR_HEIGHT;
 
@@ -1214,16 +1091,19 @@ export default function Play() {
       <Navbar />
       <TopBar />
       <LeftSidebarHUD />
-      <PlotInfoPanel />
       <LeftWeaponPanel
         selected={selectedWeapon}
         onSelect={setSelectedWeapon}
         topOffset={weaponPanelTop}
       />
       <RightInventoryPanel />
-      <CentralFireButton onFire={handleFire} active={missileActive} />
       <VirtualJoystick controlsRef={controlsRef} />
-      <RightControlButtons />
+      <CommandPanel
+        onFire={handleFire}
+        fireDisabled={missileActive || !activeWeapon || selectedPlotId === null}
+        onOpenTab={(tab) => setActiveTab(tab)}
+        onToggleCombatLog={() => {}}
+      />
       <BottomNavBar activeTab={activeTab} onTabClick={handleTabClick} />
       <CombatLog />
       <BottomSheet activeTab={activeTab} onClose={() => setActiveTab(null)} />

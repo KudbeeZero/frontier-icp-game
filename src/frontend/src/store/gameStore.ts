@@ -100,6 +100,76 @@ export interface OrbitalEvent {
   expiresAt: number;
 }
 
+export interface SubParcel {
+  subId: number;
+  plotId: number;
+  unlocked: boolean;
+  purchaseTime: number;
+  buildingType: string | null;
+  durability: number;
+}
+
+function generateSubParcels(plotId: number): SubParcel[] {
+  return [
+    {
+      subId: 0,
+      plotId,
+      unlocked: true,
+      purchaseTime: Date.now(),
+      buildingType: null,
+      durability: 100,
+    },
+    {
+      subId: 1,
+      plotId,
+      unlocked: false,
+      purchaseTime: Date.now() - 1000 * 60 * 30,
+      buildingType: null,
+      durability: 0,
+    },
+    {
+      subId: 2,
+      plotId,
+      unlocked: true,
+      purchaseTime: Date.now(),
+      buildingType: null,
+      durability: 0,
+    },
+    {
+      subId: 3,
+      plotId,
+      unlocked: true,
+      purchaseTime: Date.now(),
+      buildingType: "MISSILE_SILO",
+      durability: 78,
+    },
+    {
+      subId: 4,
+      plotId,
+      unlocked: false,
+      purchaseTime: Date.now() - 1000 * 60 * 120,
+      buildingType: null,
+      durability: 0,
+    },
+    {
+      subId: 5,
+      plotId,
+      unlocked: true,
+      purchaseTime: Date.now(),
+      buildingType: "DEFENSE_TOWER",
+      durability: 45,
+    },
+    {
+      subId: 6,
+      plotId,
+      unlocked: true,
+      purchaseTime: Date.now(),
+      buildingType: null,
+      durability: 0,
+    },
+  ];
+}
+
 function generatePlots(): PlotData[] {
   const plots: PlotData[] = [];
   for (let i = 0; i < 10000; i++) {
@@ -188,12 +258,22 @@ interface GameState {
   combatLog: CombatEntry[];
   leaderboard: LeaderEntry[];
   orbitalEvent: OrbitalEvent | null;
+  subParcels: Record<number, SubParcel[]>;
+  activeWeapon: string | null;
 
   selectPlot: (id: number | null) => void;
   purchasePlot: (id: number) => void;
   claimResources: (id: number) => void;
   attack: (fromId: number, toId: number) => void;
   setAuth: (principal: string | null) => void;
+  getSubParcels: (plotId: number) => SubParcel[];
+  buildStructure: (
+    plotId: number,
+    subId: number,
+    buildingType: string,
+    cost: number,
+  ) => void;
+  setActiveWeapon: (weapon: string | null) => void;
 }
 
 export const useGameStore = create<GameState>((set, get) => ({
@@ -217,8 +297,36 @@ export const useGameStore = create<GameState>((set, get) => ({
     affectedBiomes: ["Desert", "Arctic"],
     expiresAt: Date.now() + 3600000,
   },
+  subParcels: {},
+  activeWeapon: null,
 
   selectPlot: (id) => set({ selectedPlotId: id }),
+
+  setActiveWeapon: (weapon) => set({ activeWeapon: weapon }),
+
+  getSubParcels: (plotId) => {
+    const state = get();
+    if (state.subParcels[plotId]) return state.subParcels[plotId];
+    const generated = generateSubParcels(plotId);
+    set((s) => ({ subParcels: { ...s.subParcels, [plotId]: generated } }));
+    return generated;
+  },
+
+  buildStructure: (plotId, subId, buildingType, cost) =>
+    set((state) => {
+      if (state.player.frntBalance < cost) return state;
+      const existing = state.subParcels[plotId] ?? generateSubParcels(plotId);
+      const updated = existing.map((sp) =>
+        sp.subId === subId ? { ...sp, buildingType, durability: 100 } : sp,
+      );
+      return {
+        subParcels: { ...state.subParcels, [plotId]: updated },
+        player: {
+          ...state.player,
+          frntBalance: state.player.frntBalance - cost,
+        },
+      };
+    }),
 
   purchasePlot: (id) =>
     set((state) => {
