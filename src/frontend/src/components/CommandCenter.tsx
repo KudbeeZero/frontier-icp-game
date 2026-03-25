@@ -1,5 +1,6 @@
 import { X, Zap } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { getCommander } from "../constants/commanders";
 import { BIOME_TIER, MINERAL_USES, TIER_MINERALS } from "../constants/minerals";
 import { useGameStore } from "../store/gameStore";
 
@@ -36,16 +37,15 @@ export default function CommandCenter({ open, onClose }: CommandCenterProps) {
   const getSubParcels = useGameStore((s) => s.getSubParcels);
   const claimResources = useGameStore((s) => s.claimResources);
   const claimAllFrntr = useGameStore((s) => s.claimAllFrntr);
+  const plotPurchaseTimes = useGameStore((s) => s.plotPurchaseTimes);
+  const commanderAssignments = useGameStore((s) => s.commanderAssignments);
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [elapsed, setElapsed] = useState(0);
-  const startRef = useRef<number>(Date.now());
+  const [now, setNow] = useState(Date.now());
 
-  // Live counter — ticks every second
+  // Live clock — ticks every second so accumulation is always current
   useEffect(() => {
-    const id = setInterval(() => {
-      setElapsed(Date.now() - startRef.current);
-    }, 1000);
+    const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
 
@@ -58,14 +58,21 @@ export default function CommandCenter({ open, onClose }: CommandCenterProps) {
       const unlockedEdge = subParcels.filter(
         (sp) => sp.subId > 0 && sp.unlocked === true,
       ).length;
-      const dayRate = BASE_RATE + unlockedEdge * SUB_PARCEL_RATE;
-      const accumulated = (dayRate / MS_PER_DAY) * elapsed;
+      const assignedCommander = getCommander(commanderAssignments[p!.id] ?? "");
+      const rarityBonus = assignedCommander?.rarityBonus ?? 0;
+      const dayRate =
+        (BASE_RATE + unlockedEdge * SUB_PARCEL_RATE) * (1 + rarityBonus);
+      const purchaseTime = plotPurchaseTimes[p!.id] ?? now;
+      const accumulated =
+        (dayRate / MS_PER_DAY) * Math.max(0, now - purchaseTime);
       return {
         id: p!.id,
         biome: p!.biome as string,
         dayRate,
         accumulated: Number.isNaN(accumulated) ? 0 : accumulated,
         unlockedEdge,
+        commanderName: assignedCommander?.name ?? null,
+        commanderBonus: rarityBonus,
       };
     });
 
@@ -79,8 +86,6 @@ export default function CommandCenter({ open, onClose }: CommandCenterProps) {
   const handleClaim = () => {
     if (totalAccumulated < 0.0001) return;
     claimAllFrntr(totalAccumulated);
-    startRef.current = Date.now();
-    setElapsed(0);
   };
 
   const handleBackdrop = useCallback(
@@ -481,6 +486,31 @@ export default function CommandCenter({ open, onClose }: CommandCenterProps) {
                           </span>
                         )}
                       </div>
+
+                      {/* Commander assignment row */}
+                      {plot.commanderName ? (
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 5,
+                            marginBottom: 5,
+                            fontSize: 8,
+                            color: "rgba(0,255,204,0.6)",
+                            fontFamily: "monospace",
+                            letterSpacing: 0.5,
+                          }}
+                        >
+                          <span>⚔</span>
+                          <span style={{ color: "#e0f4ff", fontWeight: 700 }}>
+                            {plot.commanderName}
+                          </span>
+                          <span>·</span>
+                          <span>
+                            +{(plot.commanderBonus * 100).toFixed(0)}% GEN
+                          </span>
+                        </div>
+                      ) : null}
 
                       <div
                         style={{

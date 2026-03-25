@@ -1,10 +1,4 @@
-import {
-  Building2,
-  FlaskConical,
-  MessageSquare,
-  Rocket,
-  User,
-} from "lucide-react";
+import { Building2, FlaskConical, MessageSquare, Rocket } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useGameStore } from "../store/gameStore";
 
@@ -156,7 +150,7 @@ export default function LeftSidebarHUD() {
   );
 
   // Desktop: always visible, no toggle
-  // Mobile: hidden by default, toggle button shows, slide in on open
+  // Mobile: hidden by default, slide in on open
   const sidebarTransform = isMobile
     ? mobileOpen
       ? "translateX(0)"
@@ -165,33 +159,6 @@ export default function LeftSidebarHUD() {
 
   return (
     <>
-      {/* Mobile toggle button */}
-      {isMobile && (
-        <button
-          type="button"
-          data-ocid="sidebar.open_modal_button"
-          onClick={() => setMobileOpen((v) => !v)}
-          style={{
-            position: "fixed",
-            top: 56,
-            left: 8,
-            width: 32,
-            height: 32,
-            zIndex: 26,
-            borderRadius: 4,
-            ...glass,
-            border: `1px solid ${CYAN}`,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            boxShadow: "0 0 8px rgba(0,255,204,0.3)",
-          }}
-        >
-          <User size={16} color={CYAN} />
-        </button>
-      )}
-
       {/* Backdrop (mobile only, when open) */}
       {isMobile && mobileOpen && (
         // biome-ignore lint/a11y/useKeyWithClickEvents: fullscreen overlay backdrop

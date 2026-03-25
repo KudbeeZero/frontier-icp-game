@@ -1,6 +1,5 @@
 import {
   ChevronDown,
-  Crosshair,
   Grid2x2,
   Map as MapIcon,
   MoreHorizontal,
@@ -9,20 +8,21 @@ import {
   Shield,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import CombatLog from "../components/CombatLog";
 import CommandCenter from "../components/CommandCenter";
 import CommandPanel from "../components/CommandPanel";
+import CommanderStore from "../components/CommanderStore";
 import CountdownOverlay from "../components/CountdownOverlay";
 import GlobeCanvas from "../components/GlobeCanvas";
 import LeftSidebarHUD from "../components/LeftSidebarHUD";
 import MapBottomSheet from "../components/MapBottomSheet";
 import Navbar from "../components/Navbar";
 import PlotHoverCard from "../components/PlotHoverCard";
+import SmokeTestPanel from "../components/SmokeTestPanel";
 import { useGameStore } from "../store/gameStore";
 
 const CYAN = "#00ffcc";
 const CYAN_DIM = "rgba(0,255,204,0.35)";
-const GOLD = "#ffd700";
+const _GOLD = "#ffd700";
 const BORDER = "rgba(0,255,204,0.22)";
 const TEXT = "#e0f4ff";
 
@@ -41,13 +41,6 @@ const NAV_ITEMS = [
   { id: "intel", label: "INTEL", Icon: Radio },
   { id: "commander", label: "COMMANDER", Icon: Shield },
   { id: "more", label: "MORE", Icon: MoreHorizontal },
-];
-
-const COMMANDERS = [
-  { name: "NOVA PRIME", atk: 85, def: 72, rarity: "LEGENDARY" },
-  { name: "IRON CLAW", atk: 70, def: 90, rarity: "EPIC" },
-  { name: "PHANTOM OPS", atk: 95, def: 55, rarity: "LEGENDARY" },
-  { name: "VOID HUNTER", atk: 62, def: 81, rarity: "RARE" },
 ];
 
 interface TopBarProps {
@@ -166,131 +159,43 @@ function TopBar({ onOpenCommandCenter }: TopBarProps) {
   );
 }
 
-interface JoystickProps {
-  controlsRef: React.MutableRefObject<any>;
-}
-
-function VirtualJoystick({ controlsRef }: JoystickProps) {
-  const dotRef = useRef<HTMLDivElement>(null);
-  const tracking = useRef(false);
-  const startPos = useRef({ x: 0, y: 0 });
-  const currentDelta = useRef({ x: 0, y: 0 });
-  const rafRef = useRef<number | null>(null);
-
-  const applyCamera = useCallback(() => {
-    const c = controlsRef.current;
-    if (!c) return;
-    const dx = currentDelta.current.x * 0.0015;
-    const dy = currentDelta.current.y * 0.0015;
-    if (Math.abs(dx) > 0.0001 || Math.abs(dy) > 0.0001) {
-      (c as any).rotateLeft?.(dx);
-      (c as any).rotateUp?.(dy);
-      c.update?.();
-    }
-    if (tracking.current) rafRef.current = requestAnimationFrame(applyCamera);
-  }, [controlsRef]);
-
-  const onPointerDown = (e: React.PointerEvent) => {
-    tracking.current = true;
-    startPos.current = { x: e.clientX, y: e.clientY };
-    currentDelta.current = { x: 0, y: 0 };
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    rafRef.current = requestAnimationFrame(applyCamera);
-  };
-
-  const onPointerMove = (e: React.PointerEvent) => {
-    if (!tracking.current) return;
-    const maxD = 26;
-    let dx = e.clientX - startPos.current.x;
-    let dy = e.clientY - startPos.current.y;
-    const dist = Math.hypot(dx, dy);
-    if (dist > maxD) {
-      dx = (dx / dist) * maxD;
-      dy = (dy / dist) * maxD;
-    }
-    currentDelta.current = { x: dx, y: dy };
-    if (dotRef.current)
-      dotRef.current.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
-  };
-
-  const onPointerUp = () => {
-    tracking.current = false;
-    currentDelta.current = { x: 0, y: 0 };
-    if (dotRef.current)
-      dotRef.current.style.transform = "translate(-50%, -50%)";
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
-  };
-
-  return (
-    <div
-      data-ocid="combat.joystick.canvas_target"
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
-      style={{
-        position: "fixed",
-        left: 16,
-        bottom: 96,
-        width: 80,
-        height: 80,
-        borderRadius: "50%",
-        background: "rgba(0,255,204,0.06)",
-        border: "1px solid rgba(0,255,204,0.4)",
-        touchAction: "none",
-        userSelect: "none",
-        zIndex: 30,
-        cursor: "crosshair",
-      }}
-    >
-      <div
-        style={{
-          position: "absolute",
-          top: "50%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-          width: 50,
-          height: 50,
-          borderRadius: "50%",
-          border: "1px solid rgba(0,255,204,0.2)",
-          pointerEvents: "none",
-        }}
-      />
-      <div
-        ref={dotRef}
-        style={{
-          position: "absolute",
-          top: "50%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-          width: 28,
-          height: 28,
-          borderRadius: "50%",
-          background: "rgba(0,255,204,0.6)",
-          boxShadow: `0 0 10px ${CYAN}`,
-          pointerEvents: "none",
-          transition: "transform 0.15s ease-out",
-        }}
-      />
-    </div>
-  );
-}
-
 interface BottomNavProps {
   activeTab: string | null;
   onTabClick: (id: string) => void;
 }
 
 function BottomNavBar({ activeTab, onTabClick }: BottomNavProps) {
+  const [windowHeight, setWindowHeight] = useState(() =>
+    typeof window !== "undefined" ? window.innerHeight : 800,
+  );
+  useEffect(() => {
+    const handler = () => setWindowHeight(window.innerHeight);
+    window.addEventListener("resize", handler);
+    window.addEventListener("orientationchange", handler);
+    return () => {
+      window.removeEventListener("resize", handler);
+      window.removeEventListener("orientationchange", handler);
+    };
+  }, []);
+
+  const isLandscape = windowHeight < 500;
+  const navHeight = isLandscape ? 44 : 64;
+
   return (
     <div
       data-ocid="nav.panel"
-      className="fixed bottom-0 left-0 right-0 z-40 flex"
       style={{
-        height: 64,
+        position: "fixed",
+        bottom: 0,
+        left: 0,
+        right: 0,
+        zIndex: 60,
+        height: navHeight,
+        display: "flex",
         background: "rgba(2,10,20,0.97)",
         borderTop: "1px solid rgba(0,255,204,0.3)",
         paddingBottom: "env(safe-area-inset-bottom)",
+        boxSizing: "border-box",
       }}
     >
       {NAV_ITEMS.map(({ id, label, Icon }) => {
@@ -307,7 +212,7 @@ function BottomNavBar({ activeTab, onTabClick }: BottomNavProps) {
               flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
-              gap: 2,
+              gap: isLandscape ? 0 : 2,
               background: isActive ? "rgba(0,255,204,0.07)" : "transparent",
               border: "none",
               borderTop: isActive
@@ -334,134 +239,28 @@ function BottomNavBar({ activeTab, onTabClick }: BottomNavProps) {
               />
             )}
             <Icon
-              size={18}
+              size={isLandscape ? 16 : 18}
               color={isActive ? CYAN : CYAN_DIM}
               style={{
                 filter: isActive ? `drop-shadow(0 0 4px ${CYAN})` : "none",
               }}
             />
-            <span
-              style={{
-                fontSize: 7.5,
-                letterSpacing: 0.5,
-                color: isActive ? CYAN : CYAN_DIM,
-                fontWeight: isActive ? 700 : 400,
-                textShadow: isActive ? `0 0 8px ${CYAN}` : "none",
-              }}
-            >
-              {label}
-            </span>
+            {!isLandscape && (
+              <span
+                style={{
+                  fontSize: 7.5,
+                  letterSpacing: 0.5,
+                  color: isActive ? CYAN : CYAN_DIM,
+                  fontWeight: isActive ? 700 : 400,
+                  textShadow: isActive ? `0 0 8px ${CYAN}` : "none",
+                }}
+              >
+                {label}
+              </span>
+            )}
           </button>
         );
       })}
-    </div>
-  );
-}
-
-function CommanderSheet() {
-  return (
-    <div style={{ padding: 12 }}>
-      <div
-        style={{
-          fontSize: 8.5,
-          color: CYAN_DIM,
-          letterSpacing: 1.5,
-          marginBottom: 12,
-        }}
-      >
-        SELECT ACTIVE COMMANDER NFT
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        {COMMANDERS.map((c, i) => (
-          <div
-            key={c.name}
-            data-ocid={`commander.item.${i + 1}`}
-            style={{
-              background: "rgba(0,255,204,0.04)",
-              border: `1px solid ${BORDER}`,
-              borderRadius: 8,
-              padding: "10px",
-              display: "flex",
-              flexDirection: "column",
-              gap: 7,
-              alignItems: "center",
-            }}
-          >
-            {/* Hex avatar placeholder */}
-            <div
-              style={{
-                width: 60,
-                height: 60,
-                clipPath:
-                  "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)",
-                background:
-                  "linear-gradient(135deg, rgba(0,255,204,0.15), rgba(0,100,80,0.3))",
-                border: `1px solid ${CYAN}44`,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 22,
-              }}
-            >
-              👤
-            </div>
-            <div
-              style={{
-                fontSize: 9,
-                fontWeight: 700,
-                color: TEXT,
-                letterSpacing: 0.5,
-                textAlign: "center",
-              }}
-            >
-              {c.name}
-            </div>
-            <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
-              <span style={{ fontSize: 8, color: "#ef4444" }}>ATK {c.atk}</span>
-              <span style={{ fontSize: 8, color: "#3b82f6" }}>DEF {c.def}</span>
-            </div>
-            <div
-              style={{
-                fontSize: 7.5,
-                padding: "2px 8px",
-                borderRadius: 3,
-                background:
-                  c.rarity === "LEGENDARY"
-                    ? "rgba(255,215,0,0.1)"
-                    : "rgba(168,85,247,0.1)",
-                border: `1px solid ${c.rarity === "LEGENDARY" ? `${GOLD}66` : "#a855f766"}`,
-                color: c.rarity === "LEGENDARY" ? GOLD : "#a855f7",
-                letterSpacing: 0.5,
-              }}
-            >
-              {c.rarity}
-            </div>
-            <div
-              style={{ fontSize: 7.5, color: "#22c55e", letterSpacing: 0.5 }}
-            >
-              • NFT IN WALLET
-            </div>
-            <button
-              type="button"
-              data-ocid={`commander.item.${i + 1}.button`}
-              style={{
-                width: "100%",
-                padding: "5px",
-                background: "transparent",
-                border: "1px solid #ef444466",
-                borderRadius: 4,
-                color: "#ef4444",
-                fontSize: 8,
-                fontWeight: 700,
-                letterSpacing: 1,
-                cursor: "pointer",
-              }}
-            >
-              SELECT TO PLAY
-            </button>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
@@ -583,7 +382,7 @@ function SheetContent({
   }
 
   if (tab === "commander") {
-    return <CommanderSheet />;
+    return <CommanderStore />;
   }
 
   // MORE = settings
@@ -657,6 +456,30 @@ function BottomSheet({ activeTab, onClose, controlsRef }: BottomSheetProps) {
   const isMapTab = activeTab === "map";
   const sheetHeight = isMapTab ? "75vh" : "55vh";
 
+  const [windowWidth, setWindowWidth] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth : 1024,
+  );
+  const [windowHeight, setWindowHeight] = useState(() =>
+    typeof window !== "undefined" ? window.innerHeight : 800,
+  );
+  useEffect(() => {
+    const handler = () => {
+      setWindowWidth(window.innerWidth);
+      setWindowHeight(window.innerHeight);
+    };
+    window.addEventListener("resize", handler);
+    window.addEventListener("orientationchange", handler);
+    return () => {
+      window.removeEventListener("resize", handler);
+      window.removeEventListener("orientationchange", handler);
+    };
+  }, []);
+  const isMobile = windowWidth < 768;
+  const isLandscape = windowHeight < 500;
+  const navHeight = isLandscape ? 44 : 64;
+  // On mobile MAP tab, offset sheet above the 60px collapsed CommandPanel + navHeight
+  const sheetBottom = isMapTab && isMobile ? navHeight + 64 : navHeight;
+
   return (
     <>
       {isOpen && (
@@ -666,7 +489,10 @@ function BottomSheet({ activeTab, onClose, controlsRef }: BottomSheetProps) {
           onClick={onClose}
           style={{
             position: "fixed",
-            inset: 0,
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: navHeight,
             background: "rgba(0,0,0,0.4)",
             zIndex: 45,
           }}
@@ -676,7 +502,7 @@ function BottomSheet({ activeTab, onClose, controlsRef }: BottomSheetProps) {
         data-ocid="nav.sheet"
         style={{
           position: "fixed",
-          bottom: 64,
+          bottom: sheetBottom,
           left: "50%",
           transform: isOpen ? "translate(-50%, 0)" : "translate(-50%, 100%)",
           width: "min(100%, 480px)",
@@ -687,7 +513,8 @@ function BottomSheet({ activeTab, onClose, controlsRef }: BottomSheetProps) {
           borderLeft: `1px solid ${BORDER}`,
           borderRight: `1px solid ${BORDER}`,
           borderRadius: "16px 16px 0 0",
-          transition: "transform 0.3s ease-out, height 0.3s ease-out",
+          transition:
+            "transform 0.3s ease-out, height 0.3s ease-out, bottom 0.2s ease-out",
           display: "flex",
           flexDirection: "column",
           backdropFilter: "blur(16px)",
@@ -785,6 +612,15 @@ export default function Play() {
   const selectedPlotId = useGameStore((s) => s.selectedPlotId);
   const plotHoverCard = useGameStore((s) => s.plotHoverCard);
   const setPlotHoverCard = useGameStore((s) => s.setPlotHoverCard);
+  const player = useGameStore((s) => s.player);
+  const [purchaseToast, setPurchaseToast] = useState<{
+    plotId: number;
+    rate: number;
+  } | null>(null);
+  const purchaseToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const prevPlotsOwnedLen = useRef(player.plotsOwned.length);
 
   const handleTabClick = (id: string) =>
     setActiveTab((prev) => (prev === id ? null : id));
@@ -804,6 +640,21 @@ export default function Play() {
     if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
     bannerTimerRef.current = setTimeout(() => setShowStrikeBanner(false), 2500);
   }, []);
+
+  useEffect(() => {
+    const currentLen = player.plotsOwned.length;
+    if (currentLen > prevPlotsOwnedLen.current) {
+      const newPlotId = player.plotsOwned[currentLen - 1];
+      setPurchaseToast({ plotId: newPlotId, rate: 50 });
+      if (purchaseToastTimerRef.current)
+        clearTimeout(purchaseToastTimerRef.current);
+      purchaseToastTimerRef.current = setTimeout(
+        () => setPurchaseToast(null),
+        3000,
+      );
+    }
+    prevPlotsOwnedLen.current = currentLen;
+  }, [player.plotsOwned]);
 
   return (
     <div
@@ -825,7 +676,6 @@ export default function Play() {
       <Navbar />
       <TopBar onOpenCommandCenter={() => setCommandCenterOpen(true)} />
       <LeftSidebarHUD />
-      <VirtualJoystick controlsRef={controlsRef} />
       <CommandPanel
         onFire={handleFire}
         fireDisabled={missileActive || showCountdown || selectedPlotId === null}
@@ -833,7 +683,6 @@ export default function Play() {
         onToggleCombatLog={() => {}}
       />
       <BottomNavBar activeTab={activeTab} onTabClick={handleTabClick} />
-      <CombatLog />
       <BottomSheet
         activeTab={activeTab}
         onClose={() => setActiveTab(null)}
@@ -935,6 +784,60 @@ export default function Play() {
         />
       )}
 
+      {/* Purchase success toast */}
+      {purchaseToast && (
+        <div
+          data-ocid="map.success_state"
+          style={{
+            position: "fixed",
+            bottom: 80,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 70,
+            background: "rgba(4,12,24,0.95)",
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
+            border: "1px solid rgba(0,255,204,0.45)",
+            borderTop: "2px solid #00ffcc",
+            borderRadius: 8,
+            padding: "10px 20px",
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            whiteSpace: "nowrap",
+            boxShadow: "0 4px 24px rgba(0,255,204,0.18)",
+            animation: "slideUpFadeIn 0.3s ease",
+          }}
+        >
+          <span style={{ color: "#00ffcc", fontSize: 13, fontWeight: 700 }}>
+            ✓
+          </span>
+          <span
+            style={{
+              color: "#00ffcc",
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: 2,
+              fontFamily: "monospace",
+            }}
+          >
+            PLOT #{purchaseToast.plotId} ACQUIRED
+          </span>
+          <span style={{ color: "rgba(0,255,204,0.45)", fontSize: 9 }}>·</span>
+          <span
+            style={{
+              color: "#ffd700",
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: 1.5,
+              fontFamily: "monospace",
+            }}
+          >
+            +{purchaseToast.rate} FRNTR/DAY
+          </span>
+        </div>
+      )}
+
       <div
         style={{
           position: "fixed",
@@ -959,6 +862,7 @@ export default function Play() {
           CAFFEINE.AI
         </a>
       </div>
+      <SmokeTestPanel />
     </div>
   );
 }

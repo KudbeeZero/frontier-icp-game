@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { COMMANDERS } from "../constants/commanders";
 
 export type Biome =
   | "Arctic"
@@ -76,6 +77,7 @@ export interface PlayerData {
   commanderDef: number;
   faction: string | null;
   weaponInventory: Record<string, number>;
+  mockIcpBalance: number;
 }
 
 export interface CombatEntry {
@@ -116,6 +118,14 @@ export interface PlotHoverCard {
   owner: string;
   action: string;
   nextStep: string;
+}
+
+export type PlayerRank = "Lieutenant" | "Captain" | "Colonel" | "General";
+
+export interface RankStats {
+  missionsLaunched: number;
+  plotsOwned: number;
+  combatWins: number;
 }
 
 function generateSubParcels(plotId: number): SubParcel[] {
@@ -199,9 +209,9 @@ function generatePlots(): PlotData[] {
       biome,
       richness,
       owner,
-      iron: owner ? (i % 8) * richness : 0,
-      fuel: owner ? (i % 5) * richness : 0,
-      crystal: owner ? (i % 6) * richness : 0,
+      iron: 0,
+      fuel: 0,
+      crystal: 0,
       defenses: owner
         ? {
             turrets: i % 4,
@@ -272,11 +282,17 @@ interface GameState {
   activeWeapon: string | null;
   hoveredPlotId: number | null;
   plotHoverCard: PlotHoverCard | null;
+  commanderAssignments: Record<number, string>;
+  plotPurchaseTimes: Record<number, number>;
+  rankStats: RankStats;
+  ownedCommanderIds: string[];
+  commanderUpgrades: Record<string, number>;
 
   selectPlot: (id: number | null) => void;
   purchasePlot: (id: number) => void;
   claimResources: (id: number) => void;
   claimAllFrntr: (amount: number) => void;
+  mintTestTokens: () => void;
   attack: (fromId: number, toId: number) => void;
   setAuth: (principal: string | null) => void;
   getSubParcels: (plotId: number) => SubParcel[];
@@ -292,16 +308,21 @@ interface GameState {
   setHoveredPlotId: (id: number | null) => void;
   setFaction: (faction: string | null) => void;
   buyWeapon: (weaponName: string) => void;
+  selectCommander: (id: string, atk: number, def: number) => void;
+  assignCommanderToPlot: (plotId: number, commanderId: string) => void;
+  removeCommanderFromPlot: (plotId: number) => void;
+  purchaseCommander: (commanderId: string) => boolean;
+  upgradeCommander: (commanderId: string, frntrCost: number) => boolean;
 }
 
 export const useGameStore = create<GameState>((set, get) => ({
   plots: ALL_PLOTS,
   player: {
     principal: null,
-    iron: 250,
-    fuel: 180,
-    crystal: 95,
-    frntBalance: 1250,
+    iron: 0,
+    fuel: 0,
+    crystal: 0,
+    frntBalance: 0,
     plotsOwned: [],
     commanderType: null,
     commanderAtk: 0,
@@ -315,6 +336,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       INTERCEPTOR: 15,
       "ORBITAL RAIL": 1,
     },
+    mockIcpBalance: 5.0,
   },
   selectedPlotId: null,
   targetPlotId: null,
@@ -329,6 +351,15 @@ export const useGameStore = create<GameState>((set, get) => ({
   activeWeapon: null,
   hoveredPlotId: null,
   plotHoverCard: null,
+  commanderAssignments: {},
+  plotPurchaseTimes: {},
+  rankStats: {
+    missionsLaunched: 0,
+    plotsOwned: 0,
+    combatWins: 0,
+  },
+  ownedCommanderIds: [],
+  commanderUpgrades: {},
 
   selectPlot: (id) => set({ selectedPlotId: id }),
 
@@ -341,6 +372,16 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   setFaction: (faction) =>
     set((state) => ({ player: { ...state.player, faction } })),
+
+  selectCommander: (id, atk, def) =>
+    set((state) => ({
+      player: {
+        ...state.player,
+        commanderType: id,
+        commanderAtk: atk,
+        commanderDef: def,
+      },
+    })),
 
   buyWeapon: (weaponName) =>
     set((state) => {
@@ -403,6 +444,11 @@ export const useGameStore = create<GameState>((set, get) => ({
           frntBalance: state.player.frntBalance - 100,
           plotsOwned: [...state.player.plotsOwned, id],
         },
+        rankStats: {
+          ...state.rankStats,
+          plotsOwned: state.rankStats.plotsOwned + 1,
+          plotPurchaseTimes: { ...state.plotPurchaseTimes, [id]: Date.now() },
+        },
       };
     }),
 
@@ -412,6 +458,14 @@ export const useGameStore = create<GameState>((set, get) => ({
         ...state.player,
         frntBalance:
           state.player.frntBalance + (Number.isNaN(amount) ? 0 : amount),
+      },
+    })),
+
+  mintTestTokens: () =>
+    set((state) => ({
+      player: {
+        ...state.player,
+        frntBalance: state.player.frntBalance + 500,
       },
     })),
 
@@ -435,17 +489,67 @@ export const useGameStore = create<GameState>((set, get) => ({
       };
     }),
 
+  purchaseCommander: (commanderId) => {
+    const state = get();
+    const commander = COMMANDERS.find((c) => c.id === commanderId);
+    if (!commander) return false;
+    if (state.ownedCommanderIds.includes(commanderId)) return false;
+    if (state.player.mockIcpBalance < commander.icpPrice) return false;
+    set((s) => ({
+      player: {
+        ...s.player,
+        mockIcpBalance:
+          Math.round((s.player.mockIcpBalance - commander.icpPrice) * 1000) /
+          1000,
+      },
+      ownedCommanderIds: [...s.ownedCommanderIds, commanderId],
+    }));
+    return true;
+  },
+
+  upgradeCommander: (commanderId, frntrCost) => {
+    const state = get();
+    if (!state.ownedCommanderIds.includes(commanderId)) return false;
+    const currentLevel = state.commanderUpgrades[commanderId] ?? 0;
+    if (currentLevel >= 3) return false;
+    if (state.player.frntBalance < frntrCost) return false;
+    set((s) => ({
+      player: {
+        ...s.player,
+        frntBalance: s.player.frntBalance - frntrCost,
+      },
+      commanderUpgrades: {
+        ...s.commanderUpgrades,
+        [commanderId]: currentLevel + 1,
+      },
+    }));
+    return true;
+  },
+
   attack: (fromId, toId) => {
     const state = get();
     const from = state.plots.find((p) => p.id === fromId);
     const to = state.plots.find((p) => p.id === toId);
     if (!from || !to) return;
-    const atkPower = 10 + state.player.commanderAtk;
+
+    const atkCommanderId = state.commanderAssignments[fromId];
+    const atkCommander = COMMANDERS.find((c) => c.id === atkCommanderId);
+    const defCommanderId = state.commanderAssignments[toId];
+    const defCommander = COMMANDERS.find((c) => c.id === defCommanderId);
+
+    // Include upgrade bonuses
+    const atkUpgrade = state.commanderUpgrades[atkCommanderId ?? ""] ?? 0;
+    const defUpgrade = state.commanderUpgrades[defCommanderId ?? ""] ?? 0;
+    const atkBonus = atkCommander ? atkCommander.atk + atkUpgrade * 5 : 0;
+    const defBonus = defCommander ? defCommander.def + defUpgrade * 5 : 0;
+
+    const atkPower = 10 + state.player.commanderAtk + atkBonus;
     const defPower =
       to.defenses.turrets * 3 +
       to.defenses.shields * 5 +
       to.defenses.walls * 2 +
-      5;
+      5 +
+      defBonus;
     const success = atkPower * 10 > defPower * 7;
     const entry: CombatEntry = {
       id: Date.now(),
@@ -473,13 +577,35 @@ export const useGameStore = create<GameState>((set, get) => ({
         ? {
             ...s.player,
             plotsOwned: [...s.player.plotsOwned, toId],
-            combatVictories:
-              (s.player as PlayerData & { combatVictories?: number })
-                .combatVictories ?? 0,
           }
         : s.player,
+      rankStats: {
+        ...s.rankStats,
+        missionsLaunched: s.rankStats.missionsLaunched + 1,
+        combatWins: success
+          ? s.rankStats.combatWins + 1
+          : s.rankStats.combatWins,
+      },
     }));
   },
+
+  assignCommanderToPlot: (plotId, commanderId) =>
+    set((state) => {
+      if (!state.player.plotsOwned.includes(plotId)) return state;
+      return {
+        commanderAssignments: {
+          ...state.commanderAssignments,
+          [plotId]: commanderId,
+        },
+      };
+    }),
+
+  removeCommanderFromPlot: (plotId) =>
+    set((state) => {
+      const next = { ...state.commanderAssignments };
+      delete next[plotId];
+      return { commanderAssignments: next };
+    }),
 
   setAuth: (principal) =>
     set((state) => ({

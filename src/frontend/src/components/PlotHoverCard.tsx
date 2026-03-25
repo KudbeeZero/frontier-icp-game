@@ -1,5 +1,7 @@
 import { X } from "lucide-react";
 import { useEffect, useState } from "react";
+import { TIER_COLORS, getCommander } from "../constants/commanders";
+import { useGameStore } from "../store/gameStore";
 
 const CYAN = "#00ffcc";
 const CYAN_DIM = "rgba(0,255,204,0.5)";
@@ -21,15 +23,24 @@ export default function PlotHoverCard({
   onDismiss,
 }: PlotHoverCardProps) {
   const [visible, setVisible] = useState(false);
+  const commanderAssignments = useGameStore((s) => s.commanderAssignments);
+  const commanderUpgrades = useGameStore((s) => s.commanderUpgrades);
 
   useEffect(() => {
-    // Trigger slide-up animation
     const t = setTimeout(() => setVisible(true), 20);
     return () => clearTimeout(t);
   }, []);
 
   const isTarget = action === "TARGET LOCKED";
+  const isOwned = action === "TERRITORY ACQUIRED" || action === "YOU OWN THIS";
   const actionColor = isTarget ? "#ef4444" : CYAN;
+
+  const assignedId = commanderAssignments[plotId];
+  const commander = assignedId ? getCommander(assignedId) : null;
+  const upgradeLevel = assignedId ? (commanderUpgrades[assignedId] ?? 0) : 0;
+  const effectiveAtk = commander ? commander.atk + upgradeLevel * 5 : 0;
+  const effectiveDef = commander ? commander.def + upgradeLevel * 5 : 0;
+  const tierColor = commander ? TIER_COLORS[commander.tier] : CYAN;
 
   return (
     <div
@@ -149,10 +160,152 @@ export default function PlotHoverCard({
           }}
         >
           {owner.length > 20
-            ? `${owner.slice(0, 10)}…${owner.slice(-6)}`
+            ? `${owner.slice(0, 10)}\u2026${owner.slice(-6)}`
             : owner}
         </span>
       </div>
+
+      {/* Commander block */}
+      {commander ? (
+        <div
+          style={{
+            background: `${tierColor}06`,
+            border: `1px solid ${tierColor}28`,
+            borderRadius: 7,
+            padding: "8px 10px",
+            marginBottom: 8,
+            display: "flex",
+            flexDirection: "column",
+            gap: 6,
+          }}
+        >
+          {/* Portrait + name + tier */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div
+              style={{
+                width: 40,
+                height: 40,
+                flexShrink: 0,
+                clipPath:
+                  "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)",
+                overflow: "hidden",
+                background: "rgba(0,0,0,0.6)",
+                boxShadow: `0 0 8px ${tierColor}55`,
+              }}
+            >
+              <img
+                src={commander.badge}
+                alt={commander.name}
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div
+                style={{
+                  fontSize: 9,
+                  fontWeight: 700,
+                  color: "#e0f4ff",
+                  fontFamily: "monospace",
+                  letterSpacing: 1,
+                  marginBottom: 3,
+                }}
+              >
+                {commander.name}
+                {upgradeLevel > 0 && (
+                  <span
+                    style={{
+                      marginLeft: 5,
+                      fontSize: 7.5,
+                      color: "#f59e0b",
+                    }}
+                  >
+                    LVL {upgradeLevel}
+                  </span>
+                )}
+              </div>
+              <span
+                style={{
+                  fontSize: 8,
+                  fontWeight: 700,
+                  color: tierColor,
+                  background: `${tierColor}18`,
+                  border: `1px solid ${tierColor}44`,
+                  borderRadius: 3,
+                  padding: "1px 5px",
+                  letterSpacing: 1,
+                  fontFamily: "monospace",
+                }}
+              >
+                {commander.tier}
+              </span>
+            </div>
+          </div>
+
+          {/* Stat pills */}
+          <div style={{ display: "flex", gap: 6 }}>
+            <span
+              style={{
+                fontSize: 8,
+                fontWeight: 700,
+                color: "#ef4444",
+                background: "rgba(239,68,68,0.12)",
+                border: "1px solid rgba(239,68,68,0.3)",
+                borderRadius: 4,
+                padding: "2px 7px",
+                fontFamily: "monospace",
+                letterSpacing: 0.5,
+              }}
+            >
+              ATK +{effectiveAtk}
+            </span>
+            <span
+              style={{
+                fontSize: 8,
+                fontWeight: 700,
+                color: "#3b82f6",
+                background: "rgba(59,130,246,0.12)",
+                border: "1px solid rgba(59,130,246,0.3)",
+                borderRadius: 4,
+                padding: "2px 7px",
+                fontFamily: "monospace",
+                letterSpacing: 0.5,
+              }}
+            >
+              DEF +{effectiveDef}
+            </span>
+          </div>
+
+          {/* FRNTR bonus */}
+          <div
+            style={{
+              fontSize: 8,
+              color: CYAN,
+              fontFamily: "monospace",
+              letterSpacing: 0.5,
+              opacity: 0.85,
+            }}
+          >
+            +{(commander.rarityBonus * 100).toFixed(0)}% FRNTR/DAY BONUS
+          </div>
+        </div>
+      ) : (
+        <div
+          style={{
+            background: "rgba(255,255,255,0.02)",
+            border: "1px solid rgba(255,255,255,0.06)",
+            borderRadius: 7,
+            padding: "7px 10px",
+            marginBottom: 8,
+            fontSize: 8,
+            color: "rgba(200,220,255,0.3)",
+            fontFamily: "monospace",
+            letterSpacing: 1,
+            textAlign: "center",
+          }}
+        >
+          NO COMMANDER ASSIGNED
+        </div>
+      )}
 
       {/* Next step */}
       <div
@@ -178,6 +331,60 @@ export default function PlotHoverCard({
           {nextStep}
         </span>
       </div>
+
+      {/* Owner action buttons */}
+      {isOwned && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginTop: 10,
+            gap: 8,
+          }}
+        >
+          <button
+            type="button"
+            data-ocid="map.card.open_modal_button"
+            onClick={onDismiss}
+            style={{
+              flex: 1,
+              padding: "8px 10px",
+              background: "rgba(0,255,204,0.12)",
+              border: `1px solid ${CYAN}55`,
+              borderRadius: 6,
+              color: CYAN,
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: 1.5,
+              cursor: "pointer",
+              fontFamily: "monospace",
+              transition: "all 0.15s",
+            }}
+          >
+            OPEN MAP
+          </button>
+          <div
+            style={{
+              fontSize: 8,
+              color: "rgba(0,255,204,0.5)",
+              letterSpacing: 0.8,
+              fontFamily: "monospace",
+              textAlign: "center",
+              padding: "0 4px",
+              whiteSpace: "nowrap",
+            }}
+          >
+            ⚡{" "}
+            {commander
+              ? `${(50 * (1 + commander.rarityBonus)).toFixed(1)}`
+              : "50"}{" "}
+            FRNTR/DAY
+            <br />
+            GENERATING
+          </div>
+        </div>
+      )}
     </div>
   );
 }

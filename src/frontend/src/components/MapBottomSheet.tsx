@@ -49,6 +49,17 @@ const BUILDING_NAMES: Record<string, string> = {
   CYCLES_REACTOR: "Cycles Reactor",
 };
 
+const COMMANDER_IMAGES: Record<string, string> = {
+  "NOVA PRIME":
+    "/assets/generated/commander-nova-prime-transparent.dim_300x300.png",
+  "IRON CLAW":
+    "/assets/generated/commander-iron-claw-transparent.dim_300x300.png",
+  "PHANTOM OPS":
+    "/assets/generated/commander-phantom-ops-transparent.dim_300x300.png",
+  "VOID HUNTER":
+    "/assets/generated/commander-void-hunter-transparent.dim_300x300.png",
+};
+
 function getCountdown(purchaseTime: number): string {
   const unlockAt = purchaseTime + 4 * 60 * 60 * 1000;
   const remaining = unlockAt - Date.now();
@@ -259,6 +270,7 @@ export default function MapBottomSheet({
   controlsRef,
 }: MapBottomSheetProps) {
   const [pickerSlot, setPickerSlot] = useState<number | null>(null);
+  const [purchasing, setPurchasing] = useState(false);
 
   const selectedPlotId = useGameStore((s) => s.selectedPlotId);
   const plots = useGameStore((s) => s.plots);
@@ -267,6 +279,7 @@ export default function MapBottomSheet({
   const purchasePlot = useGameStore((s) => s.purchasePlot);
   const setTargetPlotId = useGameStore((s) => s.setTargetPlotId);
   const setPlotHoverCard = useGameStore((s) => s.setPlotHoverCard);
+  const commanderAssignments = useGameStore((s) => s.commanderAssignments);
 
   const plot =
     selectedPlotId !== null
@@ -287,16 +300,22 @@ export default function MapBottomSheet({
   );
 
   function handlePurchase() {
-    if (!plot) return;
-    purchasePlot(plot.id);
-    onClose();
-    focusOnPlot(plot.lat, plot.lng, controlsRef);
-    setPlotHoverCard({
-      plotId: plot.id,
-      owner: player.principal ?? "You",
-      action: "PURCHASING",
-      nextStep: "Plot purchased! Start building.",
-    });
+    if (!plot || purchasing) return;
+    if (player.frntBalance < 100) return;
+    setPurchasing(true);
+    setTimeout(() => {
+      purchasePlot(plot.id);
+      setPurchasing(false);
+      onClose();
+      focusOnPlot(plot.lat, plot.lng, controlsRef);
+      setPlotHoverCard({
+        plotId: plot.id,
+        owner: player.principal ?? "You",
+        action: "TERRITORY ACQUIRED",
+        nextStep:
+          "Open Command Center to track FRNTR generation. Build a Silo to attack.",
+      });
+    }, 800);
   }
 
   function handleBuild() {
@@ -451,6 +470,50 @@ export default function MapBottomSheet({
                 >
                   {plot.lat.toFixed(2)}°N · {plot.lng.toFixed(2)}°E
                 </div>
+                {commanderAssignments[plot.id] && (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      marginTop: 5,
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 24,
+                        height: 24,
+                        clipPath:
+                          "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)",
+                        overflow: "hidden",
+                        flexShrink: 0,
+                        border: "1px solid rgba(0,255,204,0.4)",
+                      }}
+                    >
+                      <img
+                        src={
+                          COMMANDER_IMAGES[commanderAssignments[plot.id]] ?? ""
+                        }
+                        alt={commanderAssignments[plot.id]}
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                        }}
+                      />
+                    </div>
+                    <span
+                      style={{
+                        fontSize: 9,
+                        color: "#00ffcc",
+                        letterSpacing: 1,
+                        fontFamily: "monospace",
+                      }}
+                    >
+                      CMD: {commanderAssignments[plot.id]}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* DIVIDER */}
@@ -500,14 +563,52 @@ export default function MapBottomSheet({
             }}
           >
             {!isOwned && (
-              <button
-                type="button"
-                data-ocid="map.primary_button"
-                onClick={handlePurchase}
-                style={actionBtnStyle("#00ffcc", "rgba(0,255,204,0.12)")}
-              >
-                PURCHASE PLOT
-              </button>
+              <div>
+                <button
+                  type="button"
+                  data-ocid="map.primary_button"
+                  onClick={handlePurchase}
+                  disabled={purchasing || player.frntBalance < 100}
+                  style={{
+                    ...actionBtnStyle(
+                      player.frntBalance < 100
+                        ? "rgba(0,255,204,0.3)"
+                        : "#00ffcc",
+                      player.frntBalance < 100
+                        ? "rgba(0,255,204,0.04)"
+                        : purchasing
+                          ? "rgba(0,255,204,0.06)"
+                          : "rgba(0,255,204,0.12)",
+                    ),
+                    opacity: player.frntBalance < 100 || purchasing ? 0.6 : 1,
+                    cursor:
+                      player.frntBalance < 100 || purchasing
+                        ? "not-allowed"
+                        : "pointer",
+                  }}
+                >
+                  {purchasing
+                    ? "PROCESSING..."
+                    : player.frntBalance < 100
+                      ? "PURCHASE PLOT — 100 FRNTR"
+                      : "PURCHASE PLOT — 100 FRNTR"}
+                </button>
+                {player.frntBalance < 100 && (
+                  <div
+                    data-ocid="map.error_state"
+                    style={{
+                      marginTop: 6,
+                      fontSize: 9,
+                      color: "#ef4444",
+                      textAlign: "center",
+                      letterSpacing: 1,
+                      fontFamily: "monospace",
+                    }}
+                  >
+                    INSUFFICIENT FRNTR
+                  </div>
+                )}
+              </div>
             )}
             {isOwnPlot && hasEmptySlot && (
               <button
