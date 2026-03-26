@@ -15,6 +15,7 @@ import CommandPanel from "../components/CommandPanel";
 import CommanderStore from "../components/CommanderStore";
 import CountdownOverlay from "../components/CountdownOverlay";
 import GlobeCanvas from "../components/GlobeCanvas";
+import { IntelTab } from "../components/IntelTab";
 import LeftSidebarHUD from "../components/LeftSidebarHUD";
 import MapBottomSheet from "../components/MapBottomSheet";
 import Navbar from "../components/Navbar";
@@ -280,8 +281,6 @@ function SheetContent({
   controlsRef: React.RefObject<any>;
   onFireMissile: (missile: MissileConfig) => void;
 }) {
-  const combatLog = useGameStore((s) => s.combatLog);
-
   if (tab === "map") {
     return <MapBottomSheet onClose={onClose} controlsRef={controlsRef} />;
   }
@@ -342,52 +341,7 @@ function SheetContent({
   }
 
   if (tab === "intel") {
-    return (
-      <div
-        style={{
-          padding: 12,
-          overflowY: "auto",
-          maxHeight: "calc(55vh - 60px)",
-        }}
-      >
-        {combatLog.slice(0, 10).map((entry, i) => (
-          <div
-            key={entry.id}
-            data-ocid={`intel.item.${i + 1}`}
-            style={{
-              padding: "6px 8px",
-              marginBottom: 4,
-              background: "rgba(0,255,204,0.04)",
-              border: `1px solid ${BORDER}`,
-              borderRadius: 4,
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <div>
-              <div
-                style={{
-                  fontSize: 9,
-                  color: entry.success ? "#22c55e" : "#ef4444",
-                }}
-              >
-                {entry.success ? "✓ HIT" : "✗ MISS"}
-              </div>
-              <div style={{ fontSize: 8, color: CYAN_DIM }}>
-                {entry.attacker} → {entry.defender}
-              </div>
-              <div style={{ fontSize: 7, color: "rgba(0,255,204,0.25)" }}>
-                Plot {entry.fromPlot} → {entry.toPlot}
-              </div>
-            </div>
-            <div style={{ fontSize: 7, color: CYAN_DIM }}>
-              {new Date(entry.timestamp).toLocaleTimeString()}
-            </div>
-          </div>
-        ))}
-      </div>
-    );
+    return <IntelTab />;
   }
 
   if (tab === "commander") {
@@ -469,7 +423,8 @@ function BottomSheet({
   const tabLabel = NAV_ITEMS.find((n) => n.id === activeTab)?.label ?? "";
   const isMapTab = activeTab === "map";
   const isArsenalTab = activeTab === "arsenal";
-  const sheetHeight = isMapTab || isArsenalTab ? "75vh" : "55vh";
+  const isIntelTab = activeTab === "intel";
+  const sheetHeight = isMapTab || isArsenalTab || isIntelTab ? "75vh" : "55vh";
 
   const [windowWidth, setWindowWidth] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth : 1024,

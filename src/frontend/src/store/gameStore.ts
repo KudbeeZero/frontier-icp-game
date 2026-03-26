@@ -433,7 +433,6 @@ interface GameState {
   commanderUpgrades: Record<string, number>;
   compareModeActive: boolean;
   comparePlotId: number | null;
-  totalFrntrBurned: number;
 
   selectPlot: (id: number | null) => void;
   setSelectedWorldPoint: (p: [number, number, number] | null) => void;
@@ -543,7 +542,6 @@ export const useGameStore = create<GameState>((set, get) => ({
   commanderUpgrades: {},
   compareModeActive: false,
   comparePlotId: null,
-  totalFrntrBurned: 0,
 
   selectPlot: (id) => set({ selectedPlotId: id }),
   setSelectedWorldPoint: (p) => set({ selectedWorldPoint: p }),
@@ -626,7 +624,6 @@ export const useGameStore = create<GameState>((set, get) => ({
         frntBalance: s.player.frntBalance - cost,
         plotsOwned: [...s.player.plotsOwned, id],
       },
-      totalFrntrBurned: (s.totalFrntrBurned ?? 0) + cost,
       plots: s.plots.map((p) =>
         p.id === id ? { ...p, owner: s.player.principal ?? "You" } : p,
       ),
@@ -691,7 +688,6 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (!plot) return;
     set((s) => ({
       player: { ...s.player, frntBalance: s.player.frntBalance - cost },
-      totalFrntrBurned: (s.totalFrntrBurned ?? 0) + cost,
       plots: s.plots.map((p) =>
         p.id === id
           ? {
@@ -733,7 +729,6 @@ export const useGameStore = create<GameState>((set, get) => ({
     );
     set((s) => ({
       player: { ...s.player, frntBalance: s.player.frntBalance - cost },
-      totalFrntrBurned: (s.totalFrntrBurned ?? 0) + cost,
       subParcels: { ...s.subParcels, [plotId]: updated },
     }));
   },
@@ -759,7 +754,6 @@ export const useGameStore = create<GameState>((set, get) => ({
           [weaponName]: (s.player.weaponInventory[weaponName] ?? 0) + 1,
         },
       },
-      totalFrntrBurned: (s.totalFrntrBurned ?? 0) + cost,
     }));
   },
 
@@ -973,7 +967,6 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (state.player.frntBalance < cost) return;
     set((s) => ({
       player: { ...s.player, frntBalance: s.player.frntBalance - cost },
-      totalFrntrBurned: (s.totalFrntrBurned ?? 0) + cost,
       plots: s.plots.map((p) => {
         if (p.id !== plotId) return p;
         const newDamage = Math.max(0, p.structuralDamage - 25);
@@ -1056,7 +1049,6 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
     set((s) => ({
       player: { ...s.player, frntBalance: s.player.frntBalance - cost },
-      totalFrntrBurned: (s.totalFrntrBurned ?? 0) + cost,
       ownedCommanders: s.ownedCommanders.map((c, i) =>
         i === idx ? updatedCommander : c,
       ),
@@ -1090,7 +1082,6 @@ export const useGameStore = create<GameState>((set, get) => ({
         frntBalance: s.player.frntBalance - 150,
         resourceStorageCap: Math.min(500, s.player.resourceStorageCap + 50),
       },
-      totalFrntrBurned: (s.totalFrntrBurned ?? 0) + 150,
     }));
   },
 
@@ -1149,7 +1140,6 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (!cost || state.player.frntBalance < cost) return;
     set((s) => ({
       player: { ...s.player, frntBalance: s.player.frntBalance - cost },
-      totalFrntrBurned: (s.totalFrntrBurned ?? 0) + cost,
       commanderUpgrades: { ...s.commanderUpgrades, [key]: currentLevel + 1 },
     }));
   },
