@@ -1,5 +1,5 @@
 import { motion } from "motion/react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -604,6 +604,286 @@ function ResourceChart({
   );
 }
 
+// -- Live Accumulation Window --
+function LiveAccumulationWindow() {
+  const player = useGameStore((s) => s.player);
+  const plots = useGameStore((s) => s.plots);
+  const [, forceUpdate] = useState(0);
+
+  useEffect(() => {
+    const t = setInterval(() => forceUpdate((n) => n + 1), 500);
+    return () => clearInterval(t);
+  }, []);
+
+  const plotCount = player.plotsOwned.length;
+  // Daily rates
+  const BASE_FRNTR_DAY = plotCount * 7;
+  const IRON_DAY = player.plotsOwned.reduce((acc, pid) => {
+    const p = plots.find((pl) => pl.id === pid);
+    if (!p) return acc;
+    const rates: Record<string, number> = {
+      Desert: 0.0008,
+      Jungle: 0.0025,
+      Arctic: 0.0005,
+      Ocean: 0.001,
+      Mountain: 0.0025,
+      Volcanic: 0.001,
+      Forest: 0.0015,
+      Grassland: 0.0018,
+      Toxic: 0.0005,
+    };
+    return acc + (rates[p.biome] ?? 0.001) * 86400;
+  }, 0);
+  const FUEL_DAY = player.plotsOwned.reduce((acc, pid) => {
+    const p = plots.find((pl) => pl.id === pid);
+    if (!p) return acc;
+    const rates: Record<string, number> = {
+      Desert: 0.0025,
+      Jungle: 0.0008,
+      Arctic: 0.0003,
+      Ocean: 0.001,
+      Mountain: 0.0005,
+      Volcanic: 0.0015,
+      Forest: 0.0012,
+      Grassland: 0.0015,
+      Toxic: 0.0008,
+    };
+    return acc + (rates[p.biome] ?? 0.001) * 86400;
+  }, 0);
+  const XTAL_DAY = player.plotsOwned.reduce((acc, pid) => {
+    const p = plots.find((pl) => pl.id === pid);
+    if (!p) return acc;
+    const rates: Record<string, number> = {
+      Desert: 0.0003,
+      Jungle: 0.0005,
+      Arctic: 0.0022,
+      Ocean: 0.0008,
+      Mountain: 0.0008,
+      Volcanic: 0.0005,
+      Forest: 0.001,
+      Grassland: 0.0005,
+      Toxic: 0.0008,
+    };
+    return acc + (rates[p.biome] ?? 0.0005) * 86400;
+  }, 0);
+  const RARE_DAY = player.plotsOwned.reduce((acc, pid) => {
+    const p = plots.find((pl) => pl.id === pid);
+    if (!p) return acc;
+    const rates: Record<string, number> = {
+      Desert: 0.0001,
+      Jungle: 0.0002,
+      Arctic: 0.0008,
+      Ocean: 0.0004,
+      Mountain: 0.0003,
+      Volcanic: 0.0017,
+      Forest: 0.0003,
+      Grassland: 0.0003,
+      Toxic: 0.002,
+    };
+    return acc + (rates[p.biome] ?? 0.0003) * 86400;
+  }, 0);
+
+  const rows = [
+    {
+      label: "FRNTR",
+      value: player.frntBalance,
+      day: BASE_FRNTR_DAY,
+      color: CYAN,
+    },
+    { label: "IRON", value: player.iron, day: IRON_DAY, color: "#94a3b8" },
+    { label: "FUEL", value: player.fuel, day: FUEL_DAY, color: AMBER },
+    {
+      label: "CRYSTAL",
+      value: player.crystal,
+      day: XTAL_DAY,
+      color: "#3b82f6",
+    },
+    {
+      label: "RARE EARTH",
+      value: player.rareEarth,
+      day: RARE_DAY,
+      color: PURPLE,
+    },
+  ];
+
+  return (
+    <div
+      style={{
+        background: PANEL,
+        backdropFilter: "blur(12px)",
+        border: `1px solid ${BORDER}`,
+        borderRadius: 8,
+        overflow: "hidden",
+      }}
+    >
+      <div style={{ padding: "8px 12px", borderBottom: `1px solid ${BORDER}` }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: "50%",
+              background: GREEN,
+              boxShadow: `0 0 6px ${GREEN}`,
+              animation: "accPulse 1.2s ease-in-out infinite",
+            }}
+          />
+          <span
+            style={{
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: 2,
+              color: CYAN,
+              textTransform: "uppercase",
+            }}
+          >
+            Live Accumulation
+          </span>
+        </div>
+      </div>
+      {rows.map((row) => (
+        <div
+          key={row.label}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "7px 12px",
+            borderBottom: "1px solid rgba(0,255,204,0.05)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div
+              style={{
+                width: 5,
+                height: 5,
+                borderRadius: "50%",
+                background: GREEN,
+                opacity: 0.8,
+                boxShadow: `0 0 4px ${GREEN}`,
+                animation: "accPulse 1.8s ease-in-out infinite",
+              }}
+            />
+            <span
+              style={{
+                fontSize: 9,
+                fontWeight: 700,
+                color: row.color,
+                letterSpacing: 1,
+                fontFamily: "monospace",
+              }}
+            >
+              {row.label}
+            </span>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div
+              style={{
+                fontSize: 12,
+                fontWeight: 800,
+                color: row.color,
+                fontFamily: "monospace",
+                letterSpacing: 0.5,
+              }}
+            >
+              {row.value.toFixed(8)}
+            </div>
+            <div
+              style={{
+                fontSize: 8,
+                color: TEXT_DIM,
+                fontFamily: "monospace",
+                marginTop: 1,
+              }}
+            >
+              +{row.day.toFixed(4)} /day
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// -- Mine All Button --
+function MineAllButton() {
+  const player = useGameStore((s) => s.player);
+  const mineResources = useGameStore((s) => s.mineResources);
+  const [popupText, setPopupText] = useState<string | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function handleMineAll() {
+    if (player.plotsOwned.length === 0) return;
+    let totalIron = 0;
+    let totalFuel = 0;
+    let totalXtal = 0;
+    let totalRare = 0;
+    for (const plotId of player.plotsOwned) {
+      const yld = mineResources(plotId);
+      if (yld) {
+        totalIron += yld.iron;
+        totalFuel += yld.fuel;
+        totalXtal += yld.crystal;
+        totalRare += yld.rareEarth;
+      }
+    }
+    const msg = `+${totalIron.toFixed(2)} Fe  +${totalFuel.toFixed(2)} Fuel  +${totalXtal.toFixed(2)} Xtal  +${totalRare.toFixed(2)} Rare`;
+    setPopupText(msg);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setPopupText(null), 2000);
+  }
+
+  const disabled = player.plotsOwned.length === 0;
+
+  return (
+    <div style={{ marginTop: 10 }}>
+      {popupText && (
+        <div
+          data-ocid="command_center.mining.success_state"
+          style={{
+            marginBottom: 6,
+            padding: "6px 10px",
+            background: "rgba(34,197,94,0.12)",
+            border: "1px solid rgba(34,197,94,0.3)",
+            borderRadius: 6,
+            fontSize: 9,
+            color: GREEN,
+            fontFamily: "monospace",
+            fontWeight: 700,
+            letterSpacing: 0.5,
+            textAlign: "center",
+          }}
+        >
+          {popupText}
+        </div>
+      )}
+      <button
+        type="button"
+        data-ocid="command_center.mine_all.button"
+        onClick={handleMineAll}
+        disabled={disabled}
+        style={{
+          width: "100%",
+          padding: "13px 0",
+          background: disabled ? "rgba(0,0,0,0.2)" : "rgba(0,255,204,0.08)",
+          border: `1px solid ${disabled ? "rgba(0,255,204,0.15)" : CYAN}`,
+          borderRadius: 8,
+          color: disabled ? TEXT_DIM : CYAN,
+          fontSize: 10,
+          fontWeight: 700,
+          letterSpacing: 3,
+          cursor: disabled ? "not-allowed" : "pointer",
+          fontFamily: "monospace",
+          opacity: disabled ? 0.5 : 1,
+          transition: "all 0.2s",
+        }}
+      >
+        {disabled ? "NO PLOTS OWNED" : "MINE ALL PLOTS"}
+      </button>
+    </div>
+  );
+}
+
 // -- Mining Operations Table --
 function MiningTable() {
   const player = useGameStore((s) => s.player);
@@ -840,6 +1120,7 @@ export default function CommandCenter({
   const player = useGameStore((s) => s.player);
   const rankStats = useGameStore((s) => s.rankStats);
 
+  const totalFrntrBurned = useGameStore((s) => s.totalFrntrBurned);
   const frnt = player.frntBalance;
   const plotCount = player.plotsOwned.length;
 
@@ -975,6 +1256,13 @@ export default function CommandCenter({
               accent={netFlow >= 0 ? GREEN : RED}
               ocid="command_center.netflow.card"
             />
+            <StatCard
+              label="Burned"
+              value={totalFrntrBurned.toLocaleString()}
+              sub="OUT OF CIRCULATION"
+              accent={RED}
+              ocid="command_center.burned.card"
+            />
           </div>
         </div>
 
@@ -995,7 +1283,11 @@ export default function CommandCenter({
         {/* 4. Mining Operations */}
         <div>
           <SectionHeader title="Mining Operations" icon="&#9935;" />
-          <MiningTable />
+          <LiveAccumulationWindow />
+          <div style={{ marginTop: 10 }}>
+            <MiningTable />
+          </div>
+          <MineAllButton />
         </div>
 
         {/* 5. Combat Stats */}
@@ -1010,6 +1302,12 @@ export default function CommandCenter({
           <LeaderboardSnapshot />
         </div>
       </div>
+      <style>{`
+        @keyframes accPulse {
+          0%, 100% { opacity: 0.5; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.3); }
+        }
+      `}</style>
     </motion.div>
   );
 }

@@ -6,12 +6,14 @@ import {
   createRoute,
   createRouter,
 } from "@tanstack/react-router";
+import { useEffect } from "react";
 import Factions from "./pages/Factions";
 import Inventory from "./pages/Inventory";
 import Leaderboard from "./pages/Leaderboard";
 import Manual from "./pages/Manual";
 import Marketplace from "./pages/Marketplace";
 import Play from "./pages/Play";
+import { useGameStore } from "./store/gameStore";
 
 const rootRoute = createRootRoute({
   component: () => <Outlet />,
@@ -78,6 +80,23 @@ declare module "@tanstack/react-router" {
   }
 }
 
+function GameTicker() {
+  useEffect(() => {
+    const id = setInterval(() => {
+      const store = useGameStore.getState();
+      store.tickPassiveIncome();
+      store.tickMineralDrip();
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
+  return null;
+}
+
 export default function App() {
-  return <RouterProvider router={router} />;
+  return (
+    <>
+      <GameTicker />
+      <RouterProvider router={router} />
+    </>
+  );
 }

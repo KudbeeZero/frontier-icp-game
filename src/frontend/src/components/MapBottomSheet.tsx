@@ -22,6 +22,7 @@ import {
 } from "../store/gameStore";
 import BuildingPicker from "./BuildingPicker";
 import PlotComparisonView from "./PlotComparisonView";
+import SubParcelPieView from "./SubParcelPieView";
 
 const CYAN = "#00ffcc";
 const CYAN_DIM = "rgba(0,255,204,0.5)";
@@ -621,6 +622,7 @@ export default function MapBottomSheet({
 }: MapBottomSheetProps) {
   const [pickerSlot, setPickerSlot] = useState<number | null>(null);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
+  const [showPieView, setShowPieView] = useState(false);
   const [mineYield, setMineYield] = useState<{
     iron: number;
     fuel: number;
@@ -1012,14 +1014,42 @@ export default function MapBottomSheet({
               {/* SUB-PARCELS */}
               <div
                 style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
                   marginBottom: 6,
-                  fontSize: 9,
-                  color: CYAN_DIM,
-                  letterSpacing: 2,
-                  fontFamily: "monospace",
                 }}
               >
-                SUB-PARCELS (7)
+                <div
+                  style={{
+                    fontSize: 9,
+                    color: CYAN_DIM,
+                    letterSpacing: 2,
+                    fontFamily: "monospace",
+                  }}
+                >
+                  SUB-PARCELS (7)
+                </div>
+                <button
+                  type="button"
+                  data-ocid="map.sub_parcel_pie.open_modal_button"
+                  onClick={() => setShowPieView(true)}
+                  style={{
+                    background: "rgba(0,255,204,0.08)",
+                    border: "1px solid rgba(0,255,204,0.35)",
+                    borderRadius: 5,
+                    color: CYAN,
+                    fontSize: 8,
+                    fontWeight: 700,
+                    letterSpacing: 1.5,
+                    padding: "4px 8px",
+                    cursor: "pointer",
+                    fontFamily: "monospace",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  VIEW SUB-PARCELS
+                </button>
               </div>
               <div
                 style={{
@@ -1149,6 +1179,16 @@ export default function MapBottomSheet({
           </div>
         )}
       </div>
+
+      {/* SubParcelPieView overlay */}
+      {showPieView && selectedPlotId !== null && (
+        <SubParcelPieView
+          plotId={selectedPlotId}
+          plot={plot}
+          subParcels={subParcels}
+          onClose={() => setShowPieView(false)}
+        />
+      )}
 
       {/* BuildingPicker overlay */}
       {pickerSlot !== null && selectedPlotId !== null && (

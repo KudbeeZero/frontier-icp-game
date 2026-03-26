@@ -15,8 +15,15 @@ const glass: React.CSSProperties = {
   border: `1px solid ${BORDER}`,
 };
 
-function fmt(n: number): string {
-  return n >= 1000 ? `${(n / 1000).toFixed(0)}K` : String(n);
+// Format with 8 decimal places so gradual drip is visible
+function fmtResource(n: number): string {
+  if (n >= 100) return n.toFixed(2);
+  if (n >= 1) return n.toFixed(4);
+  return n.toFixed(8);
+}
+
+function fmtFrntr(n: number): string {
+  return n.toFixed(8);
 }
 
 const RESOURCES = [
@@ -172,8 +179,6 @@ export default function LeftSidebarHUD() {
     </div>
   );
 
-  // Desktop: always visible, no toggle
-  // Mobile: hidden by default, slide in on open
   const sidebarTransform = isMobile
     ? mobileOpen
       ? "translateX(0)"
@@ -320,6 +325,77 @@ export default function LeftSidebarHUD() {
           style={{ height: 1, background: BORDER, margin: `0 ${sidebarPad}px` }}
         />
 
+        {/* FRNTR BALANCE */}
+        <div style={{ padding: `6px ${sidebarPad}px` }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              {/* FRNTR hex icon */}
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 12 12"
+                fill="none"
+                aria-hidden="true"
+                role="img"
+              >
+                <title>FRNTR</title>
+                <polygon
+                  points="6,1 11,3.5 11,8.5 6,11 1,8.5 1,3.5"
+                  fill="none"
+                  stroke="#00ffcc"
+                  strokeWidth="1.2"
+                  opacity="0.9"
+                />
+                <text
+                  x="6"
+                  y="7.5"
+                  textAnchor="middle"
+                  fill="#00ffcc"
+                  fontSize="4.5"
+                  fontWeight="bold"
+                  fontFamily="monospace"
+                >
+                  F
+                </text>
+              </svg>
+              <span
+                style={{
+                  fontSize: isMobile ? 9 : 8,
+                  color: "rgba(224,244,255,0.6)",
+                  letterSpacing: 1,
+                  textTransform: "uppercase" as const,
+                }}
+              >
+                FRNTR
+              </span>
+            </div>
+            <span
+              data-ocid="sidebar.frntr.row"
+              style={{
+                fontSize: isMobile ? 8 : 7.5,
+                fontWeight: 700,
+                color: CYAN,
+                letterSpacing: 0.5,
+                fontFamily: "monospace",
+                textShadow: `0 0 6px ${CYAN}88`,
+              }}
+            >
+              {fmtFrntr(player.frntBalance)}
+            </span>
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div
+          style={{ height: 1, background: BORDER, margin: `0 ${sidebarPad}px` }}
+        />
+
         {/* RESOURCES */}
         <div style={{ padding: `8px ${sidebarPad}px` }}>
           {sectionHeader("Resources")}
@@ -366,14 +442,15 @@ export default function LeftSidebarHUD() {
                 </div>
                 <span
                   style={{
-                    fontSize: isMobile ? 10 : 9,
+                    fontSize: isMobile ? 9 : 8,
                     fontWeight: 700,
                     color,
                     letterSpacing: 0.5,
+                    fontFamily: "monospace",
                     textShadow: `0 0 6px ${color}88`,
                   }}
                 >
-                  {fmt(player[key])}
+                  {fmtResource(player[key])}
                 </span>
               </div>
             ))}

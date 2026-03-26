@@ -1,15 +1,18 @@
 import {
   AlertTriangle,
   CheckCircle,
+  ChevronDown,
   ChevronRight,
   GitCompare,
   Shield,
   Swords,
+  User,
   Wrench,
   Zap,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { INTERCEPTOR_CONFIGS } from "../constants/interceptors";
 import type { BattleFormation, PlotData, SubParcel } from "../store/gameStore";
 import {
   BIOME_COLORS,
@@ -91,6 +94,15 @@ export default function TacticalCommandPanel() {
   const repairPlot = useGameStore((s) => s.repairPlot);
   const setCompareModeActive = useGameStore((s) => s.setCompareModeActive);
   const equippedMissileId = useGameStore((s) => s.equippedMissileId);
+  const commanderAssignments = useGameStore((s) => s.commanderAssignments);
+  const ownedCommanders = useGameStore((s) => s.ownedCommanders);
+  const assignInterceptorToPlot = useGameStore(
+    (s) => s.assignInterceptorToPlot,
+  );
+  const interceptorInventory = useGameStore((s) => s.interceptorInventory);
+  const assignedInterceptors = useGameStore((s) => s.assignedInterceptors);
+  const commanderUpgrades = useGameStore((s) => s.commanderUpgrades);
+  const upgradeElectricity = useGameStore((s) => s.upgradeElectricity);
 
   const [selectedFormation, setSelectedFormation] =
     useState<BattleFormation>("PRECISION_STRIKE");
@@ -99,6 +111,7 @@ export default function TacticalCommandPanel() {
     success: boolean;
     message: string;
   } | null>(null);
+  const [defenseOpen, setDefenseOpen] = useState(false);
 
   if (selectedPlotId === null) return null;
 
@@ -127,13 +140,12 @@ export default function TacticalCommandPanel() {
       ? Math.ceil((plot.regenActiveUntil - Date.now()) / 60000)
       : 0;
 
-  // Check incoming threat — last 3 combat events targeting this plot within 60s
   const now = Date.now();
   const incomingThreat = combatLog
     .slice(0, 10)
     .some((e) => e.toPlot === selectedPlotId && now - e.timestamp < 60_000);
 
-  // Interceptors — check subparcels for interceptor buildings
+  // Interceptors from sub-parcel buildings
   const interceptorBuildings = subParcels
     .filter((sp) => {
       if (!sp.buildingType) return false;
@@ -146,6 +158,19 @@ export default function TacticalCommandPanel() {
       );
     })
     .map((sp) => sp.buildingType ?? "");
+
+  // Also show assigned interceptors from inventory
+  const assignedIcpId = assignedInterceptors[selectedPlotId];
+  const assignedIcpLabel = assignedIcpId
+    ? (INTERCEPTOR_CONFIGS.find((c) => c.id === assignedIcpId)?.name ??
+      assignedIcpId)
+    : null;
+
+  // Commander assigned to this plot
+  const assignedCmdInstanceId = commanderAssignments[selectedPlotId];
+  const assignedCommander = assignedCmdInstanceId
+    ? ownedCommanders.find((c) => c.instanceId === assignedCmdInstanceId)
+    : null;
 
   const effColor =
     plot.efficiency >= 70
@@ -166,6 +191,11 @@ export default function TacticalCommandPanel() {
     "SUPPRESSION",
     "STEALTH",
   ];
+
+  // Available interceptors from inventory (qty > 0)
+  const availableInterceptors = INTERCEPTOR_CONFIGS.filter(
+    (cfg) => (interceptorInventory[cfg.id] ?? 0) > 0,
+  );
 
   async function handleFire() {
     if (isFiring) return;
@@ -200,6 +230,16 @@ export default function TacticalCommandPanel() {
     toast.success(
       `Plot #${selectedPlotId} repaired. Structural damage reduced.`,
     );
+  }
+
+  function handleAssignInterceptor(interceptorId: string) {
+    if (!isOwnPlot) return;
+    assignInterceptorToPlot(selectedPlotId!, interceptorId);
+    const name =
+      INTERCEPTOR_CONFIGS.find((c) => c.id === interceptorId)?.name ??
+      interceptorId;
+    toast.success(`${name} assigned to silo`);
+    setDefenseOpen(false);
   }
 
   return (
@@ -320,6 +360,115 @@ export default function TacticalCommandPanel() {
           gap: 10,
         }}
       >
+        {/* COMMANDER ROW */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "6px 8px",
+            background: assignedCommander
+              ? "rgba(0,255,204,0.06)"
+              : "rgba(0,0,0,0.2)",
+            border: `1px solid ${
+              assignedCommander
+                ? "rgba(0,255,204,0.2)"
+                : "rgba(255,255,255,0.07)"
+            }`,
+            borderRadius: 6,
+          }}
+        >
+          {/* Avatar hex */}
+          <div
+            style={{
+              width: 28,
+              height: 28,
+              flexShrink: 0,
+              background: assignedCommander
+                ? "linear-gradient(135deg, rgba(0,255,204,0.18), rgba(2,10,20,0.9))"
+                : "rgba(0,0,0,0.4)",
+              border: `1px solid ${
+                assignedCommander ? CYAN : "rgba(255,255,255,0.1)"
+              }`,
+              borderRadius: 4,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <User
+              size={14}
+              color={assignedCommander ? CYAN : "rgba(255,255,255,0.2)"}
+            />
+          </div>
+          {assignedCommander ? (
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div
+                style={{
+                  fontSize: 8,
+                  fontWeight: 700,
+                  color: CYAN,
+                  letterSpacing: 0.5,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {assignedCommander.archetypeId.toUpperCase()} CDR
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 6,
+                  marginTop: 2,
+                }}
+              >
+                <span style={{ fontSize: 7, color: "#ef4444" }}>
+                  ATK +{player.commanderAtk}
+                </span>
+                <span style={{ fontSize: 7, color: "#22c55e" }}>
+                  DEF +{player.commanderDef}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div style={{ flex: 1 }}>
+              <div
+                style={{
+                  fontSize: 7,
+                  color: "rgba(255,255,255,0.3)",
+                  letterSpacing: 0.5,
+                  fontStyle: "italic",
+                }}
+              >
+                NO COMMANDER ASSIGNED
+              </div>
+              {isOwnPlot && ownedCommanders.length > 0 && (
+                <button
+                  type="button"
+                  data-ocid="tactical.assign_commander.button"
+                  onClick={() =>
+                    toast.info("Assign from Command Center → Commander tab")
+                  }
+                  style={{
+                    marginTop: 3,
+                    fontSize: 7,
+                    padding: "2px 6px",
+                    background: "rgba(0,255,204,0.08)",
+                    border: "1px solid rgba(0,255,204,0.25)",
+                    borderRadius: 4,
+                    color: CYAN,
+                    cursor: "pointer",
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  ASSIGN COMMANDER
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* SECTION A — LAND STATUS */}
         <div>
           <div
@@ -366,7 +515,7 @@ export default function TacticalCommandPanel() {
             </div>
           </div>
 
-          {/* Structural Damage bar — only if > 0 */}
+          {/* Structural Damage bar */}
           {plot.structuralDamage > 0 && (
             <div style={{ marginBottom: 5 }}>
               <div
@@ -408,33 +557,53 @@ export default function TacticalCommandPanel() {
             {subParcels.map((sp, idx) => {
               const hasBuilding = !!sp.buildingType;
               const disabled = plot.buildingsDisabled && hasBuilding;
+              const isCenter = idx === 0;
+              const isElectricity =
+                isCenter &&
+                sp.buildingType?.toUpperCase().includes("ELECTRICITY");
+              const elecLevel = isElectricity
+                ? ((commanderUpgrades[`electricity_${selectedPlotId}`] ??
+                    0) as number)
+                : 0;
               return (
                 <div
                   key={sp.subId}
-                  title={sp.buildingType ?? `Sub-parcel ${idx + 1} (empty)`}
+                  title={
+                    isElectricity
+                      ? `ELECTRICITY Lv.${elecLevel} — Center Nexus`
+                      : (sp.buildingType ?? `Sub-parcel ${idx + 1} (empty)`)
+                  }
                   style={{
-                    width: 10,
-                    height: 10,
-                    borderRadius: "50%",
+                    width: isCenter ? 14 : 10,
+                    height: isCenter ? 14 : 10,
+                    borderRadius: isCenter ? 3 : "50%",
                     background: disabled
                       ? "transparent"
-                      : hasBuilding
-                        ? CYAN
-                        : "transparent",
+                      : isElectricity
+                        ? "rgba(250,204,21,0.2)"
+                        : hasBuilding
+                          ? CYAN
+                          : "transparent",
                     border: disabled
                       ? "1.5px solid rgba(239,68,68,0.7)"
-                      : hasBuilding
-                        ? `1.5px solid ${CYAN}`
-                        : "1.5px solid rgba(0,255,204,0.3)",
+                      : isElectricity
+                        ? "1.5px solid rgba(250,204,21,0.7)"
+                        : hasBuilding
+                          ? `1.5px solid ${CYAN}`
+                          : "1.5px solid rgba(0,255,204,0.3)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     fontSize: 7,
-                    color: disabled ? "#ef4444" : "transparent",
+                    color: disabled
+                      ? "#ef4444"
+                      : isElectricity
+                        ? "#facc15"
+                        : "transparent",
                     flexShrink: 0,
                   }}
                 >
-                  {disabled ? "×" : ""}
+                  {disabled ? "×" : isElectricity ? "⚡" : ""}
                 </div>
               );
             })}
@@ -499,6 +668,94 @@ export default function TacticalCommandPanel() {
               </span>
             )}
           </div>
+
+          {/* NEXUS POWER — Electricity upgrade */}
+          {isOwnPlot &&
+            (() => {
+              const elecKey = `electricity_${selectedPlotId}`;
+              const elecLevel = (commanderUpgrades[elecKey] ?? 0) as number;
+              const BONUS_DAY = [0, 8, 24, 48];
+              const UPGRADE_COSTS = [500, 500, 1500, 4000];
+              const nextCost = elecLevel < 3 ? UPGRADE_COSTS[elecLevel + 1] : 0;
+              const canAfford = player.frntBalance >= nextCost;
+              return (
+                <div
+                  style={{
+                    marginTop: 6,
+                    padding: "5px 8px",
+                    background: "rgba(250,204,21,0.05)",
+                    border: "1px solid rgba(250,204,21,0.2)",
+                    borderRadius: 5,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 6,
+                  }}
+                >
+                  <div>
+                    <div
+                      style={{
+                        fontSize: 7,
+                        color: "rgba(250,204,21,0.7)",
+                        letterSpacing: 1,
+                        fontWeight: 700,
+                      }}
+                    >
+                      ⚡ NEXUS POWER{" "}
+                      <span style={{ color: "#facc15" }}>Lv.{elecLevel}/3</span>
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 7,
+                        color: "rgba(255,255,255,0.4)",
+                        marginTop: 1,
+                      }}
+                    >
+                      {elecLevel > 0
+                        ? `+${BONUS_DAY[elecLevel]} FRNTR/day`
+                        : "No bonus — install Electricity"}
+                    </div>
+                  </div>
+                  {elecLevel < 3 ? (
+                    <button
+                      type="button"
+                      data-ocid="tactical.electricity_upgrade.button"
+                      onClick={() => {
+                        upgradeElectricity(selectedPlotId!);
+                      }}
+                      disabled={!canAfford}
+                      style={{
+                        fontSize: 7,
+                        fontWeight: 700,
+                        letterSpacing: 0.5,
+                        padding: "3px 8px",
+                        borderRadius: 4,
+                        border: `1px solid ${canAfford ? "rgba(250,204,21,0.5)" : "rgba(255,255,255,0.1)"}`,
+                        background: canAfford
+                          ? "rgba(250,204,21,0.1)"
+                          : "rgba(0,0,0,0.2)",
+                        color: canAfford ? "#facc15" : "rgba(255,255,255,0.2)",
+                        cursor: canAfford ? "pointer" : "not-allowed",
+                        whiteSpace: "nowrap" as const,
+                      }}
+                    >
+                      UPGRADE ({nextCost} FRNTR)
+                    </button>
+                  ) : (
+                    <span
+                      style={{
+                        fontSize: 7,
+                        color: "#facc15",
+                        fontWeight: 700,
+                        letterSpacing: 0.5,
+                      }}
+                    >
+                      MAXED +48/DAY
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
         </div>
 
         {/* SECTION B — DEFENSE & WEAPONS MONITOR */}
@@ -529,8 +786,8 @@ export default function TacticalCommandPanel() {
             />
           </div>
 
-          {/* Interceptors */}
-          {interceptorBuildings.length > 0 ? (
+          {/* Sub-parcel interceptor buildings */}
+          {interceptorBuildings.length > 0 && (
             <div
               style={{
                 display: "flex",
@@ -541,7 +798,7 @@ export default function TacticalCommandPanel() {
             >
               {interceptorBuildings.map((bt, i) => (
                 <div
-                  key={`icp-${i}-${bt.slice(0, 8)}`}
+                  key={`icp-b-${i}-${bt.slice(0, 8)}`}
                   style={{
                     fontSize: 7,
                     background: plot.buildingsDisabled
@@ -570,7 +827,47 @@ export default function TacticalCommandPanel() {
                 </div>
               ))}
             </div>
-          ) : (
+          )}
+
+          {/* Assigned interceptor from inventory */}
+          {assignedIcpLabel && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+                marginBottom: 4,
+                padding: "3px 6px",
+                background: plot.buildingsDisabled
+                  ? "rgba(239,68,68,0.08)"
+                  : "rgba(0,255,204,0.06)",
+                border: `1px solid ${
+                  plot.buildingsDisabled
+                    ? "rgba(239,68,68,0.2)"
+                    : "rgba(0,255,204,0.2)"
+                }`,
+                borderRadius: 4,
+              }}
+            >
+              <Shield
+                size={8}
+                color={plot.buildingsDisabled ? "#ef4444" : "#22c55e"}
+              />
+              <span
+                style={{
+                  fontSize: 7,
+                  color: plot.buildingsDisabled ? "#ef4444" : "#22c55e",
+                  letterSpacing: 0.5,
+                }}
+              >
+                {assignedIcpLabel} — SILO ASSIGNED{" "}
+                {plot.buildingsDisabled ? "(OFFLINE)" : "(AUTO-DEFEND)"}
+              </span>
+            </div>
+          )}
+
+          {/* No interceptors at all */}
+          {interceptorBuildings.length === 0 && !assignedIcpLabel && (
             <div
               style={{
                 fontSize: 7,
@@ -580,6 +877,115 @@ export default function TacticalCommandPanel() {
               }}
             >
               No interceptors assigned
+            </div>
+          )}
+
+          {/* SET DEFENSE — inline assignment for own plots */}
+          {isOwnPlot && (
+            <div style={{ marginBottom: 4 }}>
+              <button
+                type="button"
+                data-ocid="tactical.defense.button"
+                onClick={() => setDefenseOpen((v) => !v)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 5,
+                  fontSize: 7,
+                  fontWeight: 700,
+                  letterSpacing: 1,
+                  padding: "4px 8px",
+                  borderRadius: 5,
+                  border: "1px solid rgba(0,255,204,0.25)",
+                  background: defenseOpen
+                    ? "rgba(0,255,204,0.1)"
+                    : "rgba(0,0,0,0.3)",
+                  color: CYAN_DIM,
+                  cursor: "pointer",
+                }}
+              >
+                <Shield size={9} />
+                SET DEFENSE
+                {defenseOpen ? (
+                  <ChevronDown size={9} />
+                ) : (
+                  <ChevronRight size={9} />
+                )}
+              </button>
+
+              {defenseOpen && (
+                <div
+                  style={{
+                    marginTop: 5,
+                    padding: "6px 8px",
+                    background: "rgba(0,0,0,0.35)",
+                    border: "1px solid rgba(0,255,204,0.15)",
+                    borderRadius: 6,
+                  }}
+                >
+                  {availableInterceptors.length === 0 ? (
+                    <div
+                      style={{
+                        fontSize: 7,
+                        color: "rgba(255,255,255,0.3)",
+                        fontStyle: "italic",
+                      }}
+                    >
+                      No interceptors in inventory. Purchase from Arsenal.
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 4,
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 7,
+                          color: CYAN_DIM,
+                          letterSpacing: 1,
+                          marginBottom: 2,
+                        }}
+                      >
+                        ASSIGN TO SILO:
+                      </div>
+                      {availableInterceptors.map((cfg) => (
+                        <button
+                          key={cfg.id}
+                          type="button"
+                          data-ocid="tactical.interceptor.button"
+                          onClick={() => handleAssignInterceptor(cfg.id)}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "4px 8px",
+                            background: "rgba(0,255,204,0.06)",
+                            border: "1px solid rgba(0,255,204,0.2)",
+                            borderRadius: 4,
+                            cursor: "pointer",
+                            color: CYAN,
+                          }}
+                        >
+                          <span style={{ fontSize: 7, letterSpacing: 0.5 }}>
+                            {cfg.name}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: 7,
+                              color: CYAN_DIM,
+                            }}
+                          >
+                            ×{interceptorInventory[cfg.id]}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -705,30 +1111,6 @@ export default function TacticalCommandPanel() {
               {isFiring ? "LAUNCHING..." : "FIRE"}
             </button>
           )}
-
-          {/* SET DEFENSE */}
-          <button
-            type="button"
-            data-ocid="tactical.defense.button"
-            onClick={() => toast.info("Defense assignment coming soon")}
-            style={{
-              fontSize: 8,
-              fontWeight: 700,
-              letterSpacing: 1,
-              padding: "6px 12px",
-              borderRadius: 6,
-              border: "1px solid rgba(255,255,255,0.15)",
-              background: "rgba(0,0,0,0.3)",
-              color: "rgba(255,255,255,0.5)",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: 5,
-            }}
-          >
-            <Shield size={10} />
-            SET DEFENSE
-          </button>
 
           {/* COMPARE */}
           <button

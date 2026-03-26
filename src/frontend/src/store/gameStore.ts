@@ -122,6 +122,7 @@ export interface CombatEntry {
   formationUsed?: BattleFormation;
   damageDealt?: number;
   intercepted?: boolean;
+  interceptorType?: string;
 }
 
 export interface LeaderEntry {
@@ -364,7 +365,7 @@ function computePlotDEF(
     if (bt.includes("DEFENSE_TOWER") || bt.includes("TOWER")) def += 15;
     if (bt.includes("SHIELD_GENERATOR") || bt.includes("SHIELD")) def += 10;
     if (bt.includes("CYCLES_REACTOR") || bt.includes("REACTOR")) mult += 0.1;
-    if (bt.includes("RADAR_STATION") || bt.includes("RADAR")) mult -= 0.15; // debuff to attacker accuracy (applied separately)
+    if (bt.includes("RADAR_STATION") || bt.includes("RADAR")) mult -= 0.15;
   }
   return def * mult;
 }
@@ -392,6 +393,20 @@ const INITIAL_ARTILLERY_INVENTORY: Record<string, number> = Object.fromEntries(
 const INITIAL_INTERCEPTOR_INVENTORY: Record<string, number> =
   Object.fromEntries(INTERCEPTOR_CONFIGS.map((i) => [i.id, i.qty]));
 
+// Biome drip rates per second: [iron, fuel, crystal, rareEarth]
+// ~1/3600 of per-mine yield so 1 hour of drip ≈ one MINE click
+const BIOME_DRIP: Record<string, [number, number, number, number]> = {
+  Desert: [0.0008, 0.0025, 0.0003, 0.0001],
+  Jungle: [0.0025, 0.0008, 0.0005, 0.0002],
+  Arctic: [0.0005, 0.0003, 0.0022, 0.0008],
+  Ocean: [0.001, 0.001, 0.0008, 0.0004],
+  Mountain: [0.0025, 0.0005, 0.0008, 0.0003],
+  Volcanic: [0.001, 0.0015, 0.0005, 0.0017],
+  Forest: [0.0015, 0.0012, 0.001, 0.0003],
+  Grassland: [0.0018, 0.0015, 0.0005, 0.0003],
+  Toxic: [0.0005, 0.0008, 0.0008, 0.002],
+};
+
 interface GameState {
   plots: PlotData[];
   player: PlayerData;
@@ -418,6 +433,7 @@ interface GameState {
   commanderUpgrades: Record<string, number>;
   compareModeActive: boolean;
   comparePlotId: number | null;
+  totalFrntrBurned: number;
 
   selectPlot: (id: number | null) => void;
   setSelectedWorldPoint: (p: [number, number, number] | null) => void;
@@ -470,6 +486,9 @@ interface GameState {
   getNetworkBonus: () => boolean;
   setComparePlotId: (id: number | null) => void;
   setCompareModeActive: (active: boolean) => void;
+  upgradeElectricity: (plotId: number) => void;
+  tickPassiveIncome: () => void;
+  tickMineralDrip: () => void;
 }
 
 export const useGameStore = create<GameState>((set, get) => ({
@@ -524,6 +543,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   commanderUpgrades: {},
   compareModeActive: false,
   comparePlotId: null,
+  totalFrntrBurned: 0,
 
   selectPlot: (id) => set({ selectedPlotId: id }),
   setSelectedWorldPoint: (p) => set({ selectedWorldPoint: p }),
@@ -606,6 +626,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         frntBalance: s.player.frntBalance - cost,
         plotsOwned: [...s.player.plotsOwned, id],
       },
+      totalFrntrBurned: (s.totalFrntrBurned ?? 0) + cost,
       plots: s.plots.map((p) =>
         p.id === id ? { ...p, owner: s.player.principal ?? "You" } : p,
       ),
@@ -628,11 +649,13 @@ export const useGameStore = create<GameState>((set, get) => ({
     const yld = getMineralYield(plot.biome, plot.efficiency, regenActive);
     const resourcesMult = plot.specialization === "RESOURCES" ? 1.15 : 1.0;
     const storageCap = state.player.resourceStorageCap;
+    // MINE is now a small boost (10% of normal yield), not a full lump sum
+    const boostFactor = 0.1;
     const scaledYield = {
-      iron: yld.iron * resourcesMult,
-      fuel: yld.fuel * resourcesMult,
-      crystal: yld.crystal * resourcesMult,
-      rareEarth: yld.rareEarth * resourcesMult,
+      iron: yld.iron * resourcesMult * boostFactor,
+      fuel: yld.fuel * resourcesMult * boostFactor,
+      crystal: yld.crystal * resourcesMult * boostFactor,
+      rareEarth: yld.rareEarth * resourcesMult * boostFactor,
     };
     const newMineCount = plot.mineCount + 1;
     const newEfficiency =
@@ -668,6 +691,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (!plot) return;
     set((s) => ({
       player: { ...s.player, frntBalance: s.player.frntBalance - cost },
+      totalFrntrBurned: (s.totalFrntrBurned ?? 0) + cost,
       plots: s.plots.map((p) =>
         p.id === id
           ? {
@@ -709,6 +733,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     );
     set((s) => ({
       player: { ...s.player, frntBalance: s.player.frntBalance - cost },
+      totalFrntrBurned: (s.totalFrntrBurned ?? 0) + cost,
       subParcels: { ...s.subParcels, [plotId]: updated },
     }));
   },
@@ -734,6 +759,7 @@ export const useGameStore = create<GameState>((set, get) => ({
           [weaponName]: (s.player.weaponInventory[weaponName] ?? 0) + 1,
         },
       },
+      totalFrntrBurned: (s.totalFrntrBurned ?? 0) + cost,
     }));
   },
 
@@ -759,8 +785,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     const defCmdBonus = defCmd ? defCmd.def : 0;
 
     // Compute base ATK / DEF
-    let atkPower = computePlotATK(from, fromParcels, atkCmdBonus);
-    let defPower = computePlotDEF(to, toParcels, defCmdBonus);
+    const atkPower = computePlotATK(from, fromParcels, atkCmdBonus);
+    const defPower = computePlotDEF(to, toParcels, defCmdBonus);
 
     // Check radar debuff on attacker hit chance
     let hasRadar = false;
@@ -782,24 +808,65 @@ export const useGameStore = create<GameState>((set, get) => ({
       AEGIS: 0.9,
     };
     let intercepted = false;
+    let interceptorType: string | undefined;
+
     if (!to.buildingsDisabled) {
+      // Check sub-parcel buildings first
       for (const sp of toParcels) {
         if (!sp.buildingType) continue;
         const bt = sp.buildingType.toUpperCase();
         let chance = 0;
-        if (bt.includes("IRON_DOME") || bt.includes("IRON DOME"))
+        let label = "";
+        if (bt.includes("IRON_DOME") || bt.includes("IRON DOME")) {
           chance = interceptorChances.IRON_DOME;
-        else if (bt.includes("THAAD")) chance = interceptorChances.THAAD;
-        else if (bt.includes("AEGIS")) chance = interceptorChances.AEGIS;
+          label = "IRON DOME-F";
+        } else if (bt.includes("THAAD")) {
+          chance = interceptorChances.THAAD;
+          label = "THAAD-X";
+        } else if (bt.includes("AEGIS")) {
+          chance = interceptorChances.AEGIS;
+          label = "AEGIS-S";
+        }
 
         if (chance > 0) {
-          const roll = Math.random();
-          // STEALTH bypasses 50% of interceptors
           const effectiveChance =
             formation === "STEALTH" ? chance * 0.5 : chance;
-          if (roll < effectiveChance) {
+          if (Math.random() < effectiveChance) {
             intercepted = true;
+            interceptorType = label;
             break;
+          }
+        }
+      }
+
+      // Also check assignedInterceptors map (from inventory assignment)
+      if (!intercepted) {
+        const assignedId = state.assignedInterceptors[toId];
+        if (assignedId) {
+          const id = assignedId.toUpperCase();
+          let chance = 0;
+          let label = "";
+          if (
+            id.includes("IRON_DOME") ||
+            id.includes("IRON DOME") ||
+            id.includes("IRON-DOME")
+          ) {
+            chance = 0.7;
+            label = "IRON DOME-F";
+          } else if (id.includes("THAAD")) {
+            chance = 0.85;
+            label = "THAAD-X";
+          } else if (id.includes("AEGIS")) {
+            chance = 0.9;
+            label = "AEGIS-S";
+          }
+          if (chance > 0) {
+            const effectiveChance =
+              formation === "STEALTH" ? chance * 0.5 : chance;
+            if (Math.random() < effectiveChance) {
+              intercepted = true;
+              interceptorType = label;
+            }
           }
         }
       }
@@ -852,6 +919,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       formationUsed: formation,
       damageDealt: Math.round(damageDealt),
       intercepted,
+      interceptorType,
     };
 
     set((s) => {
@@ -860,7 +928,6 @@ export const useGameStore = create<GameState>((set, get) => ({
         const newDamage = Math.min(100, p.structuralDamage + damageDealt);
         const disabled = newDamage >= 50;
         const destroyed = newDamage >= 100;
-        // updatedSubParcels computed below
         return {
           ...p,
           structuralDamage: newDamage,
@@ -906,6 +973,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (state.player.frntBalance < cost) return;
     set((s) => ({
       player: { ...s.player, frntBalance: s.player.frntBalance - cost },
+      totalFrntrBurned: (s.totalFrntrBurned ?? 0) + cost,
       plots: s.plots.map((p) => {
         if (p.id !== plotId) return p;
         const newDamage = Math.max(0, p.structuralDamage - 25);
@@ -988,6 +1056,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
     set((s) => ({
       player: { ...s.player, frntBalance: s.player.frntBalance - cost },
+      totalFrntrBurned: (s.totalFrntrBurned ?? 0) + cost,
       ownedCommanders: s.ownedCommanders.map((c, i) =>
         i === idx ? updatedCommander : c,
       ),
@@ -1021,6 +1090,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         frntBalance: s.player.frntBalance - 150,
         resourceStorageCap: Math.min(500, s.player.resourceStorageCap + 50),
       },
+      totalFrntrBurned: (s.totalFrntrBurned ?? 0) + 150,
     }));
   },
 
@@ -1038,4 +1108,83 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   setAuth: (principal) =>
     set((state) => ({ player: { ...state.player, principal } })),
+
+  // Passive FRNTR drip: 7 FRNTR/day per plot + Electricity upgrade bonus
+  tickPassiveIncome: () => {
+    const state = get();
+    if (state.player.plotsOwned.length === 0) return;
+    const BASE_PER_PLOT_PER_SEC = 7 / 86400; // 7 FRNTR/day
+    const ELEC_BONUS: Record<number, number> = {
+      1: 8 / 86400,
+      2: 24 / 86400,
+      3: 48 / 86400,
+    };
+    let totalFrntr = 0;
+    for (const plotId of state.player.plotsOwned) {
+      const plot = state.plots.find((p) => p.id === plotId);
+      if (!plot || plot.isDestroyed) continue;
+      totalFrntr += BASE_PER_PLOT_PER_SEC;
+      // Electricity upgrade bonus from center sub-parcel (index 0)
+      const parcels = state.subParcels[plotId] ?? [];
+      const centerParcel = parcels[0];
+      if (centerParcel?.buildingType?.toUpperCase().includes("ELECTRICITY")) {
+        const level = (state.commanderUpgrades[`electricity_${plotId}`] ??
+          0) as number;
+        if (level > 0) totalFrntr += ELEC_BONUS[level] ?? 0;
+      }
+    }
+    if (totalFrntr === 0) return;
+    set((s) => ({
+      player: { ...s.player, frntBalance: s.player.frntBalance + totalFrntr },
+    }));
+  },
+
+  upgradeElectricity: (plotId: number) => {
+    const COSTS: Record<number, number> = { 1: 500, 2: 1500, 3: 4000 };
+    const state = get();
+    const key = `electricity_${plotId}`;
+    const currentLevel = (state.commanderUpgrades[key] ?? 0) as number;
+    if (currentLevel >= 3) return;
+    const cost = COSTS[currentLevel + 1];
+    if (!cost || state.player.frntBalance < cost) return;
+    set((s) => ({
+      player: { ...s.player, frntBalance: s.player.frntBalance - cost },
+      totalFrntrBurned: (s.totalFrntrBurned ?? 0) + cost,
+      commanderUpgrades: { ...s.commanderUpgrades, [key]: currentLevel + 1 },
+    }));
+  },
+
+  // Gradual mineral drip: biome-based per-second accumulation
+  tickMineralDrip: () => {
+    const state = get();
+    if (state.player.plotsOwned.length === 0) return;
+    set((s) => {
+      let dIron = 0;
+      let dFuel = 0;
+      let dXtal = 0;
+      let dRare = 0;
+      for (const plotId of s.player.plotsOwned) {
+        const plot = s.plots.find((p) => p.id === plotId);
+        if (!plot || plot.isDestroyed) continue;
+        const rates = BIOME_DRIP[plot.biome] ?? [0.001, 0.001, 0.001, 0.001];
+        const eff = (plot.efficiency ?? 90) / 100;
+        const regenMult = Date.now() < plot.regenActiveUntil ? 1.2 : 1.0;
+        const specMult = plot.specialization === "RESOURCES" ? 1.15 : 1.0;
+        dIron += rates[0] * eff * regenMult * specMult;
+        dFuel += rates[1] * eff * regenMult * specMult;
+        dXtal += rates[2] * eff * regenMult * specMult;
+        dRare += rates[3] * eff * regenMult * specMult;
+      }
+      const storageCap = s.player.resourceStorageCap;
+      return {
+        player: {
+          ...s.player,
+          iron: Math.min(storageCap, s.player.iron + dIron),
+          fuel: Math.min(storageCap, s.player.fuel + dFuel),
+          crystal: Math.min(storageCap, s.player.crystal + dXtal),
+          rareEarth: Math.min(storageCap, s.player.rareEarth + dRare),
+        },
+      };
+    });
+  },
 }));
