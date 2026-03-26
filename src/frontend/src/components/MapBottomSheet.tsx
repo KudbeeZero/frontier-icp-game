@@ -12,12 +12,16 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type React from "react";
-import { useState } from "react";
-import type { MissileConfig } from "../constants/missiles";
-import { MISSILE_CONFIGS } from "../constants/missiles";
-import { useArsenalAudio } from "../hooks/useArsenalAudio";
-import { type SubParcel, useGameStore } from "../store/gameStore";
+import { useEffect, useState } from "react";
+import { getMineralYield, projectedMonthlyYield } from "../constants/minerals";
+import { usePurchasePlot } from "../hooks/usePurchasePlot";
+import {
+  type PlotSpecialization,
+  type SubParcel,
+  useGameStore,
+} from "../store/gameStore";
 import BuildingPicker from "./BuildingPicker";
+import PlotComparisonView from "./PlotComparisonView";
 
 const CYAN = "#00ffcc";
 const CYAN_DIM = "rgba(0,255,204,0.5)";
@@ -61,6 +65,32 @@ const COMMANDER_IMAGES: Record<string, string> = {
     "/assets/generated/commander-phantom-ops-transparent.dim_300x300.png",
   "VOID HUNTER":
     "/assets/generated/commander-void-hunter-transparent.dim_300x300.png",
+};
+
+const SPEC_CONFIG: Record<
+  PlotSpecialization,
+  { color: string; label: string; buff: string }
+> = {
+  TRADING_DEPOT: {
+    color: "#f59e0b",
+    label: "TRADING DEPOT",
+    buff: "+10% FRNTR from combat wins",
+  },
+  ENERGY_TECH: {
+    color: "#3b82f6",
+    label: "ENERGY & TECH",
+    buff: "Dome Shield -10% damage taken",
+  },
+  ARMORY: {
+    color: "#ef4444",
+    label: "ARMORY",
+    buff: "+5% hit target accuracy",
+  },
+  RESOURCES: {
+    color: "#22c55e",
+    label: "RESOURCES",
+    buff: "+15% mineral yield",
+  },
 };
 
 function getCountdown(purchaseTime: number): string {
@@ -263,143 +293,356 @@ function SlotRow({
   );
 }
 
-function QuickLaunchPanel({
-  onFireMissile,
-}: {
-  onFireMissile: (missile: MissileConfig) => void;
-}) {
-  const arsenalInventory = useGameStore((s) => s.arsenalInventory);
-  const { playMissileAudio } = useArsenalAudio();
-  const fireArsenalMissile = useGameStore((s) => s.fireArsenalMissile);
+interface MapBottomSheetProps {
+  onClose: () => void;
+  controlsRef?: React.RefObject<any>;
+}
 
-  const available = MISSILE_CONFIGS.filter(
-    (m) => (arsenalInventory[m.id] ?? 0) > 0,
-  ).slice(0, 3);
+interface SurveyReportProps {
+  plot: import("../store/gameStore").PlotData;
+  isOwnPlot: boolean;
+  playerFrntr: number;
+  mineYield: {
+    iron: number;
+    fuel: number;
+    crystal: number;
+    rareEarth: number;
+  } | null;
+  regenError: string | null;
+  onMine: () => void;
+  onRegen: () => void;
+}
 
-  if (available.length === 0) return null;
+function SurveyReport({
+  plot,
+  isOwnPlot,
+  playerFrntr,
+  mineYield,
+  regenError,
+  onMine,
+  onRegen,
+}: SurveyReportProps) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 10000);
+    return () => clearInterval(t);
+  }, []);
+
+  const regenActive = now < plot.regenActiveUntil;
+  const regenRemaining = plot.regenActiveUntil - now;
+  const regenHours = Math.floor(regenRemaining / 3600000);
+  const regenMins = Math.floor((regenRemaining % 3600000) / 60000);
+
+  const monthly = projectedMonthlyYield(plot.biome, plot.efficiency);
+  const effPct = plot.efficiency;
+  const effColor =
+    effPct > 80 ? "#22c55e" : effPct >= 60 ? "#f59e0b" : "#ef4444";
+
+  const previewYield = getMineralYield(
+    plot.biome,
+    plot.efficiency,
+    regenActive,
+  );
 
   return (
-    <div
-      data-ocid="map.quicklaunch.panel"
-      style={{
-        padding: "10px 14px",
-        borderTop: `1px solid ${BORDER}`,
-        flexShrink: 0,
-      }}
-    >
+    <div style={{ marginBottom: 14 }}>
+      {/* Section header */}
       <div
         style={{
-          fontSize: 8,
+          fontSize: 9,
           color: CYAN_DIM,
           letterSpacing: 2,
-          marginBottom: 8,
           fontFamily: "monospace",
-          display: "flex",
-          alignItems: "center",
-          gap: 4,
+          marginBottom: 8,
         }}
       >
-        <Zap size={10} color={"#f97316"} />
-        QUICK LAUNCH
+        SURVEY REPORT
       </div>
-      <div
-        style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2 }}
-      >
-        {available.map((missile) => (
-          <div
-            key={missile.id}
+
+      {/* Efficiency bar */}
+      <div style={{ marginBottom: 10 }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            marginBottom: 4,
+            alignItems: "center",
+          }}
+        >
+          <span
             style={{
-              flexShrink: 0,
-              background: "rgba(0,0,0,0.3)",
-              border: `1px solid ${missile.accentColor}55`,
-              borderRadius: 6,
-              padding: "6px 8px",
-              minWidth: 90,
+              fontSize: 8,
+              color: "rgba(224,244,255,0.5)",
+              letterSpacing: 1,
+              fontFamily: "monospace",
             }}
           >
+            EFFICIENCY
+          </span>
+          <span
+            style={{
+              fontSize: 9,
+              fontWeight: 700,
+              color: effColor,
+              fontFamily: "monospace",
+              textShadow: `0 0 6px ${effColor}88`,
+            }}
+          >
+            {effPct}%
+          </span>
+        </div>
+        <div
+          style={{
+            height: 4,
+            background: "rgba(255,255,255,0.07)",
+            borderRadius: 2,
+            border: "1px solid rgba(255,255,255,0.1)",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              height: "100%",
+              width: `${effPct}%`,
+              background: `linear-gradient(90deg, ${effColor}, ${effColor}aa)`,
+              borderRadius: 2,
+              transition: "width 0.4s ease",
+            }}
+          />
+        </div>
+        <div
+          style={{
+            marginTop: 3,
+            fontSize: 7,
+            color: "rgba(224,244,255,0.3)",
+            fontFamily: "monospace",
+            letterSpacing: 0.5,
+          }}
+        >
+          Extracted: {plot.mineCount}x · Degrades 1% per 2 mines
+        </div>
+      </div>
+
+      {/* Regen status */}
+      {regenActive && (
+        <div
+          data-ocid="map.success_state"
+          style={{
+            marginBottom: 8,
+            fontSize: 8,
+            color: CYAN,
+            fontFamily: "monospace",
+            letterSpacing: 1,
+            padding: "3px 6px",
+            background: "rgba(0,255,204,0.07)",
+            border: "1px solid rgba(0,255,204,0.2)",
+            borderRadius: 3,
+          }}
+        >
+          ⚡ REGEN ACTIVE: {regenHours}h {regenMins}m remaining
+        </div>
+      )}
+
+      {/* Monthly projection */}
+      <div
+        style={{
+          marginBottom: 10,
+          padding: "7px 8px",
+          background: "rgba(0,0,0,0.25)",
+          border: "1px solid rgba(0,255,204,0.12)",
+          borderRadius: 4,
+        }}
+      >
+        <div
+          style={{
+            fontSize: 7,
+            color: CYAN_DIM,
+            letterSpacing: 2,
+            fontFamily: "monospace",
+            marginBottom: 5,
+          }}
+        >
+          PROJECTED MONTHLY YIELD
+        </div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: "3px 10px",
+          }}
+        >
+          {[
+            { label: "IRON", val: monthly.iron, color: "#94a3b8" },
+            { label: "FUEL", val: monthly.fuel, color: "#f97316" },
+            { label: "CRYSTAL", val: monthly.crystal, color: "#3b82f6" },
+            { label: "RARE EARTH", val: monthly.rareEarth, color: "#c084fc" },
+          ].map(({ label, val, color }) => (
             <div
-              style={{
-                fontSize: 8,
-                fontWeight: 700,
-                color: missile.accentColor,
-                letterSpacing: 0.5,
-                fontFamily: "monospace",
-                marginBottom: 4,
-                whiteSpace: "nowrap",
-              }}
-            >
-              {missile.name}
-            </div>
-            <div
+              key={label}
               style={{
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
-                gap: 4,
               }}
             >
               <span
                 style={{
-                  fontSize: 8,
-                  color: CYAN_DIM,
-                  fontFamily: "monospace",
-                }}
-              >
-                ×{arsenalInventory[missile.id] ?? 0}
-              </span>
-              <button
-                type="button"
-                data-ocid={`map.quicklaunch.${missile.id.toLowerCase()}.button`}
-                onClick={() => {
-                  fireArsenalMissile(missile.id);
-                  playMissileAudio(missile.id, "launch");
-                  onFireMissile(missile);
-                }}
-                style={{
                   fontSize: 7,
-                  fontWeight: 700,
-                  letterSpacing: 1,
-                  padding: "3px 6px",
-                  borderRadius: 3,
-                  background: "rgba(239,68,68,0.15)",
-                  border: "1px solid #ef4444",
-                  color: "#ef4444",
-                  cursor: "pointer",
+                  color: "rgba(224,244,255,0.45)",
+                  letterSpacing: 0.5,
                   fontFamily: "monospace",
                 }}
               >
-                FIRE
-              </button>
+                {label}
+              </span>
+              <span
+                style={{
+                  fontSize: 8,
+                  fontWeight: 700,
+                  color,
+                  fontFamily: "monospace",
+                }}
+              >
+                {val >= 1000 ? `${(val / 1000).toFixed(1)}K` : val}
+              </span>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
+        <div
+          style={{
+            marginTop: 4,
+            fontSize: 7,
+            color: "rgba(224,244,255,0.25)",
+            fontFamily: "monospace",
+          }}
+        >
+          Based on 10 mines/day · Biome: {plot.biome}
+        </div>
       </div>
+
+      {/* Per-mine preview */}
+      <div
+        style={{
+          marginBottom: isOwnPlot ? 10 : 0,
+          fontSize: 7,
+          color: "rgba(224,244,255,0.35)",
+          fontFamily: "monospace",
+          letterSpacing: 0.5,
+        }}
+      >
+        Per mine:{" "}
+        <span style={{ color: "#94a3b8" }}>+{previewYield.iron} Fe</span>{" "}
+        <span style={{ color: "#f97316" }}>+{previewYield.fuel} Fuel</span>{" "}
+        <span style={{ color: "#3b82f6" }}>+{previewYield.crystal} Xtal</span>{" "}
+        <span style={{ color: "#c084fc" }}>+{previewYield.rareEarth} Rare</span>
+      </div>
+
+      {/* Mine yield popup */}
+      {mineYield && (
+        <div
+          data-ocid="map.success_state"
+          style={{
+            marginBottom: 8,
+            padding: "5px 8px",
+            background: "rgba(34,197,94,0.12)",
+            border: "1px solid rgba(34,197,94,0.3)",
+            borderRadius: 4,
+            fontSize: 9,
+            color: "#22c55e",
+            fontFamily: "monospace",
+            letterSpacing: 0.5,
+            fontWeight: 700,
+          }}
+        >
+          +{mineYield.iron} IRON +{mineYield.fuel} FUEL +{mineYield.crystal}{" "}
+          XTAL +{mineYield.rareEarth} RARE
+        </div>
+      )}
+
+      {/* Mine + Regen buttons (own plots only) */}
+      {isOwnPlot && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <button
+            type="button"
+            data-ocid="map.primary_button"
+            onClick={onMine}
+            style={{
+              ...actionBtnStyle("#00ffcc", "rgba(0,255,204,0.1)"),
+              fontSize: 10,
+            }}
+          >
+            ⛏ MINE RESOURCES
+          </button>
+          <button
+            type="button"
+            data-ocid="map.secondary_button"
+            onClick={onRegen}
+            disabled={regenActive || playerFrntr < 50}
+            style={{
+              ...actionBtnStyle(
+                regenActive
+                  ? "rgba(0,255,204,0.3)"
+                  : playerFrntr < 50
+                    ? "rgba(245,158,11,0.3)"
+                    : "#f59e0b",
+                regenActive ? "rgba(0,0,0,0.2)" : "rgba(245,158,11,0.08)",
+              ),
+              opacity: regenActive || playerFrntr < 50 ? 0.55 : 1,
+              cursor:
+                regenActive || playerFrntr < 50 ? "not-allowed" : "pointer",
+              fontSize: 10,
+            }}
+          >
+            ⚡ REGEN BOOST — 50 FRNTR
+          </button>
+          {regenError && (
+            <div
+              data-ocid="map.error_state"
+              style={{
+                fontSize: 9,
+                color: "#ef4444",
+                textAlign: "center",
+                letterSpacing: 1,
+                fontFamily: "monospace",
+              }}
+            >
+              {regenError}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
-}
-
-interface MapBottomSheetProps {
-  onClose: () => void;
-  controlsRef?: React.RefObject<any>;
-  onFireMissile?: (missile: MissileConfig) => void;
 }
 
 export default function MapBottomSheet({
   onClose,
   controlsRef,
-  onFireMissile,
 }: MapBottomSheetProps) {
   const [pickerSlot, setPickerSlot] = useState<number | null>(null);
-  const [purchasing, setPurchasing] = useState(false);
+  const [purchaseError, setPurchaseError] = useState<string | null>(null);
+  const [mineYield, setMineYield] = useState<{
+    iron: number;
+    fuel: number;
+    crystal: number;
+    rareEarth: number;
+  } | null>(null);
+  const [regenError, setRegenError] = useState<string | null>(null);
 
   const selectedPlotId = useGameStore((s) => s.selectedPlotId);
   const plots = useGameStore((s) => s.plots);
   const player = useGameStore((s) => s.player);
   const getSubParcels = useGameStore((s) => s.getSubParcels);
-  const purchasePlot = useGameStore((s) => s.purchasePlot);
   const setTargetPlotId = useGameStore((s) => s.setTargetPlotId);
   const setPlotHoverCard = useGameStore((s) => s.setPlotHoverCard);
   const commanderAssignments = useGameStore((s) => s.commanderAssignments);
+
+  const setPlotSpecialization = useGameStore((s) => s.setPlotSpecialization);
+  const getNetworkBonus = useGameStore((s) => s.getNetworkBonus);
+  const mineResources = useGameStore((s) => s.mineResources);
+  const activateRegenBoost = useGameStore((s) => s.activateRegenBoost);
+
+  const { purchasePlot, isPurchasing } = usePurchasePlot();
 
   const plot =
     selectedPlotId !== null
@@ -419,15 +662,12 @@ export default function MapBottomSheet({
     (sp) => sp.subId !== 0 && sp.unlocked && !sp.buildingType,
   );
 
-  const hasSilo = subParcels.some((sp) => sp.buildingType === "MISSILE_SILO");
-
-  function handlePurchase() {
-    if (!plot || purchasing) return;
+  async function handlePurchase() {
+    if (!plot || isPurchasing) return;
     if (player.frntBalance < 100) return;
-    setPurchasing(true);
-    setTimeout(() => {
-      purchasePlot(plot.id);
-      setPurchasing(false);
+    setPurchaseError(null);
+    const result = await purchasePlot(plot.id);
+    if (result.success) {
       onClose();
       focusOnPlot(plot.lat, plot.lng, controlsRef);
       setPlotHoverCard({
@@ -437,7 +677,9 @@ export default function MapBottomSheet({
         nextStep:
           "Open Command Center to track FRNTR generation. Build a Silo to attack.",
       });
-    }, 800);
+    } else {
+      setPurchaseError(result.message);
+    }
   }
 
   function handleBuild() {
@@ -643,6 +885,130 @@ export default function MapBottomSheet({
                 style={{ height: 1, background: BORDER, marginBottom: 12 }}
               />
 
+              {/* SPECIALIZATION SELECTOR */}
+              {isOwnPlot && (
+                <div style={{ marginBottom: 14 }}>
+                  {getNetworkBonus() && (
+                    <div
+                      data-ocid="map.network_linked.success_state"
+                      style={{
+                        marginBottom: 8,
+                        padding: "4px 8px",
+                        background: "rgba(0,255,204,0.08)",
+                        border: "1px solid rgba(0,255,204,0.4)",
+                        borderRadius: 4,
+                        fontSize: 8,
+                        color: CYAN,
+                        fontFamily: "monospace",
+                        letterSpacing: 2,
+                        fontWeight: 700,
+                        textAlign: "center",
+                        boxShadow: "0 0 12px rgba(0,255,204,0.15)",
+                        animation: "mapGlobePulse 2s ease-in-out infinite",
+                      }}
+                    >
+                      ⬡ NETWORK LINKED — ALL 4 SPECIALIZATIONS ACTIVE
+                    </div>
+                  )}
+                  {plot.specialization ? (
+                    <div
+                      style={{ display: "flex", alignItems: "center", gap: 6 }}
+                    >
+                      <span
+                        data-ocid="map.specialization.toggle"
+                        style={{
+                          fontSize: 9,
+                          padding: "3px 10px",
+                          borderRadius: 4,
+                          background: `${SPEC_CONFIG[plot.specialization].color}22`,
+                          border: `1px solid ${SPEC_CONFIG[plot.specialization].color}`,
+                          color: SPEC_CONFIG[plot.specialization].color,
+                          fontFamily: "monospace",
+                          letterSpacing: 1.5,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {SPEC_CONFIG[plot.specialization].label}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 8,
+                          color: "rgba(224,244,255,0.4)",
+                          fontFamily: "monospace",
+                        }}
+                      >
+                        {SPEC_CONFIG[plot.specialization].buff}
+                      </span>
+                    </div>
+                  ) : (
+                    <div>
+                      <div
+                        style={{
+                          fontSize: 8,
+                          color: CYAN_DIM,
+                          letterSpacing: 2,
+                          fontFamily: "monospace",
+                          marginBottom: 6,
+                        }}
+                      >
+                        CHOOSE PLOT SPECIALIZATION
+                      </div>
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr 1fr",
+                          gap: 5,
+                        }}
+                      >
+                        {(
+                          Object.entries(SPEC_CONFIG) as [
+                            PlotSpecialization,
+                            { color: string; label: string; buff: string },
+                          ][]
+                        ).map(([key, cfg]) => (
+                          <button
+                            key={key}
+                            type="button"
+                            data-ocid={`map.specialization.${key.toLowerCase()}.button`}
+                            onClick={() => setPlotSpecialization(plot.id, key)}
+                            style={{
+                              padding: "8px 6px",
+                              background: `${cfg.color}11`,
+                              border: `1px solid ${cfg.color}66`,
+                              borderRadius: 6,
+                              cursor: "pointer",
+                              textAlign: "left",
+                            }}
+                          >
+                            <div
+                              style={{
+                                fontSize: 8,
+                                fontWeight: 700,
+                                color: cfg.color,
+                                letterSpacing: 1,
+                                fontFamily: "monospace",
+                                marginBottom: 2,
+                              }}
+                            >
+                              {cfg.label}
+                            </div>
+                            <div
+                              style={{
+                                fontSize: 7,
+                                color: `${cfg.color}aa`,
+                                fontFamily: "monospace",
+                              }}
+                            >
+                              {cfg.buff}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* SUB-PARCELS */}
               <div
                 style={{
@@ -671,14 +1037,41 @@ export default function MapBottomSheet({
                   />
                 ))}
               </div>
+
+              {/* DIVIDER */}
+              <div
+                style={{ height: 1, background: BORDER, marginBottom: 12 }}
+              />
+
+              {/* SURVEY REPORT */}
+              <SurveyReport
+                plot={plot}
+                isOwnPlot={isOwnPlot}
+                playerFrntr={player.frntBalance}
+                mineYield={mineYield}
+                regenError={regenError}
+                onMine={() => {
+                  const yld = mineResources(plot.id);
+                  if (yld) {
+                    setMineYield(yld);
+                    setTimeout(() => setMineYield(null), 3000);
+                  }
+                }}
+                onRegen={() => {
+                  setRegenError(null);
+                  if (player.frntBalance < 50) {
+                    setRegenError("INSUFFICIENT FRNTR");
+                    return;
+                  }
+                  activateRegenBoost(plot.id);
+                }}
+              />
             </>
           )}
         </div>
 
-        {/* QUICK LAUNCH — only if plot has a silo and handler is provided */}
-        {plot && isOwnPlot && hasSilo && onFireMissile && (
-          <QuickLaunchPanel onFireMissile={onFireMissile} />
-        )}
+        {/* PLOT COMPARISON OVERLAY */}
+        <PlotComparisonView />
 
         {/* DECISION LAYER */}
         {plot && (
@@ -695,7 +1088,7 @@ export default function MapBottomSheet({
                   type="button"
                   data-ocid="map.primary_button"
                   onClick={handlePurchase}
-                  disabled={purchasing || player.frntBalance < 100}
+                  disabled={isPurchasing || player.frntBalance < 100}
                   style={{
                     ...actionBtnStyle(
                       player.frntBalance < 100
@@ -703,24 +1096,20 @@ export default function MapBottomSheet({
                         : "#00ffcc",
                       player.frntBalance < 100
                         ? "rgba(0,255,204,0.04)"
-                        : purchasing
+                        : isPurchasing
                           ? "rgba(0,255,204,0.06)"
                           : "rgba(0,255,204,0.12)",
                     ),
-                    opacity: player.frntBalance < 100 || purchasing ? 0.6 : 1,
+                    opacity: player.frntBalance < 100 || isPurchasing ? 0.6 : 1,
                     cursor:
-                      player.frntBalance < 100 || purchasing
+                      player.frntBalance < 100 || isPurchasing
                         ? "not-allowed"
                         : "pointer",
                   }}
                 >
-                  {purchasing
-                    ? "PROCESSING..."
-                    : player.frntBalance < 100
-                      ? "PURCHASE PLOT — 100 FRNTR"
-                      : "PURCHASE PLOT — 100 FRNTR"}
+                  {isPurchasing ? "PROCESSING…" : "PURCHASE PLOT — 100 FRNTR"}
                 </button>
-                {player.frntBalance < 100 && (
+                {(player.frntBalance < 100 || purchaseError) && (
                   <div
                     data-ocid="map.error_state"
                     style={{
@@ -732,7 +1121,7 @@ export default function MapBottomSheet({
                       fontFamily: "monospace",
                     }}
                   >
-                    INSUFFICIENT FRNTR
+                    {purchaseError ?? "INSUFFICIENT FRNTR"}
                   </div>
                 )}
               </div>
@@ -767,6 +1156,7 @@ export default function MapBottomSheet({
           plotId={selectedPlotId}
           subId={pickerSlot}
           onClose={() => setPickerSlot(null)}
+          specialization={plot?.specialization}
         />
       )}
     </>

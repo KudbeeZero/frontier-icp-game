@@ -1,11 +1,33 @@
-import { Cpu, Crosshair, Radio, Zap } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle,
+  GitCompare,
+  Radio,
+  Shield,
+  Swords,
+  Wrench,
+  Zap,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useGameStore } from "../store/gameStore";
+import { toast } from "sonner";
+import type { BattleFormation, SubParcel } from "../store/gameStore";
+import {
+  BIOME_COLORS,
+  getPlotCombatStats,
+  useGameStore,
+} from "../store/gameStore";
 
 const CYAN = "#00ffcc";
-const CYAN_DIM = "rgba(0,255,204,0.35)";
-const GOLD = "#ffd700";
-const BORDER = "rgba(0,255,204,0.22)";
+const CYAN_DIM = "rgba(0,255,204,0.45)";
+const BORDER = "rgba(0,255,204,0.18)";
+const GLASS_BG = "rgba(4,16,28,0.55)";
+
+const FORMATION_DESCRIPTIONS: Record<BattleFormation, string> = {
+  SWARM: "+20% hit, ×0.7 dmg — overwhelm with volume",
+  PRECISION_STRIKE: "-10% hit, ×1.5 dmg — one devastating blow",
+  SUPPRESSION: "+5% hit, bypass 50% DEF — sustained pressure",
+  STEALTH: "Bypass 50% interceptors — ghost approach",
+};
 
 interface CommandPanelProps {
   onFire: () => void;
@@ -15,238 +37,862 @@ interface CommandPanelProps {
 }
 
 export default function CommandPanel({
-  onFire,
-  fireDisabled,
+  onFire: _onFire,
+  fireDisabled: _fireDisabled,
   onOpenTab,
   onToggleCombatLog,
 }: CommandPanelProps) {
   const selectedPlotId = useGameStore((s) => s.selectedPlotId);
-  const [expanded, setExpanded] = useState(false);
-  const [devicesTooltip, setDevicesTooltip] = useState(false);
+  const targetPlotId = useGameStore((s) => s.targetPlotId);
+  const plots = useGameStore((s) => s.plots);
+  const player = useGameStore((s) => s.player);
+  const getSubParcels = useGameStore((s) => s.getSubParcels);
+  const combatLog = useGameStore((s) => s.combatLog);
+  const resolveBattle = useGameStore((s) => s.resolveBattle);
+  const repairPlot = useGameStore((s) => s.repairPlot);
+  const setCompareModeActive = useGameStore((s) => s.setCompareModeActive);
+  const equippedMissileId = useGameStore((s) => s.equippedMissileId);
+
+  const [selectedFormation, setSelectedFormation] =
+    useState<BattleFormation>("PRECISION_STRIKE");
+  const [isFiring, setIsFiring] = useState(false);
+  const [fireResult, setFireResult] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
+
   const panelRef = useRef<HTMLDivElement>(null);
 
-  const isDesktop = typeof window !== "undefined" && window.innerWidth >= 768;
-  const targetLocked = selectedPlotId !== null;
+  // Detect landscape (height < 500) to collapse to strip only
+  const [isLandscape, setIsLandscape] = useState(
+    typeof window !== "undefined" && window.innerHeight < 500,
+  );
+  const [isDesktop, setIsDesktop] = useState(
+    typeof window !== "undefined" && window.innerWidth >= 768,
+  );
 
-  // Auto-collapse on outside tap (mobile only)
   useEffect(() => {
-    if (isDesktop) return;
-    const handler = (e: PointerEvent) => {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-        setExpanded(false);
-      }
+    const handleResize = () => {
+      setIsLandscape(window.innerHeight < 500);
+      setIsDesktop(window.innerWidth >= 768);
     };
-    document.addEventListener("pointerdown", handler);
-    return () => document.removeEventListener("pointerdown", handler);
-  }, [isDesktop]);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
-  const handleFire = () => {
-    if (fireDisabled) return;
-    onFire();
-    setExpanded(false);
-  };
+  const plot =
+    selectedPlotId !== null
+      ? (plots.find((p) => p.id === selectedPlotId) ?? null)
+      : null;
+  const subParcels: SubParcel[] = plot ? getSubParcels(plot.id) : [];
+  const isOwnPlot = plot ? player.plotsOwned.includes(plot.id) : false;
 
+  const stats = plot
+    ? getPlotCombatStats(
+        plot,
+        subParcels,
+        isOwnPlot ? player.commanderAtk : 0,
+        0,
+      )
+    : null;
+
+  const hasSilo = subParcels.some(
+    (sp) =>
+      sp.buildingType &&
+      (sp.buildingType.toUpperCase().includes("SILO") ||
+        sp.buildingType.toUpperCase().includes("MISSILE")),
+  );
+
+  const regenTimeLeft =
+    plot && plot.regenActiveUntil > Date.now()
+      ? Math.ceil((plot.regenActiveUntil - Date.now()) / 60000)
+      : 0;
+
+  const now = Date.now();
+  const incomingThreat = plot
+    ? combatLog
+        .slice(0, 10)
+        .some((e) => e.toPlot === plot.id && now - e.timestamp < 60_000)
+    : false;
+
+  const interceptorBuildings = subParcels
+    .filter((sp) => {
+      if (!sp.buildingType) return false;
+      const bt = sp.buildingType.toUpperCase();
+      return (
+        bt.includes("IRON_DOME") || bt.includes("THAAD") || bt.includes("AEGIS")
+      );
+    })
+    .map((sp) => sp.buildingType ?? "");
+
+  const effColor = !plot
+    ? CYAN_DIM
+    : plot.efficiency >= 70
+      ? "#22c55e"
+      : plot.efficiency >= 40
+        ? "#f59e0b"
+        : "#ef4444";
+
+  const dmgColor = !plot
+    ? CYAN_DIM
+    : plot.structuralDamage < 50
+      ? "#22c55e"
+      : plot.structuralDamage < 75
+        ? "#f59e0b"
+        : "#ef4444";
+
+  const formationList: BattleFormation[] = [
+    "SWARM",
+    "PRECISION_STRIKE",
+    "SUPPRESSION",
+    "STEALTH",
+  ];
+
+  async function handleFire() {
+    if (isFiring) return;
+    if (targetPlotId === null) {
+      toast.error("No target selected. Tap SET AS TARGET on an enemy plot.");
+      return;
+    }
+    setIsFiring(true);
+    setFireResult(null);
+    try {
+      resolveBattle(
+        selectedPlotId!,
+        targetPlotId,
+        selectedFormation,
+        equippedMissileId ?? "",
+      );
+      setFireResult({ success: true, message: "STRIKE RESOLVED" });
+      setTimeout(() => setFireResult(null), 3000);
+    } catch {
+      setFireResult({ success: false, message: "LAUNCH FAILED" });
+    } finally {
+      setIsFiring(false);
+    }
+  }
+
+  function handleRepair() {
+    if (player.frntBalance < 100) {
+      toast.error("Insufficient FRNTR. Need 100 FRNTR to repair.");
+      return;
+    }
+    repairPlot(selectedPlotId!);
+    toast.success(`Plot #${selectedPlotId} repaired.`);
+  }
+
+  // ── Frosted glass base style ──────────────────────────────────────
   const glassStyle: React.CSSProperties = {
-    background: "rgba(2,10,20,0.88)",
-    backdropFilter: "blur(10px)",
-    WebkitBackdropFilter: "blur(10px)",
+    background: GLASS_BG,
+    backdropFilter: "blur(20px)",
+    WebkitBackdropFilter: "blur(20px)",
     border: `1px solid ${BORDER}`,
   };
 
-  // ── LOCK INDICATOR ───────────────────────────────────────────────
-  const lockIndicator = (
+  // ── MINIMAL STRIP (no selection, or landscape) ────────────────────
+  const minimalStrip = (
     <div
       style={{
+        height: 44,
         display: "flex",
         alignItems: "center",
-        gap: 4,
-        padding: "3px 8px",
-        background: targetLocked
-          ? "rgba(255,215,0,0.1)"
-          : "rgba(100,100,100,0.1)",
-        border: `1px solid ${
-          targetLocked ? "rgba(255,215,0,0.4)" : "rgba(100,100,100,0.3)"
-        }`,
-        borderRadius: 3,
-        flexShrink: 0,
+        paddingLeft: 14,
+        paddingRight: 14,
+        gap: 10,
       }}
     >
+      <Swords size={11} color={CYAN} />
+      <span
+        style={{
+          flex: 1,
+          fontSize: 8,
+          letterSpacing: 2.5,
+          color: CYAN,
+          fontFamily: "monospace",
+          fontWeight: 700,
+        }}
+      >
+        TACTICAL COMMAND
+      </span>
+      {/* RADAR */}
+      <button
+        type="button"
+        data-ocid="command_panel.radar_button"
+        onClick={() => onToggleCombatLog?.()}
+        style={{
+          background: "rgba(0,255,204,0.07)",
+          border: `1px solid ${BORDER}`,
+          borderRadius: 6,
+          padding: "4px 8px",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          gap: 4,
+        }}
+      >
+        <Radio size={11} color={CYAN} />
+        <span style={{ fontSize: 7, color: CYAN, letterSpacing: 1 }}>
+          RADAR
+        </span>
+      </button>
+    </div>
+  );
+
+  // ── EXPANDED CONTENT (plot selected) ─────────────────────────────
+  const expandedContent = plot ? (
+    <>
+      {/* Header row */}
       <div
         style={{
-          width: 6,
-          height: 6,
-          borderRadius: "50%",
-          background: targetLocked ? GOLD : "#555",
-          boxShadow: targetLocked ? `0 0 6px ${GOLD}` : "none",
-          animation: targetLocked ? "lockPulse 1.5s infinite" : "none",
-        }}
-      />
-      <span
-        style={{
-          fontSize: 7,
-          letterSpacing: 1.5,
-          fontWeight: 700,
-          color: targetLocked ? GOLD : "#555",
+          display: "flex",
+          alignItems: "center",
+          padding: "8px 14px",
+          borderBottom: `1px solid ${BORDER}`,
+          background: "rgba(0,255,204,0.03)",
+          gap: 8,
         }}
       >
-        {targetLocked ? "LOCKED" : "LOCK"}
-      </span>
-    </div>
-  );
-
-  // ── TARGET LABEL ─────────────────────────────────────────────────
-  const targetLabel = (
-    <div
-      style={{
-        fontSize: 9,
-        letterSpacing: 2,
-        color: CYAN,
-        textAlign: "center",
-        animation: targetLocked ? "cmdPulse 1.5s infinite" : "none",
-        textShadow: targetLocked ? `0 0 8px ${CYAN}` : "none",
-      }}
-    >
-      TARGET IN FORMATION
-    </div>
-  );
-
-  // ── FIRE BUTTON ──────────────────────────────────────────────────
-  const fireButton = (
-    <button
-      type="button"
-      data-ocid="combat.fire.button"
-      onClick={handleFire}
-      disabled={fireDisabled}
-      style={{
-        width: 72,
-        height: 72,
-        borderRadius: "50%",
-        background:
-          "radial-gradient(circle at 40% 35%, #ff4400, #cc0000, #880000)",
-        border: fireDisabled
-          ? "2px solid rgba(255,100,0,0.3)"
-          : `2px solid ${GOLD}`,
-        boxShadow: fireDisabled
-          ? "0 0 10px rgba(255,68,0,0.3)"
-          : "0 0 20px #ff4400aa, 0 0 40px #ff220033",
-        cursor: fireDisabled ? "not-allowed" : "pointer",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        flexDirection: "column",
-        gap: 1,
-        opacity: fireDisabled ? 0.5 : 1,
-        transition: "all 0.2s",
-        flexShrink: 0,
-      }}
-    >
-      <Zap size={16} color="white" />
-      <span
-        style={{
-          fontSize: 11,
-          fontWeight: 900,
-          color: "white",
-          letterSpacing: 3,
-          textShadow: "0 0 8px white",
-        }}
-      >
-        FIRE
-      </span>
-    </button>
-  );
-
-  // ── CIRCLE BUTTONS ───────────────────────────────────────────────
-  const circleButtons = (
-    <div
-      style={{
-        display: "flex",
-        gap: 12,
-        justifyContent: "center",
-        alignItems: "center",
-      }}
-    >
-      {(
-        [
-          {
-            id: "scope",
-            label: "SCOPE",
-            Icon: Crosshair,
-            action: () => onOpenTab("map"),
-          },
-          {
-            id: "radar",
-            label: "RADAR",
-            Icon: Radio,
-            action: () => onToggleCombatLog?.(),
-          },
-          {
-            id: "devices",
-            label: "DEVICES",
-            Icon: Cpu,
-            action: () => setDevicesTooltip((v) => !v),
-          },
-        ] as const
-      ).map(({ id, label, Icon, action }) => (
-        <div
-          key={id}
+        <Swords size={11} color={CYAN} />
+        <span
           style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: 3,
-            position: "relative",
+            fontSize: 8,
+            fontWeight: 700,
+            color: CYAN,
+            letterSpacing: 2,
           }}
         >
-          <button
-            type="button"
-            data-ocid={`combat.${id}.button`}
-            onClick={action}
+          TACTICAL COMMAND
+        </span>
+        <span style={{ fontSize: 8, color: CYAN_DIM, letterSpacing: 1 }}>
+          PLOT #{plot.id}
+        </span>
+        {/* biome badge */}
+        <span
+          style={{
+            fontSize: 7,
+            padding: "1px 5px",
+            background: `${BIOME_COLORS[plot.biome]}1a`,
+            border: `1px solid ${BIOME_COLORS[plot.biome]}44`,
+            borderRadius: 3,
+            color: BIOME_COLORS[plot.biome],
+            letterSpacing: 1,
+            textTransform: "uppercase",
+          }}
+        >
+          {plot.biome}
+        </span>
+        <div style={{ flex: 1 }} />
+        {/* RADAR */}
+        <button
+          type="button"
+          data-ocid="command_panel.radar_button"
+          onClick={() => onToggleCombatLog?.()}
+          style={{
+            background: "rgba(0,255,204,0.07)",
+            border: `1px solid ${BORDER}`,
+            borderRadius: 5,
+            padding: "3px 7px",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: 3,
+          }}
+        >
+          <Radio size={10} color={CYAN} />
+          <span style={{ fontSize: 7, color: CYAN, letterSpacing: 1 }}>
+            RADAR
+          </span>
+        </button>
+      </div>
+
+      {/* Total destruction banner */}
+      {plot.isDestroyed && (
+        <div
+          style={{
+            background: "rgba(239,68,68,0.12)",
+            borderBottom: "1px solid rgba(239,68,68,0.3)",
+            padding: "5px 14px",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          <AlertTriangle size={11} color="#ef4444" />
+          <span
             style={{
-              width: 44,
-              height: 44,
-              borderRadius: "50%",
-              background: "rgba(2,10,20,0.85)",
-              border: `1px solid ${BORDER}`,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
+              fontSize: 7,
+              color: "#ef4444",
+              letterSpacing: 1,
+              fontWeight: 700,
             }}
           >
-            <Icon size={16} color={CYAN} />
-          </button>
-          <span style={{ fontSize: 6, color: CYAN_DIM, letterSpacing: 1 }}>
-            {label}
+            TOTAL DESTRUCTION — ALL BUILDINGS WIPED
           </span>
-          {id === "devices" && devicesTooltip && (
+        </div>
+      )}
+
+      {/* Incoming threat */}
+      {incomingThreat && !plot.isDestroyed && (
+        <div
+          style={{
+            background: "rgba(239,68,68,0.10)",
+            borderBottom: "1px solid rgba(239,68,68,0.22)",
+            padding: "4px 14px",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          <Zap size={10} color="#ef4444" />
+          <span style={{ fontSize: 7, color: "#ef4444", letterSpacing: 1 }}>
+            INCOMING THREAT DETECTED
+          </span>
+        </div>
+      )}
+
+      {/* Body */}
+      <div
+        style={{
+          padding: "10px 14px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 10,
+        }}
+      >
+        {/* ── LAND STATUS ── */}
+        <section>
+          <div
+            style={{
+              fontSize: 7,
+              color: CYAN_DIM,
+              letterSpacing: 2,
+              marginBottom: 6,
+            }}
+          >
+            LAND STATUS
+          </div>
+
+          {/* Efficiency */}
+          <div style={{ marginBottom: 5 }}>
             <div
-              data-ocid="combat.devices.tooltip"
               style={{
-                position: "absolute",
-                bottom: "110%",
-                left: "50%",
-                transform: "translateX(-50%)",
-                background: "rgba(2,10,20,0.95)",
-                border: `1px solid ${BORDER}`,
-                borderRadius: 4,
-                padding: "4px 8px",
-                fontSize: 8,
-                color: CYAN,
-                letterSpacing: 1,
-                whiteSpace: "nowrap",
-                pointerEvents: "none",
-                zIndex: 10,
+                display: "flex",
+                justifyContent: "space-between",
+                marginBottom: 2,
               }}
             >
-              Coming Soon
+              <span style={{ fontSize: 7, color: CYAN_DIM }}>EFFICIENCY</span>
+              <span style={{ fontSize: 7, color: effColor, fontWeight: 700 }}>
+                {plot.efficiency}%
+              </span>
+            </div>
+            <div
+              style={{
+                height: 4,
+                background: "rgba(255,255,255,0.1)",
+                borderRadius: 2,
+              }}
+            >
+              <div
+                style={{
+                  width: `${plot.efficiency}%`,
+                  height: "100%",
+                  background: effColor,
+                  borderRadius: 2,
+                  transition: "width 0.4s",
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Structural damage (only if > 0) */}
+          {plot.structuralDamage > 0 && (
+            <div style={{ marginBottom: 5 }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginBottom: 2,
+                }}
+              >
+                <span style={{ fontSize: 7, color: CYAN_DIM }}>
+                  STRUCTURAL DMG
+                </span>
+                <span style={{ fontSize: 7, color: dmgColor, fontWeight: 700 }}>
+                  {Math.round(plot.structuralDamage)}%
+                </span>
+              </div>
+              <div
+                style={{
+                  height: 4,
+                  background: "rgba(255,255,255,0.1)",
+                  borderRadius: 2,
+                }}
+              >
+                <div
+                  style={{
+                    width: `${plot.structuralDamage}%`,
+                    height: "100%",
+                    background: dmgColor,
+                    borderRadius: 2,
+                  }}
+                />
+              </div>
             </div>
           )}
-        </div>
-      ))}
-    </div>
-  );
 
-  // ── DESKTOP LAYOUT ───────────────────────────────────────────────
+          {/* Sub-parcel dot indicators */}
+          <div
+            style={{
+              display: "flex",
+              gap: 4,
+              flexWrap: "wrap",
+              marginBottom: 5,
+            }}
+          >
+            {subParcels.slice(0, 7).map((sp, i) => (
+              <div
+                key={sp.subId}
+                title={sp.buildingType ?? `Sub-parcel ${i + 1}`}
+                style={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: "50%",
+                  background: sp.buildingType
+                    ? sp.durability < 25
+                      ? "transparent"
+                      : CYAN
+                    : "transparent",
+                  border: `1.5px solid ${
+                    sp.durability < 25
+                      ? "#ef4444"
+                      : sp.buildingType
+                        ? CYAN
+                        : CYAN_DIM
+                  }`,
+                  boxShadow:
+                    sp.buildingType && sp.durability >= 25
+                      ? `0 0 4px ${CYAN}66`
+                      : "none",
+                  flexShrink: 0,
+                }}
+              />
+            ))}
+          </div>
+
+          {/* Badges row */}
+          <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+            {plot.specialization && (
+              <span
+                style={{
+                  fontSize: 7,
+                  padding: "2px 6px",
+                  background: "rgba(0,255,204,0.08)",
+                  border: `1px solid ${BORDER}`,
+                  borderRadius: 3,
+                  color: CYAN,
+                  letterSpacing: 1,
+                }}
+              >
+                {plot.specialization.replace("_", " ")}
+              </span>
+            )}
+            {regenTimeLeft > 0 && (
+              <span
+                style={{
+                  fontSize: 7,
+                  padding: "2px 6px",
+                  background: "rgba(34,197,94,0.1)",
+                  border: "1px solid rgba(34,197,94,0.3)",
+                  borderRadius: 3,
+                  color: "#22c55e",
+                  letterSpacing: 1,
+                }}
+              >
+                REGEN {regenTimeLeft}m
+              </span>
+            )}
+            {plot.structuralDamage >= 50 && !plot.isDestroyed && (
+              <span
+                style={{
+                  fontSize: 7,
+                  padding: "2px 6px",
+                  background: "rgba(239,68,68,0.1)",
+                  border: "1px solid rgba(239,68,68,0.3)",
+                  borderRadius: 3,
+                  color: "#ef4444",
+                  letterSpacing: 1,
+                }}
+              >
+                SYSTEMS OFFLINE
+              </span>
+            )}
+          </div>
+        </section>
+
+        {/* ── DEFENSE & WEAPONS MONITOR ── */}
+        {stats && (
+          <section>
+            <div
+              style={{
+                fontSize: 7,
+                color: CYAN_DIM,
+                letterSpacing: 2,
+                marginBottom: 6,
+              }}
+            >
+              DEFENSE &amp; WEAPONS
+            </div>
+
+            {/* ATK / DEF chips */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 7 }}>
+              <div
+                style={{
+                  flex: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 5,
+                  background: "rgba(0,0,0,0.3)",
+                  border: "1px solid rgba(239,68,68,0.3)",
+                  borderRadius: 6,
+                  padding: "5px 10px",
+                }}
+              >
+                <Swords size={10} color="#ef4444" />
+                <div>
+                  <div
+                    style={{ fontSize: 7, color: CYAN_DIM, letterSpacing: 1 }}
+                  >
+                    ATK
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 14,
+                      fontWeight: 700,
+                      color: "#ef4444",
+                      fontFamily: "monospace",
+                    }}
+                  >
+                    {Math.round(stats.atk)}
+                  </div>
+                </div>
+              </div>
+              <div
+                style={{
+                  flex: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 5,
+                  background: "rgba(0,0,0,0.3)",
+                  border: "1px solid rgba(34,197,94,0.3)",
+                  borderRadius: 6,
+                  padding: "5px 10px",
+                }}
+              >
+                <Shield size={10} color="#22c55e" />
+                <div>
+                  <div
+                    style={{ fontSize: 7, color: CYAN_DIM, letterSpacing: 1 }}
+                  >
+                    DEF
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 14,
+                      fontWeight: 700,
+                      color: "#22c55e",
+                      fontFamily: "monospace",
+                    }}
+                  >
+                    {Math.round(stats.def)}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Interceptors */}
+            {interceptorBuildings.length > 0 && (
+              <div style={{ marginBottom: 5 }}>
+                {interceptorBuildings.map((b) => (
+                  <div
+                    key={b}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 5,
+                      marginBottom: 3,
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: "50%",
+                        background:
+                          plot.structuralDamage < 75 ? "#22c55e" : "#ef4444",
+                      }}
+                    />
+                    <span
+                      style={{ fontSize: 7, color: CYAN_DIM, letterSpacing: 1 }}
+                    >
+                      {b.toUpperCase()} —{" "}
+                      {plot.structuralDamage < 75 ? "ACTIVE" : "OFFLINE"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Silo status */}
+            {hasSilo && (
+              <div
+                style={{
+                  fontSize: 7,
+                  color: CYAN_DIM,
+                  letterSpacing: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 5,
+                  marginBottom: 3,
+                }}
+              >
+                <div
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: "50%",
+                    background: equippedMissileId ? CYAN : "#555",
+                    boxShadow: equippedMissileId ? `0 0 4px ${CYAN}` : "none",
+                  }}
+                />
+                SILO —{" "}
+                {equippedMissileId
+                  ? `${equippedMissileId.toUpperCase()} LOADED`
+                  : "NO WEAPON EQUIPPED"}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* ── BATTLE FORMATION (own plot + has silo) ── */}
+        {isOwnPlot && hasSilo && (
+          <section>
+            <div
+              style={{
+                fontSize: 7,
+                color: CYAN_DIM,
+                letterSpacing: 2,
+                marginBottom: 6,
+              }}
+            >
+              BATTLE FORMATION
+            </div>
+            <div
+              style={{
+                display: "flex",
+                gap: 4,
+                flexWrap: "wrap",
+                marginBottom: 5,
+              }}
+            >
+              {formationList.map((f) => {
+                const label = f === "PRECISION_STRIKE" ? "PRECISE" : f;
+                const active = selectedFormation === f;
+                return (
+                  <button
+                    key={f}
+                    type="button"
+                    data-ocid={`command_panel.formation.${f.toLowerCase()}.toggle`}
+                    onClick={() => setSelectedFormation(f)}
+                    style={{
+                      fontSize: 7,
+                      padding: "3px 7px",
+                      borderRadius: 4,
+                      border: `1px solid ${active ? CYAN : BORDER}`,
+                      background: active
+                        ? "rgba(0,255,204,0.12)"
+                        : "rgba(0,0,0,0.3)",
+                      color: active ? CYAN : CYAN_DIM,
+                      cursor: "pointer",
+                      letterSpacing: 0.8,
+                      fontFamily: "monospace",
+                      fontWeight: active ? 700 : 400,
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ fontSize: 7, color: CYAN_DIM, letterSpacing: 0.5 }}>
+              {FORMATION_DESCRIPTIONS[selectedFormation]}
+            </div>
+          </section>
+        )}
+
+        {/* ── ACTION ROW ── */}
+        <section
+          style={{
+            display: "flex",
+            gap: 6,
+            flexWrap: "wrap",
+            paddingTop: 4,
+            borderTop: `1px solid ${BORDER}`,
+          }}
+        >
+          {/* FIRE — only own plot with silo */}
+          {isOwnPlot && hasSilo && (
+            <button
+              type="button"
+              data-ocid="command_panel.fire.button"
+              disabled={isFiring || targetPlotId === null}
+              onClick={handleFire}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                fontSize: 8,
+                padding: "4px 10px",
+                borderRadius: 5,
+                border: `1px solid rgba(239,68,68,${
+                  isFiring || targetPlotId === null ? 0.25 : 0.7
+                })`,
+                background: "rgba(239,68,68,0.08)",
+                color:
+                  isFiring || targetPlotId === null
+                    ? "rgba(239,68,68,0.4)"
+                    : "#ef4444",
+                cursor:
+                  isFiring || targetPlotId === null ? "not-allowed" : "pointer",
+                fontFamily: "monospace",
+                fontWeight: 700,
+                letterSpacing: 1.5,
+              }}
+            >
+              <Zap size={10} />
+              {isFiring ? "FIRING..." : "FIRE"}
+            </button>
+          )}
+
+          {/* SET DEFENSE */}
+          <button
+            type="button"
+            data-ocid="command_panel.set_defense.button"
+            onClick={() => onOpenTab("arsenal")}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              fontSize: 8,
+              padding: "4px 10px",
+              borderRadius: 5,
+              border: `1px solid ${BORDER}`,
+              background: "rgba(0,255,204,0.05)",
+              color: CYAN_DIM,
+              cursor: "pointer",
+              fontFamily: "monospace",
+              letterSpacing: 1,
+            }}
+          >
+            <Shield size={10} />
+            SET DEFENSE
+          </button>
+
+          {/* COMPARE */}
+          <button
+            type="button"
+            data-ocid="command_panel.compare.button"
+            onClick={() => setCompareModeActive(true)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              fontSize: 8,
+              padding: "4px 10px",
+              borderRadius: 5,
+              border: `1px solid ${BORDER}`,
+              background: "rgba(0,255,204,0.05)",
+              color: CYAN_DIM,
+              cursor: "pointer",
+              fontFamily: "monospace",
+              letterSpacing: 1,
+            }}
+          >
+            <GitCompare size={10} />
+            COMPARE
+          </button>
+
+          {/* REPAIR — only if own plot with damage */}
+          {isOwnPlot && plot.structuralDamage > 0 && (
+            <button
+              type="button"
+              data-ocid="command_panel.repair.button"
+              onClick={handleRepair}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                fontSize: 8,
+                padding: "4px 10px",
+                borderRadius: 5,
+                border: "1px solid rgba(251,191,36,0.4)",
+                background: "rgba(251,191,36,0.06)",
+                color: "rgba(251,191,36,0.8)",
+                cursor: "pointer",
+                fontFamily: "monospace",
+                letterSpacing: 1,
+              }}
+            >
+              <Wrench size={10} />
+              REPAIR (100 FRNTR)
+            </button>
+          )}
+        </section>
+
+        {/* Fire result feedback */}
+        {fireResult && (
+          <div
+            data-ocid={
+              fireResult.success
+                ? "command_panel.success_state"
+                : "command_panel.error_state"
+            }
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "5px 10px",
+              borderRadius: 5,
+              background: fireResult.success
+                ? "rgba(34,197,94,0.1)"
+                : "rgba(239,68,68,0.1)",
+              border: fireResult.success
+                ? "1px solid rgba(34,197,94,0.3)"
+                : "1px solid rgba(239,68,68,0.3)",
+            }}
+          >
+            {fireResult.success ? (
+              <CheckCircle size={11} color="#22c55e" />
+            ) : (
+              <AlertTriangle size={11} color="#ef4444" />
+            )}
+            <span
+              style={{
+                fontSize: 8,
+                color: fireResult.success ? "#22c55e" : "#ef4444",
+                letterSpacing: 1,
+                fontFamily: "monospace",
+              }}
+            >
+              {fireResult.message}
+            </span>
+          </div>
+        )}
+      </div>
+    </>
+  ) : null;
+
+  // ── DESKTOP LAYOUT ─────────────────────────────────────────────────
   if (isDesktop) {
     return (
       <div
@@ -256,41 +902,46 @@ export default function CommandPanel({
           position: "fixed",
           bottom: 64,
           left: 180,
-          width: 180,
+          width: 260,
           zIndex: 30,
           ...glassStyle,
-          borderRadius: 8,
-          display: "flex",
-          flexDirection: "column",
-          padding: 12,
-          gap: 10,
+          borderRadius: "10px 10px 0 0",
+          fontFamily: "monospace",
+          overflowY: "auto",
+          maxHeight: "60vh",
         }}
       >
         <style>{`
           @keyframes cmdPulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
-          @keyframes lockPulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
         `}</style>
-
-        {/* Lock indicator */}
-        <div style={{ display: "flex", justifyContent: "center" }}>
-          {lockIndicator}
-        </div>
-
-        {/* Target label */}
-        {targetLabel}
-
-        {/* Fire button */}
-        <div style={{ display: "flex", justifyContent: "center" }}>
-          {fireButton}
-        </div>
-
-        {/* Circle buttons */}
-        {circleButtons}
+        {plot ? expandedContent : minimalStrip}
       </div>
     );
   }
 
-  // ── MOBILE LAYOUT ────────────────────────────────────────────────
+  // ── MOBILE LAYOUT ──────────────────────────────────────────────────
+  // Landscape: always minimal strip only
+  if (isLandscape) {
+    return (
+      <div
+        ref={panelRef}
+        data-ocid="command_panel.panel"
+        style={{
+          position: "fixed",
+          bottom: 64,
+          left: 0,
+          right: 0,
+          zIndex: 35,
+          ...glassStyle,
+          borderRadius: "10px 10px 0 0",
+          fontFamily: "monospace",
+        }}
+      >
+        {minimalStrip}
+      </div>
+    );
+  }
+
   return (
     <div
       ref={panelRef}
@@ -300,93 +951,20 @@ export default function CommandPanel({
         bottom: 64,
         left: 0,
         right: 0,
-        height: expanded ? "45vh" : 60,
         zIndex: 35,
-        background: "rgba(0,0,0,0.4)",
-        backdropFilter: "blur(12px)",
-        WebkitBackdropFilter: "blur(12px)",
-        borderTop: `1px solid ${BORDER}`,
-        transition: "height 0.3s ease-out",
-        overflow: "hidden",
-        display: "flex",
-        flexDirection: "column",
+        ...glassStyle,
+        borderRadius: "10px 10px 0 0",
+        fontFamily: "monospace",
+        // Animated height: expanded when plot selected
+        maxHeight: plot ? "65vh" : 44,
+        overflowY: plot ? "auto" : "hidden",
+        transition: "max-height 0.3s ease-out",
       }}
     >
       <style>{`
         @keyframes cmdPulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
-        @keyframes lockPulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
       `}</style>
-
-      {/* Collapsed strip — always visible, acts as expand/collapse handle */}
-      {/* biome-ignore lint/a11y/useKeyWithClickEvents: game HUD tap area */}
-      <div
-        data-ocid="command_panel.toggle"
-        onClick={() => setExpanded((v) => !v)}
-        style={{
-          height: 60,
-          flexShrink: 0,
-          display: "flex",
-          alignItems: "center",
-          paddingLeft: 16,
-          paddingRight: 16,
-          gap: 12,
-          cursor: "pointer",
-        }}
-      >
-        <div
-          style={{
-            flex: 1,
-            fontSize: 8,
-            letterSpacing: 2,
-            color: "rgba(0,255,204,0.5)",
-            fontFamily: "monospace",
-          }}
-        >
-          COMMAND PANEL
-        </div>
-        {lockIndicator}
-        <button
-          type="button"
-          data-ocid="command_panel.expand_button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setExpanded((v) => !v);
-          }}
-          style={{
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            color: CYAN,
-            fontSize: 14,
-            padding: "2px 4px",
-            flexShrink: 0,
-            transition: "transform 0.3s",
-            transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
-          }}
-        >
-          ▲
-        </button>
-      </div>
-
-      {/* Expanded content */}
-      <div
-        style={{
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "space-evenly",
-          padding: "8px 16px 12px",
-          gap: 10,
-          opacity: expanded ? 1 : 0,
-          transition: "opacity 0.2s ease",
-          pointerEvents: expanded ? "auto" : "none",
-        }}
-      >
-        {targetLabel}
-        {fireButton}
-        {circleButtons}
-      </div>
+      {plot ? expandedContent : minimalStrip}
     </div>
   );
 }

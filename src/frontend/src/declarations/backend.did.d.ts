@@ -10,8 +10,43 @@ import type { ActorMethod } from '@icp-sdk/core/agent';
 import type { IDL } from '@icp-sdk/core/candid';
 import type { Principal } from '@icp-sdk/core/principal';
 
+export interface CombatEvent {
+  'attacker' : Principal,
+  'intercepted' : boolean,
+  'interceptorType' : [] | [string],
+  'toPlot' : bigint,
+  'atkPower' : bigint,
+  'timestamp' : bigint,
+  'fromPlot' : bigint,
+  'success' : boolean,
+  'missileType' : [] | [string],
+  'defPower' : bigint,
+}
+export interface PlayerState {
+  'empTargets' : Array<[bigint, bigint]>,
+  'commanderType' : [] | [string],
+  'fuel' : bigint,
+  'iron' : bigint,
+  'frntBalance' : bigint,
+  'plotsOwned' : bigint,
+  'satelliteExpiry' : bigint,
+  'crystal' : bigint,
+  'combatVictories' : bigint,
+  'reconTargets' : Array<[bigint, bigint]>,
+  'commanderAtk' : bigint,
+  'commanderDef' : bigint,
+}
 export interface _SERVICE {
+  'assignInterceptor' : ActorMethod<[bigint, string], undefined>,
   'getAdjacentPlots' : ActorMethod<[bigint], Array<bigint>>,
+  'getAssignedInterceptor' : ActorMethod<[bigint], [] | [string]>,
+  'getCombatLog' : ActorMethod<[bigint], Array<CombatEvent>>,
+  'getPlayerState' : ActorMethod<[], [] | [PlayerState]>,
+  'launchMissile' : ActorMethod<
+    [bigint, bigint, string],
+    { 'ok' : string } |
+      { 'err' : string }
+  >,
   'purchasePlot' : ActorMethod<
     [bigint],
     { 'ok' : string } |

@@ -121,7 +121,7 @@ export default function PlotInfoPanel() {
     : "";
   const typeTag = plot ? (BIOME_TYPE[plot.biome] ?? "UNKNOWN") : "";
   const faction = plot ? deriveFaction(plot.owner) : "";
-  const plotClass = plot ? deriveClass(plot.richness) : "";
+  const plotClass = plot ? deriveClass(plot.efficiency) : "";
   const biomeColor = plot ? (BIOME_COLOR[plot.biome] ?? "#3b82f6") : "#3b82f6";
 
   const ownerLabel =

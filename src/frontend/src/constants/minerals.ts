@@ -33,4 +33,52 @@ export const MINERAL_USES = {
   iron: "Physical structures (Silo, Airbase, Boundary Node)",
   fuel: "Powers units (F-16, drones, satellites)",
   crystal: "Cyber/tech (MCP Node, Chain Fusion, NNS Hub)",
+  rareEarth: "Advanced weapons, high-tier NFT minting, orbital systems",
 };
+
+export const BIOME_MINERAL_RATES: Record<
+  string,
+  { iron: number; fuel: number; crystal: number; rareEarth: number }
+> = {
+  Arctic: { iron: 2, fuel: 1, crystal: 8, rareEarth: 4 },
+  Tundra: { iron: 3, fuel: 2, crystal: 6, rareEarth: 3 },
+  Wasteland: { iron: 5, fuel: 3, crystal: 2, rareEarth: 2 },
+  Desert: { iron: 3, fuel: 9, crystal: 1, rareEarth: 2 },
+  Forest: { iron: 6, fuel: 4, crystal: 3, rareEarth: 1 },
+  Grassland: { iron: 7, fuel: 5, crystal: 2, rareEarth: 1 },
+  Coastal: { iron: 5, fuel: 7, crystal: 4, rareEarth: 3 },
+  Volcanic: { iron: 8, fuel: 6, crystal: 3, rareEarth: 6 },
+  Equatorial: { iron: 6, fuel: 8, crystal: 5, rareEarth: 2 },
+  Ocean: { iron: 2, fuel: 5, crystal: 7, rareEarth: 5 },
+  Mountain: { iron: 9, fuel: 3, crystal: 6, rareEarth: 4 },
+  Toxic: { iron: 4, fuel: 2, crystal: 9, rareEarth: 7 },
+};
+
+export function getMineralYield(
+  biome: string,
+  efficiency: number,
+  regenActive: boolean,
+): { iron: number; fuel: number; crystal: number; rareEarth: number } {
+  const base = BIOME_MINERAL_RATES[biome] ?? BIOME_MINERAL_RATES.Grassland;
+  const mult = (efficiency / 100) * (regenActive ? 1.2 : 1.0);
+  return {
+    iron: Math.floor(base.iron * mult),
+    fuel: Math.floor(base.fuel * mult),
+    crystal: Math.floor(base.crystal * mult),
+    rareEarth: Math.floor(base.rareEarth * mult),
+  };
+}
+
+export function projectedMonthlyYield(
+  biome: string,
+  efficiency: number,
+): { iron: number; fuel: number; crystal: number; rareEarth: number } {
+  // Assume 10 mines per day × 30 days = 300 mines/month
+  const single = getMineralYield(biome, efficiency, false);
+  return {
+    iron: single.iron * 300,
+    fuel: single.fuel * 300,
+    crystal: single.crystal * 300,
+    rareEarth: single.rareEarth * 300,
+  };
+}

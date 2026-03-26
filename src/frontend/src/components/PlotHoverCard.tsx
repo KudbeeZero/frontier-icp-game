@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import {
   TIER_COLORS,
   commanderHasWings,
+  getArchetype,
   getCommander,
 } from "../constants/commanders";
 import { useGameStore } from "../store/gameStore";
@@ -47,6 +48,12 @@ export default function PlotHoverCard({
     (c) => c.instanceId === assignedInstanceId,
   );
   const hasWings = ownedInstance ? commanderHasWings(ownedInstance) : false;
+  // Use the exact rank insignia image rather than the archetype badge fallback
+  const rankImage = ownedInstance
+    ? (getArchetype(ownedInstance.archetypeId)?.rankProgression[
+        ownedInstance.currentRankIndex
+      ]?.image ?? null)
+    : null;
   const tierColor = commander ? (TIER_COLORS[commander.tier] ?? CYAN) : CYAN;
 
   return (
@@ -199,9 +206,13 @@ export default function PlotHoverCard({
               }}
             >
               <img
-                src={commander.badge}
+                src={rankImage ?? commander.badge}
                 alt={commander.name}
                 style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src =
+                    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' fill='%23112233' rx='6'/%3E%3Ctext x='24' y='32' text-anchor='middle' fill='%2300ffcc' font-size='20'%3E%E2%98%85%3C/text%3E%3C/svg%3E";
+                }}
               />
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>

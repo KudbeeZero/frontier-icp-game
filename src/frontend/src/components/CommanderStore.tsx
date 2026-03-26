@@ -104,6 +104,10 @@ function ArchetypeCard({
               objectFit: "contain",
               filter: `drop-shadow(0 0 6px ${color}66)`,
             }}
+            onError={(e) => {
+              (e.target as HTMLImageElement).src =
+                "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' fill='%23112233' rx='6'/%3E%3Ctext x='24' y='32' text-anchor='middle' fill='%2300ffcc' font-size='20'%3E%E2%98%85%3C/text%3E%3C/svg%3E";
+            }}
           />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -305,6 +309,10 @@ function RankLadderView({
             objectFit: "contain",
             filter: `drop-shadow(0 0 6px ${color}66)`,
           }}
+          onError={(e) => {
+            (e.target as HTMLImageElement).src =
+              "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' fill='%23112233' rx='6'/%3E%3Ctext x='24' y='32' text-anchor='middle' fill='%2300ffcc' font-size='20'%3E%E2%98%85%3C/text%3E%3C/svg%3E";
+          }}
         />
       </div>
 
@@ -371,6 +379,10 @@ function RankLadderView({
                 src={rank.image}
                 alt={rank.name}
                 style={{ width: 28, height: 28, objectFit: "contain" }}
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src =
+                    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' fill='%23112233' rx='6'/%3E%3Ctext x='24' y='32' text-anchor='middle' fill='%2300ffcc' font-size='20'%3E%E2%98%85%3C/text%3E%3C/svg%3E";
+                }}
               />
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -539,6 +551,10 @@ function OwnedCommanderRow({
               src={arch.badgeImage}
               alt={arch.name}
               style={{ width: "100%", height: "100%", objectFit: "contain" }}
+              onError={(e) => {
+                (e.target as HTMLImageElement).src =
+                  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' fill='%23112233' rx='6'/%3E%3Ctext x='24' y='32' text-anchor='middle' fill='%2300ffcc' font-size='20'%3E%E2%98%85%3C/text%3E%3C/svg%3E";
+              }}
             />
           </div>
           <img
@@ -550,6 +566,10 @@ function OwnedCommanderRow({
               objectFit: "contain",
               filter: `drop-shadow(0 0 6px ${color})`,
               borderRadius: 6,
+            }}
+            onError={(e) => {
+              (e.target as HTMLImageElement).src =
+                "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' fill='%23112233' rx='6'/%3E%3Ctext x='24' y='32' text-anchor='middle' fill='%2300ffcc' font-size='20'%3E%E2%98%85%3C/text%3E%3C/svg%3E";
             }}
           />
         </div>

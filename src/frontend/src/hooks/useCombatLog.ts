@@ -4,44 +4,56 @@ import { useActor } from "./useActor";
 
 export function useCombatLog(): CombatEntry[] {
   const { actor, isFetching } = useActor();
-  const mockLog = useGameStore((s) => s.combatLog);
-  const [log, setLog] = useState<CombatEntry[]>(mockLog);
+  const storeLog = useGameStore((s) => s.combatLog);
+  const plots = useGameStore((s) => s.plots);
+  const [log, setLog] = useState<CombatEntry[]>(storeLog);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!actor || isFetching) return;
 
     const fetchLog = async () => {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const raw = (await (actor as any).getCombatLog()) as Array<{
-          attacker: string;
-          defender: string;
-          fromPlot: bigint;
-          toPlot: bigint;
-          success: boolean;
-          timestamp: bigint;
-        }>;
-        const entries: CombatEntry[] = raw.map((e, i) => ({
-          id: i,
-          timestamp: Number(e.timestamp) / 1e6,
-          attacker: e.attacker,
-          defender: e.defender,
-          fromPlot: Number(e.fromPlot),
-          toPlot: Number(e.toPlot),
-          success: e.success,
-        }));
+        const raw = await actor.getCombatLog(BigInt(50));
+        const entries: CombatEntry[] = raw.map((e, i) => {
+          const attackerStr = e.attacker.toString();
+          const toPlotNum = Number(e.toPlot);
+          // Derive defender from the plots store owner; fall back to plot label
+          const defenderPlot = plots.find((p) => p.id === toPlotNum);
+          const defenderStr = defenderPlot?.owner ?? `Plot #${toPlotNum}`;
+          return {
+            id: i,
+            // ICP timestamps are nanoseconds — convert to milliseconds
+            timestamp: Number(e.timestamp) / 1_000_000,
+            attacker: attackerStr,
+            defender: defenderStr,
+            fromPlot: Number(e.fromPlot),
+            toPlot: toPlotNum,
+            success: e.success,
+            atkPower: Number(e.atkPower),
+            defPower: Number(e.defPower),
+          };
+        });
         setLog(entries);
-      } catch {
-        // Fall back to mock data silently
+        setError(null);
+        // Keep store in sync so other components see fresh data
+        useGameStore.setState({ combatLog: entries });
+      } catch (err) {
+        const msg =
+          err instanceof Error ? err.message : "Failed to fetch combat log";
+        setError(msg);
+        // Fall back to store log but don't crash
+        setLog(useGameStore.getState().combatLog);
       }
     };
 
     void fetchLog();
-    const interval = setInterval(() => {
-      void fetchLog();
-    }, 5000);
+    const interval = setInterval(() => void fetchLog(), 5000);
     return () => clearInterval(interval);
-  }, [actor, isFetching]);
+  }, [actor, isFetching, plots]);
+
+  // Suppress lint warning — error state is available for parent if needed
+  void error;
 
   return log;
 }

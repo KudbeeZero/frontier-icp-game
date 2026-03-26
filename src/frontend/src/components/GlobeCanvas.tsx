@@ -5,7 +5,11 @@ import { Suspense, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { MissileConfig } from "../constants/missiles";
 import { useGameStore } from "../store/gameStore";
-import { PLOT_POSITION_CACHE, findNearestTile } from "../utils/geodesicGrid";
+import {
+  GEODESIC_TILES,
+  PLOT_POSITION_CACHE,
+  findNearestTile,
+} from "../utils/geodesicGrid";
 
 function latLngToXYZ(lat: number, lng: number, r: number): THREE.Vector3 {
   const phi = (90 - lat) * (Math.PI / 180);
@@ -18,26 +22,21 @@ function latLngToXYZ(lat: number, lng: number, r: number): THREE.Vector3 {
 }
 
 // ---------------------------------------------------------------------------
-// Hex tile geometry (created once – shared across all instances)
+// Hex tile geometry — flat hexagon in XZ plane, Y = outward normal
 // ---------------------------------------------------------------------------
-//   Flat hexagon in the XZ plane (Y = 0 = outward-facing normal)
-//   Circumradius 0.0195 → leaves ~4% gap between adjacent tiles at 10 K count
-const HEX_R = 0.0195;
+const HEX_R = 0.021;
 function makeHexGeometry(): THREE.BufferGeometry {
-  const positions = new Float32Array(6 * 3 * 3); // 6 triangles × 3 verts × 3 floats
+  const positions = new Float32Array(6 * 3 * 3);
   let idx = 0;
   for (let i = 0; i < 6; i++) {
     const a0 = (i / 6) * Math.PI * 2;
     const a1 = ((i + 1) / 6) * Math.PI * 2;
-    // center
     positions[idx++] = 0;
     positions[idx++] = 0;
     positions[idx++] = 0;
-    // corner i
     positions[idx++] = Math.cos(a0) * HEX_R;
     positions[idx++] = 0;
     positions[idx++] = Math.sin(a0) * HEX_R;
-    // corner i+1
     positions[idx++] = Math.cos(a1) * HEX_R;
     positions[idx++] = 0;
     positions[idx++] = Math.sin(a1) * HEX_R;
@@ -47,19 +46,51 @@ function makeHexGeometry(): THREE.BufferGeometry {
   geo.computeVertexNormals();
   return geo;
 }
-const HEX_GEO = makeHexGeometry();
 
-// Pre-allocated scratch objects – avoids per-frame allocations
+// Ring outline geometry for selection — hexagonal ring
+function makeHexRingGeometry(
+  inner: number,
+  outer: number,
+): THREE.BufferGeometry {
+  const positions: number[] = [];
+  for (let i = 0; i < 6; i++) {
+    const a0 = (i / 6) * Math.PI * 2;
+    const a1 = ((i + 1) / 6) * Math.PI * 2;
+    const ix0 = Math.cos(a0) * inner;
+    const iz0 = Math.sin(a0) * inner;
+    const ix1 = Math.cos(a1) * inner;
+    const iz1 = Math.sin(a1) * inner;
+    const ox0 = Math.cos(a0) * outer;
+    const oz0 = Math.sin(a0) * outer;
+    const ox1 = Math.cos(a1) * outer;
+    const oz1 = Math.sin(a1) * outer;
+    // two triangles per segment
+    positions.push(ix0, 0, iz0, ox0, 0, oz0, ix1, 0, iz1);
+    positions.push(ox0, 0, oz0, ox1, 0, oz1, ix1, 0, iz1);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute(
+    "position",
+    new THREE.BufferAttribute(new Float32Array(positions), 3),
+  );
+  geo.computeVertexNormals();
+  return geo;
+}
+
+const HEX_GEO = makeHexGeometry();
+const HEX_RING_GEO = makeHexRingGeometry(HEX_R * 0.78, HEX_R * 1.22);
+
+// Pre-allocated scratch objects
 const _mat4 = new THREE.Matrix4();
 const _quat = new THREE.Quaternion();
 const _pos = new THREE.Vector3();
 const _Y = new THREE.Vector3(0, 1, 0);
 
-// State colors
-const COL_BASE = new THREE.Color(0x00ccaa); // dim teal grid fill
-const COL_OWNED = new THREE.Color(0x22c55e); // green
-const COL_HOVER = new THREE.Color(0xffd700); // gold
-const COL_SELECTED = new THREE.Color(0x00ffff); // bright cyan
+// State colours
+const COL_BASE = new THREE.Color(0.05, 0.07, 0.07);
+const COL_OWNED = new THREE.Color(0.45, 1.0, 0.8);
+const COL_HOVER = new THREE.Color(1.0, 1.0, 1.0);
+const COL_SELECTED = new THREE.Color(1.0, 1.0, 1.0);
 const COL_FACTION: Record<string, THREE.Color> = {
   "NEXUS-7": new THREE.Color(0xef4444),
   KRONOS: new THREE.Color(0x8b5cf6),
@@ -67,13 +98,9 @@ const COL_FACTION: Record<string, THREE.Color> = {
   SPECTRE: new THREE.Color(0xf59e0b),
 };
 
-/**
- * GlobeHexGrid
- * ============
- * Renders all ~10,242 geodesic hex tiles as a single InstancedMesh draw call.
- * Selection / hover state is expressed via per-instance vertex colours
- * (no geometry rebuilds, no separate meshes per tile).
- */
+// ---------------------------------------------------------------------------
+// GlobeHexGrid — single InstancedMesh draw call for all ~10k tiles
+// ---------------------------------------------------------------------------
 function GlobeHexGrid() {
   const plots = useGameStore((s) => s.plots);
   const hoveredId = useGameStore((s) => s.hoveredPlotId);
@@ -81,87 +108,57 @@ function GlobeHexGrid() {
   const ownedPlots = useGameStore((s) => s.player.plotsOwned);
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const { camera } = useThree();
-
   const count = plots.length;
 
-  // ── One-time matrix setup ────────────────────────────────────────────────
-  // Run after first render when meshRef is populated.
-  // Each instance: flat hex face oriented toward the tile's surface normal.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: runs once on mount; plots and count are stable references from the store
+  // One-time matrix setup — use GEODESIC_TILES directly (no lat/lng conversion)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs once; tiles are static
   useEffect(() => {
     const mesh = meshRef.current;
     if (!mesh) return;
     for (let i = 0; i < count; i++) {
-      const p = plots[i];
-      _pos.set(p.id, 0, 0); // temp reuse
-      // Build normal from stored lat/lng (matches latLngToXYZ convention)
-      const phi = (90 - p.lat) * (Math.PI / 180);
-      const theta = (p.lng + 180) * (Math.PI / 180);
-      _pos.set(
-        -Math.sin(phi) * Math.cos(theta),
-        Math.cos(phi),
-        Math.sin(phi) * Math.sin(theta),
-      );
-      // Rotate flat hex (+Y normal) to face outward along _pos
+      const tile = GEODESIC_TILES[i];
+      if (!tile) continue;
+      _pos.set(tile.nx, tile.ny, tile.nz);
       _quat.setFromUnitVectors(_Y, _pos);
       _mat4.makeRotationFromQuaternion(_quat);
-      _mat4.setPosition(_pos.clone().multiplyScalar(1.001)); // 0.1% above surface
+      _mat4.setPosition(_pos.clone().multiplyScalar(1.001));
       mesh.setMatrixAt(i, _mat4);
     }
     mesh.instanceMatrix.needsUpdate = true;
     mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
-    // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally runs once
   }, []);
 
-  // ── Colour updates on state change ──────────────────────────────────────
-  // Writes only the changed colour slots then flips needsUpdate.
-  // Writing 30 KB Float32Array is negligible; no matrix re-upload needed.
+  // Colour updates
   useEffect(() => {
     const mesh = meshRef.current;
     if (!mesh) return;
-
-    // 1. Reset all to base
-    for (let i = 0; i < count; i++) {
-      mesh.setColorAt(i, COL_BASE);
-    }
-
-    // 2. AI / faction owned
+    for (let i = 0; i < count; i++) mesh.setColorAt(i, COL_BASE);
     for (const p of plots) {
-      if (p.owner && COL_FACTION[p.owner]) {
+      if (p.owner && COL_FACTION[p.owner])
         mesh.setColorAt(p.id, COL_FACTION[p.owner]);
-      }
     }
-
-    // 3. Player-owned (overrides faction)
     for (const pid of ownedPlots) {
       if (pid >= 0 && pid < count) mesh.setColorAt(pid, COL_OWNED);
     }
-
-    // 4. Hovered
     if (hoveredId !== null && hoveredId >= 0 && hoveredId < count) {
       mesh.setColorAt(hoveredId, COL_HOVER);
     }
-
-    // 5. Selected (overrides hover)
     if (selectedId !== null && selectedId >= 0 && selectedId < count) {
       mesh.setColorAt(selectedId, COL_SELECTED);
     }
-
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
   }, [plots, hoveredId, selectedId, ownedPlots, count]);
 
-  // ── Distance-based opacity fade ─────────────────────────────────────────
+  // Distance-based opacity fade (tiles — not the selection ring)
   useFrame(() => {
     const mesh = meshRef.current;
     if (!mesh) return;
     const dist = camera.position.length();
     const mat = mesh.material as THREE.MeshBasicMaterial;
-    // More transparent when zoomed out (full globe view), more visible when
-    // zoomed in (plot-level interaction)
     mat.opacity = THREE.MathUtils.clamp(
-      THREE.MathUtils.mapLinear(dist, 1.4, 2.5, 0.32, 0.08),
-      0.05,
-      0.35,
+      THREE.MathUtils.mapLinear(dist, 1.4, 2.5, 0.35, 0.06),
+      0.04,
+      0.38,
     );
   });
 
@@ -174,7 +171,7 @@ function GlobeHexGrid() {
       <meshBasicMaterial
         vertexColors
         transparent
-        opacity={0.18}
+        opacity={0.35}
         depthWrite={false}
         side={THREE.DoubleSide}
       />
@@ -182,6 +179,88 @@ function GlobeHexGrid() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// SelectedTileHighlight — bright hexagonal ring at the selected tile
+// Always full opacity regardless of camera distance.
+// ---------------------------------------------------------------------------
+const _selY = new THREE.Vector3(0, 1, 0);
+const _selPos = new THREE.Vector3();
+const _selQ = new THREE.Quaternion();
+
+function SelectedTileHighlight() {
+  const selectedId = useGameStore((s) => s.selectedPlotId);
+  const hoveredId = useGameStore((s) => s.hoveredPlotId);
+
+  const selMeshRef = useRef<THREE.Mesh>(null);
+  const hoverMeshRef = useRef<THREE.Mesh>(null);
+
+  function positionAt(mesh: THREE.Mesh, plotId: number) {
+    const tile = GEODESIC_TILES[plotId];
+    if (!tile) {
+      mesh.visible = false;
+      return;
+    }
+    _selPos.set(tile.nx, tile.ny, tile.nz);
+    _selQ.setFromUnitVectors(_selY, _selPos);
+    mesh.quaternion.copy(_selQ);
+    mesh.position.copy(_selPos).multiplyScalar(1.003);
+    mesh.visible = true;
+  }
+
+  // Update selection ring
+  useEffect(() => {
+    const mesh = selMeshRef.current;
+    if (!mesh) return;
+    if (selectedId !== null) positionAt(mesh, selectedId);
+    else mesh.visible = false;
+  });
+
+  // Update hover ring
+  useEffect(() => {
+    const mesh = hoverMeshRef.current;
+    if (!mesh) return;
+    if (hoveredId !== null && hoveredId !== selectedId)
+      positionAt(mesh, hoveredId);
+    else mesh.visible = false;
+  });
+
+  // Pulse animation on selection ring
+  useFrame(({ clock }) => {
+    const mesh = selMeshRef.current;
+    if (!mesh || !mesh.visible) return;
+    const mat = mesh.material as THREE.MeshBasicMaterial;
+    mat.opacity = 0.75 + Math.sin(clock.getElapsedTime() * 4) * 0.2;
+  });
+
+  return (
+    <>
+      {/* Selection ring — pulsing bright cyan */}
+      <mesh ref={selMeshRef} visible={false} geometry={HEX_RING_GEO}>
+        <meshBasicMaterial
+          color={0xffffff}
+          transparent
+          opacity={0.9}
+          depthWrite={false}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+      {/* Hover ring — gold, no pulse */}
+      <mesh ref={hoverMeshRef} visible={false} geometry={HEX_RING_GEO}>
+        <meshBasicMaterial
+          color={0xcccccc}
+          transparent
+          opacity={0.5}
+          depthWrite={false}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Atmosphere shaders
+// ---------------------------------------------------------------------------
 const atmosphereVert = /* glsl */ `
   varying vec3 vNormal;
   varying vec3 vViewPosition;
@@ -192,32 +271,67 @@ const atmosphereVert = /* glsl */ `
     gl_Position = projectionMatrix * mvPosition;
   }
 `;
-
 const atmosphereFrag = /* glsl */ `
   uniform vec3 glowColor;
   varying vec3 vNormal;
   varying vec3 vViewPosition;
   void main() {
-    float intensity = pow(0.65 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 3.0);
+    float intensity = pow(0.65 - dot(vNormal, vec3(0.0,0.0,1.0)), 3.0);
     intensity = clamp(intensity, 0.0, 1.0);
     gl_FragColor = vec4(glowColor * intensity, intensity * 0.8);
   }
 `;
 
+// ---------------------------------------------------------------------------
+// Day/Night Earth shaders — world-space normals so sun stays fixed
+// ---------------------------------------------------------------------------
+const earthDayNightVert = /* glsl */ `
+  varying vec3 vWorldNormal;
+  varying vec2 vUv;
+  void main() {
+    vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+const earthDayNightFrag = /* glsl */ `
+  uniform sampler2D dayMap;
+  varying vec2 vUv;
+  void main() {
+    gl_FragColor = texture2D(dayMap, vUv);
+  }
+`;
+
+// ---------------------------------------------------------------------------
+// EarthSphere — globe mesh + hex grid + click handling
+// ---------------------------------------------------------------------------
 function EarthSphere() {
-  const dayTex = useTexture("/assets/generated/earth-day.dim_4096x2048.jpg");
-  const cloudsTex = useTexture(
+  const [dayTex, cloudsTex] = useTexture([
+    "/assets/generated/earth-day.dim_4096x2048.jpg",
     "/assets/generated/earth-clouds.dim_2048x1024.jpg",
-  );
+  ]);
   const globeRef = useRef<THREE.Group>(null);
   const cloudsRef = useRef<THREE.Mesh>(null);
+
   const selectPlot = useGameStore((s) => s.selectPlot);
+  const setSelectedWorldPoint = useGameStore((s) => s.setSelectedWorldPoint);
   const setHoveredPlotId = useGameStore((s) => s.setHoveredPlotId);
+  const compareModeActive = useGameStore((s) => s.compareModeActive);
+  const setComparePlotId = useGameStore((s) => s.setComparePlotId);
+  // setCompareModeActive available via store if needed
   const lastMoveTime = useRef(0);
 
   const atmosphereUniforms = useMemo(
     () => ({ glowColor: { value: new THREE.Color(0.1, 0.5, 1.0) } }),
     [],
+  );
+
+  const earthUniforms = useMemo(
+    () => ({
+      dayMap: { value: dayTex },
+    }),
+    [dayTex],
   );
 
   useFrame(() => {
@@ -226,47 +340,46 @@ function EarthSphere() {
   });
 
   /**
-   * findNearestPlot — pixel-perfect hit detection
-   * ──────────────────────────────────────────────
-   * 1. Transform the world-space hit point into the GLOBE GROUP's local space.
-   *    This is the critical fix: the globe rotates continuously, so a raw
-   *    world-space point maps to the wrong tile once the globe has moved.
-   * 2. Normalize to a unit direction on the sphere.
-   * 3. Use max-dot-product search over the pre-built position cache.
-   *    O(n) over 10,242 tiles ≈ 0.05–0.1 ms — negligible for click/hover.
+   * findNearestPlot
+   * ───────────────
+   * 1. Transform world-space hit into the GLOBE GROUP's local space.
+   *    Critical: globe rotates continuously — raw world point maps to wrong tile.
+   * 2. Normalize to unit sphere direction.
+   * 3. Max-dot-product search over pre-built cache (~0.05 ms, O(n)).
    */
   function findNearestPlot(worldPoint: THREE.Vector3): number {
-    // Step 1: world → globe-local space
     const local = worldPoint.clone();
-    if (globeRef.current) {
-      // worldToLocal is equivalent to applying the inverse of matrixWorld
-      globeRef.current.worldToLocal(local);
-    }
-    // Step 2: normalize to unit sphere direction
+    if (globeRef.current) globeRef.current.worldToLocal(local);
     const len = local.length();
     if (len < 1e-9) return 0;
     local.divideScalar(len);
-    // Step 3: max dot-product search using the pre-cached tile positions
     return findNearestTile(local.x, local.y, local.z, PLOT_POSITION_CACHE);
   }
 
   const handleClick = (e: any) => {
     e.stopPropagation();
     const nearest = findNearestPlot(e.point);
+    if (compareModeActive) {
+      // In compare mode: set the compare plot and exit compare mode selection
+      setComparePlotId(nearest);
+      return;
+    }
     selectPlot(nearest);
+    // Store the actual world-space click direction × orbit distance.
+    // CameraAnimator uses this directly — no lat/lng recomputation needed,
+    // so the globe rotation is already baked in.
+    const dir = e.point.clone().normalize().multiplyScalar(2.0);
+    setSelectedWorldPoint([dir.x, dir.y, dir.z]);
   };
 
   const handlePointerMove = (e: any) => {
     const now = performance.now();
     if (now - lastMoveTime.current < 50) return;
     lastMoveTime.current = now;
-    const nearest = findNearestPlot(e.point);
-    setHoveredPlotId(nearest);
+    setHoveredPlotId(findNearestPlot(e.point));
   };
 
-  const handlePointerLeave = () => {
-    setHoveredPlotId(null);
-  };
+  const handlePointerLeave = () => setHoveredPlotId(null);
 
   return (
     <group ref={globeRef}>
@@ -277,10 +390,10 @@ function EarthSphere() {
         onPointerLeave={handlePointerLeave}
       >
         <sphereGeometry args={[1, 64, 64]} />
-        <meshPhongMaterial
-          map={dayTex}
-          shininess={15}
-          specular={new THREE.Color(0x333333)}
+        <shaderMaterial
+          vertexShader={earthDayNightVert}
+          fragmentShader={earthDayNightFrag}
+          uniforms={earthUniforms}
         />
       </mesh>
 
@@ -309,10 +422,14 @@ function EarthSphere() {
       </mesh>
 
       <GlobeHexGrid />
+      <SelectedTileHighlight />
     </group>
   );
 }
 
+// ---------------------------------------------------------------------------
+// Starfield
+// ---------------------------------------------------------------------------
 function Starfield() {
   const tex = useTexture(
     "/assets/generated/starfield-nebula.dim_2048x1024.jpg",
@@ -325,30 +442,29 @@ function Starfield() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Missile helpers
+// ---------------------------------------------------------------------------
 function bezierPoint(
   p0: THREE.Vector3,
   p1: THREE.Vector3,
   p2: THREE.Vector3,
   t: number,
 ): THREE.Vector3 {
-  const q0 = p0.clone().lerp(p1, t);
-  const q1 = p1.clone().lerp(p2, t);
-  return q0.lerp(q1, t);
+  return p0.clone().lerp(p1, t).lerp(p1.clone().lerp(p2, t), t);
 }
-
 function hexColorToInt(hex: string): number {
   return Number.parseInt(hex.replace("#", ""), 16);
 }
+
+const _scratchVec = new THREE.Vector3();
+const _scratchVec2 = new THREE.Vector3();
 
 interface MissileProps {
   active: boolean;
   onComplete: () => void;
   missileConfig?: MissileConfig;
 }
-
-// Pre-allocated scratchpad vectors to avoid per-frame allocations
-const _scratchVec = new THREE.Vector3();
-const _scratchVec2 = new THREE.Vector3();
 
 function MissileAnimation({ active, onComplete, missileConfig }: MissileProps) {
   const progressRef = useRef(0);
@@ -357,10 +473,8 @@ function MissileAnimation({ active, onComplete, missileConfig }: MissileProps) {
   const impactStartRef = useRef(0);
   const plumeStartRef = useRef(0);
 
-  // Missile body
   const missileRef = useRef<THREE.Mesh>(null);
 
-  // Smoke trail layers (ring buffer approach)
   const TRAIL_POINTS = 30;
   const trail1Ref = useRef<THREE.Points>(null);
   const trail2Ref = useRef<THREE.Points>(null);
@@ -371,20 +485,14 @@ function MissileAnimation({ active, onComplete, missileConfig }: MissileProps) {
   const trailWriteIdx = useRef(0);
   const trailFilled = useRef(false);
 
-  // Launch plume
   const plumeRef = useRef<THREE.Mesh>(null);
   const plumeMushroomRef = useRef<THREE.Mesh>(null);
   const scorchRef = useRef<THREE.Mesh>(null);
-
-  // Exhaust flame + shock diamonds
   const flameRef = useRef<THREE.Points>(null);
   const flamePosArr = useRef(new Float32Array(8 * 3));
   const shockDiamondRefs = useRef<(THREE.Mesh | null)[]>([]);
-
-  // Vapor cone
   const vaporConeRef = useRef<THREE.Mesh>(null);
 
-  // MIRV sub-missiles
   const MIRV_COUNT = 5;
   const mirvRefs = useRef<(THREE.Mesh | null)[]>([]);
   const mirvTrailRefs = useRef<(THREE.Points | null)[]>([]);
@@ -392,7 +500,6 @@ function MissileAnimation({ active, onComplete, missileConfig }: MissileProps) {
     Array.from({ length: MIRV_COUNT }, () => new Float32Array(12 * 3)),
   );
 
-  // Impact
   const shockwaveRef = useRef<THREE.Mesh>(null);
   const fireballRef = useRef<THREE.Mesh>(null);
   const debrisRef = useRef<THREE.Points>(null);
@@ -422,51 +529,46 @@ function MissileAnimation({ active, onComplete, missileConfig }: MissileProps) {
     }
   }, [trajectory]);
 
-  // For top-attack: two bezier segments — ascent then dive
   const ctrlPt = useMemo(() => {
     const mid = srcPlot.clone().lerp(dstPlot, 0.5).normalize();
-    if (trajectory === "top-attack") {
-      return mid.multiplyScalar(1 + arcHeight);
-    }
     return mid.multiplyScalar(1 + arcHeight);
-  }, [srcPlot, dstPlot, arcHeight, trajectory]);
+  }, [srcPlot, dstPlot, arcHeight]);
 
-  // Top-attack dive control point: starts from peak, dives to dest
   const diveCtrlPt = useMemo(() => {
-    if (trajectory === "top-attack") {
+    if (trajectory === "top-attack")
       return ctrlPt.clone().lerp(dstPlot, 0.5).normalize().multiplyScalar(1.6);
-    }
     return ctrlPt;
   }, [ctrlPt, dstPlot, trajectory]);
 
-  // Vertical-pop: shoot up first then arc
   const vertPopCtrl = useMemo(() => {
-    if (trajectory === "vertical-pop") {
-      const up = srcPlot
+    if (trajectory === "vertical-pop")
+      return srcPlot
         .clone()
         .normalize()
         .multiplyScalar(1 + arcHeight);
-      return up;
-    }
     return ctrlPt;
   }, [srcPlot, ctrlPt, arcHeight, trajectory]);
 
-  // MIRV target offsets
   const mirvTargets = useMemo(() => {
     const targets: THREE.Vector3[] = [];
     for (let i = 0; i < MIRV_COUNT; i++) {
       const angle = (i / MIRV_COUNT) * Math.PI * 2;
-      const offset = new THREE.Vector3(
-        Math.cos(angle) * 0.05,
-        Math.sin(angle) * 0.02,
-        Math.sin(angle) * 0.05,
+      targets.push(
+        dstPlot
+          .clone()
+          .add(
+            new THREE.Vector3(
+              Math.cos(angle) * 0.04,
+              Math.sin(angle) * 0.02,
+              Math.sin(angle) * 0.04,
+            ),
+          )
+          .normalize(),
       );
-      targets.push(dstPlot.clone().add(offset).normalize());
     }
     return targets;
   }, [dstPlot]);
 
-  // Initialize debris velocities once
   useMemo(() => {
     const vel = debrisVelArr.current;
     for (let i = 0; i < 40; i++) {
@@ -478,9 +580,7 @@ function MissileAnimation({ active, onComplete, missileConfig }: MissileProps) {
 
   function getMissilePosition(t: number): THREE.Vector3 {
     if (trajectory === "top-attack") {
-      if (t < 0.5) {
-        return bezierPoint(srcPlot, ctrlPt, diveCtrlPt, t * 2);
-      }
+      if (t < 0.5) return bezierPoint(srcPlot, ctrlPt, diveCtrlPt, t * 2);
       return bezierPoint(
         diveCtrlPt,
         dstPlot.clone().lerp(diveCtrlPt, 0.1),
@@ -489,9 +589,8 @@ function MissileAnimation({ active, onComplete, missileConfig }: MissileProps) {
       );
     }
     if (trajectory === "vertical-pop") {
-      if (t < 0.2) {
+      if (t < 0.2)
         return bezierPoint(srcPlot, vertPopCtrl, vertPopCtrl, t / 0.2);
-      }
       return bezierPoint(vertPopCtrl, ctrlPt, dstPlot, (t - 0.2) / 0.8);
     }
     return bezierPoint(srcPlot, ctrlPt, dstPlot, t);
@@ -506,11 +605,9 @@ function MissileAnimation({ active, onComplete, missileConfig }: MissileProps) {
       plumeStartRef.current = 0;
       trailWriteIdx.current = 0;
       trailFilled.current = false;
-      // Zero out trail buffers
       trail1Pos.current.fill(0);
       trail2Pos.current.fill(0);
       trail3Pos.current.fill(0);
-
       if (missileRef.current) missileRef.current.visible = false;
       if (trail1Ref.current) trail1Ref.current.visible = false;
       if (trail2Ref.current) trail2Ref.current.visible = false;
@@ -530,32 +627,20 @@ function MissileAnimation({ active, onComplete, missileConfig }: MissileProps) {
         if (mirvTrailRefs.current[i])
           (mirvTrailRefs.current[i] as THREE.Points).visible = false;
       }
-      for (const sd of shockDiamondRefs.current) {
-        if (sd) sd.visible = false;
-      }
+      for (const sd of shockDiamondRefs.current) if (sd) sd.visible = false;
       return;
     }
 
     const t = progressRef.current;
     const clock = state.clock.getElapsedTime();
     const baseSpeed = speedMultiplier / 6.0;
-
-    let speed: number;
-    if (t < 0.8) {
-      speed = baseSpeed;
-    } else if (t < 0.95) {
-      speed = 0.2 * baseSpeed;
-    } else {
-      speed = 1.5 * baseSpeed;
-    }
-
-    if (t < 1.0) {
-      progressRef.current = Math.min(t + delta * speed, 1.0);
-    }
+    let speed =
+      t < 0.8 ? baseSpeed : t < 0.95 ? 0.2 * baseSpeed : 1.5 * baseSpeed;
+    if (t < 1.0) progressRef.current = Math.min(t + delta * speed, 1.0);
 
     const pos = getMissilePosition(t);
 
-    // ── LAUNCH PLUME (t < 0.15) ──────────────────────────────────
+    // Launch plume
     if (t < 0.15) {
       if (plumeStartRef.current === 0) plumeStartRef.current = clock;
       const elapsed = clock - plumeStartRef.current;
@@ -563,52 +648,41 @@ function MissileAnimation({ active, onComplete, missileConfig }: MissileProps) {
       const isHot = vfx?.launchType === "hot";
       const lingerSec = vfx?.plumeLingerSeconds ?? 2;
       const plumeAlpha = Math.max(0, 1 - elapsed / lingerSec);
-
       if (plumeRef.current) {
         plumeRef.current.visible = true;
         plumeRef.current.position.copy(srcPlot);
-        if (isHot) {
-          // Hot: fast violent expand then shrink
-          const hotScale = Math.min(elapsed * 8, 1.0) * plumeScale * 0.08;
-          plumeRef.current.scale.setScalar(hotScale);
-        } else {
-          // Cold: slower expand, lingers
-          const coldScale = Math.min(elapsed * 3, 1.0) * plumeScale * 0.1;
-          plumeRef.current.scale.setScalar(coldScale);
-        }
-        const pm = plumeRef.current.material as THREE.MeshBasicMaterial;
-        pm.opacity = plumeAlpha * (isHot ? 0.9 : 0.7);
+        const sc =
+          Math.min(elapsed * (isHot ? 8 : 3), 1.0) *
+          plumeScale *
+          (isHot ? 0.08 : 0.1);
+        plumeRef.current.scale.setScalar(sc);
+        (plumeRef.current.material as THREE.MeshBasicMaterial).opacity =
+          plumeAlpha * (isHot ? 0.9 : 0.7);
       }
-
-      // Mushroom / steam cap (cold only)
       if (plumeMushroomRef.current) {
         plumeMushroomRef.current.visible = !isHot;
         if (!isHot) {
           plumeMushroomRef.current.position.copy(
             srcPlot.clone().multiplyScalar(1.03),
           );
-          const mScale = Math.min(elapsed * 2.5, 1.0) * plumeScale * 0.14;
-          plumeMushroomRef.current.scale.set(mScale, mScale * 0.4, mScale);
-          const mm = plumeMushroomRef.current
-            .material as THREE.MeshBasicMaterial;
-          mm.opacity = plumeAlpha * 0.5;
+          const msc = Math.min(elapsed * 2.5, 1.0) * plumeScale * 0.14;
+          plumeMushroomRef.current.scale.set(msc, msc * 0.4, msc);
+          (
+            plumeMushroomRef.current.material as THREE.MeshBasicMaterial
+          ).opacity = plumeAlpha * 0.5;
         }
       }
-
-      // Ground scorch (hot only)
       if (scorchRef.current) {
         scorchRef.current.visible = isHot;
         if (isHot) {
           scorchRef.current.position.copy(srcPlot);
           scorchRef.current.lookAt(0, 0, 0);
-          const scScale = Math.min(elapsed * 4, 1.0) * 0.06;
-          scorchRef.current.scale.setScalar(scScale);
-          const scm = scorchRef.current.material as THREE.MeshBasicMaterial;
-          scm.opacity = Math.max(0, 0.6 - elapsed * 0.2);
+          scorchRef.current.scale.setScalar(Math.min(elapsed * 4, 1.0) * 0.06);
+          (scorchRef.current.material as THREE.MeshBasicMaterial).opacity =
+            Math.max(0, 0.6 - elapsed * 0.2);
         }
       }
     } else {
-      // Fade out plume after launch
       if (plumeRef.current) {
         const elapsed =
           plumeStartRef.current > 0 ? clock - plumeStartRef.current : 999;
@@ -617,69 +691,54 @@ function MissileAnimation({ active, onComplete, missileConfig }: MissileProps) {
           plumeRef.current.visible = false;
           if (plumeMushroomRef.current)
             plumeMushroomRef.current.visible = false;
-        } else {
-          const pm = plumeRef.current.material as THREE.MeshBasicMaterial;
-          pm.opacity = Math.max(0, 1 - elapsed / lingerSec) * 0.5;
-        }
+        } else
+          (plumeRef.current.material as THREE.MeshBasicMaterial).opacity =
+            Math.max(0, 1 - elapsed / lingerSec) * 0.5;
       }
       if (scorchRef.current) scorchRef.current.visible = false;
     }
 
-    // ── MISSILE BODY (t < 0.95) ──────────────────────────────────
-    if (t < 0.95) {
-      if (missileRef.current) {
-        missileRef.current.visible = true;
-        missileRef.current.position.copy(pos);
-        // Orient along direction of travel
-        const nextT = Math.min(t + 0.005, 1.0);
-        const nextPos = getMissilePosition(nextT);
-        _scratchVec.subVectors(nextPos, pos).normalize();
-        missileRef.current.quaternion.setFromUnitVectors(
-          new THREE.Vector3(0, 1, 0),
-          _scratchVec,
-        );
-        const mat = missileRef.current.material as THREE.MeshStandardMaterial;
-        mat.emissiveIntensity = t > 0.8 ? 2.0 + (t - 0.8) * 30 : 2.5;
-      }
-    } else {
-      if (missileRef.current) missileRef.current.visible = false;
-    }
+    // Missile body
+    if (t < 0.95 && missileRef.current) {
+      missileRef.current.visible = true;
+      missileRef.current.position.copy(pos);
+      const nextPos = getMissilePosition(Math.min(t + 0.005, 1.0));
+      _scratchVec.subVectors(nextPos, pos).normalize();
+      missileRef.current.quaternion.setFromUnitVectors(
+        new THREE.Vector3(0, 1, 0),
+        _scratchVec,
+      );
+      (
+        missileRef.current.material as THREE.MeshStandardMaterial
+      ).emissiveIntensity = t > 0.8 ? 2.0 + (t - 0.8) * 30 : 2.5;
+    } else if (missileRef.current) missileRef.current.visible = false;
 
-    // ── EXHAUST FLAME + SHOCK DIAMONDS (t < 0.95) ────────────────
+    // Exhaust flame + shock diamonds
     if (t < 0.95 && t > 0.01) {
       if (flameRef.current) {
         flameRef.current.visible = true;
-        const flameArr = flamePosArr.current;
         const fl = vfx?.flameLength ?? 0.05;
-        const nextT = Math.min(t + 0.002, 1.0);
-        const nextPos = getMissilePosition(nextT);
+        const nextPos = getMissilePosition(Math.min(t + 0.002, 1.0));
         _scratchVec2.subVectors(pos, nextPos).normalize();
-
         for (let i = 0; i < 8; i++) {
           const frac = i / 7;
-          const fx =
+          flamePosArr.current[i * 3] =
             pos.x + _scratchVec2.x * fl * frac + (Math.random() - 0.5) * 0.002;
-          const fy =
+          flamePosArr.current[i * 3 + 1] =
             pos.y + _scratchVec2.y * fl * frac + (Math.random() - 0.5) * 0.002;
-          const fz =
+          flamePosArr.current[i * 3 + 2] =
             pos.z + _scratchVec2.z * fl * frac + (Math.random() - 0.5) * 0.002;
-          flameArr[i * 3] = fx;
-          flameArr[i * 3 + 1] = fy;
-          flameArr[i * 3 + 2] = fz;
         }
         const fAttr = flameRef.current.geometry.getAttribute(
           "position",
         ) as THREE.BufferAttribute;
-        (fAttr.array as Float32Array).set(flameArr);
+        (fAttr.array as Float32Array).set(flamePosArr.current);
         fAttr.needsUpdate = true;
       }
-
-      // Shock diamonds
       if (vfx?.shockDiamondsEnabled) {
         const sdCount = vfx.shockDiamondCount;
         const fl = vfx.flameLength;
-        const nextT = Math.min(t + 0.002, 1.0);
-        const nextPos = getMissilePosition(nextT);
+        const nextPos = getMissilePosition(Math.min(t + 0.002, 1.0));
         _scratchVec2.subVectors(pos, nextPos).normalize();
         for (let i = 0; i < sdCount; i++) {
           const sd = shockDiamondRefs.current[i];
@@ -691,124 +750,97 @@ function MissileAnimation({ active, onComplete, missileConfig }: MissileProps) {
               pos.y + _scratchVec2.y * fl * frac,
               pos.z + _scratchVec2.z * fl * frac,
             );
-            const sdMat = sd.material as THREE.MeshBasicMaterial;
-            sdMat.opacity = (Math.sin(clock * 20 + i * 1.3) * 0.5 + 0.5) * 0.9;
+            (sd.material as THREE.MeshBasicMaterial).opacity =
+              (Math.sin(clock * 20 + i * 1.3) * 0.5 + 0.5) * 0.9;
           }
         }
       }
     } else {
       if (flameRef.current) flameRef.current.visible = false;
-      for (const sd of shockDiamondRefs.current) {
-        if (sd) sd.visible = false;
-      }
+      for (const sd of shockDiamondRefs.current) if (sd) sd.visible = false;
     }
 
-    // ── SMOKE TRAIL (ring buffer, t > 0.01 && t < 0.95) ──────────
+    // Smoke trail
     if (t > 0.01 && t < 0.98) {
       const wIdx = trailWriteIdx.current;
       const spiral = vfx?.trailSpiral ?? false;
       const spiralFreq = vfx?.trailSpiralFreq ?? 0;
       const billow = vfx?.layer2BillowFactor ?? 0.006;
-
-      // Write current position into ring buffer
       trail1Pos.current[wIdx * 3] =
         pos.x + (spiral ? Math.sin(t * spiralFreq * 50) * 0.008 : 0);
       trail1Pos.current[wIdx * 3 + 1] = pos.y;
       trail1Pos.current[wIdx * 3 + 2] =
         pos.z + (spiral ? Math.cos(t * spiralFreq * 50) * 0.008 : 0);
-
       trail2Pos.current[wIdx * 3] = pos.x + (Math.random() - 0.5) * billow;
       trail2Pos.current[wIdx * 3 + 1] = pos.y + (Math.random() - 0.5) * billow;
       trail2Pos.current[wIdx * 3 + 2] = pos.z + (Math.random() - 0.5) * billow;
-
       trail3Pos.current[wIdx * 3] =
         pos.x + (Math.random() - 0.5) * billow * 2.5;
       trail3Pos.current[wIdx * 3 + 1] =
         pos.y + (Math.random() - 0.5) * billow * 2.5;
       trail3Pos.current[wIdx * 3 + 2] =
         pos.z + (Math.random() - 0.5) * billow * 2.5;
-
       trailWriteIdx.current = (wIdx + 1) % TRAIL_POINTS;
       if (!trailFilled.current && wIdx === TRAIL_POINTS - 1)
         trailFilled.current = true;
-
-      if (trail1Ref.current) {
-        trail1Ref.current.visible = true;
-        const a1 = trail1Ref.current.geometry.getAttribute(
+      const setTrail = (
+        ref: React.MutableRefObject<THREE.Points | null>,
+        buf: Float32Array,
+        opacity: number,
+      ) => {
+        if (!ref.current) return;
+        ref.current.visible = true;
+        const a = ref.current.geometry.getAttribute(
           "position",
         ) as THREE.BufferAttribute;
-        (a1.array as Float32Array).set(trail1Pos.current);
-        a1.needsUpdate = true;
-        const m1 = trail1Ref.current.material as THREE.PointsMaterial;
-        m1.opacity = (vfx?.layer1Opacity ?? 0.8) * (1 - t * 0.3);
-      }
-      if (trail2Ref.current) {
-        trail2Ref.current.visible = true;
-        const a2 = trail2Ref.current.geometry.getAttribute(
-          "position",
-        ) as THREE.BufferAttribute;
-        (a2.array as Float32Array).set(trail2Pos.current);
-        a2.needsUpdate = true;
-        const m2 = trail2Ref.current.material as THREE.PointsMaterial;
-        m2.opacity = (vfx?.layer2Opacity ?? 0.4) * (1 - t * 0.3);
-      }
-      if (trail3Ref.current) {
-        trail3Ref.current.visible = true;
-        const a3 = trail3Ref.current.geometry.getAttribute(
-          "position",
-        ) as THREE.BufferAttribute;
-        (a3.array as Float32Array).set(trail3Pos.current);
-        a3.needsUpdate = true;
-        const m3 = trail3Ref.current.material as THREE.PointsMaterial;
-        m3.opacity = (vfx?.layer3Opacity ?? 0.15) * (1 - t * 0.4);
-      }
+        (a.array as Float32Array).set(buf);
+        a.needsUpdate = true;
+        (ref.current.material as THREE.PointsMaterial).opacity =
+          opacity * (1 - t * 0.3);
+      };
+      setTrail(trail1Ref, trail1Pos.current, vfx?.layer1Opacity ?? 0.8);
+      setTrail(trail2Ref, trail2Pos.current, vfx?.layer2Opacity ?? 0.4);
+      setTrail(
+        trail3Ref,
+        trail3Pos.current,
+        ((vfx?.layer3Opacity ?? 0.15) * (1 - t * 0.4)) / (1 - t * 0.3 + 0.001),
+      );
     } else if (t >= 0.98) {
       if (trail1Ref.current) trail1Ref.current.visible = false;
       if (trail2Ref.current) trail2Ref.current.visible = false;
       if (trail3Ref.current) trail3Ref.current.visible = false;
     }
 
-    // ── VAPOR CONE (supersonic, speedMultiplier >= 3) ─────────────
+    // Vapor cone
     if (vfx?.vaporConeEnabled && speedMultiplier >= 3 && t > 0.05 && t < 0.95) {
       if (vaporConeRef.current) {
         vaporConeRef.current.visible = true;
         vaporConeRef.current.position.copy(pos);
-        const nextT = Math.min(t + 0.01, 1.0);
-        const nextPos = getMissilePosition(nextT);
-        vaporConeRef.current.lookAt(nextPos);
-        const vcMat = vaporConeRef.current.material as THREE.MeshBasicMaterial;
-        vcMat.opacity = 0.25 + Math.sin(clock * 15) * 0.05;
+        vaporConeRef.current.lookAt(
+          getMissilePosition(Math.min(t + 0.01, 1.0)),
+        );
+        (vaporConeRef.current.material as THREE.MeshBasicMaterial).opacity =
+          0.25 + Math.sin(clock * 15) * 0.05;
       }
-    } else {
-      if (vaporConeRef.current) vaporConeRef.current.visible = false;
-    }
+    } else if (vaporConeRef.current) vaporConeRef.current.visible = false;
 
-    // ── MIRV FAN (ICBM only, t = 0.85-0.98) ─────────────────────
+    // MIRV fan
     const mirvCount = vfx?.mirvCount ?? 0;
     if (mirvCount > 0 && t >= 0.85 && t < 0.98) {
       for (let i = 0; i < MIRV_COUNT; i++) {
         const mirvMesh = mirvRefs.current[i];
         const mirvTrail = mirvTrailRefs.current[i];
         if (!mirvMesh || !mirvTrail) continue;
-
         const mirvT = (t - 0.85) / 0.13;
-        const mirvTarget = mirvTargets[i];
-        const peakCtrl = dstPlot
+        const mt = mirvTargets[i];
+        const peak = dstPlot
           .clone()
-          .lerp(mirvTarget, 0.5)
+          .lerp(mt, 0.5)
           .normalize()
           .multiplyScalar(1.2);
-        const mirvPos = bezierPoint(
-          dstPlot,
-          peakCtrl,
-          mirvTarget,
-          Math.min(mirvT, 1.0),
-        );
-
+        const mirvPos = bezierPoint(dstPlot, peak, mt, Math.min(mirvT, 1.0));
         mirvMesh.visible = true;
         mirvMesh.position.copy(mirvPos);
-
-        // Update MIRV trail
         const tp = mirvTrailPos.current[i];
         for (let j = 11; j > 0; j--) {
           tp[j * 3] = tp[(j - 1) * 3];
@@ -818,7 +850,6 @@ function MissileAnimation({ active, onComplete, missileConfig }: MissileProps) {
         tp[0] = mirvPos.x;
         tp[1] = mirvPos.y;
         tp[2] = mirvPos.z;
-
         mirvTrail.visible = true;
         const mta = mirvTrail.geometry.getAttribute(
           "position",
@@ -835,15 +866,13 @@ function MissileAnimation({ active, onComplete, missileConfig }: MissileProps) {
       }
     }
 
-    // ── IMPACT EXPLOSION (t >= 0.95) ─────────────────────────────
+    // Impact
     if (t >= 0.95) {
       if (missileRef.current) missileRef.current.visible = false;
       if (flameRef.current) flameRef.current.visible = false;
       if (vaporConeRef.current) vaporConeRef.current.visible = false;
-
       if (impactStartRef.current === 0) {
         impactStartRef.current = clock;
-        // Initialize debris velocities from impact point
         const dp = debrisPosArr.current;
         for (let i = 0; i < 40; i++) {
           dp[i * 3] = dstPlot.x;
@@ -851,57 +880,47 @@ function MissileAnimation({ active, onComplete, missileConfig }: MissileProps) {
           dp[i * 3 + 2] = dstPlot.z;
         }
       }
-
       const elapsed = clock - impactStartRef.current;
       const flashColor = hexColorToInt(vfx?.impactFlashColor ?? "#ffffff");
       const swColor = hexColorToInt(vfx?.impactShockwaveColor ?? "#ff4400");
       const fbScale = vfx?.impactFireballScale ?? 0.15;
       const debrisCount = Math.min(vfx?.impactDebrisCount ?? 20, 40);
-
-      // Shockwave ring
       if (shockwaveRef.current) {
         shockwaveRef.current.visible = elapsed < 1.2;
         if (elapsed < 1.2) {
           shockwaveRef.current.position.copy(dstPlot);
           shockwaveRef.current.lookAt(0, 0, 0);
-          const s = Math.min(elapsed * 4, 4.0);
-          shockwaveRef.current.scale.setScalar(s);
-          const swMat = shockwaveRef.current
-            .material as THREE.MeshBasicMaterial;
-          swMat.color.setHex(swColor);
-          swMat.opacity = Math.max(0, 1 - elapsed * 1.2);
+          shockwaveRef.current.scale.setScalar(Math.min(elapsed * 4, 4.0));
+          const m = shockwaveRef.current.material as THREE.MeshBasicMaterial;
+          m.color.setHex(swColor);
+          m.opacity = Math.max(0, 1 - elapsed * 1.2);
         }
       }
-
-      // Fireball
       if (fireballRef.current) {
         fireballRef.current.visible = elapsed < 1.0;
         if (elapsed < 1.0) {
           fireballRef.current.position.copy(dstPlot);
-          const fbS = Math.min(elapsed * 5, 1.0) * fbScale;
-          fireballRef.current.scale.setScalar(fbS);
-          const fbMat = fireballRef.current.material as THREE.MeshBasicMaterial;
-          fbMat.color.setHex(elapsed < 0.3 ? flashColor : 0xff4400);
-          fbMat.opacity = Math.max(0, 1 - elapsed * 1.5);
+          fireballRef.current.scale.setScalar(
+            Math.min(elapsed * 5, 1.0) * fbScale,
+          );
+          const m = fireballRef.current.material as THREE.MeshBasicMaterial;
+          m.color.setHex(elapsed < 0.3 ? flashColor : 0xff4400);
+          m.opacity = Math.max(0, 1 - elapsed * 1.5);
         }
       }
-
-      // Ground flash
       if (groundFlashRef.current) {
         groundFlashRef.current.visible = elapsed < 0.4;
         if (elapsed < 0.4) {
           groundFlashRef.current.position.copy(dstPlot);
           groundFlashRef.current.lookAt(0, 0, 0);
-          const gfs = Math.min(elapsed * 6, 1.0) * fbScale * 1.5;
-          groundFlashRef.current.scale.setScalar(gfs);
-          const gfm = groundFlashRef.current
-            .material as THREE.MeshBasicMaterial;
-          gfm.color.setHex(flashColor);
-          gfm.opacity = Math.max(0, 1 - elapsed * 4);
+          groundFlashRef.current.scale.setScalar(
+            Math.min(elapsed * 6, 1.0) * fbScale * 1.5,
+          );
+          const m = groundFlashRef.current.material as THREE.MeshBasicMaterial;
+          m.color.setHex(flashColor);
+          m.opacity = Math.max(0, 1 - elapsed * 4);
         }
       }
-
-      // Debris sparks
       if (debrisRef.current) {
         debrisRef.current.visible = elapsed < 1.5;
         if (elapsed < 1.5) {
@@ -915,16 +934,15 @@ function MissileAnimation({ active, onComplete, missileConfig }: MissileProps) {
           const dAttr = debrisRef.current.geometry.getAttribute(
             "position",
           ) as THREE.BufferAttribute;
-          (dAttr.array as Float32Array).set(dp);
+          (dAttr.array as Float32Array).set(debrisPosArr.current);
           dAttr.needsUpdate = true;
-          const dbMat = debrisRef.current.material as THREE.PointsMaterial;
-          dbMat.color.setHex(flashColor);
-          dbMat.opacity = Math.max(0, 1 - elapsed * 0.8);
+          const m = debrisRef.current.material as THREE.PointsMaterial;
+          m.color.setHex(flashColor);
+          m.opacity = Math.max(0, 1 - elapsed * 0.8);
         }
       }
     }
 
-    // Post-impact -> onComplete after 2s
     if (t >= 1.0 && !completedRef.current) {
       postImpactTimerRef.current += delta;
       if (postImpactTimerRef.current >= 2.0) {
@@ -946,7 +964,6 @@ function MissileAnimation({ active, onComplete, missileConfig }: MissileProps) {
   const sdCount = vfxData?.shockDiamondCount ?? 0;
   const mirvCountVal = vfxData?.mirvCount ?? 0;
 
-  // Pre-allocate geometry arrays
   const trail1InitPos = new Float32Array(TRAIL_POINTS * 3);
   const trail2InitPos = new Float32Array(TRAIL_POINTS * 3);
   const trail3InitPos = new Float32Array(TRAIL_POINTS * 3);
@@ -956,7 +973,6 @@ function MissileAnimation({ active, onComplete, missileConfig }: MissileProps) {
 
   return (
     <group>
-      {/* Missile body */}
       <mesh ref={missileRef} visible={false}>
         <cylinderGeometry args={[0.004, 0.002, 0.045, 6]} />
         <meshStandardMaterial
@@ -965,8 +981,6 @@ function MissileAnimation({ active, onComplete, missileConfig }: MissileProps) {
           emissiveIntensity={2.5}
         />
       </mesh>
-
-      {/* Smoke trail Layer 1 — core ribbon */}
       <points ref={trail1Ref} visible={false}>
         <bufferGeometry>
           <bufferAttribute
@@ -983,8 +997,6 @@ function MissileAnimation({ active, onComplete, missileConfig }: MissileProps) {
           sizeAttenuation
         />
       </points>
-
-      {/* Smoke trail Layer 2 — billow */}
       <points ref={trail2Ref} visible={false}>
         <bufferGeometry>
           <bufferAttribute
@@ -1001,8 +1013,6 @@ function MissileAnimation({ active, onComplete, missileConfig }: MissileProps) {
           sizeAttenuation
         />
       </points>
-
-      {/* Smoke trail Layer 3 — outer haze */}
       <points ref={trail3Ref} visible={false}>
         <bufferGeometry>
           <bufferAttribute
@@ -1019,8 +1029,6 @@ function MissileAnimation({ active, onComplete, missileConfig }: MissileProps) {
           sizeAttenuation
         />
       </points>
-
-      {/* Launch plume sphere */}
       <mesh ref={plumeRef} visible={false}>
         <sphereGeometry args={[1, 12, 12]} />
         <meshBasicMaterial
@@ -1031,8 +1039,6 @@ function MissileAnimation({ active, onComplete, missileConfig }: MissileProps) {
           blending={THREE.AdditiveBlending}
         />
       </mesh>
-
-      {/* Mushroom steam cap (cold launch) */}
       <mesh ref={plumeMushroomRef} visible={false}>
         <sphereGeometry args={[1, 12, 8]} />
         <meshBasicMaterial
@@ -1042,8 +1048,6 @@ function MissileAnimation({ active, onComplete, missileConfig }: MissileProps) {
           depthWrite={false}
         />
       </mesh>
-
-      {/* Ground scorch (hot launch) */}
       <mesh ref={scorchRef} visible={false}>
         <circleGeometry args={[1, 16]} />
         <meshBasicMaterial
@@ -1054,8 +1058,6 @@ function MissileAnimation({ active, onComplete, missileConfig }: MissileProps) {
           side={THREE.DoubleSide}
         />
       </mesh>
-
-      {/* Exhaust flame core */}
       <points ref={flameRef} visible={false}>
         <bufferGeometry>
           <bufferAttribute
@@ -1073,8 +1075,6 @@ function MissileAnimation({ active, onComplete, missileConfig }: MissileProps) {
           blending={THREE.AdditiveBlending}
         />
       </points>
-
-      {/* Shock diamonds */}
       {Array.from({ length: sdCount }, (_, i) => (
         <mesh
           // biome-ignore lint/suspicious/noArrayIndexKey: stable fixed-length VFX array
@@ -1094,8 +1094,6 @@ function MissileAnimation({ active, onComplete, missileConfig }: MissileProps) {
           />
         </mesh>
       ))}
-
-      {/* Vapor cone */}
       {vfxData?.vaporConeEnabled && (
         <mesh ref={vaporConeRef} visible={false}>
           <coneGeometry args={[0.025, 0.08, 16, 1, true]} />
@@ -1109,11 +1107,9 @@ function MissileAnimation({ active, onComplete, missileConfig }: MissileProps) {
           />
         </mesh>
       )}
-
-      {/* MIRV sub-missiles */}
       {mirvCountVal > 0 &&
         Array.from({ length: MIRV_COUNT }, (_, i) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: stable fixed-length VFX array
+          // biome-ignore lint/suspicious/noArrayIndexKey: stable VFX array
           <group key={`mirv-${i}`}>
             <mesh
               visible={false}
@@ -1122,7 +1118,7 @@ function MissileAnimation({ active, onComplete, missileConfig }: MissileProps) {
               }}
             >
               <cylinderGeometry args={[0.002, 0.001, 0.02, 4]} />
-              <meshBasicMaterial color={0xff4400} transparent={false} />
+              <meshBasicMaterial color={0xff4400} />
             </mesh>
             <points
               visible={false}
@@ -1148,8 +1144,6 @@ function MissileAnimation({ active, onComplete, missileConfig }: MissileProps) {
             </points>
           </group>
         ))}
-
-      {/* Impact — Shockwave ring */}
       <mesh ref={shockwaveRef} visible={false}>
         <torusGeometry args={[0.04, 0.004, 6, 32]} />
         <meshBasicMaterial
@@ -1160,8 +1154,6 @@ function MissileAnimation({ active, onComplete, missileConfig }: MissileProps) {
           blending={THREE.AdditiveBlending}
         />
       </mesh>
-
-      {/* Impact — Fireball */}
       <mesh ref={fireballRef} visible={false}>
         <sphereGeometry args={[1, 12, 12]} />
         <meshBasicMaterial
@@ -1172,8 +1164,6 @@ function MissileAnimation({ active, onComplete, missileConfig }: MissileProps) {
           blending={THREE.AdditiveBlending}
         />
       </mesh>
-
-      {/* Impact — Ground flash */}
       <mesh ref={groundFlashRef} visible={false}>
         <circleGeometry args={[1, 16]} />
         <meshBasicMaterial
@@ -1185,8 +1175,6 @@ function MissileAnimation({ active, onComplete, missileConfig }: MissileProps) {
           blending={THREE.AdditiveBlending}
         />
       </mesh>
-
-      {/* Impact — Debris sparks */}
       <points ref={debrisRef} visible={false}>
         <bufferGeometry>
           <bufferAttribute
@@ -1208,45 +1196,38 @@ function MissileAnimation({ active, onComplete, missileConfig }: MissileProps) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// CameraAnimator — moves camera to face the clicked tile
+// Uses world-space click point from store, NOT lat/lng recomputation.
+// This is the critical fix: lat/lng → world space ignores globe rotation.
+// ---------------------------------------------------------------------------
 interface CameraAnimatorProps {
   controlsRef: React.MutableRefObject<any>;
 }
 
 function CameraAnimator({ controlsRef }: CameraAnimatorProps) {
   const { camera } = useThree();
-  const selectedPlotId = useGameStore((s) => s.selectedPlotId);
-  const plots = useGameStore((s) => s.plots);
-
+  const selectedWorldPoint = useGameStore((s) => s.selectedWorldPoint);
   const targetPosRef = useRef<THREE.Vector3 | null>(null);
-  const prevPlotIdRef = useRef<number | null>(null);
+  const prevWorldPointRef = useRef<[number, number, number] | null>(null);
   const animatingRef = useRef(false);
 
-  if (selectedPlotId !== prevPlotIdRef.current) {
-    prevPlotIdRef.current = selectedPlotId;
-    if (selectedPlotId !== null && plots[selectedPlotId]) {
-      const plot = plots[selectedPlotId];
-      const dir = latLngToXYZ(plot.lat, plot.lng, 1.0).normalize();
-      targetPosRef.current = dir.multiplyScalar(2.0);
+  // Detect change
+  if (selectedWorldPoint !== prevWorldPointRef.current) {
+    prevWorldPointRef.current = selectedWorldPoint;
+    if (selectedWorldPoint) {
+      targetPosRef.current = new THREE.Vector3(...selectedWorldPoint);
       animatingRef.current = true;
-      if (controlsRef.current) {
-        controlsRef.current.autoRotate = false;
-      }
+      if (controlsRef.current) controlsRef.current.autoRotate = false;
     }
   }
 
   useFrame((_, delta) => {
     if (!animatingRef.current || !targetPosRef.current) return;
-
-    const target = targetPosRef.current;
-    const speed = 3 * delta;
-    camera.position.lerp(target, speed);
-
-    if (controlsRef.current) {
-      controlsRef.current.update();
-    }
-
-    if (camera.position.distanceTo(target) < 0.005) {
-      camera.position.copy(target);
+    camera.position.lerp(targetPosRef.current, 3 * delta);
+    if (controlsRef.current) controlsRef.current.update();
+    if (camera.position.distanceTo(targetPosRef.current) < 0.005) {
+      camera.position.copy(targetPosRef.current);
       animatingRef.current = false;
     }
   });
@@ -1254,6 +1235,9 @@ function CameraAnimator({ controlsRef }: CameraAnimatorProps) {
   return null;
 }
 
+// ---------------------------------------------------------------------------
+// Scene + Canvas
+// ---------------------------------------------------------------------------
 interface SceneProps {
   controlsRef: React.MutableRefObject<any>;
   missileActive: boolean;
@@ -1269,19 +1253,11 @@ function GlobeScene({
 }: SceneProps) {
   return (
     <>
-      <ambientLight color={0x223344} intensity={0.8} />
-      <directionalLight color={0xffffff} intensity={1.5} position={[5, 3, 5]} />
-      <directionalLight
-        color={0x1144aa}
-        intensity={0.3}
-        position={[-3, -1, -2]}
-      />
-
+      <ambientLight color={0xffffff} intensity={2.5} />
       <Suspense fallback={null}>
         <Starfield />
         <EarthSphere />
       </Suspense>
-
       <OrbitControls
         ref={controlsRef}
         enableDamping
@@ -1291,9 +1267,7 @@ function GlobeScene({
         autoRotate
         autoRotateSpeed={0.2}
       />
-
       <CameraAnimator controlsRef={controlsRef} />
-
       <MissileAnimation
         active={missileActive}
         onComplete={onMissileComplete}

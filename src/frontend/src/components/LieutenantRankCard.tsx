@@ -117,6 +117,10 @@ export default function LieutenantRankCard() {
                     height: "100%",
                     objectFit: "contain",
                   }}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src =
+                      "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' fill='%23112233' rx='6'/%3E%3Ctext x='24' y='32' text-anchor='middle' fill='%2300ffcc' font-size='20'%3E%E2%98%85%3C/text%3E%3C/svg%3E";
+                  }}
                 />
               </div>
               <img
@@ -130,6 +134,10 @@ export default function LieutenantRankCard() {
                   position: "relative",
                   zIndex: 1,
                   borderRadius: 8,
+                }}
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src =
+                    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' fill='%23112233' rx='6'/%3E%3Ctext x='24' y='32' text-anchor='middle' fill='%2300ffcc' font-size='20'%3E%E2%98%85%3C/text%3E%3C/svg%3E";
                 }}
               />
             </div>

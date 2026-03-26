@@ -89,8 +89,45 @@ export class ExternalBlob {
         return this;
     }
 }
+export interface CombatEvent {
+    attacker: Principal;
+    intercepted: boolean;
+    interceptorType?: string;
+    toPlot: bigint;
+    atkPower: bigint;
+    timestamp: bigint;
+    fromPlot: bigint;
+    success: boolean;
+    missileType?: string;
+    defPower: bigint;
+}
+export interface PlayerState {
+    empTargets: Array<[bigint, bigint]>;
+    commanderType?: string;
+    fuel: bigint;
+    iron: bigint;
+    frntBalance: bigint;
+    plotsOwned: bigint;
+    satelliteExpiry: bigint;
+    crystal: bigint;
+    combatVictories: bigint;
+    reconTargets: Array<[bigint, bigint]>;
+    commanderAtk: bigint;
+    commanderDef: bigint;
+}
 export interface backendInterface {
+    assignInterceptor(plotId: bigint, interceptorType: string): Promise<void>;
     getAdjacentPlots(plotId: bigint): Promise<Array<bigint>>;
+    getAssignedInterceptor(plotId: bigint): Promise<string | null>;
+    getCombatLog(limit: bigint): Promise<Array<CombatEvent>>;
+    getPlayerState(): Promise<PlayerState | null>;
+    launchMissile(fromPlotId: bigint, toPlotId: bigint, missileType: string): Promise<{
+        __kind__: "ok";
+        ok: string;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
     purchasePlot(plotId: bigint): Promise<{
         __kind__: "ok";
         ok: string;
@@ -99,8 +136,23 @@ export interface backendInterface {
         err: string;
     }>;
 }
+import type { CombatEvent as _CombatEvent, PlayerState as _PlayerState } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
     constructor(private actor: ActorSubclass<_SERVICE>, private _uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, private _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, private processError?: (error: unknown) => never){}
+    async assignInterceptor(arg0: bigint, arg1: string): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.assignInterceptor(arg0, arg1);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.assignInterceptor(arg0, arg1);
+            return result;
+        }
+    }
     async getAdjacentPlots(arg0: bigint): Promise<Array<bigint>> {
         if (this.processError) {
             try {
@@ -115,6 +167,68 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async getAssignedInterceptor(arg0: bigint): Promise<string | null> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getAssignedInterceptor(arg0);
+                return from_candid_opt_n1(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getAssignedInterceptor(arg0);
+            return from_candid_opt_n1(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async getCombatLog(arg0: bigint): Promise<Array<CombatEvent>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getCombatLog(arg0);
+                return from_candid_vec_n2(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getCombatLog(arg0);
+            return from_candid_vec_n2(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async getPlayerState(): Promise<PlayerState | null> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getPlayerState();
+                return from_candid_opt_n5(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getPlayerState();
+            return from_candid_opt_n5(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async launchMissile(arg0: bigint, arg1: bigint, arg2: string): Promise<{
+        __kind__: "ok";
+        ok: string;
+    } | {
+        __kind__: "err";
+        err: string;
+    }> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.launchMissile(arg0, arg1, arg2);
+                return from_candid_variant_n8(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.launchMissile(arg0, arg1, arg2);
+            return from_candid_variant_n8(this._uploadFile, this._downloadFile, result);
+        }
+    }
     async purchasePlot(arg0: bigint): Promise<{
         __kind__: "ok";
         ok: string;
@@ -125,18 +239,108 @@ export class Backend implements backendInterface {
         if (this.processError) {
             try {
                 const result = await this.actor.purchasePlot(arg0);
-                return from_candid_variant_n1(this._uploadFile, this._downloadFile, result);
+                return from_candid_variant_n8(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
             const result = await this.actor.purchasePlot(arg0);
-            return from_candid_variant_n1(this._uploadFile, this._downloadFile, result);
+            return from_candid_variant_n8(this._uploadFile, this._downloadFile, result);
         }
     }
 }
-function from_candid_variant_n1(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
+function from_candid_CombatEvent_n3(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _CombatEvent): CombatEvent {
+    return from_candid_record_n4(_uploadFile, _downloadFile, value);
+}
+function from_candid_PlayerState_n6(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _PlayerState): PlayerState {
+    return from_candid_record_n7(_uploadFile, _downloadFile, value);
+}
+function from_candid_opt_n1(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [string]): string | null {
+    return value.length === 0 ? null : value[0];
+}
+function from_candid_opt_n5(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [_PlayerState]): PlayerState | null {
+    return value.length === 0 ? null : from_candid_PlayerState_n6(_uploadFile, _downloadFile, value[0]);
+}
+function from_candid_record_n4(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
+    attacker: Principal;
+    intercepted: boolean;
+    interceptorType: [] | [string];
+    toPlot: bigint;
+    atkPower: bigint;
+    timestamp: bigint;
+    fromPlot: bigint;
+    success: boolean;
+    missileType: [] | [string];
+    defPower: bigint;
+}): {
+    attacker: Principal;
+    intercepted: boolean;
+    interceptorType?: string;
+    toPlot: bigint;
+    atkPower: bigint;
+    timestamp: bigint;
+    fromPlot: bigint;
+    success: boolean;
+    missileType?: string;
+    defPower: bigint;
+} {
+    return {
+        attacker: value.attacker,
+        intercepted: value.intercepted,
+        interceptorType: record_opt_to_undefined(from_candid_opt_n1(_uploadFile, _downloadFile, value.interceptorType)),
+        toPlot: value.toPlot,
+        atkPower: value.atkPower,
+        timestamp: value.timestamp,
+        fromPlot: value.fromPlot,
+        success: value.success,
+        missileType: record_opt_to_undefined(from_candid_opt_n1(_uploadFile, _downloadFile, value.missileType)),
+        defPower: value.defPower
+    };
+}
+function from_candid_record_n7(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
+    empTargets: Array<[bigint, bigint]>;
+    commanderType: [] | [string];
+    fuel: bigint;
+    iron: bigint;
+    frntBalance: bigint;
+    plotsOwned: bigint;
+    satelliteExpiry: bigint;
+    crystal: bigint;
+    combatVictories: bigint;
+    reconTargets: Array<[bigint, bigint]>;
+    commanderAtk: bigint;
+    commanderDef: bigint;
+}): {
+    empTargets: Array<[bigint, bigint]>;
+    commanderType?: string;
+    fuel: bigint;
+    iron: bigint;
+    frntBalance: bigint;
+    plotsOwned: bigint;
+    satelliteExpiry: bigint;
+    crystal: bigint;
+    combatVictories: bigint;
+    reconTargets: Array<[bigint, bigint]>;
+    commanderAtk: bigint;
+    commanderDef: bigint;
+} {
+    return {
+        empTargets: value.empTargets,
+        commanderType: record_opt_to_undefined(from_candid_opt_n1(_uploadFile, _downloadFile, value.commanderType)),
+        fuel: value.fuel,
+        iron: value.iron,
+        frntBalance: value.frntBalance,
+        plotsOwned: value.plotsOwned,
+        satelliteExpiry: value.satelliteExpiry,
+        crystal: value.crystal,
+        combatVictories: value.combatVictories,
+        reconTargets: value.reconTargets,
+        commanderAtk: value.commanderAtk,
+        commanderDef: value.commanderDef
+    };
+}
+function from_candid_variant_n8(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
     ok: string;
 } | {
     err: string;
@@ -154,6 +358,9 @@ function from_candid_variant_n1(_uploadFile: (file: ExternalBlob) => Promise<Uin
         __kind__: "err",
         err: value.err
     } : value;
+}
+function from_candid_vec_n2(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Array<_CombatEvent>): Array<CombatEvent> {
+    return value.map((x)=>from_candid_CombatEvent_n3(_uploadFile, _downloadFile, x));
 }
 export interface CreateActorOptions {
     agent?: Agent;

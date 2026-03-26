@@ -8,8 +8,48 @@
 
 import { IDL } from '@icp-sdk/core/candid';
 
+export const CombatEvent = IDL.Record({
+  'attacker' : IDL.Principal,
+  'intercepted' : IDL.Bool,
+  'interceptorType' : IDL.Opt(IDL.Text),
+  'toPlot' : IDL.Nat,
+  'atkPower' : IDL.Nat,
+  'timestamp' : IDL.Int,
+  'fromPlot' : IDL.Nat,
+  'success' : IDL.Bool,
+  'missileType' : IDL.Opt(IDL.Text),
+  'defPower' : IDL.Nat,
+});
+export const PlayerState = IDL.Record({
+  'empTargets' : IDL.Vec(IDL.Tuple(IDL.Nat, IDL.Int)),
+  'commanderType' : IDL.Opt(IDL.Text),
+  'fuel' : IDL.Nat,
+  'iron' : IDL.Nat,
+  'frntBalance' : IDL.Nat,
+  'plotsOwned' : IDL.Nat,
+  'satelliteExpiry' : IDL.Int,
+  'crystal' : IDL.Nat,
+  'combatVictories' : IDL.Nat,
+  'reconTargets' : IDL.Vec(IDL.Tuple(IDL.Nat, IDL.Int)),
+  'commanderAtk' : IDL.Nat,
+  'commanderDef' : IDL.Nat,
+});
+
 export const idlService = IDL.Service({
+  'assignInterceptor' : IDL.Func([IDL.Nat, IDL.Text], [], []),
   'getAdjacentPlots' : IDL.Func([IDL.Nat], [IDL.Vec(IDL.Nat)], ['query']),
+  'getAssignedInterceptor' : IDL.Func(
+      [IDL.Nat],
+      [IDL.Opt(IDL.Text)],
+      ['query'],
+    ),
+  'getCombatLog' : IDL.Func([IDL.Nat], [IDL.Vec(CombatEvent)], ['query']),
+  'getPlayerState' : IDL.Func([], [IDL.Opt(PlayerState)], ['query']),
+  'launchMissile' : IDL.Func(
+      [IDL.Nat, IDL.Nat, IDL.Text],
+      [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
+      [],
+    ),
   'purchasePlot' : IDL.Func(
       [IDL.Nat],
       [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
@@ -20,8 +60,48 @@ export const idlService = IDL.Service({
 export const idlInitArgs = [];
 
 export const idlFactory = ({ IDL }) => {
+  const CombatEvent = IDL.Record({
+    'attacker' : IDL.Principal,
+    'intercepted' : IDL.Bool,
+    'interceptorType' : IDL.Opt(IDL.Text),
+    'toPlot' : IDL.Nat,
+    'atkPower' : IDL.Nat,
+    'timestamp' : IDL.Int,
+    'fromPlot' : IDL.Nat,
+    'success' : IDL.Bool,
+    'missileType' : IDL.Opt(IDL.Text),
+    'defPower' : IDL.Nat,
+  });
+  const PlayerState = IDL.Record({
+    'empTargets' : IDL.Vec(IDL.Tuple(IDL.Nat, IDL.Int)),
+    'commanderType' : IDL.Opt(IDL.Text),
+    'fuel' : IDL.Nat,
+    'iron' : IDL.Nat,
+    'frntBalance' : IDL.Nat,
+    'plotsOwned' : IDL.Nat,
+    'satelliteExpiry' : IDL.Int,
+    'crystal' : IDL.Nat,
+    'combatVictories' : IDL.Nat,
+    'reconTargets' : IDL.Vec(IDL.Tuple(IDL.Nat, IDL.Int)),
+    'commanderAtk' : IDL.Nat,
+    'commanderDef' : IDL.Nat,
+  });
+  
   return IDL.Service({
+    'assignInterceptor' : IDL.Func([IDL.Nat, IDL.Text], [], []),
     'getAdjacentPlots' : IDL.Func([IDL.Nat], [IDL.Vec(IDL.Nat)], ['query']),
+    'getAssignedInterceptor' : IDL.Func(
+        [IDL.Nat],
+        [IDL.Opt(IDL.Text)],
+        ['query'],
+      ),
+    'getCombatLog' : IDL.Func([IDL.Nat], [IDL.Vec(CombatEvent)], ['query']),
+    'getPlayerState' : IDL.Func([], [IDL.Opt(PlayerState)], ['query']),
+    'launchMissile' : IDL.Func(
+        [IDL.Nat, IDL.Nat, IDL.Text],
+        [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
+        [],
+      ),
     'purchasePlot' : IDL.Func(
         [IDL.Nat],
         [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],

@@ -21,6 +21,7 @@ import Navbar from "../components/Navbar";
 import PlotHoverCard from "../components/PlotHoverCard";
 import SmokeTestPanel from "../components/SmokeTestPanel";
 import type { MissileConfig } from "../constants/missiles";
+import { usePlayerSync } from "../hooks/usePlayerSync";
 import { useGameStore } from "../store/gameStore";
 
 const CYAN = "#00ffcc";
@@ -282,13 +283,7 @@ function SheetContent({
   const combatLog = useGameStore((s) => s.combatLog);
 
   if (tab === "map") {
-    return (
-      <MapBottomSheet
-        onClose={onClose}
-        controlsRef={controlsRef}
-        onFireMissile={onFireMissile}
-      />
-    );
+    return <MapBottomSheet onClose={onClose} controlsRef={controlsRef} />;
   }
 
   if (tab === "inventory") {
@@ -622,6 +617,7 @@ function BottomSheet({
 
 export default function Play() {
   const controlsRef = useRef<any>(null);
+  usePlayerSync();
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [missileActive, setMissileActive] = useState(false);
   const [showCountdown, setShowCountdown] = useState(false);
@@ -728,6 +724,10 @@ export default function Play() {
       <CommandCenter
         open={commandCenterOpen}
         onClose={() => setCommandCenterOpen(false)}
+        onOpenCommanderStore={() => {
+          setCommandCenterOpen(false);
+          setActiveTab("commander");
+        }}
       />
 
       {showCountdown && <CountdownOverlay onLaunchReady={handleLaunchReady} />}

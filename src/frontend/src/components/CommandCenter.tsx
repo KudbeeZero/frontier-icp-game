@@ -1,710 +1,1015 @@
-import { X, Zap } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
-import { getCommander } from "../constants/commanders";
-import { BIOME_TIER, MINERAL_USES, TIER_MINERALS } from "../constants/minerals";
+import { motion } from "motion/react";
+import { useMemo } from "react";
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import {
+  commanderEffectiveAtk,
+  commanderEffectiveDef,
+  commanderFrntrBonus,
+  getArchetype,
+  getCurrentRank,
+  getNextRank,
+} from "../constants/commanders";
 import { useGameStore } from "../store/gameStore";
 
 const CYAN = "#00ffcc";
-const CYAN_DIM = "rgba(0,255,204,0.35)";
 const GOLD = "#ffd700";
-const BG = "rgba(4,12,24,0.97)";
-const BORDER = "rgba(0,255,204,0.22)";
+const AMBER = "#f59e0b";
+const PURPLE = "#a855f7";
+const RED = "#ef4444";
+const GREEN = "#22c55e";
+const BG_DEEP = "rgba(4,12,24,0.97)";
+const PANEL = "rgba(0,20,40,0.85)";
+const BORDER = "rgba(0,255,204,0.2)";
 const TEXT = "#e0f4ff";
-
-const BIOME_COLORS: Record<string, string> = {
-  Arctic: "#a8d8ea",
-  Desert: "#e8c97a",
-  Forest: "#4a9b5f",
-  Ocean: "#1a6b9e",
-  Mountain: "#7a6b5a",
-  Volcanic: "#c0392b",
-  Grassland: "#5aab4a",
-  Toxic: "#7dba3a",
-};
-
-const BASE_RATE = 50.0; // FRNTR/day per plot
-const SUB_PARCEL_RATE = 10.0; // FRNTR/day per unlocked edge sub-parcel
-const MS_PER_DAY = 86400000;
+const TEXT_DIM = "rgba(224,244,255,0.55)";
 
 interface CommandCenterProps {
   open: boolean;
   onClose: () => void;
+  onOpenCommanderStore?: () => void;
 }
 
-export default function CommandCenter({ open, onClose }: CommandCenterProps) {
-  const player = useGameStore((s) => s.player);
-  const plots = useGameStore((s) => s.plots);
-  const getSubParcels = useGameStore((s) => s.getSubParcels);
-  const claimResources = useGameStore((s) => s.claimResources);
-  const claimAllFrntr = useGameStore((s) => s.claimAllFrntr);
-  const plotPurchaseTimes = useGameStore((s) => s.plotPurchaseTimes);
-  const commanderAssignments = useGameStore((s) => s.commanderAssignments);
-
-  const [searchQuery, setSearchQuery] = useState("");
-  const [now, setNow] = useState(Date.now());
-
-  // Live clock — ticks every second so accumulation is always current
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, []);
-
-  // Build per-plot data from real owned plots only
-  const ownedPlotData = player.plotsOwned
-    .map((id) => plots.find((p) => p.id === id))
-    .filter(Boolean)
-    .map((p) => {
-      const subParcels = getSubParcels(p!.id);
-      const unlockedEdge = subParcels.filter(
-        (sp) => sp.subId > 0 && sp.unlocked === true,
-      ).length;
-      const assignedCommander = getCommander(commanderAssignments[p!.id] ?? "");
-      const rarityBonus = assignedCommander?.rarityBonus ?? 0;
-      const dayRate =
-        (BASE_RATE + unlockedEdge * SUB_PARCEL_RATE) * (1 + rarityBonus);
-      const purchaseTime = plotPurchaseTimes[p!.id] ?? now;
-      const accumulated =
-        (dayRate / MS_PER_DAY) * Math.max(0, now - purchaseTime);
-      return {
-        id: p!.id,
-        biome: p!.biome as string,
-        dayRate,
-        accumulated: Number.isNaN(accumulated) ? 0 : accumulated,
-        unlockedEdge,
-        commanderName: assignedCommander?.name ?? null,
-        commanderBonus: rarityBonus,
-      };
-    });
-
-  const totalDayRate = ownedPlotData.reduce((s, p) => s + p.dayRate, 0);
-  const totalAccumulated = ownedPlotData.reduce((s, p) => s + p.accumulated, 0);
-
-  const filtered = ownedPlotData.filter(
-    (p) => searchQuery === "" || String(p.id).includes(searchQuery),
-  );
-
-  const handleClaim = () => {
-    if (totalAccumulated < 0.0001) return;
-    claimAllFrntr(totalAccumulated);
-  };
-
-  const handleBackdrop = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      if (e.target === e.currentTarget) onClose();
-    },
-    [onClose],
-  );
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [open, onClose]);
-
+// -- Stat Card --
+function StatCard({
+  label,
+  value,
+  sub,
+  accent,
+  ocid,
+}: {
+  label: string;
+  value: string | number;
+  sub?: string;
+  accent?: string;
+  ocid?: string;
+}) {
   return (
-    <>
-      {/* biome-ignore lint/a11y/useKeyWithClickEvents: overlay backdrop */}
+    <div
+      data-ocid={ocid}
+      style={{
+        background: PANEL,
+        backdropFilter: "blur(12px)",
+        border: `1px solid ${BORDER}`,
+        borderRadius: 8,
+        padding: "12px 14px",
+        flex: 1,
+        minWidth: 0,
+      }}
+    >
       <div
-        data-ocid="command_center.backdrop"
-        onClick={handleBackdrop}
         style={{
-          position: "fixed",
-          inset: 0,
-          background: open ? "rgba(0,0,0,0.55)" : "transparent",
-          zIndex: 58,
-          pointerEvents: open ? "auto" : "none",
-          transition: "background 0.3s",
-        }}
-      />
-      <div
-        data-ocid="command_center.panel"
-        style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          bottom: 0,
-          width: "min(340px, 92vw)",
-          zIndex: 60,
-          background: BG,
-          backdropFilter: "blur(16px)",
-          WebkitBackdropFilter: "blur(16px)",
-          borderRight: `1px solid ${CYAN}44`,
-          transform: open ? "translateX(0)" : "translateX(-100%)",
-          transition: "transform 0.3s cubic-bezier(0.4,0,0.2,1)",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
+          fontSize: 9,
+          fontWeight: 700,
+          letterSpacing: 2,
+          color: TEXT_DIM,
+          textTransform: "uppercase",
+          marginBottom: 4,
         }}
       >
-        {/* Header */}
+        {label}
+      </div>
+      <div
+        style={{
+          fontSize: 22,
+          fontWeight: 800,
+          fontFamily: "monospace",
+          color: accent ?? CYAN,
+          lineHeight: 1,
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}
+      >
+        {value}
+      </div>
+      {sub && (
         <div
           style={{
-            padding: "14px 14px 10px",
-            borderBottom: `1px solid ${BORDER}`,
+            fontSize: 9,
+            color: TEXT_DIM,
+            marginTop: 3,
+            fontFamily: "monospace",
+          }}
+        >
+          {sub}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// -- Section Header --
+function SectionHeader({ title, icon }: { title: string; icon: string }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        marginBottom: 10,
+        paddingBottom: 6,
+        borderBottom: `1px solid ${BORDER}`,
+      }}
+    >
+      <span style={{ fontSize: 14 }}>{icon}</span>
+      <span
+        style={{
+          fontSize: 10,
+          fontWeight: 700,
+          letterSpacing: 3,
+          color: CYAN,
+          textTransform: "uppercase",
+        }}
+      >
+        {title}
+      </span>
+    </div>
+  );
+}
+
+// -- Commander Profile Strip --
+function CommanderStrip({
+  onOpenCommanderStore,
+}: {
+  onOpenCommanderStore?: () => void;
+}) {
+  const ownedCommanders = useGameStore((s) => s.ownedCommanders);
+  const promoteCommander = useGameStore((s) => s.promoteCommander);
+  const commander = ownedCommanders[0] ?? null;
+
+  if (!commander) {
+    return (
+      <div
+        data-ocid="command_center.commander.card"
+        style={{
+          background: PANEL,
+          backdropFilter: "blur(12px)",
+          border: `1px solid ${BORDER}`,
+          borderRadius: 8,
+          padding: "14px 16px",
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          marginBottom: 14,
+        }}
+      >
+        <div
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: "50%",
+            background: "rgba(0,255,204,0.08)",
+            border: `1px solid ${BORDER}`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 20,
             flexShrink: 0,
           }}
         >
+          &#128100;
+        </div>
+        <div style={{ flex: 1 }}>
           <div
             style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: 4,
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: 2,
+              color: CYAN,
+              textTransform: "uppercase",
             }}
           >
-            <span
-              style={{
-                fontSize: 12,
-                fontWeight: 700,
-                color: CYAN,
-                letterSpacing: 3,
-                textShadow: `0 0 12px ${CYAN}`,
-              }}
-            >
-              COMMAND CENTER
-            </span>
-            <button
-              type="button"
-              data-ocid="command_center.close_button"
-              onClick={onClose}
-              style={{
-                background: "rgba(0,255,204,0.08)",
-                border: `1px solid ${BORDER}`,
-                borderRadius: 4,
-                cursor: "pointer",
-                color: CYAN_DIM,
-                padding: "3px 5px",
-                display: "flex",
-                alignItems: "center",
-              }}
-            >
-              <X size={14} />
-            </button>
+            No Commander Assigned
           </div>
-          <div style={{ fontSize: 9, color: CYAN_DIM, letterSpacing: 0.5 }}>
-            {ownedPlotData.length} plots owned ·{" "}
-            <span style={{ color: GOLD }}>
-              {Number.isNaN(player.frntBalance)
-                ? "0.00"
-                : player.frntBalance.toFixed(2)}{" "}
-              FRNTR
-            </span>{" "}
-            balance
+          <div style={{ fontSize: 10, color: TEXT_DIM, marginTop: 2 }}>
+            Assign a Commander NFT to unlock combat buffs
           </div>
         </div>
-
-        {/* Body */}
-        <div
+        <button
+          type="button"
+          data-ocid="command_center.open_modal_button"
+          onClick={onOpenCommanderStore}
           style={{
-            flex: 1,
-            overflowY: "auto",
-            padding: "10px 12px",
-            scrollbarWidth: "thin",
-            scrollbarColor: `${BORDER} transparent`,
+            background: "rgba(0,255,204,0.1)",
+            border: `1px solid ${CYAN}`,
+            borderRadius: 6,
+            color: CYAN,
+            fontSize: 9,
+            fontWeight: 700,
+            letterSpacing: 2,
+            padding: "7px 12px",
+            cursor: "pointer",
+            textTransform: "uppercase",
+            whiteSpace: "nowrap",
           }}
         >
-          {/* FRNTR Generation Card */}
-          <div
+          Visit Store
+        </button>
+      </div>
+    );
+  }
+
+  const arch = getArchetype(commander.archetypeId);
+  const rankDef = getCurrentRank(commander);
+  const nextRankDef = getNextRank(commander);
+  const atk = commanderEffectiveAtk(commander);
+  const defStat = commanderEffectiveDef(commander);
+  const bonus = commanderFrntrBonus(commander);
+
+  return (
+    <div
+      data-ocid="command_center.commander.card"
+      style={{
+        background: PANEL,
+        backdropFilter: "blur(12px)",
+        border: `1px solid ${BORDER}`,
+        borderRadius: 8,
+        padding: "12px 14px",
+        marginBottom: 14,
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+      }}
+    >
+      {/* Portrait */}
+      <div
+        style={{
+          width: 52,
+          height: 52,
+          borderRadius: 6,
+          background: "rgba(0,255,204,0.08)",
+          border: `2px solid ${CYAN}`,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 26,
+          flexShrink: 0,
+          boxShadow: "0 0 10px rgba(0,255,204,0.3)",
+          overflow: "hidden",
+        }}
+      >
+        {arch?.badgeImage ? (
+          <img
+            src={arch.badgeImage}
+            alt={arch.name}
+            style={{ width: "100%", height: "100%", objectFit: "contain" }}
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = "none";
+            }}
+          />
+        ) : (
+          <span>&#11088;</span>
+        )}
+      </div>
+
+      {/* Info */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span
             style={{
-              background: "rgba(0,255,204,0.04)",
-              border: "1px solid rgba(0,255,204,0.35)",
-              borderRadius: 8,
-              padding: "12px",
-              marginBottom: 10,
+              fontSize: 12,
+              fontWeight: 800,
+              color: TEXT,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
             }}
           >
+            {arch?.name ?? commander.archetypeId}
+          </span>
+          <span
+            style={{
+              fontSize: 8,
+              fontWeight: 700,
+              color: CYAN,
+              border: `1px solid ${CYAN}`,
+              borderRadius: 3,
+              padding: "1px 4px",
+              letterSpacing: 1,
+              flexShrink: 0,
+            }}
+          >
+            {rankDef?.payGrade ?? "N/A"}
+          </span>
+        </div>
+        <div
+          style={{ fontSize: 9, color: CYAN, letterSpacing: 1, marginTop: 1 }}
+        >
+          {rankDef?.name ?? "Unknown Rank"} &bull; {rankDef?.abbreviation ?? ""}
+        </div>
+        {/* ATK / DEF bars */}
+        <div style={{ display: "flex", gap: 10, marginTop: 5 }}>
+          <div style={{ flex: 1 }}>
             <div
               style={{
-                fontSize: 8,
-                color: CYAN_DIM,
-                letterSpacing: 2,
-                marginBottom: 10,
-                fontWeight: 700,
-              }}
-            >
-              FRNTR TOKEN GENERATION
-            </div>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 8,
-                marginBottom: 10,
-              }}
-            >
-              <div>
-                <div
-                  style={{
-                    fontSize: 20,
-                    fontWeight: 700,
-                    color: CYAN,
-                    lineHeight: 1,
-                  }}
-                >
-                  {Number.isNaN(totalDayRate) ? "0.0" : totalDayRate.toFixed(1)}
-                </div>
-                <div
-                  style={{
-                    fontSize: 7.5,
-                    color: CYAN_DIM,
-                    marginTop: 3,
-                    letterSpacing: 0.5,
-                  }}
-                >
-                  FRNTR / DAY · across {ownedPlotData.length} plots
-                </div>
-              </div>
-              <div>
-                <div
-                  style={{
-                    fontSize: 20,
-                    fontWeight: 700,
-                    color: GOLD,
-                    lineHeight: 1,
-                  }}
-                >
-                  {Number.isNaN(totalAccumulated)
-                    ? "0.0000"
-                    : totalAccumulated.toFixed(4)}
-                </div>
-                <div
-                  style={{
-                    fontSize: 7.5,
-                    color: CYAN_DIM,
-                    marginTop: 3,
-                    letterSpacing: 0.5,
-                  }}
-                >
-                  ACCUMULATED THIS SESSION
-                </div>
-              </div>
-            </div>
-            <button
-              type="button"
-              data-ocid="command_center.claim_all.button"
-              onClick={handleClaim}
-              disabled={totalAccumulated < 0.0001}
-              style={{
-                width: "100%",
-                padding: "8px",
-                background:
-                  totalAccumulated >= 0.0001
-                    ? "rgba(0,255,204,0.14)"
-                    : "rgba(0,255,204,0.04)",
-                border: `1px solid ${
-                  totalAccumulated >= 0.0001 ? `${CYAN}88` : BORDER
-                }`,
-                borderRadius: 5,
-                color: totalAccumulated >= 0.0001 ? CYAN : CYAN_DIM,
-                fontSize: 9,
-                fontWeight: 700,
-                letterSpacing: 1.5,
-                cursor: totalAccumulated >= 0.0001 ? "pointer" : "default",
                 display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 5,
-                transition: "all 0.2s",
+                justifyContent: "space-between",
+                fontSize: 8,
+                color: TEXT_DIM,
+                marginBottom: 2,
               }}
             >
-              <Zap size={11} />
-              CLAIM ALL — +
-              {Number.isNaN(totalAccumulated)
-                ? "0.0000"
-                : totalAccumulated.toFixed(4)}{" "}
-              FRNTR
-            </button>
-          </div>
-
-          {/* Territories */}
-          <div>
+              <span>ATK</span>
+              <span style={{ fontFamily: "monospace", color: TEXT }}>
+                {atk}
+              </span>
+            </div>
             <div
               style={{
-                fontSize: 9,
-                fontWeight: 700,
-                color: CYAN,
-                letterSpacing: 2,
-                marginBottom: 8,
+                height: 3,
+                background: "rgba(255,255,255,0.1)",
+                borderRadius: 2,
+                overflow: "hidden",
               }}
             >
-              YOUR TERRITORIES ({ownedPlotData.length})
-            </div>
-
-            {ownedPlotData.length === 0 ? (
               <div
-                data-ocid="command_center.territories.empty_state"
                 style={{
-                  textAlign: "center",
-                  padding: "28px 16px",
-                  color: CYAN_DIM,
-                  fontSize: 9,
-                  letterSpacing: 1,
-                  lineHeight: 1.8,
-                  border: `1px dashed ${BORDER}`,
-                  borderRadius: 6,
+                  height: "100%",
+                  width: `${Math.min(100, atk)}%`,
+                  background: RED,
+                  borderRadius: 2,
                 }}
-              >
-                <div style={{ fontSize: 22, marginBottom: 8, opacity: 0.4 }}>
-                  🌐
-                </div>
-                <div style={{ fontWeight: 700, marginBottom: 4 }}>
-                  NO TERRITORIES OWNED
-                </div>
-                <div style={{ fontSize: 8, opacity: 0.7 }}>
-                  Tap a plot on the globe to purchase your first territory
-                </div>
-              </div>
-            ) : (
-              <>
-                <input
-                  data-ocid="command_center.search_input"
-                  type="text"
-                  placeholder="Search by plot ID..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "7px 10px",
-                    background: "rgba(0,0,0,0.5)",
-                    border: `1px solid ${BORDER}`,
-                    borderRadius: 5,
-                    color: TEXT,
-                    fontSize: 9,
-                    marginBottom: 8,
-                    outline: "none",
-                    boxSizing: "border-box",
-                  }}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = CYAN;
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = BORDER;
-                  }}
-                />
-                <div
-                  style={{ display: "flex", flexDirection: "column", gap: 6 }}
-                >
-                  {filtered.map((plot, i) => (
-                    <div
-                      key={plot.id}
-                      data-ocid={`command_center.item.${i + 1}`}
-                      style={{
-                        background: "rgba(0,255,204,0.04)",
-                        border: `1px solid ${BORDER}`,
-                        borderRadius: 6,
-                        padding: "10px 10px 8px",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          marginBottom: 6,
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: 11,
-                            fontWeight: 700,
-                            color: CYAN,
-                          }}
-                        >
-                          PLOT #{plot.id}
-                        </span>
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 6,
-                          }}
-                        >
-                          <span
-                            style={{
-                              fontSize: 8,
-                              padding: "2px 6px",
-                              borderRadius: 3,
-                              background: `${
-                                BIOME_COLORS[plot.biome] ?? "#666"
-                              }22`,
-                              border: `1px solid ${
-                                BIOME_COLORS[plot.biome] ?? "#666"
-                              }55`,
-                              color: BIOME_COLORS[plot.biome] ?? "#aaa",
-                              letterSpacing: 0.5,
-                            }}
-                          >
-                            {plot.biome.toUpperCase()}
-                          </span>
-                          <div
-                            style={{
-                              width: 16,
-                              height: 16,
-                              borderRadius: "50%",
-                              background: "rgba(34,197,94,0.2)",
-                              border: "1px solid #22c55e66",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontSize: 9,
-                            }}
-                          >
-                            ✓
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Rate + live accumulation */}
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: 8,
-                          alignItems: "center",
-                          marginBottom: 5,
-                          flexWrap: "wrap",
-                        }}
-                      >
-                        <span style={{ fontSize: 8, color: GOLD }}>
-                          {plot.dayRate.toFixed(1)} FRNTR/day
-                        </span>
-                        {plot.unlockedEdge > 0 && (
-                          <span
-                            style={{
-                              fontSize: 7.5,
-                              padding: "1px 5px",
-                              borderRadius: 3,
-                              background: "rgba(0,255,204,0.08)",
-                              border: `1px solid ${BORDER}`,
-                              color: CYAN_DIM,
-                              letterSpacing: 0.5,
-                            }}
-                          >
-                            +{plot.unlockedEdge} sub-parcels
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Commander assignment row */}
-                      {plot.commanderName ? (
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 5,
-                            marginBottom: 5,
-                            fontSize: 8,
-                            color: "rgba(0,255,204,0.6)",
-                            fontFamily: "monospace",
-                            letterSpacing: 0.5,
-                          }}
-                        >
-                          <span>⚔</span>
-                          <span style={{ color: "#e0f4ff", fontWeight: 700 }}>
-                            {plot.commanderName}
-                          </span>
-                          <span>·</span>
-                          <span>
-                            +{(plot.commanderBonus * 100).toFixed(0)}% GEN
-                          </span>
-                        </div>
-                      ) : null}
-
-                      <div
-                        style={{
-                          fontSize: 9,
-                          color: CYAN,
-                          marginBottom: 7,
-                          fontVariantNumeric: "tabular-nums",
-                        }}
-                      >
-                        {Number.isNaN(plot.accumulated)
-                          ? "0.0000"
-                          : plot.accumulated.toFixed(4)}{" "}
-                        FRNTR accumulated
-                      </div>
-
-                      <button
-                        type="button"
-                        data-ocid={`command_center.mine.button.${i + 1}`}
-                        onClick={() => claimResources(plot.id)}
-                        style={{
-                          width: "100%",
-                          padding: "6px",
-                          background: "transparent",
-                          border: `1px solid ${CYAN}55`,
-                          borderRadius: 4,
-                          color: CYAN,
-                          fontSize: 8.5,
-                          fontWeight: 700,
-                          letterSpacing: 1,
-                          cursor: "pointer",
-                        }}
-                      >
-                        ⛏ COLLECT RESOURCES
-                      </button>
-                    </div>
-                  ))}
-                  {filtered.length === 0 && searchQuery !== "" && (
-                    <div
-                      data-ocid="command_center.territories.empty_state"
-                      style={{
-                        textAlign: "center",
-                        padding: "20px",
-                        color: CYAN_DIM,
-                        fontSize: 9,
-                        letterSpacing: 1,
-                      }}
-                    >
-                      NO PLOTS MATCH YOUR SEARCH
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
+              />
+            </div>
           </div>
-
-          {/* MINERALS */}
-          <div style={{ marginTop: 16 }}>
+          <div style={{ flex: 1 }}>
             <div
               style={{
-                fontSize: 9,
-                fontWeight: 700,
-                color: CYAN,
-                letterSpacing: 2,
-                marginBottom: 8,
+                display: "flex",
+                justifyContent: "space-between",
+                fontSize: 8,
+                color: TEXT_DIM,
+                marginBottom: 2,
               }}
             >
-              MINERALS
+              <span>DEF</span>
+              <span style={{ fontFamily: "monospace", color: TEXT }}>
+                {defStat}
+              </span>
             </div>
-            {(() => {
-              const totalTickRate = player.plotsOwned.reduce((acc, plotId) => {
-                const plot = plots.find((p) => p.id === plotId);
-                if (!plot) return acc;
-                const subParcelsForPlot = getSubParcels(plotId);
-                const hasReactor = subParcelsForPlot.some(
-                  (sp) => sp.buildingType === "CYCLES_REACTOR",
-                );
-                if (!hasReactor) return acc;
-                const tier = BIOME_TIER[plot.biome] ?? 1;
-                const rate = TIER_MINERALS[tier] ?? TIER_MINERALS[1];
-                return acc + rate.tickRate;
-              }, 0);
-
-              const mineralRows = [
-                {
-                  key: "iron" as const,
-                  icon: "⚙",
-                  label: "IRON",
-                  color: "#9ca3af",
-                  value: player.iron,
-                },
-                {
-                  key: "fuel" as const,
-                  icon: "⛽",
-                  label: "FUEL",
-                  color: "#f97316",
-                  value: player.fuel,
-                },
-                {
-                  key: "crystal" as const,
-                  icon: "💎",
-                  label: "CRYSTAL",
-                  color: "#00ffcc",
-                  value: player.crystal,
-                },
-              ];
-
-              return mineralRows.map((m) => (
-                <div
-                  key={m.key}
-                  style={{
-                    background: "rgba(0,255,204,0.03)",
-                    border: "1px solid rgba(0,255,204,0.12)",
-                    borderRadius: 6,
-                    padding: "9px 10px",
-                    marginBottom: 6,
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      marginBottom: 5,
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: 10,
-                        color: m.color,
-                        fontFamily: "monospace",
-                        letterSpacing: 1,
-                      }}
-                    >
-                      {m.icon} {m.label}
-                    </span>
-                    <div
-                      style={{ display: "flex", alignItems: "center", gap: 8 }}
-                    >
-                      <span
-                        style={{
-                          fontSize: 11,
-                          fontWeight: 700,
-                          color: m.color,
-                          fontVariantNumeric: "tabular-nums",
-                        }}
-                      >
-                        {m.value}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: 8,
-                          color: "rgba(160,200,220,0.5)",
-                          letterSpacing: 0.5,
-                        }}
-                      >
-                        +{totalTickRate}/tick
-                      </span>
-                    </div>
-                  </div>
-                  <div
-                    style={{
-                      height: 4,
-                      background: "rgba(255,255,255,0.06)",
-                      borderRadius: 2,
-                      overflow: "hidden",
-                    }}
-                  >
-                    <div
-                      style={{
-                        height: "100%",
-                        width: `${Math.min(100, (m.value / 500) * 100)}%`,
-                        background: m.color,
-                        borderRadius: 2,
-                        transition: "width 0.6s ease-out",
-                        boxShadow: `0 0 6px ${m.color}66`,
-                      }}
-                    />
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 7.5,
-                      color: "rgba(160,200,220,0.35)",
-                      marginTop: 3,
-                      letterSpacing: 0.3,
-                    }}
-                  >
-                    USED FOR: {MINERAL_USES[m.key]}
-                  </div>
-                </div>
-              ));
-            })()}
+            <div
+              style={{
+                height: 3,
+                background: "rgba(255,255,255,0.1)",
+                borderRadius: 2,
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  height: "100%",
+                  width: `${Math.min(100, defStat)}%`,
+                  background: CYAN,
+                  borderRadius: 2,
+                }}
+              />
+            </div>
           </div>
         </div>
       </div>
-    </>
+
+      {/* Bonus + Promote */}
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 6,
+          flexShrink: 0,
+        }}
+      >
+        <div
+          style={{
+            fontSize: 9,
+            color: GOLD,
+            fontWeight: 700,
+            letterSpacing: 1,
+            textAlign: "center",
+          }}
+        >
+          +{bonus}%
+          <br />
+          <span style={{ color: TEXT_DIM, fontWeight: 400 }}>FRNTR</span>
+        </div>
+        {nextRankDef && (
+          <button
+            type="button"
+            data-ocid="command_center.primary_button"
+            onClick={() => promoteCommander(commander.instanceId)}
+            style={{
+              background: "rgba(255,215,0,0.12)",
+              border: `1px solid ${GOLD}`,
+              borderRadius: 5,
+              color: GOLD,
+              fontSize: 8,
+              fontWeight: 700,
+              letterSpacing: 1,
+              padding: "5px 8px",
+              cursor: "pointer",
+              textTransform: "uppercase",
+            }}
+          >
+            Promote
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// -- FRNTR Accumulation Chart --
+function AccumulationChart({
+  balance,
+  plotCount,
+}: { balance: number; plotCount: number }) {
+  const data = useMemo(() => {
+    const dailyGain = plotCount * 8 + 12;
+    return Array.from({ length: 30 }, (_, i) => {
+      const day = i + 1;
+      const base = Math.max(0, balance - dailyGain * (30 - day));
+      const noise = Math.sin(day * 2.5) * dailyGain * 0.15;
+      return {
+        day: i % 5 === 0 ? `D${day}` : "",
+        value: Math.round(base + noise),
+      };
+    });
+  }, [balance, plotCount]);
+
+  return (
+    <div
+      style={{
+        background: PANEL,
+        backdropFilter: "blur(12px)",
+        border: `1px solid ${BORDER}`,
+        borderRadius: 8,
+        padding: "12px 10px",
+        flex: 1,
+        minWidth: 0,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 9,
+          fontWeight: 700,
+          letterSpacing: 2,
+          color: CYAN,
+          textTransform: "uppercase",
+          marginBottom: 8,
+        }}
+      >
+        30-Day Token Accumulation
+      </div>
+      <ResponsiveContainer width="100%" height={100}>
+        <AreaChart
+          data={data}
+          margin={{ top: 0, right: 0, left: -28, bottom: 0 }}
+        >
+          <defs>
+            <linearGradient id="cyanGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor={CYAN} stopOpacity={0.4} />
+              <stop offset="95%" stopColor={CYAN} stopOpacity={0.02} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,255,204,0.07)" />
+          <XAxis
+            dataKey="day"
+            tick={{ fill: TEXT_DIM, fontSize: 8 }}
+            axisLine={false}
+            tickLine={false}
+          />
+          <YAxis
+            tick={{ fill: TEXT_DIM, fontSize: 8 }}
+            axisLine={false}
+            tickLine={false}
+          />
+          <Tooltip
+            contentStyle={{
+              background: "rgba(4,12,24,0.95)",
+              border: `1px solid ${BORDER}`,
+              borderRadius: 6,
+              color: CYAN,
+              fontSize: 10,
+            }}
+            formatter={(v: number) => [`${v.toLocaleString()} FRNTR`, ""]}
+          />
+          <Area
+            type="monotone"
+            dataKey="value"
+            stroke={CYAN}
+            strokeWidth={1.5}
+            fill="url(#cyanGrad)"
+            dot={false}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+// -- Resource Holdings Bar Chart --
+function ResourceChart({
+  iron,
+  fuel,
+  crystal,
+  rareEarth,
+}: {
+  iron: number;
+  fuel: number;
+  crystal: number;
+  rareEarth: number;
+}) {
+  const data = useMemo(
+    () => [
+      { name: "IRON", value: iron, color: "#94a3b8" },
+      { name: "FUEL", value: fuel, color: AMBER },
+      { name: "XTAL", value: crystal, color: CYAN },
+      { name: "RARE", value: rareEarth, color: PURPLE },
+    ],
+    [iron, fuel, crystal, rareEarth],
+  );
+
+  return (
+    <div
+      style={{
+        background: PANEL,
+        backdropFilter: "blur(12px)",
+        border: `1px solid ${BORDER}`,
+        borderRadius: 8,
+        padding: "12px 10px",
+        flex: 1,
+        minWidth: 0,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 9,
+          fontWeight: 700,
+          letterSpacing: 2,
+          color: CYAN,
+          textTransform: "uppercase",
+          marginBottom: 8,
+        }}
+      >
+        Current Resource Holdings
+      </div>
+      <ResponsiveContainer width="100%" height={100}>
+        <BarChart
+          data={data}
+          margin={{ top: 0, right: 0, left: -28, bottom: 0 }}
+        >
+          <CartesianGrid
+            strokeDasharray="3 3"
+            stroke="rgba(0,255,204,0.07)"
+            vertical={false}
+          />
+          <XAxis
+            dataKey="name"
+            tick={{ fill: TEXT_DIM, fontSize: 8 }}
+            axisLine={false}
+            tickLine={false}
+          />
+          <YAxis
+            tick={{ fill: TEXT_DIM, fontSize: 8 }}
+            axisLine={false}
+            tickLine={false}
+          />
+          <Tooltip
+            contentStyle={{
+              background: "rgba(4,12,24,0.95)",
+              border: `1px solid ${BORDER}`,
+              borderRadius: 6,
+              color: TEXT,
+              fontSize: 10,
+            }}
+          />
+          <Bar dataKey="value" radius={[3, 3, 0, 0]}>
+            {data.map((entry) => (
+              <Cell key={entry.name} fill={entry.color} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+// -- Mining Operations Table --
+function MiningTable() {
+  const player = useGameStore((s) => s.player);
+  const plots = useGameStore((s) => s.plots);
+
+  const ownedPlots = useMemo(
+    () => plots.filter((p) => player.plotsOwned.includes(p.id)).slice(0, 5),
+    [plots, player.plotsOwned],
+  );
+
+  if (ownedPlots.length === 0) {
+    return (
+      <div
+        data-ocid="command_center.empty_state"
+        style={{
+          background: PANEL,
+          backdropFilter: "blur(12px)",
+          border: `1px solid ${BORDER}`,
+          borderRadius: 8,
+          padding: "16px",
+          textAlign: "center",
+          color: TEXT_DIM,
+          fontSize: 11,
+        }}
+      >
+        No plots owned. Acquire territory on the globe to begin mining.
+      </div>
+    );
+  }
+
+  const effColor = (e: number) => (e >= 80 ? GREEN : e >= 60 ? AMBER : RED);
+
+  return (
+    <div
+      style={{
+        background: PANEL,
+        backdropFilter: "blur(12px)",
+        border: `1px solid ${BORDER}`,
+        borderRadius: 8,
+        overflow: "hidden",
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "60px 1fr 60px 60px 1fr",
+          gap: 4,
+          padding: "8px 10px",
+          borderBottom: `1px solid ${BORDER}`,
+          fontSize: 8,
+          fontWeight: 700,
+          letterSpacing: 1.5,
+          color: TEXT_DIM,
+          textTransform: "uppercase",
+        }}
+      >
+        <span>Plot</span>
+        <span>Biome</span>
+        <span>Eff%</span>
+        <span>Mines</span>
+        <span>Est. Daily</span>
+      </div>
+      {/* Rows */}
+      <div style={{ maxHeight: 140, overflowY: "auto" }}>
+        {ownedPlots.map((plot, idx) => {
+          const dailyYield = (
+            (plot.iron + plot.fuel + plot.crystal + plot.rareEarth) *
+            (plot.efficiency / 100) *
+            30
+          ).toFixed(1);
+          return (
+            <div
+              key={plot.id}
+              data-ocid={`command_center.mining.item.${idx + 1}`}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "60px 1fr 60px 60px 1fr",
+                gap: 4,
+                padding: "7px 10px",
+                borderBottom: "1px solid rgba(0,255,204,0.06)",
+                fontSize: 10,
+                fontFamily: "monospace",
+                color: TEXT,
+                alignItems: "center",
+              }}
+            >
+              <span style={{ color: CYAN, fontSize: 9 }}>#{plot.id}</span>
+              <span style={{ fontSize: 9, color: TEXT_DIM }}>{plot.biome}</span>
+              <span
+                style={{ color: effColor(plot.efficiency), fontWeight: 700 }}
+              >
+                {plot.efficiency}%
+              </span>
+              <span style={{ color: TEXT_DIM }}>{plot.mineCount}</span>
+              <span style={{ color: GOLD, fontSize: 9 }}>
+                {dailyYield} /day
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// -- Combat Stats Row --
+function CombatStatsRow() {
+  const rankStats = useGameStore((s) => s.rankStats);
+  const winRate =
+    rankStats.missionsLaunched > 0
+      ? ((rankStats.combatWins / rankStats.missionsLaunched) * 100).toFixed(1)
+      : "0.0";
+  const winRateNum = Number.parseFloat(winRate);
+
+  return (
+    <div style={{ display: "flex", gap: 8 }}>
+      <StatCard
+        label="Missions"
+        value={rankStats.missionsLaunched}
+        sub="LAUNCHED"
+        accent={CYAN}
+        ocid="command_center.missions.card"
+      />
+      <StatCard
+        label="Combat Wins"
+        value={rankStats.combatWins}
+        sub="CONFIRMED"
+        accent={GREEN}
+        ocid="command_center.wins.card"
+      />
+      <StatCard
+        label="Win Rate"
+        value={`${winRate}%`}
+        sub="OVERALL"
+        accent={winRateNum >= 50 ? GREEN : AMBER}
+        ocid="command_center.winrate.card"
+      />
+    </div>
+  );
+}
+
+// -- Leaderboard Snapshot --
+function LeaderboardSnapshot() {
+  const leaderboard = useGameStore((s) => s.leaderboard);
+  const top5 = leaderboard.slice(0, 5);
+
+  return (
+    <div
+      style={{
+        background: PANEL,
+        backdropFilter: "blur(12px)",
+        border: `1px solid ${BORDER}`,
+        borderRadius: 8,
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "28px 1fr 50px 70px 50px",
+          gap: 4,
+          padding: "8px 10px",
+          borderBottom: `1px solid ${BORDER}`,
+          fontSize: 8,
+          fontWeight: 700,
+          letterSpacing: 1.5,
+          color: TEXT_DIM,
+          textTransform: "uppercase",
+        }}
+      >
+        <span>#</span>
+        <span>Commander</span>
+        <span>Plots</span>
+        <span>FRNTR</span>
+        <span>Wins</span>
+      </div>
+      {top5.map((entry, idx) => {
+        const rankColor =
+          idx === 0
+            ? GOLD
+            : idx === 1
+              ? "#c0c0c0"
+              : idx === 2
+                ? AMBER
+                : TEXT_DIM;
+        return (
+          <div
+            key={entry.rank}
+            data-ocid={`command_center.leaderboard.item.${idx + 1}`}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "28px 1fr 50px 70px 50px",
+              gap: 4,
+              padding: "7px 10px",
+              borderBottom: "1px solid rgba(0,255,204,0.06)",
+              fontSize: 10,
+              fontFamily: "monospace",
+              color: TEXT,
+              alignItems: "center",
+            }}
+          >
+            <span style={{ color: rankColor, fontWeight: 700 }}>
+              {entry.rank}
+            </span>
+            <span
+              style={{
+                fontSize: 10,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {entry.name}
+            </span>
+            <span style={{ color: TEXT_DIM }}>{entry.plotsOwned}</span>
+            <span style={{ color: CYAN }}>
+              {entry.frntEarned.toLocaleString()}
+            </span>
+            <span style={{ color: GREEN }}>{entry.victories}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// -- Main CommandCenter --
+export default function CommandCenter({
+  open,
+  onClose,
+  onOpenCommanderStore,
+}: CommandCenterProps) {
+  const player = useGameStore((s) => s.player);
+  const rankStats = useGameStore((s) => s.rankStats);
+
+  const frnt = player.frntBalance;
+  const plotCount = player.plotsOwned.length;
+
+  const burnRate = rankStats.missionsLaunched * 15 + plotCount * 5;
+  const tokensMined = Math.round(
+    player.iron * 1 +
+      player.fuel * 1.2 +
+      player.crystal * 2 +
+      player.rareEarth * 5,
+  );
+  const netFlow = tokensMined - burnRate;
+
+  if (!open) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 30 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 30 }}
+      transition={{ duration: 0.25, ease: "easeOut" }}
+      data-ocid="command_center.panel"
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 50,
+        background: BG_DEEP,
+        display: "flex",
+        flexDirection: "column",
+        overflowY: "auto",
+        paddingBottom: 80,
+      }}
+    >
+      {/* Top Bar */}
+      <div
+        style={{
+          position: "sticky",
+          top: 0,
+          zIndex: 10,
+          background: "rgba(4,12,24,0.98)",
+          backdropFilter: "blur(16px)",
+          borderBottom: `1px solid ${BORDER}`,
+          padding: "10px 14px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexShrink: 0,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 16 }}>&#128752;</span>
+          <div>
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 800,
+                letterSpacing: 3,
+                color: CYAN,
+                textTransform: "uppercase",
+              }}
+            >
+              Commander Dashboard
+            </div>
+            <div style={{ fontSize: 8, color: TEXT_DIM, letterSpacing: 1 }}>
+              FRONTIER &middot; MISSILE HORIZON
+            </div>
+          </div>
+        </div>
+        <button
+          type="button"
+          data-ocid="command_center.close_button"
+          onClick={onClose}
+          style={{
+            background: "transparent",
+            border: "1px solid rgba(0,255,204,0.2)",
+            borderRadius: 6,
+            color: TEXT_DIM,
+            fontSize: 16,
+            width: 32,
+            height: 32,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          &#215;
+        </button>
+      </div>
+
+      {/* Content */}
+      <div
+        style={{
+          padding: "14px 12px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 16,
+        }}
+      >
+        {/* 1. Commander Profile */}
+        <CommanderStrip onOpenCommanderStore={onOpenCommanderStore} />
+
+        {/* 2. Token Economy Cards */}
+        <div>
+          <SectionHeader title="Token Economy" icon="&#128160;" />
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <StatCard
+              label="FRNTR Balance"
+              value={frnt.toLocaleString(undefined, {
+                maximumFractionDigits: 2,
+              })}
+              sub="FRONTIER TOKENS"
+              accent={CYAN}
+              ocid="command_center.frntr.card"
+            />
+            <StatCard
+              label="Est. Burn/Day"
+              value={burnRate}
+              sub="FRNTR/DAY"
+              accent={RED}
+              ocid="command_center.burn.card"
+            />
+            <StatCard
+              label="Tokens Mined"
+              value={tokensMined.toLocaleString()}
+              sub="FRNTR-EQ"
+              accent={GOLD}
+              ocid="command_center.mined.card"
+            />
+            <StatCard
+              label="Net Flow"
+              value={(netFlow >= 0 ? "+" : "") + netFlow.toLocaleString()}
+              sub={netFlow >= 0 ? "POSITIVE" : "NEGATIVE"}
+              accent={netFlow >= 0 ? GREEN : RED}
+              ocid="command_center.netflow.card"
+            />
+          </div>
+        </div>
+
+        {/* 3. Charts */}
+        <div>
+          <SectionHeader title="Analytics" icon="&#128202;" />
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <AccumulationChart balance={frnt} plotCount={plotCount} />
+            <ResourceChart
+              iron={player.iron}
+              fuel={player.fuel}
+              crystal={player.crystal}
+              rareEarth={player.rareEarth}
+            />
+          </div>
+        </div>
+
+        {/* 4. Mining Operations */}
+        <div>
+          <SectionHeader title="Mining Operations" icon="&#9935;" />
+          <MiningTable />
+        </div>
+
+        {/* 5. Combat Stats */}
+        <div>
+          <SectionHeader title="Combat Record" icon="&#127919;" />
+          <CombatStatsRow />
+        </div>
+
+        {/* 6. Leaderboard */}
+        <div>
+          <SectionHeader title="Leaderboard" icon="&#127942;" />
+          <LeaderboardSnapshot />
+        </div>
+      </div>
+    </motion.div>
   );
 }

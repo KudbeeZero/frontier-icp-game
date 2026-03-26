@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { Cpu, Globe, Shield, Users, Zap } from "lucide-react";
+import { Cpu, Globe, Shield, Users } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 
 const STATS = [
@@ -23,26 +23,22 @@ export default function Landing() {
     >
       {/* Starfield */}
       <div className="absolute inset-0 pointer-events-none">
-        {Array.from({ length: 80 }, (_, i) => i).map(
-          /* biome-ignore lint/suspicious/noArrayIndexKey: decorative */ (
-            i,
-          ) => (
-            <div
-              key={i}
-              className="absolute rounded-full"
-              style={{
-                left: `${(i * 127 + 13) % 100}%`,
-                top: `${(i * 71 + 29) % 100}%`,
-                width: i % 5 === 0 ? "2px" : "1px",
-                height: i % 5 === 0 ? "2px" : "1px",
-                background: "#aaccff",
-                opacity: 0.3 + (i % 7) * 0.1,
-                animation: `twinkle ${2 + (i % 4)}s ease-in-out infinite`,
-                animationDelay: `${(i % 3) * 0.7}s`,
-              }}
-            />
-          ),
-        )}
+        {Array.from({ length: 80 }, (_, i) => i).map((i) => (
+          <div
+            key={i}
+            className="absolute rounded-full"
+            style={{
+              left: `${(i * 127 + 13) % 100}%`,
+              top: `${(i * 71 + 29) % 100}%`,
+              width: i % 5 === 0 ? "2px" : "1px",
+              height: i % 5 === 0 ? "2px" : "1px",
+              background: "#aaccff",
+              opacity: 0.3 + (i % 7) * 0.1,
+              animation: `twinkle ${2 + (i % 4)}s ease-in-out infinite`,
+              animationDelay: `${(i % 3) * 0.7}s`,
+            }}
+          />
+        ))}
       </div>
 
       {/* Orbital rings decoration */}
@@ -103,30 +99,26 @@ export default function Landing() {
             }}
           >
             {/* Plot dots */}
-            {Array.from({ length: 30 }, (_, i) => i).map(
-              /* biome-ignore lint/suspicious/noArrayIndexKey: decorative */ (
-                i,
-              ) => (
-                <div
-                  key={i}
-                  className="absolute rounded-full"
-                  style={{
-                    left: `${15 + ((i * 47 + 11) % 70)}%`,
-                    top: `${15 + ((i * 31 + 7) % 70)}%`,
-                    width: "4px",
-                    height: "4px",
-                    background: [
-                      "#EF4444",
-                      "#8B5CF6",
-                      "#22C3C9",
-                      "#F59E0B",
-                      "#35E7FF",
-                    ][i % 5],
-                    boxShadow: `0 0 6px ${["#EF4444", "#8B5CF6", "#22C3C9", "#F59E0B", "#35E7FF"][i % 5]}`,
-                  }}
-                />
-              ),
-            )}
+            {Array.from({ length: 30 }, (_, i) => i).map((i) => (
+              <div
+                key={i}
+                className="absolute rounded-full"
+                style={{
+                  left: `${15 + ((i * 47 + 11) % 70)}%`,
+                  top: `${15 + ((i * 31 + 7) % 70)}%`,
+                  width: "4px",
+                  height: "4px",
+                  background: [
+                    "#EF4444",
+                    "#8B5CF6",
+                    "#22C3C9",
+                    "#F59E0B",
+                    "#35E7FF",
+                  ][i % 5],
+                  boxShadow: `0 0 6px ${["#EF4444", "#8B5CF6", "#22C3C9", "#F59E0B", "#35E7FF"][i % 5]}`,
+                }}
+              />
+            ))}
           </div>
           <div
             className="absolute inset-0 rounded-full animate-pulse-glow"
@@ -220,7 +212,8 @@ export default function Landing() {
           ))}
         </div>
         <p className="text-xs text-muted-foreground/50">
-          © 2026 Frontier ICP Game · Fully Decentralized on Internet Computer
+          © {new Date().getFullYear()} Frontier ICP Game · Fully Decentralized
+          on Internet Computer
         </p>
       </footer>
     </div>

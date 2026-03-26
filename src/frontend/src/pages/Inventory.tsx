@@ -225,7 +225,7 @@ export default function Inventory() {
                 </div>
                 <div className="text-xs text-muted-foreground">{p.biome}</div>
                 <div className="text-xs text-primary mt-1">
-                  {"★".repeat(Math.ceil(p.richness / 3))}
+                  {"★".repeat(Math.ceil(p.efficiency / 3))}
                 </div>
               </div>
             ))}

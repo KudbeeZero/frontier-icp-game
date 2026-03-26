@@ -1,6 +1,19 @@
 import type { LucideIcon } from "lucide-react";
-import { Cpu, Pickaxe, Radio, Shield, ShieldCheck, X, Zap } from "lucide-react";
-import { useGameStore } from "../store/gameStore";
+import {
+  Cpu,
+  Database,
+  Factory,
+  Flame,
+  Pickaxe,
+  Radio,
+  Shield,
+  ShieldCheck,
+  ShoppingBag,
+  Sigma,
+  Terminal,
+  Zap,
+} from "lucide-react";
+import { type PlotSpecialization, useGameStore } from "../store/gameStore";
 
 const CYAN = "#00ffcc";
 const BG = "rgba(2,5,15,0.95)";
@@ -60,19 +73,128 @@ const BUILDINGS: BuildingDef[] = [
   },
 ];
 
+const SPEC_BUILDINGS: Record<PlotSpecialization, BuildingDef[]> = {
+  TRADING_DEPOT: [
+    {
+      type: "MARKET_STALL",
+      name: "Market Stall",
+      icon: ShoppingBag,
+      cost: 200,
+      desc: "Commerce hub +FRNTR income",
+    },
+    {
+      type: "SUPPLY_CACHE",
+      name: "Supply Cache",
+      icon: Database,
+      cost: 350,
+      desc: "Stockpile resources",
+    },
+    {
+      type: "BLACK_MARKET_TERMINAL",
+      name: "Black Market Terminal",
+      icon: Terminal,
+      cost: 500,
+      desc: "Trade with any faction",
+    },
+  ],
+  ENERGY_TECH: [
+    {
+      type: "SOLAR_ARRAY",
+      name: "Solar Array",
+      icon: Flame,
+      cost: 250,
+      desc: "Clean energy generation",
+    },
+    {
+      type: "REACTOR_CORE",
+      name: "Reactor Core",
+      icon: Sigma,
+      cost: 400,
+      desc: "Heavy power output",
+    },
+    {
+      type: "TECH_LAB",
+      name: "Tech Lab",
+      icon: Cpu,
+      cost: 600,
+      desc: "Upgrades all tech",
+    },
+  ],
+  ARMORY: [
+    {
+      type: "MISSILE_SILO",
+      name: "Missile Silo",
+      icon: Zap,
+      cost: 500,
+      desc: "Enables missile attacks",
+    },
+    {
+      type: "DEFENSE_BUNKER",
+      name: "Defense Bunker",
+      icon: ShieldCheck,
+      cost: 300,
+      desc: "Heavy fortification",
+    },
+    {
+      type: "TRAINING_CAMP",
+      name: "Training Camp",
+      icon: Shield,
+      cost: 250,
+      desc: "Trains combat units",
+    },
+  ],
+  RESOURCES: [
+    {
+      type: "MINING_RIG",
+      name: "Mining Rig",
+      icon: Pickaxe,
+      cost: 200,
+      desc: "Extracts raw minerals",
+    },
+    {
+      type: "ORE_PROCESSOR",
+      name: "Ore Processor",
+      icon: Factory,
+      cost: 350,
+      desc: "+25% mineral yield",
+    },
+    {
+      type: "STORAGE_VAULT",
+      name: "Storage Vault",
+      icon: Database,
+      cost: 150,
+      desc: "Increases storage cap +50",
+    },
+  ],
+};
+
+const SPEC_ACCENT: Record<PlotSpecialization, string> = {
+  TRADING_DEPOT: "#f59e0b",
+  ENERGY_TECH: "#3b82f6",
+  ARMORY: "#ef4444",
+  RESOURCES: "#22c55e",
+};
+
 interface BuildingPickerProps {
   plotId: number;
   subId: number;
   onClose: () => void;
+  specialization?: PlotSpecialization | null;
 }
 
 export default function BuildingPicker({
   plotId,
   subId,
   onClose,
+  specialization,
 }: BuildingPickerProps) {
   const player = useGameStore((s) => s.player);
   const buildStructure = useGameStore((s) => s.buildStructure);
+
+  const buildingList = specialization
+    ? SPEC_BUILDINGS[specialization]
+    : BUILDINGS;
+  const accent = specialization ? SPEC_ACCENT[specialization] : CYAN;
 
   function handleBuild(building: BuildingDef) {
     if (player.frntBalance < building.cost) return;
@@ -122,17 +244,31 @@ export default function BuildingPicker({
           flexShrink: 0,
         }}
       >
-        <span
-          style={{
-            fontSize: 11,
-            fontFamily: "monospace",
-            color: CYAN,
-            letterSpacing: 2,
-            fontWeight: 700,
-          }}
-        >
-          SELECT BUILDING — SUB-PARCEL {subId}
-        </span>
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <span
+            style={{
+              fontSize: 11,
+              fontFamily: "monospace",
+              color: accent,
+              letterSpacing: 2,
+              fontWeight: 700,
+            }}
+          >
+            SELECT BUILDING — SUB-PARCEL {subId}
+          </span>
+          {specialization && (
+            <span
+              style={{
+                fontSize: 8,
+                fontFamily: "monospace",
+                color: `${accent}99`,
+                letterSpacing: 1,
+              }}
+            >
+              {specialization.replace("_", " ")} STRUCTURES
+            </span>
+          )}
+        </div>
         <button
           type="button"
           data-ocid="building_picker.close_button"
@@ -148,13 +284,13 @@ export default function BuildingPicker({
           }}
           aria-label="Close building picker"
         >
-          <X size={16} />
+          ✕
         </button>
       </div>
 
       {/* Building list */}
       <div style={{ flex: 1, overflowY: "auto", padding: "8px 12px 16px" }}>
-        {BUILDINGS.map((building) => {
+        {buildingList.map((building) => {
           const Icon = building.icon;
           const canAfford = player.frntBalance >= building.cost;
           return (
@@ -174,8 +310,8 @@ export default function BuildingPicker({
                 style={{
                   width: 36,
                   height: 36,
-                  background: "rgba(0,255,204,0.07)",
-                  border: "1px solid rgba(0,255,204,0.2)",
+                  background: `${accent}11`,
+                  border: `1px solid ${accent}33`,
                   borderRadius: 8,
                   display: "flex",
                   alignItems: "center",
@@ -185,7 +321,7 @@ export default function BuildingPicker({
               >
                 <Icon
                   size={16}
-                  color={canAfford ? CYAN : "rgba(100,120,140,0.5)"}
+                  color={canAfford ? accent : "rgba(100,120,140,0.5)"}
                 />
               </div>
 
@@ -238,7 +374,7 @@ export default function BuildingPicker({
                 <span
                   style={{
                     fontSize: 9,
-                    color: canAfford ? CYAN : "rgba(100,120,140,0.5)",
+                    color: canAfford ? accent : "rgba(100,120,140,0.5)",
                     fontFamily: "monospace",
                     fontWeight: 700,
                     letterSpacing: 0.5,
@@ -258,23 +394,13 @@ export default function BuildingPicker({
                     letterSpacing: 1,
                     fontFamily: "monospace",
                     background: canAfford
-                      ? "rgba(0,255,204,0.1)"
+                      ? `${accent}1a`
                       : "rgba(50,60,70,0.3)",
-                    border: `1px solid ${canAfford ? "rgba(0,255,204,0.4)" : "rgba(80,100,120,0.3)"}`,
+                    border: `1px solid ${canAfford ? `${accent}66` : "rgba(80,100,120,0.3)"}`,
                     borderRadius: 4,
-                    color: canAfford ? CYAN : "rgba(80,100,120,0.5)",
+                    color: canAfford ? accent : "rgba(80,100,120,0.5)",
                     cursor: canAfford ? "pointer" : "not-allowed",
                     transition: "background 0.15s",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (canAfford)
-                      (e.currentTarget as HTMLButtonElement).style.background =
-                        "rgba(0,255,204,0.2)";
-                  }}
-                  onMouseLeave={(e) => {
-                    if (canAfford)
-                      (e.currentTarget as HTMLButtonElement).style.background =
-                        "rgba(0,255,204,0.1)";
                   }}
                 >
                   BUILD
