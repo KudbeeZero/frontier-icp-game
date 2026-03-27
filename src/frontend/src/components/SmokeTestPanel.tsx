@@ -112,6 +112,7 @@ export default function SmokeTestPanel() {
   const mintTestTokens = useGameStore((s) => s.mintTestTokens);
   const frntBalance = useGameStore((s) => s.player.frntBalance);
   const abortRef = useRef(false);
+  const hasRunRef = useRef(false);
 
   const updateTest = useCallback(
     (id: number, status: TestStatus, detail?: string) => {
@@ -158,6 +159,7 @@ export default function SmokeTestPanel() {
             "iron",
             "fuel",
             "crystal",
+            "rareEarth",
             "mockIcpBalance",
             "weaponInventory",
           ];
@@ -191,20 +193,37 @@ export default function SmokeTestPanel() {
       // 3 BALANCES START AT ZERO
       async () => {
         const { player } = useGameStore.getState();
-        const zeroFields = ["iron", "fuel", "crystal"] as const;
-        // These should be 0 if no plots are owned yet
-        const allZero = zeroFields.every((f) => player[f] === 0);
+        const mineralFields = ["iron", "fuel", "crystal", "rareEarth"] as const;
         // frntBalance may be > 0 if user minted; just check it's a number
         const frntIsNum =
           typeof player.frntBalance === "number" &&
           !Number.isNaN(player.frntBalance);
-        const pass = allZero && frntIsNum;
-        return {
-          pass,
-          detail: pass
-            ? `Iron:${player.iron} Fuel:${player.fuel} Crystal:${player.crystal} FRNTR:${player.frntBalance.toFixed(2)}`
-            : `Non-zero mineral or invalid FRNTR — ${JSON.stringify({ iron: player.iron, fuel: player.fuel, crystal: player.crystal })}`,
-        };
+
+        let pass: boolean;
+        let detail: string;
+
+        if (player.plotsOwned.length === 0) {
+          // No plots owned — minerals must be exactly 0
+          const allZero = mineralFields.every((f) => player[f] === 0);
+          pass = allZero && frntIsNum;
+          detail = pass
+            ? `No plots owned — Iron:${player.iron} Fuel:${player.fuel} Crystal:${player.crystal} RareEarth:${player.rareEarth} FRNTR:${player.frntBalance.toFixed(2)}`
+            : `Non-zero mineral or invalid FRNTR — ${JSON.stringify({ iron: player.iron, fuel: player.fuel, crystal: player.crystal, rareEarth: player.rareEarth })}`;
+        } else {
+          // Plots owned — minerals may have accumulated; just verify they are valid numbers >= 0
+          const allValid = mineralFields.every(
+            (f) =>
+              typeof player[f] === "number" &&
+              !Number.isNaN(player[f]) &&
+              player[f] >= 0,
+          );
+          pass = allValid && frntIsNum;
+          detail = pass
+            ? `${player.plotsOwned.length} plots owned — Iron:${player.iron.toFixed(4)} Fuel:${player.fuel.toFixed(4)} Crystal:${player.crystal.toFixed(4)} RareEarth:${player.rareEarth?.toFixed(4) ?? 0} FRNTR:${player.frntBalance.toFixed(2)} ✓`
+            : `Invalid mineral value — ${JSON.stringify({ iron: player.iron, fuel: player.fuel, crystal: player.crystal, rareEarth: player.rareEarth })}`;
+        }
+
+        return { pass, detail };
       },
 
       // 4 GEODESIC TILE COUNT
@@ -564,13 +583,16 @@ export default function SmokeTestPanel() {
     setRunning(false);
   }, [updateTest]);
 
-  // Auto-run when panel opens for the first time
+  // Auto-run once on first open; do not re-run on subsequent opens
   useEffect(() => {
-    if (open && tests.every((t) => t.status === "PENDING")) runTests();
-    return () => {
+    if (open && !hasRunRef.current) {
+      hasRunRef.current = true;
+      runTests();
+    }
+    if (!open) {
       abortRef.current = true;
-    };
-  }, [open, runTests, tests]);
+    }
+  }, [open, runTests]);
 
   const passed = tests.filter((t) => t.status === "PASS").length;
   const failed = tests.filter((t) => t.status === "FAIL").length;
