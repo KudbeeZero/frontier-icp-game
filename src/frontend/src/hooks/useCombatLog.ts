@@ -1,9 +1,10 @@
+import { useActor } from "@caffeineai/core-infrastructure";
 import { useEffect, useState } from "react";
+import { createActor } from "../backend";
 import { type CombatEntry, useGameStore } from "../store/gameStore";
-import { useActor } from "./useActor";
 
 export function useCombatLog(): CombatEntry[] {
-  const { actor, isFetching } = useActor();
+  const { actor, isFetching } = useActor(createActor);
   const storeLog = useGameStore((s) => s.combatLog);
   const plots = useGameStore((s) => s.plots);
   const [log, setLog] = useState<CombatEntry[]>(storeLog);

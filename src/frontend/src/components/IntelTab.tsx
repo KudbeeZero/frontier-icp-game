@@ -221,6 +221,10 @@ function BaseBlock({
   );
 }
 
+const ARTILLERY_TYPES = ["HIMARS-R", "PALADIN-H", "MLRS-X", "EXCALIBUR-P"];
+const SALVO_TYPES = ["HIMARS-R", "MLRS-X"];
+const PRECISION_TYPES = ["PALADIN-H", "EXCALIBUR-P"];
+
 function BattleView({ entry, phase }: { entry: CombatEntry; phase: Phase }) {
   const missileX = phase === "launch" ? 50 : phase === "intercept" ? 62 : 78;
   const missileY = phase === "launch" ? 55 : 48;
@@ -232,6 +236,37 @@ function BattleView({ entry, phase }: { entry: CombatEntry; phase: Phase }) {
   const result = getResultLabel(entry);
   const atkStat = 40 + Math.floor((entry.damageDealt ?? 0) / 2);
   const defStat = 100 - atkStat;
+
+  const weaponType =
+    (entry as CombatEntry & { missileType?: string }).missileType ?? "";
+  const isArtillery = ARTILLERY_TYPES.includes(weaponType);
+  const isSalvo = SALVO_TYPES.includes(weaponType);
+  const isPrecision = PRECISION_TYPES.includes(weaponType);
+
+  // Inject artillery burst keyframes once
+  if (
+    typeof document !== "undefined" &&
+    !document.getElementById("artillery-burst-style")
+  ) {
+    const styleEl = document.createElement("style");
+    styleEl.id = "artillery-burst-style";
+    styleEl.textContent = `
+      @keyframes artilleryBurst {
+        0% { width: 0px; height: 0px; opacity: 1; }
+        100% { width: 80px; height: 80px; opacity: 0; }
+      }
+      @keyframes salvoRise {
+        0% { transform: translate(-50%,-50%) translateY(0px); opacity: 1; }
+        100% { transform: translate(-50%,-50%) translateY(-40px); opacity: 0; }
+      }
+      @keyframes precisionArc {
+        0% { transform: translate(-50%,-50%) translateY(0px); opacity: 1; }
+        50% { transform: translate(-50%,-50%) translateY(-30px) translateX(10px); opacity: 1; }
+        100% { transform: translate(-50%,-50%) translateY(-50px) translateX(30px); opacity: 0; }
+      }
+    `;
+    document.head.appendChild(styleEl);
+  }
 
   return (
     <div
@@ -307,7 +342,7 @@ function BattleView({ entry, phase }: { entry: CombatEntry; phase: Phase }) {
         <div style={{ flex: 1, position: "relative", height: "100%" }}>
           {showMissile && <MissileIcon x={missileX} y={missileY} />}
 
-          {phase === "launch" && (
+          {phase === "launch" && !isArtillery && (
             <div
               style={{
                 position: "absolute",
@@ -330,6 +365,52 @@ function BattleView({ entry, phase }: { entry: CombatEntry; phase: Phase }) {
                   }}
                 />
               ))}
+            </div>
+          )}
+
+          {/* Artillery salvo launch — 3 small projectiles */}
+          {phase === "launch" && isArtillery && isSalvo && (
+            <div style={{ position: "absolute", left: "30%", top: "55%" }}>
+              {(["45%", "50%", "55%"] as const).map((left, idx) => (
+                <div
+                  key={left}
+                  style={{
+                    position: "absolute",
+                    left,
+                    top: "50%",
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    backgroundColor: "#00ffc8",
+                    boxShadow: "0 0 6px #00ffc8",
+                    animation: "salvoRise 0.8s ease-out forwards",
+                    animationDelay: `${idx * 0.12}s`,
+                  }}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Artillery precision launch — single orange shell */}
+          {phase === "launch" && isArtillery && isPrecision && (
+            <div
+              style={{
+                position: "absolute",
+                left: "32%",
+                top: "55%",
+                transform: "translate(-50%,-50%)",
+              }}
+            >
+              <div
+                style={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: "50%",
+                  backgroundColor: "#ff8800",
+                  boxShadow: "0 0 10px #ff8800, 0 0 20px rgba(255,136,0,0.5)",
+                  animation: "precisionArc 1s ease-in-out forwards",
+                }}
+              />
             </div>
           )}
 
@@ -368,7 +449,7 @@ function BattleView({ entry, phase }: { entry: CombatEntry; phase: Phase }) {
             />
           )}
 
-          {showExplosion && (
+          {showExplosion && !isArtillery && (
             <div
               style={{
                 position: "absolute",
@@ -382,6 +463,22 @@ function BattleView({ entry, phase }: { entry: CombatEntry; phase: Phase }) {
                   "radial-gradient(circle, rgba(255,80,0,0.9) 0%, rgba(255,200,0,0.5) 40%, transparent 70%)",
                 boxShadow: "0 0 30px rgba(255,100,0,0.8)",
                 animation: "explode 0.6s ease-out forwards",
+              }}
+            />
+          )}
+
+          {/* Artillery ground burst ring */}
+          {showExplosion && isArtillery && (
+            <div
+              style={{
+                position: "absolute",
+                left: "75%",
+                top: "55%",
+                transform: "translate(-50%,-50%)",
+                borderRadius: "50%",
+                border: "2px solid #ff6600",
+                boxShadow: "0 0 16px rgba(255,102,0,0.7)",
+                animation: "artilleryBurst 0.7s ease-out forwards",
               }}
             />
           )}

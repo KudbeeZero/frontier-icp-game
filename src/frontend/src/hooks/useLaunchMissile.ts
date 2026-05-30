@@ -1,8 +1,8 @@
+import { useActor, useInternetIdentity } from "@caffeineai/core-infrastructure";
 import { useState } from "react";
+import { createActor } from "../backend";
 import type { MissileConfig } from "../constants/missiles";
 import { type CombatEntry, useGameStore } from "../store/gameStore";
-import { useActor } from "./useActor";
-import { useInternetIdentity } from "./useInternetIdentity";
 
 export interface LaunchResult {
   success: boolean;
@@ -40,7 +40,7 @@ function mapCombatEvents(
 }
 
 export function useLaunchMissile() {
-  const { actor } = useActor();
+  const { actor } = useActor(createActor);
   const { identity } = useInternetIdentity();
   const [isLaunching, setIsLaunching] = useState(false);
   const [lastResult, setLastResult] = useState<LaunchResult | null>(null);

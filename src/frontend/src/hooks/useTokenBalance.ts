@@ -1,6 +1,6 @@
+import { useInternetIdentity } from "@caffeineai/core-infrastructure";
 import { Actor, HttpAgent } from "@icp-sdk/core/agent";
 import { useEffect, useState } from "react";
-import { useInternetIdentity } from "./useInternetIdentity";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const balanceIdlFactory = ({ IDL }: { IDL: any }) => {

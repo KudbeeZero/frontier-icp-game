@@ -10,7 +10,7 @@ import {
   Wrench,
   Zap,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { INTERCEPTOR_CONFIGS } from "../constants/interceptors";
 import type { BattleFormation, PlotData, SubParcel } from "../store/gameStore";
@@ -104,6 +104,8 @@ export default function TacticalCommandPanel() {
   const commanderUpgrades = useGameStore((s) => s.commanderUpgrades);
   const upgradeElectricity = useGameStore((s) => s.upgradeElectricity);
 
+  const subParcelCooldowns = useGameStore((s) => s.subParcelCooldowns);
+
   const [selectedFormation, setSelectedFormation] =
     useState<BattleFormation>("PRECISION_STRIKE");
   const [isFiring, setIsFiring] = useState(false);
@@ -112,6 +114,30 @@ export default function TacticalCommandPanel() {
     message: string;
   } | null>(null);
   const [defenseOpen, setDefenseOpen] = useState(false);
+  const [cooldownRemaining, setCooldownRemaining] = useState<number>(0);
+
+  useEffect(() => {
+    const id = String(selectedPlotId ?? "");
+    const unlockTs = subParcelCooldowns[id];
+    if (!unlockTs || unlockTs <= Date.now()) {
+      setCooldownRemaining(0);
+      return;
+    }
+    const tick = () => {
+      const rem = Math.max(0, unlockTs - Date.now());
+      setCooldownRemaining(rem);
+    };
+    tick();
+    const iv = setInterval(tick, 1000);
+    return () => clearInterval(iv);
+  }, [selectedPlotId, subParcelCooldowns]);
+
+  const fmtCooldown = (ms: number) => {
+    const h = Math.floor(ms / 3600000);
+    const m = Math.floor((ms % 3600000) / 60000);
+    const s = Math.floor((ms % 60000) / 1000);
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  };
 
   if (selectedPlotId === null) return null;
 
@@ -548,6 +574,41 @@ export default function TacticalCommandPanel() {
                     transition: "width 0.4s",
                   }}
                 />
+              </div>
+            </div>
+          )}
+
+          {/* Sub-parcel cooldown timer */}
+          {cooldownRemaining > 0 && (
+            <div
+              style={{
+                background: "rgba(0,20,40,0.7)",
+                border: "1px solid rgba(0,255,200,0.25)",
+                borderRadius: "6px",
+                padding: "8px 14px",
+                marginBottom: "10px",
+                textAlign: "center",
+              }}
+            >
+              <div
+                style={{
+                  color: "rgba(0,255,200,0.5)",
+                  fontSize: "9px",
+                  letterSpacing: "3px",
+                  marginBottom: "2px",
+                }}
+              >
+                SUB-PARCELS
+              </div>
+              <div
+                style={{
+                  color: "rgba(0,255,200,0.95)",
+                  fontSize: "14px",
+                  fontWeight: "bold",
+                  fontFamily: "monospace",
+                }}
+              >
+                &#x1F512; LOCKED — {fmtCooldown(cooldownRemaining)}
               </div>
             </div>
           )}

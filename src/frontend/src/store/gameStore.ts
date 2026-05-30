@@ -433,6 +433,16 @@ interface GameState {
   commanderUpgrades: Record<string, number>;
   compareModeActive: boolean;
   comparePlotId: number | null;
+  subParcelCooldowns: Record<string, number>;
+  activeBattleEntry: {
+    isArtillery: boolean;
+    weaponType: string;
+    fromPlotId: number;
+    toPlotId: number;
+    result: CombatEntry | null;
+  } | null;
+  serverPassiveIncomePerDay: number;
+  totalFRNTRBurned: number;
 
   selectPlot: (id: number | null) => void;
   setSelectedWorldPoint: (p: [number, number, number] | null) => void;
@@ -488,6 +498,10 @@ interface GameState {
   upgradeElectricity: (plotId: number) => void;
   tickPassiveIncome: () => void;
   tickMineralDrip: () => void;
+  setSubParcelCooldown: (plotId: string, unlockTs: number) => void;
+  setActiveBattleEntry: (entry: GameState["activeBattleEntry"]) => void;
+  setServerPassiveIncome: (rate: number) => void;
+  setTotalFRNTRBurned: (amount: number) => void;
 }
 
 export const useGameStore = create<GameState>((set, get) => ({
@@ -542,6 +556,10 @@ export const useGameStore = create<GameState>((set, get) => ({
   commanderUpgrades: {},
   compareModeActive: false,
   comparePlotId: null,
+  subParcelCooldowns: {},
+  activeBattleEntry: null,
+  serverPassiveIncomePerDay: 0,
+  totalFRNTRBurned: 0,
 
   selectPlot: (id) => set({ selectedPlotId: id }),
   setSelectedWorldPoint: (p) => set({ selectedWorldPoint: p }),
@@ -1100,28 +1118,47 @@ export const useGameStore = create<GameState>((set, get) => ({
   setAuth: (principal) =>
     set((state) => ({ player: { ...state.player, principal } })),
 
-  // Passive FRNTR drip: 7 FRNTR/day per plot + Electricity upgrade bonus
+  setSubParcelCooldown: (plotId, unlockTs) =>
+    set((s) => ({
+      subParcelCooldowns: { ...s.subParcelCooldowns, [plotId]: unlockTs },
+    })),
+
+  setActiveBattleEntry: (entry) => set({ activeBattleEntry: entry }),
+
+  setServerPassiveIncome: (rate) => set({ serverPassiveIncomePerDay: rate }),
+
+  setTotalFRNTRBurned: (amount) => set({ totalFRNTRBurned: amount }),
+
+  // Passive FRNTR drip: uses server-synced rate if available, else local calculation
   tickPassiveIncome: () => {
     const state = get();
     if (state.player.plotsOwned.length === 0) return;
-    const BASE_PER_PLOT_PER_SEC = 7 / 86400; // 7 FRNTR/day
+    const plotCount = state.player.plotsOwned.length;
+    // Use server-synced rate if available (divided by 86400 per second per plot)
+    const serverRate = state.serverPassiveIncomePerDay;
     const ELEC_BONUS: Record<number, number> = {
       1: 8 / 86400,
       2: 24 / 86400,
       3: 48 / 86400,
     };
     let totalFrntr = 0;
-    for (const plotId of state.player.plotsOwned) {
-      const plot = state.plots.find((p) => p.id === plotId);
-      if (!plot || plot.isDestroyed) continue;
-      totalFrntr += BASE_PER_PLOT_PER_SEC;
-      // Electricity upgrade bonus from center sub-parcel (index 0)
-      const parcels = state.subParcels[plotId] ?? [];
-      const centerParcel = parcels[0];
-      if (centerParcel?.buildingType?.toUpperCase().includes("ELECTRICITY")) {
-        const level = (state.commanderUpgrades[`electricity_${plotId}`] ??
-          0) as number;
-        if (level > 0) totalFrntr += ELEC_BONUS[level] ?? 0;
+    if (serverRate > 0 && plotCount > 0) {
+      // Server rate is total per day; convert to per-second tick
+      totalFrntr = serverRate / 86400;
+    } else {
+      const BASE_PER_PLOT_PER_SEC = 7 / 86400; // 7 FRNTR/day fallback
+      for (const plotId of state.player.plotsOwned) {
+        const plot = state.plots.find((p) => p.id === plotId);
+        if (!plot || plot.isDestroyed) continue;
+        totalFrntr += BASE_PER_PLOT_PER_SEC;
+        // Electricity upgrade bonus from center sub-parcel (index 0)
+        const parcels = state.subParcels[plotId] ?? [];
+        const centerParcel = parcels[0];
+        if (centerParcel?.buildingType?.toUpperCase().includes("ELECTRICITY")) {
+          const level = (state.commanderUpgrades[`electricity_${plotId}`] ??
+            0) as number;
+          if (level > 0) totalFrntr += ELEC_BONUS[level] ?? 0;
+        }
       }
     }
     if (totalFrntr === 0) return;

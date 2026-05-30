@@ -1,0 +1,26 @@
+{
+  "overview": "A fully on-chain planetary warfare strategy game where players purchase hex plots, generate tokens, fire weapons, and compete for global dominance on ICP.",
+  "features": [
+    "Purchase hex plot territories on an interactive 3D globe",
+    "Passive FRNTR token generation per owned plot",
+    "4-hour sub-parcel unlock cooldown after plot purchase",
+    "Artillery and missile combat with cinematic 2D battle view",
+    "Real-time interceptor defense system",
+    "Commander NFT assignment with rank-based buffs",
+    "Resource mining (Iron, Fuel, Crystal, Rare Earth) by biome",
+    "Leaderboard with live rankings",
+    "Inventory and loadout manager"
+  ],
+  "category": "strategy-game",
+  "tags": [
+    "game",
+    "icp",
+    "strategy",
+    "nft",
+    "defi",
+    "3d",
+    "globe",
+    "warfare"
+  ],
+  "last_updated": "2026-05-30T17:42:50.245Z"
+}

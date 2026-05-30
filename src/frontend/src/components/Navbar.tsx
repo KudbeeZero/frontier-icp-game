@@ -1,6 +1,6 @@
+import { useInternetIdentity } from "@caffeineai/core-infrastructure";
 import { Link } from "@tanstack/react-router";
 import { Zap } from "lucide-react";
-import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import { useTokenBalance } from "../hooks/useTokenBalance";
 
 const NAV_LINKS = [

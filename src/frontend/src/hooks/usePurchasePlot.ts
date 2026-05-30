@@ -1,7 +1,7 @@
+import { useActor, useInternetIdentity } from "@caffeineai/core-infrastructure";
 import { useState } from "react";
+import { createActor } from "../backend";
 import { useGameStore } from "../store/gameStore";
-import { useActor } from "./useActor";
-import { useInternetIdentity } from "./useInternetIdentity";
 
 export interface PurchaseResult {
   success: boolean;
@@ -9,7 +9,7 @@ export interface PurchaseResult {
 }
 
 export function usePurchasePlot() {
-  const { actor } = useActor();
+  const { actor } = useActor(createActor);
   const { identity } = useInternetIdentity();
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [lastResult, setLastResult] = useState<PurchaseResult | null>(null);
@@ -40,7 +40,16 @@ export function usePurchasePlot() {
       const success = response.__kind__ === "ok";
       const message = success ? response.ok : response.err;
 
-      if (!success) {
+      if (success) {
+        // Record 4-hour sub-parcel cooldown for this plot
+        const unlockTs = Date.now() + 4 * 60 * 60 * 1000;
+        useGameStore.setState((s) => ({
+          subParcelCooldowns: {
+            ...s.subParcelCooldowns,
+            [String(plotId)]: unlockTs,
+          },
+        }));
+      } else {
         // Rollback: un-own the plot locally
         useGameStore.setState((s) => ({
           player: {

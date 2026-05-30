@@ -28,6 +28,7 @@ export interface PlayerState {
   'fuel' : bigint,
   'iron' : bigint,
   'frntBalance' : bigint,
+  'totalFRNTRBurned' : number,
   'plotsOwned' : bigint,
   'satelliteExpiry' : bigint,
   'crystal' : bigint,
@@ -35,13 +36,21 @@ export interface PlayerState {
   'reconTargets' : Array<[bigint, bigint]>,
   'commanderAtk' : bigint,
   'commanderDef' : bigint,
+  'passiveIncomePerDay' : number,
 }
 export interface _SERVICE {
   'assignInterceptor' : ActorMethod<[bigint, string], undefined>,
   'getAdjacentPlots' : ActorMethod<[bigint], Array<bigint>>,
+  'getAdminPrincipal' : ActorMethod<[], string>,
   'getAssignedInterceptor' : ActorMethod<[bigint], [] | [string]>,
   'getCombatLog' : ActorMethod<[bigint], Array<CombatEvent>>,
-  'getPlayerState' : ActorMethod<[], [] | [PlayerState]>,
+  'getPassiveIncome' : ActorMethod<[bigint], number>,
+  'getPlayerState' : ActorMethod<[], PlayerState>,
+  /**
+   * / Query the current treasury canister principal.
+   */
+  'getTreasuryPrincipal' : ActorMethod<[], string>,
+  'isSubParcelLocked' : ActorMethod<[bigint], boolean>,
   'launchMissile' : ActorMethod<
     [bigint, bigint, string],
     { 'ok' : string } |
@@ -52,6 +61,11 @@ export interface _SERVICE {
     { 'ok' : string } |
       { 'err' : string }
   >,
+  /**
+   * / Update the treasury canister principal (admin only).
+   */
+  'setTreasuryPrincipal' : ActorMethod<[Principal], undefined>,
+  'updateAdminPrincipalAuth' : ActorMethod<[string], undefined>,
 }
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];

@@ -1,5 +1,7 @@
+import { useActor, useInternetIdentity } from "@caffeineai/core-infrastructure";
 import { ArrowLeft, Shield, Target, Zap } from "lucide-react";
 import { useState } from "react";
+import { createActor } from "../backend";
 import {
   ARTILLERY_CONFIGS,
   type ArtilleryConfig,
@@ -13,10 +15,8 @@ import {
   MISSILE_CONFIGS,
   type MissileConfig,
 } from "../constants/missiles";
-import { useActor } from "../hooks/useActor";
 import { useArsenalAudio } from "../hooks/useArsenalAudio";
 import { useFireArtillery } from "../hooks/useFireArtillery";
-import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import { useLaunchMissile } from "../hooks/useLaunchMissile";
 import { useGameStore } from "../store/gameStore";
 
@@ -974,7 +974,7 @@ export default function ArsenalSheet({ onFireMissile }: ArsenalSheetProps) {
     isFiring: isArtilleryFiring,
     lastResult: artilleryResult,
   } = useFireArtillery();
-  const { actor } = useActor();
+  const { actor } = useActor(createActor);
   const { identity } = useInternetIdentity();
 
   async function handleFire(missile: MissileConfig) {

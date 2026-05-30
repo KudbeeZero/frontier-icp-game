@@ -839,6 +839,7 @@ export default function CommandCenter({
 }: CommandCenterProps) {
   const player = useGameStore((s) => s.player);
   const rankStats = useGameStore((s) => s.rankStats);
+  const totalFRNTRBurned = useGameStore((s) => s.totalFRNTRBurned);
 
   const frnt = player.frntBalance;
   const plotCount = player.plotsOwned.length;
@@ -974,6 +975,13 @@ export default function CommandCenter({
               sub={netFlow >= 0 ? "POSITIVE" : "NEGATIVE"}
               accent={netFlow >= 0 ? GREEN : RED}
               ocid="command_center.netflow.card"
+            />
+            <StatCard
+              label="FRNTR BURNED"
+              value={totalFRNTRBurned.toFixed(8)}
+              sub="OUT OF CIRCULATION"
+              accent="#ff4444"
+              ocid="command_center.burned.card"
             />
           </div>
         </div>

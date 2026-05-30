@@ -9,9 +9,11 @@ import Array "mo:core/Array";
 import Order "mo:core/Order";
 import Time "mo:core/Time";
 import Float "mo:core/Float";
+import Migration "migration";
 
 
 
+(with migration = Migration.run)
 actor {
   type Defenses = {
     turrets : Nat;
@@ -44,6 +46,8 @@ actor {
     faction : ?Text;
     morale : Nat;
     interceptorSystem : ?Text;
+    purchaseTimestamp : ?Int;
+    nexusElectricityLevel : Nat;
   };
 
   type PlayerState = {
@@ -59,6 +63,8 @@ actor {
     satelliteExpiry : Int;
     reconTargets : [(Nat, Int)];
     empTargets : [(Nat, Int)];
+    totalFRNTRBurned : Float;
+    passiveIncomePerDay : Float;
   };
 
   type CombatEvent = {
@@ -105,6 +111,12 @@ actor {
   let leaderboard = Map.empty<Principal, LeaderEntry>();
   let interceptors = Map.empty<Nat, Text>();
 
+  // Admin state — wrapped in a record so it can be mutated via reference
+  let adminState = { var adminPrincipal : Text = "aaaaa-aa" };
+
+  // Treasury canister principal — update after treasury canister is deployed
+  let treasuryState = { var treasuryPrincipal : Text = "aaaaa-aa" };
+
   func validatePlotExists(plotId : Nat) : PlotState {
     switch (plots.get(plotId)) {
       case (null) { Runtime.trap("Plot does not exist!") };
@@ -127,9 +139,83 @@ actor {
     interceptors.get(plotId);
   };
 
-  public query ({ caller }) func getPlayerState() : async ?PlayerState {
-    if (caller.isAnonymous()) { Runtime.trap("Anonymous users cannot have player state") };
-    players.get(caller);
+  // Returns daily FRNTR rate for a plot (base 7 + nexus electricity bonus)
+  func plotDailyRate(plotId : Nat) : Float {
+    let base : Float = 7.0;
+    switch (plots.get(plotId)) {
+      case (null) { base };
+      case (?plot) {
+        let bonus : Float = switch (plot.nexusElectricityLevel) {
+          case (1) { 8.0 };
+          case (2) { 24.0 };
+          case (3) { 48.0 };
+          case (_) { 0.0 };
+        };
+        base + bonus;
+      };
+    };
+  };
+
+  func computePassiveIncomePerDay(caller : Principal) : Float {
+    var total : Float = 0.0;
+    for ((plotId, plot) in plots.entries()) {
+      if (plot.owner == ?caller) {
+        total := total + plotDailyRate(plotId);
+      };
+    };
+    total;
+  };
+
+  public query func getPassiveIncome(plotId : Nat) : async Float {
+    plotDailyRate(plotId);
+  };
+
+  public query func isSubParcelLocked(plotId : Nat) : async Bool {
+    let fourHoursNs : Int = 14_400_000_000_000;
+    switch (plots.get(plotId)) {
+      case (null) { false };
+      case (?plot) {
+        switch (plot.purchaseTimestamp) {
+          case (null) { false };
+          case (?ts) { Time.now() < ts + fourHoursNs };
+        };
+      };
+    };
+  };
+
+  public shared ({ caller }) func updateAdminPrincipalAuth(newPrincipal : Text) : async () {
+    if (caller.toText() != adminState.adminPrincipal) {
+      Runtime.trap("Unauthorized: only admin can call this");
+    };
+    adminState.adminPrincipal := newPrincipal;
+  };
+
+  public query func getAdminPrincipal() : async Text {
+    adminState.adminPrincipal;
+  };
+
+  /// Update the treasury canister principal (admin only).
+  public shared ({ caller }) func setTreasuryPrincipal(p : Principal) : async () {
+    if (caller.toText() != adminState.adminPrincipal) {
+      Runtime.trap("Unauthorized: only admin can call this");
+    };
+    treasuryState.treasuryPrincipal := p.toText();
+  };
+
+  /// Query the current treasury canister principal.
+  public query func getTreasuryPrincipal() : async Text {
+    treasuryState.treasuryPrincipal;
+  };
+
+  public query ({ caller }) func getPlayerState() : async PlayerState {
+    if (caller.isAnonymous()) {
+      return emptyPlayerState();
+    };
+    let base = switch (players.get(caller)) {
+      case (null) { emptyPlayerState() };
+      case (?p) { p };
+    };
+    { base with passiveIncomePerDay = computePassiveIncomePerDay(caller) };
   };
 
   func missileStats(missileType : Text) : MissileStats {
@@ -171,6 +257,8 @@ actor {
       satelliteExpiry = 0;
       reconTargets = [];
       empTargets = [];
+      totalFRNTRBurned = 0.0;
+      passiveIncomePerDay = 0.0;
     };
   };
 
@@ -217,14 +305,36 @@ actor {
       player with
       frntBalance = player.frntBalance - 100;
       plotsOwned = player.plotsOwned + 1;
+      totalFRNTRBurned = player.totalFRNTRBurned + 100.0;
     };
     players.add(caller, updatedPlayer);
 
     let updatedPlot : PlotState = {
       plot with
       owner = ?caller;
+      purchaseTimestamp = ?Time.now();
     };
     plots.add(plotId, updatedPlot);
+
+    // Fire-and-forget: notify treasury of plot purchase so it can apply the
+    // 25/25/50 dev/leaderboard/liquidity split. Amount = 100 FRNTR game units.
+    ignore async {
+      let treasury = actor(treasuryState.treasuryPrincipal) : actor {
+        notifyPlotPurchase : (Nat, Principal) -> async {
+          #ok;
+          #err : {
+            #NotAuthorized;
+            #InvalidUsername;
+            #UsernameTaken;
+            #InsufficientFunds;
+            #InvalidDEX;
+            #InvalidPercentages;
+            #NotFound;
+          };
+        };
+      };
+      ignore await treasury.notifyPlotPurchase(100, caller);
+    };
 
     #ok("Purchase successful, congrats!");
   };
@@ -277,6 +387,7 @@ actor {
     let updatedPlayerForBalance = {
       playerForBalance with
       frntBalance = playerForBalance.frntBalance - missile.cost;
+      totalFRNTRBurned = playerForBalance.totalFRNTRBurned + missile.cost.toFloat();
     };
     players.add(caller, updatedPlayerForBalance);
 

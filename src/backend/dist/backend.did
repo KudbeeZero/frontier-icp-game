@@ -1,0 +1,60 @@
+type PlayerState = 
+ record {
+   combatVictories: nat;
+   commanderAtk: nat;
+   commanderDef: nat;
+   commanderType: opt text;
+   crystal: nat;
+   empTargets: vec record {
+                     nat;
+                     int;
+                   };
+   frntBalance: nat;
+   fuel: nat;
+   iron: nat;
+   passiveIncomePerDay: float64;
+   plotsOwned: nat;
+   reconTargets: vec record {
+                       nat;
+                       int;
+                     };
+   satelliteExpiry: int;
+   totalFRNTRBurned: float64;
+ };
+type CombatEvent = 
+ record {
+   atkPower: nat;
+   attacker: principal;
+   defPower: nat;
+   fromPlot: nat;
+   intercepted: bool;
+   interceptorType: opt text;
+   missileType: opt text;
+   success: bool;
+   timestamp: int;
+   toPlot: nat;
+ };
+service : {
+  assignInterceptor: (plotId: nat, interceptorType: text) -> ();
+  getAdjacentPlots: (plotId: nat) -> (vec nat) query;
+  getAdminPrincipal: () -> (text) query;
+  getAssignedInterceptor: (plotId: nat) -> (opt text) query;
+  getCombatLog: (limit: nat) -> (vec CombatEvent) query;
+  getPassiveIncome: (plotId: nat) -> (float64) query;
+  getPlayerState: () -> (PlayerState) query;
+  /// Query the current treasury canister principal.
+  getTreasuryPrincipal: () -> (text) query;
+  isSubParcelLocked: (plotId: nat) -> (bool) query;
+  launchMissile: (fromPlotId: nat, toPlotId: nat, missileType: text) ->
+   (variant {
+      err: text;
+      ok: text;
+    });
+  purchasePlot: (plotId: nat) -> (variant {
+                                    err: text;
+                                    ok: text;
+                                  });
+  /// Update the treasury canister principal (admin only).
+  setTreasuryPrincipal: (p: principal) -> ();
+  updateAdminPrincipalAuth: (newPrincipal: text) -> ();
+}

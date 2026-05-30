@@ -25,6 +25,7 @@ export interface PlayerState {
     fuel: bigint;
     iron: bigint;
     frntBalance: bigint;
+    totalFRNTRBurned: number;
     plotsOwned: bigint;
     satelliteExpiry: bigint;
     crystal: bigint;
@@ -32,13 +33,21 @@ export interface PlayerState {
     reconTargets: Array<[bigint, bigint]>;
     commanderAtk: bigint;
     commanderDef: bigint;
+    passiveIncomePerDay: number;
 }
 export interface backendInterface {
     assignInterceptor(plotId: bigint, interceptorType: string): Promise<void>;
     getAdjacentPlots(plotId: bigint): Promise<Array<bigint>>;
+    getAdminPrincipal(): Promise<string>;
     getAssignedInterceptor(plotId: bigint): Promise<string | null>;
     getCombatLog(limit: bigint): Promise<Array<CombatEvent>>;
-    getPlayerState(): Promise<PlayerState | null>;
+    getPassiveIncome(plotId: bigint): Promise<number>;
+    getPlayerState(): Promise<PlayerState>;
+    /**
+     * / Query the current treasury canister principal.
+     */
+    getTreasuryPrincipal(): Promise<string>;
+    isSubParcelLocked(plotId: bigint): Promise<boolean>;
     launchMissile(fromPlotId: bigint, toPlotId: bigint, missileType: string): Promise<{
         __kind__: "ok";
         ok: string;
@@ -53,4 +62,9 @@ export interface backendInterface {
         __kind__: "err";
         err: string;
     }>;
+    /**
+     * / Update the treasury canister principal (admin only).
+     */
+    setTreasuryPrincipal(p: Principal): Promise<void>;
+    updateAdminPrincipalAuth(newPrincipal: string): Promise<void>;
 }

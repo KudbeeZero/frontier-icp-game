@@ -1,0 +1,182 @@
+// Version: 3.0.0
+type CombatEvent__911207586 =
+  {
+    atkPower : Nat;
+    attacker : Principal;
+    defPower : Nat;
+    fromPlot : Nat;
+    intercepted : Bool;
+    interceptorType : ?Text;
+    missileType : ?Text;
+    success : Bool;
+    timestamp : Int;
+    toPlot : Nat
+  };
+type Data__791452850<K, V> =
+  {var count : Nat__490723111; kvs : [var ?(K, V)]};
+type Defenses__132598069 = {shields : Nat; turrets : Nat; walls : Nat};
+type Facilities__892995381 =
+  {
+    aiLab : Bool;
+    blockchainNode : Bool;
+    dataCentre : Bool;
+    electricityPlant : Bool
+  };
+type Internal__8484328<K, V> =
+  {children : [var ?Node__46230540<K, V>]; data : Data__791452850<K, V>};
+type LeaderEntry__1009553798 =
+  {
+    combatVictories : Nat;
+    frntEarned : Nat;
+    plotsOwned : Nat;
+    principal : Principal
+  };
+type Leaf__809889148<K, V> = {data : Data__791452850<K, V>};
+type Map__158565046<K, V> = Map__297112838<K, V>;
+type Map__297112838<K, V> =
+  {var root : Node__46230540<K, V>; var size : Nat__490723111};
+type Map__605269027<K, V> = Map__158565046<K, V>;
+type Nat__490723111 = Nat__920180692;
+type Nat__920180692 = Nat;
+type Node__46230540<K, V> =
+  {#internal : Internal__8484328<K, V>; #leaf : Leaf__809889148<K, V>};
+type OldCombatEvent__595240957 =
+  {
+    atkPower : Nat;
+    attacker : Principal;
+    defPower : Nat;
+    fromPlot : Nat;
+    intercepted : Bool;
+    interceptorType : ?Text;
+    missileType : ?Text;
+    success : Bool;
+    timestamp : Int;
+    toPlot : Nat
+  };
+type OldDefenses__993865052 = {shields : Nat; turrets : Nat; walls : Nat};
+type OldFacilities__585254514 =
+  {
+    aiLab : Bool;
+    blockchainNode : Bool;
+    dataCentre : Bool;
+    electricityPlant : Bool
+  };
+type OldLeaderEntry__964061948 =
+  {
+    combatVictories : Nat;
+    frntEarned : Nat;
+    plotsOwned : Nat;
+    principal : Principal
+  };
+type OldPlayerState__9184382 =
+  {
+    combatVictories : Nat;
+    commanderAtk : Nat;
+    commanderDef : Nat;
+    commanderType : ?Text;
+    crystal : Nat;
+    empTargets : [(Nat, Int)];
+    frntBalance : Nat;
+    fuel : Nat;
+    iron : Nat;
+    passiveIncomePerDay : Float;
+    plotsOwned : Nat;
+    reconTargets : [(Nat, Int)];
+    satelliteExpiry : Int;
+    totalFRNTRBurned : Float
+  };
+type OldPlotState__315407817 =
+  {
+    attackCooldown : Int;
+    biome : Text;
+    crystal : Nat;
+    defenses : OldDefenses__993865052;
+    facilities : OldFacilities__585254514;
+    faction : ?Text;
+    fuel : Nat;
+    interceptorSystem : ?Text;
+    iron : Nat;
+    lastTick : Int;
+    lat : Float;
+    lng : Float;
+    morale : Nat;
+    nexusElectricityLevel : Nat;
+    nftTokenId : ?Nat;
+    owner : ?Principal;
+    plotId : Nat;
+    purchaseTimestamp : ?Int;
+    richness : Nat
+  };
+type PlayerState__809798667 =
+  {
+    combatVictories : Nat;
+    commanderAtk : Nat;
+    commanderDef : Nat;
+    commanderType : ?Text;
+    crystal : Nat;
+    empTargets : [(Nat, Int)];
+    frntBalance : Nat;
+    fuel : Nat;
+    iron : Nat;
+    passiveIncomePerDay : Float;
+    plotsOwned : Nat;
+    reconTargets : [(Nat, Int)];
+    satelliteExpiry : Int;
+    totalFRNTRBurned : Float
+  };
+type PlotState__764233857 =
+  {
+    attackCooldown : Int;
+    biome : Text;
+    crystal : Nat;
+    defenses : Defenses__132598069;
+    facilities : Facilities__892995381;
+    faction : ?Text;
+    fuel : Nat;
+    interceptorSystem : ?Text;
+    iron : Nat;
+    lastTick : Int;
+    lat : Float;
+    lng : Float;
+    morale : Nat;
+    nexusElectricityLevel : Nat;
+    nftTokenId : ?Nat;
+    owner : ?Principal;
+    plotId : Nat;
+    purchaseTimestamp : ?Int;
+    richness : Nat
+  };
+actor ({
+  stable adminState : {var adminPrincipal : Text};
+  in combatLog : Map__605269027<Int, OldCombatEvent__595240957>;
+  in interceptors : Map__605269027<Nat, Text>;
+  in leaderboard : Map__605269027<Principal, OldLeaderEntry__964061948>;
+  in players : Map__605269027<Principal, OldPlayerState__9184382>;
+  in plots : Map__605269027<Nat, OldPlotState__315407817>;
+  stable treasuryState : {var treasuryPrincipal : Text}
+}, {
+  stable adminState : {var adminPrincipal : Text};
+  stable combatLog :
+    {
+      var root : Node__46230540<Int, CombatEvent__911207586>;
+      var size : Nat__490723111
+    };
+  stable interceptors :
+    {var root : Node__46230540<Nat, Text>; var size : Nat__490723111};
+  stable leaderboard :
+    {
+      var root : Node__46230540<Principal, LeaderEntry__1009553798>;
+      var size : Nat__490723111
+    };
+  stable players :
+    {
+      var root : Node__46230540<Principal, PlayerState__809798667>;
+      var size : Nat__490723111
+    };
+  stable plots :
+    {
+      var root : Node__46230540<Nat, PlotState__764233857>;
+      var size : Nat__490723111
+    };
+  stable treasuryState : {var treasuryPrincipal : Text}
+});

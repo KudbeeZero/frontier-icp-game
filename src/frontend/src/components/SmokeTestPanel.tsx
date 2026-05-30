@@ -147,13 +147,14 @@ export default function SmokeTestPanel() {
       // 2 PLAYER STATE FIELDS
       async () => {
         try {
+          // First check local store fields
           const state = useGameStore.getState();
           if (!state) return { pass: false, detail: "Store returned null" };
           const player = state.player;
           if (!player || typeof player !== "object") {
             return { pass: false, detail: `player is ${typeof player}` };
           }
-          const required = [
+          const localRequired = [
             "frntBalance",
             "plotsOwned",
             "iron",
@@ -163,24 +164,52 @@ export default function SmokeTestPanel() {
             "mockIcpBalance",
             "weaponInventory",
           ];
-          const present: string[] = [];
-          const missing: string[] = [];
-          for (const f of required) {
+          const localMissing: string[] = [];
+          for (const f of localRequired) {
             if (
-              Object.prototype.hasOwnProperty.call(player, f) ||
-              f in player
+              !Object.prototype.hasOwnProperty.call(player, f) &&
+              !(f in player)
             ) {
-              present.push(f);
-            } else {
-              missing.push(f);
+              localMissing.push(f);
             }
           }
-          const pass = missing.length === 0;
+          if (localMissing.length > 0) {
+            return {
+              pass: false,
+              detail: `Local store missing: [${localMissing.join(", ")}]`,
+            };
+          }
+          // Also validate field types
+          const failingFields: string[] = [];
+          if (
+            typeof player.frntBalance !== "number" ||
+            Number.isNaN(player.frntBalance)
+          )
+            failingFields.push("frntBalance (not a number)");
+          if (!Array.isArray(player.plotsOwned))
+            failingFields.push("plotsOwned (not array)");
+          if (typeof player.iron !== "number")
+            failingFields.push("iron (not a number)");
+          if (typeof player.fuel !== "number")
+            failingFields.push("fuel (not a number)");
+          if (typeof player.crystal !== "number")
+            failingFields.push("crystal (not a number)");
+          if (typeof player.rareEarth !== "number")
+            failingFields.push("rareEarth (not a number)");
+          // Check global store fields
+          const totalFRNTRBurned = state.totalFRNTRBurned;
+          const passiveIncomePerDay = state.serverPassiveIncomePerDay;
+          if (totalFRNTRBurned === null || totalFRNTRBurned === undefined)
+            failingFields.push("totalFRNTRBurned (null/undefined)");
+          if (passiveIncomePerDay === null || passiveIncomePerDay === undefined)
+            failingFields.push("passiveIncomePerDay (null/undefined)");
+          // On-chain actor check skipped in smoke test — backend not guaranteed available
+          const pass = failingFields.length === 0;
           return {
             pass,
             detail: pass
-              ? `All ${required.length} fields present ✓`
-              : `Missing: [${missing.join(", ")}] — Found: [${present.join(", ")}]`,
+              ? `All ${localRequired.length} local fields valid ✓ totalFRNTRBurned:${(totalFRNTRBurned ?? 0).toFixed(2)} passiveIncome:${(passiveIncomePerDay ?? 0).toFixed(4)}`
+              : `Failing fields: [${failingFields.join(", ")}]`,
           };
         } catch (err) {
           return {

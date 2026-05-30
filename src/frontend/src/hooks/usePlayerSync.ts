@@ -1,42 +1,44 @@
+import { useActor } from "@caffeineai/core-infrastructure";
 import { useEffect } from "react";
+import { createActor } from "../backend";
 import { useGameStore } from "../store/gameStore";
-import { useActor } from "./useActor";
 
 /**
- * Syncs player state from the ICP canister on mount (once actor is ready).
- * Maps backend PlayerState fields to the local gameStore player object.
- * Does NOT overwrite plotsOwned array — backend only returns a count.
+ * Polls player state from the ICP canister every 10 seconds.
+ * Maps backend PlayerState fields to the local gameStore.
+ * Does NOT overwrite plotsOwned array — backend returns a count (bigint), not an array.
  */
 export function usePlayerSync(): void {
-  const { actor, isFetching } = useActor();
+  const { actor, isFetching } = useActor(createActor);
 
   useEffect(() => {
     if (!actor || isFetching) return;
 
-    let cancelled = false;
-
     const syncPlayer = async () => {
       try {
         const state = await actor.getPlayerState();
-        if (cancelled || !state) return;
+        if (!state) return;
+
+        const commanderName = state.commanderType ?? null;
 
         useGameStore.setState((s) => ({
           player: {
             ...s.player,
             frntBalance: Number(state.frntBalance),
-            commanderType: state.commanderType ?? s.player.commanderType,
+            commanderType: commanderName ?? s.player.commanderType,
             commanderAtk: Number(state.commanderAtk),
             commanderDef: Number(state.commanderDef),
             iron: Number(state.iron),
             fuel: Number(state.fuel),
             crystal: Number(state.crystal),
-            // NOTE: plotsOwned is an array in local state; backend only returns
-            // a count (bigint). We do NOT overwrite the local array here.
+            // plotsOwned is local array; backend returns bigint count, not array
           },
           rankStats: {
             ...s.rankStats,
             combatWins: Number(state.combatVictories),
           },
+          serverPassiveIncomePerDay: Number(state.passiveIncomePerDay),
+          totalFRNTRBurned: Number(state.totalFRNTRBurned),
         }));
       } catch {
         // Non-critical: local state remains as-is if sync fails
@@ -44,8 +46,12 @@ export function usePlayerSync(): void {
     };
 
     void syncPlayer();
+    const interval = setInterval(() => {
+      void syncPlayer();
+    }, 10_000);
+
     return () => {
-      cancelled = true;
+      clearInterval(interval);
     };
   }, [actor, isFetching]);
 }
