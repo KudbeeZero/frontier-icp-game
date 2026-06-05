@@ -77,10 +77,10 @@ export default function Landing() {
           </button>
           <button
             type="button"
-            onClick={() => navigate({ to: "/manual" })}
+            onClick={() => navigate({ to: "/play" })}
             className="text-xs text-muted-foreground hover:text-foreground transition-colors uppercase tracking-wider"
           >
-            Manual
+            Explore
           </button>
         </div>
       </header>

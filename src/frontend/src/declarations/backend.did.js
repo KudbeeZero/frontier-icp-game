@@ -20,21 +20,18 @@ export const CombatEvent = IDL.Record({
   'missileType' : IDL.Opt(IDL.Text),
   'defPower' : IDL.Nat,
 });
-export const PlayerState = IDL.Record({
-  'empTargets' : IDL.Vec(IDL.Tuple(IDL.Nat, IDL.Int)),
-  'commanderType' : IDL.Opt(IDL.Text),
-  'fuel' : IDL.Nat,
-  'iron' : IDL.Nat,
-  'frntBalance' : IDL.Nat,
-  'totalFRNTRBurned' : IDL.Float64,
-  'plotsOwned' : IDL.Nat,
-  'satelliteExpiry' : IDL.Int,
-  'crystal' : IDL.Nat,
-  'combatVictories' : IDL.Nat,
-  'reconTargets' : IDL.Vec(IDL.Tuple(IDL.Nat, IDL.Int)),
-  'commanderAtk' : IDL.Nat,
-  'commanderDef' : IDL.Nat,
-  'passiveIncomePerDay' : IDL.Float64,
+export const ResourceType = IDL.Variant({
+  'RareEarth' : IDL.Null,
+  'Fuel' : IDL.Null,
+  'Iron' : IDL.Null,
+  'Crystal' : IDL.Null,
+});
+export const PlotId = IDL.Nat;
+export const MineResult = IDL.Record({
+  'efficiency' : IDL.Float64,
+  'plotId' : PlotId,
+  'resourceYields' : IDL.Vec(IDL.Tuple(ResourceType, IDL.Float64)),
+  'frntRate' : IDL.Float64,
 });
 
 export const idlService = IDL.Service({
@@ -47,8 +44,75 @@ export const idlService = IDL.Service({
       ['query'],
     ),
   'getCombatLog' : IDL.Func([IDL.Nat], [IDL.Vec(CombatEvent)], ['query']),
+  'getLeaderboard' : IDL.Func(
+      [IDL.Nat],
+      [
+        IDL.Vec(
+          IDL.Record({
+            'principal' : IDL.Text,
+            'username' : IDL.Opt(IDL.Text),
+            'rank' : IDL.Nat,
+            'frntBalance' : IDL.Nat,
+            'plotsOwned' : IDL.Nat,
+          })
+        ),
+      ],
+      ['query'],
+    ),
+  'getLeaderboardStats' : IDL.Func(
+      [],
+      [
+        IDL.Record({
+          'leaderboardPrizePool' : IDL.Nat,
+          'nextPayoutAt' : IDL.Nat,
+          'activePlayers' : IDL.Nat,
+          'totalPlotsOwned' : IDL.Nat,
+          'totalFRNTRMined' : IDL.Nat,
+          'totalFRNTRBurned' : IDL.Nat,
+        }),
+      ],
+      ['query'],
+    ),
   'getPassiveIncome' : IDL.Func([IDL.Nat], [IDL.Float64], ['query']),
-  'getPlayerState' : IDL.Func([], [PlayerState], ['query']),
+  'getPlayerState' : IDL.Func(
+      [],
+      [
+        IDL.Record({
+          'resourceBalances' : IDL.Vec(IDL.Tuple(ResourceType, IDL.Float64)),
+          'username' : IDL.Opt(IDL.Text),
+          'fuel' : IDL.Nat,
+          'iron' : IDL.Nat,
+          'frntBalance' : IDL.Nat,
+          'totalFRNTRBurned' : IDL.Float64,
+          'plotsOwned' : IDL.Nat,
+          'lastFaucetTime' : IDL.Opt(IDL.Int),
+          'crystal' : IDL.Nat,
+          'ownedPlots' : IDL.Vec(IDL.Text),
+          'combatVictories' : IDL.Nat,
+          'generatorTiersMap' : IDL.Vec(IDL.Tuple(IDL.Text, IDL.Nat)),
+          'passiveIncomePerDay' : IDL.Float64,
+        }),
+      ],
+      ['query'],
+    ),
+  'getPlotPrice' : IDL.Func([IDL.Text], [IDL.Nat], ['query']),
+  'getTokenomics' : IDL.Func(
+      [],
+      [
+        IDL.Record({
+          'totalSupply' : IDL.Nat,
+          'maxPlots' : IDL.Nat,
+          'dailyEmission' : IDL.Nat,
+          'emissionScheduleYears' : IDL.Nat,
+          'currentCirculating' : IDL.Nat,
+          'mineableSupply' : IDL.Nat,
+          'preMinted' : IDL.Nat,
+          'plotCount' : IDL.Nat,
+          'burnedTotal' : IDL.Nat,
+        }),
+      ],
+      ['query'],
+    ),
   'getTreasuryPrincipal' : IDL.Func([], [IDL.Text], ['query']),
   'isSubParcelLocked' : IDL.Func([IDL.Nat], [IDL.Bool], ['query']),
   'launchMissile' : IDL.Func(
@@ -56,12 +120,28 @@ export const idlService = IDL.Service({
       [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
       [],
     ),
+  'mineResources' : IDL.Func(
+      [IDL.Nat],
+      [IDL.Variant({ 'ok' : MineResult, 'err' : IDL.Text })],
+      [],
+    ),
   'purchasePlot' : IDL.Func(
       [IDL.Nat],
       [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
       [],
     ),
+  'setAdminPrincipal' : IDL.Func([IDL.Principal], [], []),
   'setTreasuryPrincipal' : IDL.Func([IDL.Principal], [], []),
+  'setUsername' : IDL.Func(
+      [IDL.Text],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+      [],
+    ),
+  'testFaucet' : IDL.Func(
+      [],
+      [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
+      [],
+    ),
   'updateAdminPrincipalAuth' : IDL.Func([IDL.Text], [], []),
 });
 
@@ -80,21 +160,18 @@ export const idlFactory = ({ IDL }) => {
     'missileType' : IDL.Opt(IDL.Text),
     'defPower' : IDL.Nat,
   });
-  const PlayerState = IDL.Record({
-    'empTargets' : IDL.Vec(IDL.Tuple(IDL.Nat, IDL.Int)),
-    'commanderType' : IDL.Opt(IDL.Text),
-    'fuel' : IDL.Nat,
-    'iron' : IDL.Nat,
-    'frntBalance' : IDL.Nat,
-    'totalFRNTRBurned' : IDL.Float64,
-    'plotsOwned' : IDL.Nat,
-    'satelliteExpiry' : IDL.Int,
-    'crystal' : IDL.Nat,
-    'combatVictories' : IDL.Nat,
-    'reconTargets' : IDL.Vec(IDL.Tuple(IDL.Nat, IDL.Int)),
-    'commanderAtk' : IDL.Nat,
-    'commanderDef' : IDL.Nat,
-    'passiveIncomePerDay' : IDL.Float64,
+  const ResourceType = IDL.Variant({
+    'RareEarth' : IDL.Null,
+    'Fuel' : IDL.Null,
+    'Iron' : IDL.Null,
+    'Crystal' : IDL.Null,
+  });
+  const PlotId = IDL.Nat;
+  const MineResult = IDL.Record({
+    'efficiency' : IDL.Float64,
+    'plotId' : PlotId,
+    'resourceYields' : IDL.Vec(IDL.Tuple(ResourceType, IDL.Float64)),
+    'frntRate' : IDL.Float64,
   });
   
   return IDL.Service({
@@ -107,8 +184,75 @@ export const idlFactory = ({ IDL }) => {
         ['query'],
       ),
     'getCombatLog' : IDL.Func([IDL.Nat], [IDL.Vec(CombatEvent)], ['query']),
+    'getLeaderboard' : IDL.Func(
+        [IDL.Nat],
+        [
+          IDL.Vec(
+            IDL.Record({
+              'principal' : IDL.Text,
+              'username' : IDL.Opt(IDL.Text),
+              'rank' : IDL.Nat,
+              'frntBalance' : IDL.Nat,
+              'plotsOwned' : IDL.Nat,
+            })
+          ),
+        ],
+        ['query'],
+      ),
+    'getLeaderboardStats' : IDL.Func(
+        [],
+        [
+          IDL.Record({
+            'leaderboardPrizePool' : IDL.Nat,
+            'nextPayoutAt' : IDL.Nat,
+            'activePlayers' : IDL.Nat,
+            'totalPlotsOwned' : IDL.Nat,
+            'totalFRNTRMined' : IDL.Nat,
+            'totalFRNTRBurned' : IDL.Nat,
+          }),
+        ],
+        ['query'],
+      ),
     'getPassiveIncome' : IDL.Func([IDL.Nat], [IDL.Float64], ['query']),
-    'getPlayerState' : IDL.Func([], [PlayerState], ['query']),
+    'getPlayerState' : IDL.Func(
+        [],
+        [
+          IDL.Record({
+            'resourceBalances' : IDL.Vec(IDL.Tuple(ResourceType, IDL.Float64)),
+            'username' : IDL.Opt(IDL.Text),
+            'fuel' : IDL.Nat,
+            'iron' : IDL.Nat,
+            'frntBalance' : IDL.Nat,
+            'totalFRNTRBurned' : IDL.Float64,
+            'plotsOwned' : IDL.Nat,
+            'lastFaucetTime' : IDL.Opt(IDL.Int),
+            'crystal' : IDL.Nat,
+            'ownedPlots' : IDL.Vec(IDL.Text),
+            'combatVictories' : IDL.Nat,
+            'generatorTiersMap' : IDL.Vec(IDL.Tuple(IDL.Text, IDL.Nat)),
+            'passiveIncomePerDay' : IDL.Float64,
+          }),
+        ],
+        ['query'],
+      ),
+    'getPlotPrice' : IDL.Func([IDL.Text], [IDL.Nat], ['query']),
+    'getTokenomics' : IDL.Func(
+        [],
+        [
+          IDL.Record({
+            'totalSupply' : IDL.Nat,
+            'maxPlots' : IDL.Nat,
+            'dailyEmission' : IDL.Nat,
+            'emissionScheduleYears' : IDL.Nat,
+            'currentCirculating' : IDL.Nat,
+            'mineableSupply' : IDL.Nat,
+            'preMinted' : IDL.Nat,
+            'plotCount' : IDL.Nat,
+            'burnedTotal' : IDL.Nat,
+          }),
+        ],
+        ['query'],
+      ),
     'getTreasuryPrincipal' : IDL.Func([], [IDL.Text], ['query']),
     'isSubParcelLocked' : IDL.Func([IDL.Nat], [IDL.Bool], ['query']),
     'launchMissile' : IDL.Func(
@@ -116,12 +260,28 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
         [],
       ),
+    'mineResources' : IDL.Func(
+        [IDL.Nat],
+        [IDL.Variant({ 'ok' : MineResult, 'err' : IDL.Text })],
+        [],
+      ),
     'purchasePlot' : IDL.Func(
         [IDL.Nat],
         [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
         [],
       ),
+    'setAdminPrincipal' : IDL.Func([IDL.Principal], [], []),
     'setTreasuryPrincipal' : IDL.Func([IDL.Principal], [], []),
+    'setUsername' : IDL.Func(
+        [IDL.Text],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+        [],
+      ),
+    'testFaucet' : IDL.Func(
+        [],
+        [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
+        [],
+      ),
     'updateAdminPrincipalAuth' : IDL.Func([IDL.Text], [], []),
   });
 };

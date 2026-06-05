@@ -22,30 +22,92 @@ export interface CombatEvent {
   'missileType' : [] | [string],
   'defPower' : bigint,
 }
-export interface PlayerState {
-  'empTargets' : Array<[bigint, bigint]>,
-  'commanderType' : [] | [string],
-  'fuel' : bigint,
-  'iron' : bigint,
-  'frntBalance' : bigint,
-  'totalFRNTRBurned' : number,
-  'plotsOwned' : bigint,
-  'satelliteExpiry' : bigint,
-  'crystal' : bigint,
-  'combatVictories' : bigint,
-  'reconTargets' : Array<[bigint, bigint]>,
-  'commanderAtk' : bigint,
-  'commanderDef' : bigint,
-  'passiveIncomePerDay' : number,
+export interface MineResult {
+  'efficiency' : number,
+  'plotId' : PlotId,
+  'resourceYields' : Array<[ResourceType, number]>,
+  'frntRate' : number,
 }
+export type PlotId = bigint;
+export type ResourceType = { 'RareEarth' : null } |
+  { 'Fuel' : null } |
+  { 'Iron' : null } |
+  { 'Crystal' : null };
 export interface _SERVICE {
   'assignInterceptor' : ActorMethod<[bigint, string], undefined>,
   'getAdjacentPlots' : ActorMethod<[bigint], Array<bigint>>,
   'getAdminPrincipal' : ActorMethod<[], string>,
   'getAssignedInterceptor' : ActorMethod<[bigint], [] | [string]>,
   'getCombatLog' : ActorMethod<[bigint], Array<CombatEvent>>,
+  /**
+   * / Public leaderboard query: top players by FRNTR balance.
+   */
+  'getLeaderboard' : ActorMethod<
+    [bigint],
+    Array<
+      {
+        'principal' : string,
+        'username' : [] | [string],
+        'rank' : bigint,
+        'frntBalance' : bigint,
+        'plotsOwned' : bigint,
+      }
+    >
+  >,
+  /**
+   * / Returns global leaderboard and economy stats.
+   */
+  'getLeaderboardStats' : ActorMethod<
+    [],
+    {
+      'leaderboardPrizePool' : bigint,
+      'nextPayoutAt' : bigint,
+      'activePlayers' : bigint,
+      'totalPlotsOwned' : bigint,
+      'totalFRNTRMined' : bigint,
+      'totalFRNTRBurned' : bigint,
+    }
+  >,
   'getPassiveIncome' : ActorMethod<[bigint], number>,
-  'getPlayerState' : ActorMethod<[], PlayerState>,
+  'getPlayerState' : ActorMethod<
+    [],
+    {
+      'resourceBalances' : Array<[ResourceType, number]>,
+      'username' : [] | [string],
+      'fuel' : bigint,
+      'iron' : bigint,
+      'frntBalance' : bigint,
+      'totalFRNTRBurned' : number,
+      'plotsOwned' : bigint,
+      'lastFaucetTime' : [] | [bigint],
+      'crystal' : bigint,
+      'ownedPlots' : Array<string>,
+      'combatVictories' : bigint,
+      'generatorTiersMap' : Array<[string, bigint]>,
+      'passiveIncomePerDay' : number,
+    }
+  >,
+  /**
+   * / Returns the canonical ICP price (e8s) for a plot identified by its H3 index.
+   */
+  'getPlotPrice' : ActorMethod<[string], bigint>,
+  /**
+   * / Returns the tokenomics snapshot for display in the UNIVERSE menu.
+   */
+  'getTokenomics' : ActorMethod<
+    [],
+    {
+      'totalSupply' : bigint,
+      'maxPlots' : bigint,
+      'dailyEmission' : bigint,
+      'emissionScheduleYears' : bigint,
+      'currentCirculating' : bigint,
+      'mineableSupply' : bigint,
+      'preMinted' : bigint,
+      'plotCount' : bigint,
+      'burnedTotal' : bigint,
+    }
+  >,
   /**
    * / Query the current treasury canister principal.
    */
@@ -56,15 +118,35 @@ export interface _SERVICE {
     { 'ok' : string } |
       { 'err' : string }
   >,
+  /**
+   * / Mine resources from an owned plot.
+   */
+  'mineResources' : ActorMethod<
+    [bigint],
+    { 'ok' : MineResult } |
+      { 'err' : string }
+  >,
   'purchasePlot' : ActorMethod<
     [bigint],
     { 'ok' : string } |
       { 'err' : string }
   >,
   /**
+   * / Set a new admin principal. Guarded by current admin.
+   */
+  'setAdminPrincipal' : ActorMethod<[Principal], undefined>,
+  /**
    * / Update the treasury canister principal (admin only).
    */
   'setTreasuryPrincipal' : ActorMethod<[Principal], undefined>,
+  /**
+   * / Set a unique username (3-16 alphanumeric + underscore).
+   */
+  'setUsername' : ActorMethod<[string], { 'ok' : null } | { 'err' : string }>,
+  /**
+   * / Testnet faucet: grants 1000 FRNTR, once per principal per 24 hours.
+   */
+  'testFaucet' : ActorMethod<[], { 'ok' : string } | { 'err' : string }>,
   'updateAdminPrincipalAuth' : ActorMethod<[string], undefined>,
 }
 export declare const idlService: IDL.ServiceClass;

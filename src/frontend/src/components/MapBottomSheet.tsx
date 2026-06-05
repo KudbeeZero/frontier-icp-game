@@ -20,8 +20,6 @@ import {
   type SubParcel,
   useGameStore,
 } from "../store/gameStore";
-import BuildingPicker from "./BuildingPicker";
-import PlotComparisonView from "./PlotComparisonView";
 
 const CYAN = "#00ffcc";
 const CYAN_DIM = "rgba(0,255,204,0.5)";
@@ -38,7 +36,7 @@ const BIOME_BADGE_COLORS: Record<string, string> = {
   Toxic: "#7dba3a",
 };
 
-const BUILDING_ICONS: Record<string, LucideIcon> = {
+const _BUILDING_ICONS: Record<string, LucideIcon> = {
   MISSILE_SILO: Zap,
   DEFENSE_TOWER: Shield,
   RESOURCE_EXTRACTOR: Pickaxe,
@@ -47,7 +45,7 @@ const BUILDING_ICONS: Record<string, LucideIcon> = {
   CYCLES_REACTOR: Cpu,
 };
 
-const BUILDING_NAMES: Record<string, string> = {
+const _BUILDING_NAMES: Record<string, string> = {
   MISSILE_SILO: "Missile Silo",
   DEFENSE_TOWER: "Defense Tower",
   RESOURCE_EXTRACTOR: "Resource Extractor",
@@ -67,7 +65,7 @@ const COMMANDER_IMAGES: Record<string, string> = {
     "/assets/generated/commander-void-hunter-transparent.dim_300x300.png",
 };
 
-const SPEC_CONFIG: Record<
+const _SPEC_CONFIG: Record<
   PlotSpecialization,
   { color: string; label: string; buff: string }
 > = {
@@ -93,7 +91,7 @@ const SPEC_CONFIG: Record<
   },
 };
 
-function getCountdown(purchaseTime: number): string {
+function _getCountdown(purchaseTime: number): string {
   const unlockAt = purchaseTime + 4 * 60 * 60 * 1000;
   const remaining = unlockAt - Date.now();
   if (remaining <= 0) return "READY";
@@ -140,157 +138,6 @@ function actionBtnStyle(color: string, bg: string): React.CSSProperties {
     transition: "all 0.2s",
     fontFamily: "monospace",
   };
-}
-
-function SlotRow({
-  sp,
-  onPickerOpen,
-}: {
-  sp: SubParcel;
-  onPickerOpen: () => void;
-}) {
-  if (sp.subId === 0) {
-    return (
-      <div
-        data-ocid="map.slot.row"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          padding: "10px 12px",
-          background: "rgba(0,255,204,0.03)",
-          border: "1px solid rgba(0,255,204,0.08)",
-          borderRadius: 6,
-          opacity: 0.7,
-          minHeight: 48,
-        }}
-      >
-        <Cpu size={14} style={{ color: CYAN, flexShrink: 0 }} />
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 9, color: CYAN, letterSpacing: 1 }}>
-            CANISTER NODE
-          </div>
-          <div style={{ fontSize: 8, color: CYAN_DIM }}>PERMANENT</div>
-        </div>
-        <Lock size={10} style={{ color: CYAN_DIM }} />
-      </div>
-    );
-  }
-
-  if (!sp.unlocked) {
-    return (
-      <div
-        data-ocid="map.slot.row"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          padding: "10px 12px",
-          background: "rgba(0,0,0,0.2)",
-          border: "1px solid rgba(0,255,204,0.06)",
-          borderRadius: 6,
-          opacity: 0.5,
-          minHeight: 48,
-        }}
-      >
-        <Timer size={14} style={{ color: CYAN_DIM, flexShrink: 0 }} />
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 9, color: CYAN_DIM, letterSpacing: 1 }}>
-            SLOT {sp.subId} — LOCKED
-          </div>
-          <div style={{ fontSize: 8, color: "rgba(0,255,204,0.3)" }}>
-            Unlocks in {getCountdown(sp.purchaseTime)}
-          </div>
-        </div>
-        <Lock size={10} style={{ color: "rgba(0,255,204,0.2)" }} />
-      </div>
-    );
-  }
-
-  if (!sp.buildingType) {
-    return (
-      <button
-        type="button"
-        data-ocid="map.slot.button"
-        onClick={onPickerOpen}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          padding: "10px 12px",
-          background: "rgba(0,255,204,0.04)",
-          border: "1px dashed rgba(0,255,204,0.25)",
-          borderRadius: 6,
-          cursor: "pointer",
-          width: "100%",
-          textAlign: "left",
-          minHeight: 48,
-        }}
-      >
-        <Folder size={14} style={{ color: CYAN, flexShrink: 0 }} />
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 9, color: CYAN, letterSpacing: 1 }}>
-            SLOT {sp.subId} — EMPTY
-          </div>
-          <div style={{ fontSize: 8, color: CYAN_DIM }}>Tap to build</div>
-        </div>
-        <span style={{ fontSize: 8, color: CYAN, letterSpacing: 1 }}>
-          + BUILD
-        </span>
-      </button>
-    );
-  }
-
-  const BuildIcon: LucideIcon = BUILDING_ICONS[sp.buildingType] ?? Zap;
-  return (
-    <div
-      data-ocid="map.slot.row"
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        padding: "10px 12px",
-        background: "rgba(0,255,204,0.05)",
-        border: "1px solid rgba(0,255,204,0.15)",
-        borderRadius: 6,
-        minHeight: 48,
-      }}
-    >
-      <BuildIcon size={14} style={{ color: CYAN, flexShrink: 0 }} />
-      <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 9, color: CYAN, letterSpacing: 1 }}>
-          {BUILDING_NAMES[sp.buildingType] ?? sp.buildingType}
-        </div>
-        <div
-          style={{
-            marginTop: 4,
-            height: 3,
-            background: "rgba(0,255,204,0.1)",
-            borderRadius: 2,
-            overflow: "hidden",
-          }}
-        >
-          <div
-            style={{
-              height: "100%",
-              width: `${sp.durability}%`,
-              background:
-                sp.durability > 50
-                  ? CYAN
-                  : sp.durability > 25
-                    ? "#f59e0b"
-                    : "#ef4444",
-              borderRadius: 2,
-              transition: "width 0.3s",
-            }}
-          />
-        </div>
-        <div style={{ fontSize: 7, color: CYAN_DIM, marginTop: 2 }}>
-          {sp.durability}% DURABILITY
-        </div>
-      </div>
-    </div>
-  );
 }
 
 interface MapBottomSheetProps {
@@ -619,7 +466,6 @@ export default function MapBottomSheet({
   onClose,
   controlsRef,
 }: MapBottomSheetProps) {
-  const [pickerSlot, setPickerSlot] = useState<number | null>(null);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
   const [mineYield, setMineYield] = useState<{
     iron: number;
@@ -637,8 +483,6 @@ export default function MapBottomSheet({
   const setPlotHoverCard = useGameStore((s) => s.setPlotHoverCard);
   const commanderAssignments = useGameStore((s) => s.commanderAssignments);
 
-  const setPlotSpecialization = useGameStore((s) => s.setPlotSpecialization);
-  const getNetworkBonus = useGameStore((s) => s.getNetworkBonus);
   const mineResources = useGameStore((s) => s.mineResources);
   const activateRegenBoost = useGameStore((s) => s.activateRegenBoost);
 
@@ -648,7 +492,7 @@ export default function MapBottomSheet({
     selectedPlotId !== null
       ? (plots.find((p) => p.id === selectedPlotId) ?? null)
       : null;
-  const subParcels =
+  const _subParcels =
     selectedPlotId !== null ? getSubParcels(selectedPlotId) : [];
 
   const playerPrincipal = player.principal ?? "You";
@@ -658,9 +502,6 @@ export default function MapBottomSheet({
     (plot?.owner === playerPrincipal ||
       (selectedPlotId !== null && player.plotsOwned.includes(selectedPlotId)));
   const isEnemyPlot = isOwned && !isOwnPlot;
-  const hasEmptySlot = subParcels.some(
-    (sp) => sp.subId !== 0 && sp.unlocked && !sp.buildingType,
-  );
 
   async function handlePurchase() {
     if (!plot || isPurchasing) return;
@@ -680,14 +521,6 @@ export default function MapBottomSheet({
     } else {
       setPurchaseError(result.message);
     }
-  }
-
-  function handleBuild() {
-    const emptySlot = subParcels.find(
-      (sp) => sp.subId !== 0 && sp.unlocked && !sp.buildingType,
-    );
-    if (!emptySlot || !plot) return;
-    setPickerSlot(emptySlot.subId);
   }
 
   function handleSetTarget() {
@@ -834,7 +667,7 @@ export default function MapBottomSheet({
                 >
                   {plot.lat.toFixed(2)}°N · {plot.lng.toFixed(2)}°E
                 </div>
-                {commanderAssignments[plot.id] && (
+                {commanderAssignments?.[plot.id] && (
                   <div
                     style={{
                       display: "flex",
@@ -885,159 +718,6 @@ export default function MapBottomSheet({
                 style={{ height: 1, background: BORDER, marginBottom: 12 }}
               />
 
-              {/* SPECIALIZATION SELECTOR */}
-              {isOwnPlot && (
-                <div style={{ marginBottom: 14 }}>
-                  {getNetworkBonus() && (
-                    <div
-                      data-ocid="map.network_linked.success_state"
-                      style={{
-                        marginBottom: 8,
-                        padding: "4px 8px",
-                        background: "rgba(0,255,204,0.08)",
-                        border: "1px solid rgba(0,255,204,0.4)",
-                        borderRadius: 4,
-                        fontSize: 8,
-                        color: CYAN,
-                        fontFamily: "monospace",
-                        letterSpacing: 2,
-                        fontWeight: 700,
-                        textAlign: "center",
-                        boxShadow: "0 0 12px rgba(0,255,204,0.15)",
-                        animation: "mapGlobePulse 2s ease-in-out infinite",
-                      }}
-                    >
-                      ⬡ NETWORK LINKED — ALL 4 SPECIALIZATIONS ACTIVE
-                    </div>
-                  )}
-                  {plot.specialization ? (
-                    <div
-                      style={{ display: "flex", alignItems: "center", gap: 6 }}
-                    >
-                      <span
-                        data-ocid="map.specialization.toggle"
-                        style={{
-                          fontSize: 9,
-                          padding: "3px 10px",
-                          borderRadius: 4,
-                          background: `${SPEC_CONFIG[plot.specialization].color}22`,
-                          border: `1px solid ${SPEC_CONFIG[plot.specialization].color}`,
-                          color: SPEC_CONFIG[plot.specialization].color,
-                          fontFamily: "monospace",
-                          letterSpacing: 1.5,
-                          fontWeight: 700,
-                        }}
-                      >
-                        {SPEC_CONFIG[plot.specialization].label}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: 8,
-                          color: "rgba(224,244,255,0.4)",
-                          fontFamily: "monospace",
-                        }}
-                      >
-                        {SPEC_CONFIG[plot.specialization].buff}
-                      </span>
-                    </div>
-                  ) : (
-                    <div>
-                      <div
-                        style={{
-                          fontSize: 8,
-                          color: CYAN_DIM,
-                          letterSpacing: 2,
-                          fontFamily: "monospace",
-                          marginBottom: 6,
-                        }}
-                      >
-                        CHOOSE PLOT SPECIALIZATION
-                      </div>
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "1fr 1fr",
-                          gap: 5,
-                        }}
-                      >
-                        {(
-                          Object.entries(SPEC_CONFIG) as [
-                            PlotSpecialization,
-                            { color: string; label: string; buff: string },
-                          ][]
-                        ).map(([key, cfg]) => (
-                          <button
-                            key={key}
-                            type="button"
-                            data-ocid={`map.specialization.${key.toLowerCase()}.button`}
-                            onClick={() => setPlotSpecialization(plot.id, key)}
-                            style={{
-                              padding: "8px 6px",
-                              background: `${cfg.color}11`,
-                              border: `1px solid ${cfg.color}66`,
-                              borderRadius: 6,
-                              cursor: "pointer",
-                              textAlign: "left",
-                            }}
-                          >
-                            <div
-                              style={{
-                                fontSize: 8,
-                                fontWeight: 700,
-                                color: cfg.color,
-                                letterSpacing: 1,
-                                fontFamily: "monospace",
-                                marginBottom: 2,
-                              }}
-                            >
-                              {cfg.label}
-                            </div>
-                            <div
-                              style={{
-                                fontSize: 7,
-                                color: `${cfg.color}aa`,
-                                fontFamily: "monospace",
-                              }}
-                            >
-                              {cfg.buff}
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* SUB-PARCELS */}
-              <div
-                style={{
-                  marginBottom: 6,
-                  fontSize: 9,
-                  color: CYAN_DIM,
-                  letterSpacing: 2,
-                  fontFamily: "monospace",
-                }}
-              >
-                SUB-PARCELS (7)
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 5,
-                  marginBottom: 16,
-                }}
-              >
-                {subParcels.map((sp) => (
-                  <SlotRow
-                    key={sp.subId}
-                    sp={sp}
-                    onPickerOpen={() => setPickerSlot(sp.subId)}
-                  />
-                ))}
-              </div>
-
               {/* DIVIDER */}
               <div
                 style={{ height: 1, background: BORDER, marginBottom: 12 }}
@@ -1069,9 +749,6 @@ export default function MapBottomSheet({
             </>
           )}
         </div>
-
-        {/* PLOT COMPARISON OVERLAY */}
-        <PlotComparisonView />
 
         {/* DECISION LAYER */}
         {plot && (
@@ -1126,16 +803,6 @@ export default function MapBottomSheet({
                 )}
               </div>
             )}
-            {isOwnPlot && hasEmptySlot && (
-              <button
-                type="button"
-                data-ocid="map.primary_button"
-                onClick={handleBuild}
-                style={actionBtnStyle("#00ffcc", "rgba(0,255,204,0.12)")}
-              >
-                BUILD STRUCTURE
-              </button>
-            )}
             {isEnemyPlot && (
               <button
                 type="button"
@@ -1149,16 +816,6 @@ export default function MapBottomSheet({
           </div>
         )}
       </div>
-
-      {/* BuildingPicker overlay */}
-      {pickerSlot !== null && selectedPlotId !== null && (
-        <BuildingPicker
-          plotId={selectedPlotId}
-          subId={pickerSlot}
-          onClose={() => setPickerSlot(null)}
-          specialization={plot?.specialization}
-        />
-      )}
     </>
   );
 }

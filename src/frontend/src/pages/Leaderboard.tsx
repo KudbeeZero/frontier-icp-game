@@ -1,4 +1,5 @@
 import { Skeleton } from "@/components/ui/skeleton";
+import { useActor } from "@caffeineai/core-infrastructure";
 import {
   ChevronDown,
   ChevronUp,
@@ -9,7 +10,8 @@ import {
   Zap,
 } from "lucide-react";
 import { motion } from "motion/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createActor } from "../backend";
 import Navbar from "../components/Navbar";
 import { useGameStore } from "../store/gameStore";
 
@@ -24,8 +26,14 @@ const TEXT_DIM = "rgba(224,244,255,0.45)";
 type SortKey = "rank" | "player" | "plots" | "frntr" | "wins" | "score";
 type SortDir = "asc" | "desc";
 
-function computeScore(plots: number, frntr: number, wins: number): number {
-  return Math.round(plots * 100 + frntr * 0.01 + wins * 50);
+function computeScore(
+  plots: number | undefined,
+  frntr: number | undefined,
+  wins: number | undefined,
+): number {
+  return Math.round(
+    (plots ?? 0) * 100 + (frntr ?? 0) * 0.01 + (wins ?? 0) * 50,
+  );
 }
 
 function RankMedal({ rank }: { rank: number }) {
@@ -83,6 +91,7 @@ export default function Leaderboard() {
   const leaderboard = useGameStore((s) => s.leaderboard);
   const player = useGameStore((s) => s.player);
   const rankStats = useGameStore((s) => s.rankStats);
+  const { actor, isFetching } = useActor(createActor);
 
   const [sortKey, setSortKey] = useState<SortKey>("score");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -91,32 +100,48 @@ export default function Leaderboard() {
   const [refreshing, setRefreshing] = useState(false);
   const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Simulate initial load
-  useEffect(() => {
-    const t = setTimeout(() => setIsLoading(false), 600);
-    return () => clearTimeout(t);
-  }, []);
+  // Fetch live leaderboard data from backend
+  const fetchLeaderboard = useCallback(async () => {
+    if (!actor || isFetching) return;
+    try {
+      const data = await actor.getLeaderboard(50n);
+      const mapped = data.map((e) => ({
+        rank: Number(e.rank),
+        name:
+          e.username ?? `${e.principal.slice(0, 8)}...${e.principal.slice(-4)}`,
+        plotsOwned: Number(e.plotsOwned),
+        frntEarned: Number(e.frntBalance),
+        victories: 0,
+      }));
+      useGameStore.setState({ leaderboard: mapped });
+    } catch {
+      // Non-critical: keep existing data if fetch fails
+    }
+  }, [actor, isFetching]);
 
-  // Auto-refresh every 30 seconds
+  // Initial load + polling every 30 seconds
   useEffect(() => {
+    const load = async () => {
+      await fetchLeaderboard();
+      setIsLoading(false);
+    };
+    void load();
+
     refreshTimerRef.current = setInterval(() => {
-      setRefreshing(true);
-      setTimeout(() => {
-        setLastRefresh(Date.now());
-        setRefreshing(false);
-      }, 500);
+      void fetchLeaderboard();
+      setLastRefresh(Date.now());
     }, 30_000);
+
     return () => {
       if (refreshTimerRef.current) clearInterval(refreshTimerRef.current);
     };
-  }, []);
+  }, [fetchLeaderboard]);
 
-  const handleManualRefresh = () => {
+  const handleManualRefresh = async () => {
     setRefreshing(true);
-    setTimeout(() => {
-      setLastRefresh(Date.now());
-      setRefreshing(false);
-    }, 600);
+    await fetchLeaderboard();
+    setLastRefresh(Date.now());
+    setRefreshing(false);
   };
 
   // Build enriched entries from store
@@ -478,7 +503,7 @@ export default function Leaderboard() {
               }}
             >
               <div style={{ fontSize: 28, marginBottom: 8 }}>📡</div>
-              NO COMBAT DATA AVAILABLE
+              NO PLAYERS YET — BE THE FIRST TO REGISTER!
             </div>
           ) : (
             <div data-ocid="leaderboard.list">

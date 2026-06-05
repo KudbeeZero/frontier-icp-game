@@ -1,25 +1,20 @@
-type PlayerState = 
+type ResourceType = 
+ variant {
+   Crystal;
+   Fuel;
+   Iron;
+   RareEarth;
+ };
+type PlotId = nat;
+type MineResult = 
  record {
-   combatVictories: nat;
-   commanderAtk: nat;
-   commanderDef: nat;
-   commanderType: opt text;
-   crystal: nat;
-   empTargets: vec record {
-                     nat;
-                     int;
-                   };
-   frntBalance: nat;
-   fuel: nat;
-   iron: nat;
-   passiveIncomePerDay: float64;
-   plotsOwned: nat;
-   reconTargets: vec record {
-                       nat;
-                       int;
-                     };
-   satelliteExpiry: int;
-   totalFRNTRBurned: float64;
+   efficiency: float64;
+   frntRate: float64;
+   plotId: PlotId;
+   resourceYields: vec record {
+                         ResourceType;
+                         float64;
+                       };
  };
 type CombatEvent = 
  record {
@@ -40,8 +35,64 @@ service : {
   getAdminPrincipal: () -> (text) query;
   getAssignedInterceptor: (plotId: nat) -> (opt text) query;
   getCombatLog: (limit: nat) -> (vec CombatEvent) query;
+  /// Public leaderboard query: top players by FRNTR balance.
+  getLeaderboard: (limit: nat) ->
+   (vec
+     record {
+       frntBalance: nat;
+       plotsOwned: nat;
+       "principal": text;
+       rank: nat;
+       username: opt text;
+     }) query;
+  /// Returns global leaderboard and economy stats.
+  getLeaderboardStats: () ->
+   (record {
+      activePlayers: nat;
+      leaderboardPrizePool: nat;
+      nextPayoutAt: nat;
+      totalFRNTRBurned: nat;
+      totalFRNTRMined: nat;
+      totalPlotsOwned: nat;
+    }) query;
   getPassiveIncome: (plotId: nat) -> (float64) query;
-  getPlayerState: () -> (PlayerState) query;
+  getPlayerState: () ->
+   (record {
+      combatVictories: nat;
+      crystal: nat;
+      frntBalance: nat;
+      fuel: nat;
+      generatorTiersMap: vec record {
+                               text;
+                               nat;
+                             };
+      iron: nat;
+      lastFaucetTime: opt int;
+      ownedPlots: vec text;
+      passiveIncomePerDay: float64;
+      plotsOwned: nat;
+      resourceBalances: vec record {
+                              ResourceType;
+                              float64;
+                            };
+      totalFRNTRBurned: float64;
+      username: opt text;
+    }) query;
+  /// Returns the canonical ICP price (e8s) for a plot identified by its H3 index.
+  getPlotPrice: (h3Index: text) -> (nat) query;
+  /// Returns the tokenomics snapshot for display in the UNIVERSE menu.
+  getTokenomics: () ->
+   (record {
+      burnedTotal: nat;
+      currentCirculating: nat;
+      dailyEmission: nat;
+      emissionScheduleYears: nat;
+      maxPlots: nat;
+      mineableSupply: nat;
+      plotCount: nat;
+      preMinted: nat;
+      totalSupply: nat;
+    }) query;
   /// Query the current treasury canister principal.
   getTreasuryPrincipal: () -> (text) query;
   isSubParcelLocked: (plotId: nat) -> (bool) query;
@@ -50,11 +101,28 @@ service : {
       err: text;
       ok: text;
     });
+  /// Mine resources from an owned plot.
+  mineResources: (plotId: nat) -> (variant {
+                                     err: text;
+                                     ok: MineResult;
+                                   });
   purchasePlot: (plotId: nat) -> (variant {
                                     err: text;
                                     ok: text;
                                   });
+  /// Set a new admin principal. Guarded by current admin.
+  setAdminPrincipal: (p: principal) -> ();
   /// Update the treasury canister principal (admin only).
   setTreasuryPrincipal: (p: principal) -> ();
+  /// Set a unique username (3-16 alphanumeric + underscore).
+  setUsername: (username: text) -> (variant {
+                                      err: text;
+                                      ok;
+                                    });
+  /// Testnet faucet: grants 1000 FRNTR, once per principal per 24 hours.
+  testFaucet: () -> (variant {
+                       err: text;
+                       ok: text;
+                     });
   updateAdminPrincipalAuth: (newPrincipal: text) -> ();
 }

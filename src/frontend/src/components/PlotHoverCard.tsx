@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
+  type OwnedCommander,
   TIER_COLORS,
   commanderHasWings,
   getArchetype,
@@ -29,7 +30,7 @@ export default function PlotHoverCard({
 }: PlotHoverCardProps) {
   const [visible, setVisible] = useState(false);
   const commanderAssignments = useGameStore((s) => s.commanderAssignments);
-  const ownedCommanders = useGameStore((s) => s.ownedCommanders);
+  const ownedCommanders = useGameStore((s) => s.ownedCommanders) ?? [];
 
   useEffect(() => {
     const t = setTimeout(() => setVisible(true), 20);
@@ -40,11 +41,11 @@ export default function PlotHoverCard({
   const isOwned = action === "TERRITORY ACQUIRED" || action === "YOU OWN THIS";
   const actionColor = isTarget ? "#ef4444" : CYAN;
 
-  const assignedInstanceId = commanderAssignments[plotId];
+  const assignedInstanceId = commanderAssignments?.[plotId];
   const commander = assignedInstanceId
     ? getCommander(assignedInstanceId)
     : null;
-  const ownedInstance = ownedCommanders.find(
+  const ownedInstance = (ownedCommanders as OwnedCommander[])?.find(
     (c) => c.instanceId === assignedInstanceId,
   );
   const hasWings = ownedInstance ? commanderHasWings(ownedInstance) : false;

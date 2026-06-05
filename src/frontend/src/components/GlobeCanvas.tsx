@@ -88,7 +88,7 @@ const _Y = new THREE.Vector3(0, 1, 0);
 
 // State colours
 const COL_BASE = new THREE.Color(0.05, 0.07, 0.07);
-const COL_OWNED = new THREE.Color(0.45, 1.0, 0.8);
+const COL_OWNED = new THREE.Color(0x00f5ff); // bright cyan
 const COL_HOVER = new THREE.Color(1.0, 1.0, 1.0);
 const COL_SELECTED = new THREE.Color(1.0, 1.0, 1.0);
 const COL_FACTION: Record<string, THREE.Color> = {
@@ -361,10 +361,10 @@ function EarthSphere() {
     const nearest = findNearestPlot(e.point);
     if (compareModeActive) {
       // In compare mode: set the compare plot and exit compare mode selection
-      setComparePlotId(nearest);
+      setComparePlotId?.(nearest);
       return;
     }
-    selectPlot(nearest);
+    selectPlot?.(nearest);
     // Store the actual world-space click direction × orbit distance.
     // CameraAnimator uses this directly — no lat/lng recomputation needed,
     // so the globe rotation is already baked in.
@@ -428,17 +428,43 @@ function EarthSphere() {
 }
 
 // ---------------------------------------------------------------------------
-// Starfield
+// Starfield — procedural point-based, no texture, no blur
 // ---------------------------------------------------------------------------
 function Starfield() {
-  const tex = useTexture(
-    "/assets/generated/starfield-nebula.dim_2048x1024.jpg",
-  );
+  const meshRef = useRef<THREE.Points>(null);
+
+  const positions = useMemo(() => {
+    const arr = new Float32Array(800 * 3);
+    for (let i = 0; i < 800; i++) {
+      // Random point on sphere of radius 200
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+      const r = 180 + Math.random() * 40;
+      arr[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+      arr[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+      arr[i * 3 + 2] = r * Math.cos(phi);
+    }
+    return arr;
+  }, []);
+
+  useFrame(() => {
+    if (meshRef.current) meshRef.current.rotation.y += 0.00005;
+  });
+
   return (
-    <mesh>
-      <sphereGeometry args={[90, 32, 32]} />
-      <meshBasicMaterial map={tex} side={THREE.BackSide} />
-    </mesh>
+    <points ref={meshRef}>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+      </bufferGeometry>
+      <pointsMaterial
+        color={0xffffff}
+        size={0.3}
+        sizeAttenuation
+        transparent
+        opacity={0.85}
+        depthWrite={false}
+      />
+    </points>
   );
 }
 

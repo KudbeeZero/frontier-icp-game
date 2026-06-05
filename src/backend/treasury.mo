@@ -122,20 +122,33 @@ actor {
   // ---------------------------------------------------------------------------
 
   /// Called by the game canister after every plot purchase.
-  /// Splits `amount` 25% dev / 25% leaderboard / 50% liquidity.
-  /// Remainder of integer division always goes to liquidity to prevent loss.
+  /// Splits `amount` using precise Nat arithmetic:
+  ///   dev = amount * 25 / 100
+  ///   lb  = amount * 25 / 100
+  ///   liq = amount - dev - lb  (absorbs any integer rounding remainder)
+  /// This guarantees dev + lb + liq == amount exactly.
   public shared ({ caller }) func notifyPlotPurchase(
     amount : Nat,
     buyer : Principal,
   ) : async { #ok; #err : TreasuryError } {
-    let dev = amount * devFeePercent / 100;
-    let lb  = amount * leaderboardFeePercent / 100;
-    let liq = amount - dev - lb; // absorbs any rounding remainder
+    let dev = amount * 25 / 100;
+    let lb  = amount * 25 / 100;
+    let liq = amount - dev - lb;
     developerTreasuryICP += dev;
     leaderboardPotICP    += lb;
     liquidityPotICP      += liq;
-    logAudit(buyer, amount, "plotPurchase");
+    logAudit(buyer, amount, "plotPurchase:dev=" # Nat.toText(dev) # ":lb=" # Nat.toText(lb) # ":liq=" # Nat.toText(liq));
     #ok;
+  };
+
+  /// Consolidated query returning all three pot balances at once.
+  public query func getPotBalances() : async {
+    developerTreasuryICP   : Nat;
+    developerTreasuryFRNTR : Nat;
+    leaderboardPotICP      : Nat;
+    liquidityPotICP        : Nat;
+  } {
+    { developerTreasuryICP; developerTreasuryFRNTR; leaderboardPotICP; liquidityPotICP };
   };
 
   /// Called when an in-game action generates a FRNTR fee.

@@ -2,6 +2,7 @@ import { useActor, useInternetIdentity } from "@caffeineai/core-infrastructure";
 import { useState } from "react";
 import { createActor } from "../backend";
 import { useGameStore } from "../store/gameStore";
+import { purchasePlotWithDebug } from "./usePlayerSync";
 
 export interface PurchaseResult {
   success: boolean;
@@ -36,9 +37,10 @@ export function usePurchasePlot() {
     }
 
     try {
-      const response = await actor.purchasePlot(BigInt(plotId));
-      const success = response.__kind__ === "ok";
-      const message = success ? response.ok : response.err;
+      const success = await purchasePlotWithDebug(actor, String(plotId));
+      const message = success
+        ? `PLOT #${plotId} ACQUIRED`
+        : `PLOT #${plotId} PURCHASE FAILED`;
 
       if (success) {
         // Record 4-hour sub-parcel cooldown for this plot

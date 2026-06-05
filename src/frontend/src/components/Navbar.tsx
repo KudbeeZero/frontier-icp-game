@@ -6,8 +6,6 @@ import { useTokenBalance } from "../hooks/useTokenBalance";
 const NAV_LINKS = [
   { label: "Home", to: "/" },
   { label: "Universe", to: "/play" },
-  { label: "Factions", to: "/factions" },
-  { label: "Marketplace", to: "/marketplace" },
 ];
 
 export default function Navbar() {

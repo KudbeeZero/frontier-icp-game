@@ -7,11 +7,8 @@ import {
   createRouter,
 } from "@tanstack/react-router";
 import { useEffect } from "react";
-import Factions from "./pages/Factions";
 import Inventory from "./pages/Inventory";
 import Leaderboard from "./pages/Leaderboard";
-import Manual from "./pages/Manual";
-import Marketplace from "./pages/Marketplace";
 import Play from "./pages/Play";
 import { useGameStore } from "./store/gameStore";
 
@@ -43,32 +40,11 @@ const leaderboardRoute = createRoute({
   component: Leaderboard,
 });
 
-const manualRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/manual",
-  component: Manual,
-});
-
-const factionsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/factions",
-  component: Factions,
-});
-
-const marketplaceRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/marketplace",
-  component: Marketplace,
-});
-
 const routeTree = rootRoute.addChildren([
   indexRoute,
   playRoute,
   inventoryRoute,
   leaderboardRoute,
-  manualRoute,
-  factionsRoute,
-  marketplaceRoute,
 ]);
 
 const hashHistory = createHashHistory();

@@ -133,8 +133,8 @@ export default function PlotInfoPanel() {
 
   function handleAttack() {
     if (selectedPlotId === null) return;
-    const playerPlot = playerData.plotsOwned[0] ?? 0;
-    attack(playerPlot, selectedPlotId);
+    const _playerPlot = playerData.plotsOwned[0] ?? 0;
+    attack?.(selectedPlotId);
   }
 
   function handleColonize() {
