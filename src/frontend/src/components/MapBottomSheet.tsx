@@ -1,3 +1,4 @@
+import { useActor } from "@caffeineai/core-infrastructure";
 import {
   Cpu,
   Folder,
@@ -12,10 +13,12 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type React from "react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { createActor } from "../backend";
 import { getMineralYield, projectedMonthlyYield } from "../constants/minerals";
 import { usePurchasePlot } from "../hooks/usePurchasePlot";
 import {
+  type GeneratorTier,
   type PlotSpecialization,
   type SubParcel,
   useGameStore,
@@ -418,6 +421,24 @@ function SurveyReport({
   );
 }
 
+// FRNTR daily rates per tier
+const TIER_DAILY_RATES: Record<number, number> = {
+  0: 7,
+  1: 10,
+  2: 15,
+  3: 22,
+  4: 32,
+  5: 45,
+};
+// Cost in FRNTR (human-readable, not e8s) to upgrade from current tier to next
+const TIER_COSTS: Record<number, number> = {
+  0: 500,
+  1: 1500,
+  2: 4000,
+  3: 8000,
+  4: 15000,
+};
+
 export default function MapBottomSheet({
   onClose,
   controlsRef,
@@ -430,10 +451,17 @@ export default function MapBottomSheet({
     rareEarth: number;
   } | null>(null);
   const [regenError, setRegenError] = useState<string | null>(null);
+  const [upgradeStatus, setUpgradeStatus] = useState<
+    "idle" | "upgrading" | "success" | "error"
+  >("idle");
+  const [upgradeError, setUpgradeError] = useState<string | null>(null);
+
+  const { actor } = useActor(createActor);
 
   const selectedPlotId = useGameStore((s) => s.selectedPlotId);
   const plots = useGameStore((s) => s.plots);
   const player = useGameStore((s) => s.player);
+  const generatorTiers = useGameStore((s) => s.generatorTiers);
   const getSubParcels = useGameStore((s) => s.getSubParcels);
   const setTargetPlotId = useGameStore((s) => s.setTargetPlotId);
   const setPlotHoverCard = useGameStore((s) => s.setPlotHoverCard);
@@ -449,8 +477,64 @@ export default function MapBottomSheet({
     selectedPlotId !== null
       ? (plots.find((p) => p.id === selectedPlotId) ?? null)
       : null;
-  const _subParcels =
-    selectedPlotId !== null ? getSubParcels(selectedPlotId) : [];
+
+  const handleUpgrade = useCallback(async () => {
+    if (!plot || !actor || upgradeStatus === "upgrading") return;
+    setUpgradeStatus("upgrading");
+    setUpgradeError(null);
+    try {
+      const res = await actor.upgradeGenerator(BigInt(plot.id));
+      if ("ok" in res) {
+        const newTier = res.ok.generatorTier;
+        // Map GeneratorTier enum to numeric tier
+        const tierMap: Record<string, number> = {
+          None: 0,
+          TierI: 1,
+          TierII: 2,
+          TierIII: 3,
+          TierIV: 4,
+          TierV: 5,
+        };
+        const numericTier = tierMap[newTier as unknown as string] ?? 1;
+        const burnCost = TIER_COSTS[numericTier - 1] ?? 0;
+        useGameStore.setState((s) => ({
+          generatorTiers: {
+            ...s.generatorTiers,
+            [plot.id]: numericTier as GeneratorTier,
+          },
+          totalFRNTRBurned: s.totalFRNTRBurned + burnCost,
+        }));
+        // Refresh player balance from canister after upgrade
+        try {
+          const state = await actor.getPlayerState();
+          if (state) {
+            useGameStore.setState((s) => ({
+              player: {
+                ...s.player,
+                frntBalance: Number(state.frntBalance) / 100_000_000,
+              },
+            }));
+          }
+        } catch {
+          /* non-critical */
+        }
+        setUpgradeStatus("success");
+        setTimeout(() => setUpgradeStatus("idle"), 2500);
+      } else {
+        const errStr = String((res as { err: unknown }).err);
+        setUpgradeError(errStr);
+        setUpgradeStatus("error");
+        setTimeout(() => setUpgradeStatus("idle"), 3000);
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Upgrade failed";
+      setUpgradeError(msg);
+      setUpgradeStatus("error");
+      setTimeout(() => setUpgradeStatus("idle"), 3000);
+    }
+  }, [actor, plot, upgradeStatus]);
+
+  void getSubParcels;
 
   const playerPrincipal = player.principal ?? "You";
   const isOwned = plot?.owner !== null && plot?.owner !== undefined;
@@ -766,6 +850,104 @@ export default function MapBottomSheet({
                 )}
               </div>
             )}
+            {isOwnPlot &&
+              (() => {
+                const currentTier = generatorTiers[plot.id] ?? 0;
+                const dailyRate = TIER_DAILY_RATES[currentTier] ?? 7;
+                const upgradeCost = TIER_COSTS[currentTier] ?? null;
+                const canUpgrade =
+                  upgradeCost !== null &&
+                  player.frntBalance >= upgradeCost &&
+                  currentTier < 5;
+                const isMaxTier = currentTier >= 5;
+                return (
+                  <div style={{ marginTop: 8 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        marginBottom: 6,
+                        fontSize: 9,
+                        color: CYAN_DIM,
+                        fontFamily: "monospace",
+                        letterSpacing: 1,
+                      }}
+                    >
+                      <span>
+                        GEN TIER {currentTier} · {dailyRate} FRNTR/DAY
+                      </span>
+                      {!isMaxTier && upgradeCost !== null && (
+                        <span
+                          style={{
+                            color:
+                              player.frntBalance >= upgradeCost
+                                ? CYAN
+                                : "#ef4444",
+                          }}
+                        >
+                          COST: {upgradeCost.toLocaleString()} FRNTR
+                        </span>
+                      )}
+                    </div>
+                    {isMaxTier ? (
+                      <div
+                        style={{
+                          textAlign: "center",
+                          padding: "10px 0",
+                          fontSize: 10,
+                          fontWeight: 700,
+                          color: CYAN,
+                          letterSpacing: 2,
+                          fontFamily: "monospace",
+                          border: `1px solid ${CYAN}44`,
+                          borderRadius: 6,
+                        }}
+                      >
+                        MAX TIER
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        data-ocid="map.upgrade_button"
+                        onClick={handleUpgrade}
+                        disabled={!canUpgrade || upgradeStatus === "upgrading"}
+                        style={{
+                          ...actionBtnStyle(
+                            canUpgrade ? "#ffd700" : CYAN_DIM,
+                            canUpgrade
+                              ? "rgba(255,215,0,0.08)"
+                              : "rgba(0,0,0,0.2)",
+                          ),
+                          opacity: canUpgrade ? 1 : 0.5,
+                          cursor: canUpgrade ? "pointer" : "not-allowed",
+                          fontSize: 10,
+                        }}
+                      >
+                        {upgradeStatus === "upgrading"
+                          ? "UPGRADING…"
+                          : upgradeStatus === "success"
+                            ? "✓ UPGRADED"
+                            : `UPGRADE TO TIER ${currentTier + 1}`}
+                      </button>
+                    )}
+                    {upgradeError && (
+                      <div
+                        data-ocid="map.error_state"
+                        style={{
+                          marginTop: 4,
+                          fontSize: 9,
+                          color: "#ef4444",
+                          textAlign: "center",
+                          letterSpacing: 1,
+                          fontFamily: "monospace",
+                        }}
+                      >
+                        {upgradeError}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             {isEnemyPlot && (
               <button
                 type="button"

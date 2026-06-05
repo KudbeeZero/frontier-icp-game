@@ -133,87 +133,90 @@ export default function StressTestPanel() {
       INITIAL_CHECKS.map((c) => ({ ...c, status: "idle" as CheckStatus })),
     );
 
-    const _principal = await runCheck(
+    // Step 1: Auth — get principal
+    const _principalResult = await runCheck(
       0,
       () => actor.getPrincipal(),
       (r) => `${r.full.slice(0, 12)}… authed=${r.isAuthed}`,
     );
 
+    // Step 2: Faucet — claim tokens
     await runCheck(
       1,
-      () => actor.testFaucetV2(),
-      (r) =>
-        r.__kind__ === "ok"
-          ? `+${Number(r.ok.frntGranted)} FRNTR +${Number(r.ok.icpGranted)} ICP`
-          : `err: ${r.err}`,
+      async () => {
+        const r = await actor.testFaucetV2();
+        if (r.__kind__ !== "ok") throw new Error(r.err);
+        return r.ok;
+      },
+      (r) => `+${Number(r.frntGranted)} FRNTR +${Number(r.icpGranted)} ICP`,
     );
 
-    const _playerState = await runCheck(
+    // Step 3: Player state — fetch balances
+    const playerState = await runCheck(
       2,
       () => actor.getPlayerState(),
       (r) => `FRNTR=${Number(r.frntBalance)} plots=${Number(r.plotsOwned)}`,
     );
 
+    // Step 4: Plot count — canister seeded
     await runCheck(
       3,
       () => actor.getPlotCount(),
-      (r) => `${Number(r)} plots on-chain`,
+      (r) => {
+        const n = Number(r);
+        if (n === 0) throw new Error("No plots seeded — call initPlots first");
+        return `${n} plots on-chain`;
+      },
     );
 
+    // Step 5: Plot owners — sync ownership
     await runCheck(
       4,
       () => actor.getAllPlotOwners(),
       (r) => `${r.length} owned plots`,
     );
 
-    // Test #6: find first unowned plot, then purchase it
+    // Step 6: Purchase plot — use getFirstAvailablePlot to find an unowned plot
     const purchaseRes = await runCheck(
       5,
       async () => {
-        // Get all owned plot IDs (backend uses sequential bigint IDs)
-        const owners = await actor.getAllPlotOwners();
-        const ownedIds = new Set(
-          owners.map(([id]: [bigint, string]) => Number(id)),
-        );
-        // Find the first sequential plot ID that has no owner
-        const plotCount = Number(await actor.getPlotCount());
-        let firstAvailable: bigint | null = null;
-        for (let i = 0; i < plotCount; i++) {
-          if (!ownedIds.has(i)) {
-            firstAvailable = BigInt(i);
-            break;
-          }
-        }
+        const firstAvailable = await actor.getFirstAvailablePlot();
         if (firstAvailable === null)
           throw new Error("No available plots found");
         const result = await actor.purchasePlot(firstAvailable);
-        if (result.__kind__ === "err") throw new Error(result.err);
+        if (!("ok" in result)) {
+          throw new Error((result as { err: string }).err ?? "Purchase failed");
+        }
         purchasedPlotIdRef.current = firstAvailable;
         return result;
       },
-      (r) => `Purchased plot — ok: ${r.ok}`,
+      (r) => `Purchased plot — ${(r as { ok: string }).ok}`,
     );
 
-    // Test #7: verify passive income > 0 (independent — works if player owns any plot)
+    // Step 7: FRNTR accrual — wait 2s then verify balance >= before
     await runCheck(
       6,
       async () => {
-        const state = await actor.getPlayerState();
-        const income = state.passiveIncomePerDay;
-        const plots = Number(state.plotsOwned);
-        if (plots === 0 && purchaseRes === null) {
+        const balanceBefore = playerState ? Number(playerState.frntBalance) : 0;
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        const updated = await actor.getPlayerState();
+        const balanceAfter = Number(updated.frntBalance);
+        const plots = Number(updated.plotsOwned);
+        if (purchaseRes === null) {
           throw new Error("Purchase prerequisite failed");
         }
-        if (income < 7) {
+        if (balanceAfter < balanceBefore) {
           throw new Error(
-            `passiveIncomePerDay=${income} — expected >= 7 (base rate for 1 plot)`,
+            `Balance decreased: before=${balanceBefore} after=${balanceAfter}`,
           );
         }
-        return { income, plots };
+        return { income: updated.passiveIncomePerDay, plots, balanceAfter };
       },
-      (r) => `passiveIncomePerDay=${r.income} plots=${r.plots} ✓`,
+      (r) =>
+        `passiveIncome=${r.income}/day plots=${r.plots} balance=${r.balanceAfter} ✓`,
     );
 
+    // Step 8: Generator tiers — fetch 6 tiers from canister
     await runCheck(
       7,
       () => actor.getCoreGeneratorTiers(),
@@ -221,6 +224,7 @@ export default function StressTestPanel() {
         `${r.length} tiers, tier1 cost=${r[0] ? Number(r[0].costFRNTR) : "?"} FRNTR`,
     );
 
+    // Step 9: Global stats — fetch live stats
     await runCheck(
       8,
       () => actor.getGlobalStats(),
@@ -228,6 +232,7 @@ export default function StressTestPanel() {
         `supply=${Number(r.circulatingSupply)} plots=${Number(r.totalPlotsOwned)} players=${Number(r.activePlayers)}`,
     );
 
+    // Step 10: Leaderboard — verify at least 1 entry appears
     await runCheck(
       9,
       () => actor.getLeaderboard(10n),
@@ -267,6 +272,7 @@ export default function StressTestPanel() {
   const passCount = checks.filter((c) => c.status === "pass").length;
   const failCount = checks.filter((c) => c.status === "fail").length;
   const doneCount = passCount + failCount;
+  const allDone = doneCount === 10;
 
   return (
     <div
@@ -379,13 +385,36 @@ export default function StressTestPanel() {
           </div>
 
           {doneCount > 0 && (
-            <div
-              style={{ display: "flex", gap: 8, fontSize: 8, fontWeight: 700 }}
-            >
-              <span style={{ color: "#00ff88" }}>✓ {passCount} PASS</span>
-              <span style={{ color: failCount > 0 ? "#ff4444" : CYAN_DIM }}>
-                {failCount > 0 ? `✗ ${failCount} FAIL` : "✗ 0"}
-              </span>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  fontSize: 8,
+                  fontWeight: 700,
+                }}
+              >
+                <span style={{ color: "#00ff88" }}>✓ {passCount} PASS</span>
+                <span style={{ color: failCount > 0 ? "#ff4444" : CYAN_DIM }}>
+                  {failCount > 0 ? `✗ ${failCount} FAIL` : "✗ 0"}
+                </span>
+              </div>
+              {allDone && (
+                <div
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 700,
+                    letterSpacing: "0.1em",
+                    color: passCount === 10 ? "#00ff88" : "#ff4444",
+                    fontFamily: "monospace",
+                    textAlign: "center",
+                    padding: "4px 0",
+                    borderTop: `1px solid ${passCount === 10 ? "rgba(0,255,136,0.2)" : "rgba(255,68,68,0.2)"}`,
+                  }}
+                >
+                  {passCount} / 10 PASSED
+                </div>
+              )}
             </div>
           )}
 

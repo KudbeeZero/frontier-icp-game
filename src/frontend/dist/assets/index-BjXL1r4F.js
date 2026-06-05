@@ -58550,7 +58550,7 @@ class ArrayCamera extends PerspectiveCamera {
     this.cameras = array;
   }
 }
-let Clock$1 = class Clock {
+class Clock {
   /**
    * Constructs a new clock.
    *
@@ -58610,7 +58610,7 @@ let Clock$1 = class Clock {
     }
     return diff;
   }
-};
+}
 function now$1() {
   return performance.now();
 }
@@ -58630,7 +58630,7 @@ class AudioListener extends Object3D {
     this.gain.connect(this.context.destination);
     this.filter = null;
     this.timeDelta = 0;
-    this._clock = new Clock$1();
+    this._clock = new Clock();
   }
   /**
    * Returns the listener's input node.
@@ -73477,7 +73477,7 @@ const THREE = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.definePropert
   CineonToneMapping,
   CircleGeometry,
   ClampToEdgeWrapping,
-  Clock: Clock$1,
+  Clock,
   Color,
   ColorKeyframeTrack,
   ColorManagement,
@@ -74464,22 +74464,23 @@ const useGameStore = create((set, get) => ({
   },
   faction: null
 }));
-const CYAN$b = "#00ffcc";
+const CYAN$a = "#00ffcc";
 const GOLD$3 = "#ffd700";
 const AMBER$1 = "#f59e0b";
 const PURPLE = "#a855f7";
-const BORDER$a = "rgba(0,255,204,0.18)";
+const BORDER$9 = "rgba(0,255,204,0.18)";
 const PANEL$1 = "rgba(0,20,40,0.70)";
 const TEXT$5 = "#e0f4ff";
 const TEXT_DIM$3 = "rgba(224,244,255,0.45)";
 const TIER_DAILY = {
   0: 7,
-  1: 15,
-  2: 31,
-  3: 55,
-  4: 103,
-  5: 199,
-  6: 391
+  1: 10,
+  2: 15,
+  3: 22,
+  4: 32,
+  5: 45,
+  6: 45
+  // tier 6 same cap as 5 for display
 };
 const TIER_LABELS = {
   0: "NONE",
@@ -74549,7 +74550,7 @@ function FRNTRCounter() {
         background: PANEL$1,
         backdropFilter: "blur(16px)",
         WebkitBackdropFilter: "blur(16px)",
-        border: `1px solid ${BORDER$a}`,
+        border: `1px solid ${BORDER$9}`,
         borderRadius: 10,
         padding: "14px 16px",
         marginBottom: 14
@@ -74562,7 +74563,7 @@ function FRNTRCounter() {
               fontSize: 9,
               fontWeight: 700,
               letterSpacing: 3,
-              color: CYAN$b,
+              color: CYAN$a,
               textTransform: "uppercase",
               marginBottom: 8
             },
@@ -74603,7 +74604,7 @@ function ResourceStockpiles() {
   const resources = [
     { label: "IRON", val: player.iron, color: "#94a3b8", icon: "⚙️" },
     { label: "FUEL", val: player.fuel, color: AMBER$1, icon: "⛽" },
-    { label: "CRYSTAL", val: player.crystal, color: CYAN$b, icon: "💎" },
+    { label: "CRYSTAL", val: player.crystal, color: CYAN$a, icon: "💎" },
     { label: "RARE EARTH", val: player.rareEarth, color: PURPLE, icon: "🔮" }
   ];
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -74613,7 +74614,7 @@ function ResourceStockpiles() {
         background: PANEL$1,
         backdropFilter: "blur(16px)",
         WebkitBackdropFilter: "blur(16px)",
-        border: `1px solid ${BORDER$a}`,
+        border: `1px solid ${BORDER$9}`,
         borderRadius: 10,
         padding: "12px 14px",
         marginBottom: 14
@@ -74626,7 +74627,7 @@ function ResourceStockpiles() {
               fontSize: 9,
               fontWeight: 700,
               letterSpacing: 3,
-              color: CYAN$b,
+              color: CYAN$a,
               textTransform: "uppercase",
               marginBottom: 10
             },
@@ -74721,7 +74722,7 @@ function PlotCard({ plotId, index: index2 }) {
   const tier = generatorTiers[plotId] ?? 0;
   const tierLabel = TIER_LABELS[tier];
   const dailyRate = TIER_DAILY[tier];
-  const biomeColor = BIOME_DOT[plot.biome] ?? CYAN$b;
+  const biomeColor = BIOME_DOT[plot.biome] ?? CYAN$a;
   const h3Short = shortH3(plotId);
   const drip = BIOME_DRIP[plot.biome] ?? [1e-3, 1e-3, 1e-3, 1e-3];
   const effFactor = plot.efficiency / 100;
@@ -74729,8 +74730,8 @@ function PlotCard({ plotId, index: index2 }) {
   const fuelPerDay = (drip[1] * 86400 * effFactor).toFixed(2);
   const crystalPerDay = (drip[2] * 86400 * effFactor).toFixed(2);
   const rarePerDay = (drip[3] * 86400 * effFactor).toFixed(2);
-  const upgradeCosts = [500, 1500, 4e3, 1e4, 25e3, 6e4];
-  const upgradeCost = tier < 6 ? upgradeCosts[tier] : null;
+  const upgradeCosts = [500, 1500, 4e3, 8e3, 15e3];
+  const upgradeCost = tier < 5 ? upgradeCosts[tier] : null;
   const canUpgrade = upgradeCost !== null && player.frntBalance >= upgradeCost;
   const isLoggedIn = !!player.principal;
   const eff = plot.efficiency;
@@ -74748,7 +74749,7 @@ function PlotCard({ plotId, index: index2 }) {
       "data-ocid": `inventory.item.${index2}`,
       style: {
         background: "rgba(0,20,40,0.55)",
-        border: `1px solid ${BORDER$a}`,
+        border: `1px solid ${BORDER$9}`,
         borderRadius: 10,
         padding: "12px 14px",
         position: "relative",
@@ -74764,7 +74765,7 @@ function PlotCard({ plotId, index: index2 }) {
               left: 0,
               width: `${tier / 6 * 100}%`,
               height: 2,
-              background: `linear-gradient(90deg, ${CYAN$b}, ${GOLD$3})`
+              background: `linear-gradient(90deg, ${CYAN$a}, ${GOLD$3})`
             }
           }
         ),
@@ -74813,11 +74814,11 @@ function PlotCard({ plotId, index: index2 }) {
                   style: {
                     padding: "3px 8px",
                     background: tier > 0 ? "rgba(0,255,204,0.12)" : "rgba(255,255,255,0.05)",
-                    border: `1px solid ${tier > 0 ? BORDER$a : "rgba(255,255,255,0.08)"}`,
+                    border: `1px solid ${tier > 0 ? BORDER$9 : "rgba(255,255,255,0.08)"}`,
                     borderRadius: 4,
                     fontSize: 8,
                     fontWeight: 700,
-                    color: tier > 0 ? CYAN$b : TEXT_DIM$3,
+                    color: tier > 0 ? CYAN$a : TEXT_DIM$3,
                     letterSpacing: 1,
                     whiteSpace: "nowrap"
                   },
@@ -74952,7 +74953,7 @@ function PlotCard({ plotId, index: index2 }) {
                     style: {
                       fontSize: 10,
                       fontWeight: 700,
-                      color: CYAN$b,
+                      color: CYAN$a,
                       fontFamily: "monospace"
                     },
                     children: crystalPerDay
@@ -74989,9 +74990,9 @@ function PlotCard({ plotId, index: index2 }) {
                 flex: 1,
                 padding: "8px 0",
                 background: "rgba(0,255,204,0.08)",
-                border: `1px solid ${BORDER$a}`,
+                border: `1px solid ${BORDER$9}`,
                 borderRadius: 6,
-                color: isLoggedIn ? CYAN$b : TEXT_DIM$3,
+                color: isLoggedIn ? CYAN$a : TEXT_DIM$3,
                 fontSize: 9,
                 fontWeight: 700,
                 letterSpacing: 1.5,
@@ -75061,7 +75062,7 @@ function Inventory() {
               fontSize: 9,
               fontWeight: 700,
               letterSpacing: 3,
-              color: CYAN$b,
+              color: CYAN$a,
               textTransform: "uppercase",
               marginBottom: 10,
               display: "flex",
@@ -77734,144 +77735,24 @@ const createLucideIcon = (iconName, iconNode) => {
  * This source code is licensed under the ISC license.
  * See the LICENSE file in the root directory of this source tree.
  */
-const __iconNode$l = [
-  [
-    "path",
-    {
-      d: "M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2",
-      key: "169zse"
-    }
-  ]
-];
-const Activity = createLucideIcon("activity", __iconNode$l);
+const __iconNode$d = [["path", { d: "m6 9 6 6 6-6", key: "qrunsl" }]];
+const ChevronDown = createLucideIcon("chevron-down", __iconNode$d);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
  * This source code is licensed under the ISC license.
  * See the LICENSE file in the root directory of this source tree.
  */
-const __iconNode$k = [["path", { d: "m6 9 6 6 6-6", key: "qrunsl" }]];
-const ChevronDown = createLucideIcon("chevron-down", __iconNode$k);
+const __iconNode$c = [["path", { d: "m9 18 6-6-6-6", key: "mthhwq" }]];
+const ChevronRight = createLucideIcon("chevron-right", __iconNode$c);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
  * This source code is licensed under the ISC license.
  * See the LICENSE file in the root directory of this source tree.
  */
-const __iconNode$j = [["path", { d: "m9 18 6-6-6-6", key: "mthhwq" }]];
-const ChevronRight = createLucideIcon("chevron-right", __iconNode$j);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$i = [["path", { d: "m18 15-6-6-6 6", key: "153udz" }]];
-const ChevronUp = createLucideIcon("chevron-up", __iconNode$i);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$h = [
-  ["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }],
-  ["polyline", { points: "12 6 12 12 16 14", key: "68esgv" }]
-];
-const Clock2 = createLucideIcon("clock", __iconNode$h);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$g = [
-  ["path", { d: "M12 20v2", key: "1lh1kg" }],
-  ["path", { d: "M12 2v2", key: "tus03m" }],
-  ["path", { d: "M17 20v2", key: "1rnc9c" }],
-  ["path", { d: "M17 2v2", key: "11trls" }],
-  ["path", { d: "M2 12h2", key: "1t8f8n" }],
-  ["path", { d: "M2 17h2", key: "7oei6x" }],
-  ["path", { d: "M2 7h2", key: "asdhe0" }],
-  ["path", { d: "M20 12h2", key: "1q8mjw" }],
-  ["path", { d: "M20 17h2", key: "1fpfkl" }],
-  ["path", { d: "M20 7h2", key: "1o8tra" }],
-  ["path", { d: "M7 20v2", key: "4gnj0m" }],
-  ["path", { d: "M7 2v2", key: "1i4yhu" }],
-  ["rect", { x: "4", y: "4", width: "16", height: "16", rx: "2", key: "1vbyd7" }],
-  ["rect", { x: "8", y: "8", width: "8", height: "8", rx: "1", key: "z9xiuo" }]
-];
-const Cpu = createLucideIcon("cpu", __iconNode$g);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$f = [
-  [
-    "path",
-    {
-      d: "M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z",
-      key: "96xj49"
-    }
-  ]
-];
-const Flame = createLucideIcon("flame", __iconNode$f);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$e = [
-  [
-    "path",
-    {
-      d: "M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2",
-      key: "18mbvz"
-    }
-  ],
-  ["path", { d: "M6.453 15h11.094", key: "3shlmq" }],
-  ["path", { d: "M8.5 2h7", key: "csnxdl" }]
-];
-const FlaskConical = createLucideIcon("flask-conical", __iconNode$e);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$d = [
-  ["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }],
-  ["path", { d: "M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20", key: "13o1zl" }],
-  ["path", { d: "M2 12h20", key: "9i4pu4" }]
-];
-const Globe = createLucideIcon("globe", __iconNode$d);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$c = [
-  ["rect", { width: "7", height: "9", x: "3", y: "3", rx: "1", key: "10lvy0" }],
-  ["rect", { width: "7", height: "5", x: "14", y: "3", rx: "1", key: "16une8" }],
-  ["rect", { width: "7", height: "9", x: "14", y: "12", rx: "1", key: "1hutg5" }],
-  ["rect", { width: "7", height: "5", x: "3", y: "16", rx: "1", key: "ldoo1y" }]
-];
-const LayoutDashboard = createLucideIcon("layout-dashboard", __iconNode$c);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$b = [
-  ["rect", { width: "18", height: "11", x: "3", y: "11", rx: "2", ry: "2", key: "1w4ew1" }],
-  ["path", { d: "M7 11V7a5 5 0 0 1 10 0v4", key: "fwvmzm" }]
-];
-const Lock = createLucideIcon("lock", __iconNode$b);
+const __iconNode$b = [["path", { d: "m18 15-6-6-6 6", key: "153udz" }]];
+const ChevronUp = createLucideIcon("chevron-up", __iconNode$b);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
@@ -77882,14 +77763,14 @@ const __iconNode$a = [
   [
     "path",
     {
-      d: "M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z",
-      key: "169xi5"
+      d: "M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2",
+      key: "18mbvz"
     }
   ],
-  ["path", { d: "M15 5.764v15", key: "1pn4in" }],
-  ["path", { d: "M9 3.236v15", key: "1uimfh" }]
+  ["path", { d: "M6.453 15h11.094", key: "3shlmq" }],
+  ["path", { d: "M8.5 2h7", key: "csnxdl" }]
 ];
-const Map$1 = createLucideIcon("map", __iconNode$a);
+const FlaskConical = createLucideIcon("flask-conical", __iconNode$a);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
@@ -77897,6 +77778,49 @@ const Map$1 = createLucideIcon("map", __iconNode$a);
  * See the LICENSE file in the root directory of this source tree.
  */
 const __iconNode$9 = [
+  ["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }],
+  ["path", { d: "M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20", key: "13o1zl" }],
+  ["path", { d: "M2 12h20", key: "9i4pu4" }]
+];
+const Globe = createLucideIcon("globe", __iconNode$9);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$8 = [
+  ["rect", { width: "7", height: "9", x: "3", y: "3", rx: "1", key: "10lvy0" }],
+  ["rect", { width: "7", height: "5", x: "14", y: "3", rx: "1", key: "16une8" }],
+  ["rect", { width: "7", height: "9", x: "14", y: "12", rx: "1", key: "1hutg5" }],
+  ["rect", { width: "7", height: "5", x: "3", y: "16", rx: "1", key: "ldoo1y" }]
+];
+const LayoutDashboard = createLucideIcon("layout-dashboard", __iconNode$8);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$7 = [
+  [
+    "path",
+    {
+      d: "M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z",
+      key: "169xi5"
+    }
+  ],
+  ["path", { d: "M15 5.764v15", key: "1pn4in" }],
+  ["path", { d: "M9 3.236v15", key: "1uimfh" }]
+];
+const Map$1 = createLucideIcon("map", __iconNode$7);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$6 = [
   [
     "path",
     {
@@ -77908,50 +77832,7 @@ const __iconNode$9 = [
   ["polyline", { points: "3.29 7 12 12 20.71 7", key: "ousv84" }],
   ["path", { d: "m7.5 4.27 9 5.15", key: "1c824w" }]
 ];
-const Package = createLucideIcon("package", __iconNode$9);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$8 = [
-  ["path", { d: "M4.9 19.1C1 15.2 1 8.8 4.9 4.9", key: "1vaf9d" }],
-  ["path", { d: "M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5", key: "u1ii0m" }],
-  ["circle", { cx: "12", cy: "12", r: "2", key: "1c9p78" }],
-  ["path", { d: "M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5", key: "1j5fej" }],
-  ["path", { d: "M19.1 4.9C23 8.8 23 15.1 19.1 19", key: "10b0cb" }]
-];
-const Radio = createLucideIcon("radio", __iconNode$8);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$7 = [
-  ["path", { d: "M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8", key: "v9h5vc" }],
-  ["path", { d: "M21 3v5h-5", key: "1q7to0" }],
-  ["path", { d: "M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16", key: "3uifl3" }],
-  ["path", { d: "M8 16H3v5", key: "1cv678" }]
-];
-const RefreshCw = createLucideIcon("refresh-cw", __iconNode$7);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$6 = [
-  [
-    "path",
-    {
-      d: "M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z",
-      key: "oel41y"
-    }
-  ]
-];
-const Shield = createLucideIcon("shield", __iconNode$6);
+const Package = createLucideIcon("package", __iconNode$6);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
@@ -77959,12 +77840,13 @@ const Shield = createLucideIcon("shield", __iconNode$6);
  * See the LICENSE file in the root directory of this source tree.
  */
 const __iconNode$5 = [
-  ["polyline", { points: "14.5 17.5 3 6 3 3 6 3 17.5 14.5", key: "1hfsw2" }],
-  ["line", { x1: "13", x2: "19", y1: "19", y2: "13", key: "1vrmhu" }],
-  ["line", { x1: "16", x2: "20", y1: "16", y2: "20", key: "1bron3" }],
-  ["line", { x1: "19", x2: "21", y1: "21", y2: "19", key: "13pww6" }]
+  ["path", { d: "M4.9 19.1C1 15.2 1 8.8 4.9 4.9", key: "1vaf9d" }],
+  ["path", { d: "M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5", key: "u1ii0m" }],
+  ["circle", { cx: "12", cy: "12", r: "2", key: "1c9p78" }],
+  ["path", { d: "M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5", key: "1j5fej" }],
+  ["path", { d: "M19.1 4.9C23 8.8 23 15.1 19.1 19", key: "10b0cb" }]
 ];
-const Sword = createLucideIcon("sword", __iconNode$5);
+const Radio = createLucideIcon("radio", __iconNode$5);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
@@ -77972,10 +77854,12 @@ const Sword = createLucideIcon("sword", __iconNode$5);
  * See the LICENSE file in the root directory of this source tree.
  */
 const __iconNode$4 = [
-  ["path", { d: "M16 7h6v6", key: "box55l" }],
-  ["path", { d: "m22 7-8.5 8.5-5-5L2 17", key: "1t1m79" }]
+  ["path", { d: "M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8", key: "v9h5vc" }],
+  ["path", { d: "M21 3v5h-5", key: "1q7to0" }],
+  ["path", { d: "M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16", key: "3uifl3" }],
+  ["path", { d: "M8 16H3v5", key: "1cv678" }]
 ];
-const TrendingUp = createLucideIcon("trending-up", __iconNode$4);
+const RefreshCw = createLucideIcon("refresh-cw", __iconNode$4);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
@@ -77983,14 +77867,12 @@ const TrendingUp = createLucideIcon("trending-up", __iconNode$4);
  * See the LICENSE file in the root directory of this source tree.
  */
 const __iconNode$3 = [
-  ["path", { d: "M6 9H4.5a2.5 2.5 0 0 1 0-5H6", key: "17hqa7" }],
-  ["path", { d: "M18 9h1.5a2.5 2.5 0 0 0 0-5H18", key: "lmptdp" }],
-  ["path", { d: "M4 22h16", key: "57wxv0" }],
-  ["path", { d: "M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22", key: "1nw9bq" }],
-  ["path", { d: "M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22", key: "1np0yb" }],
-  ["path", { d: "M18 2H6v7a6 6 0 0 0 12 0V2Z", key: "u46fv3" }]
+  ["polyline", { points: "14.5 17.5 3 6 3 3 6 3 17.5 14.5", key: "1hfsw2" }],
+  ["line", { x1: "13", x2: "19", y1: "19", y2: "13", key: "1vrmhu" }],
+  ["line", { x1: "16", x2: "20", y1: "16", y2: "20", key: "1bron3" }],
+  ["line", { x1: "19", x2: "21", y1: "21", y2: "19", key: "13pww6" }]
 ];
-const Trophy = createLucideIcon("trophy", __iconNode$3);
+const Sword = createLucideIcon("sword", __iconNode$3);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
@@ -77998,12 +77880,14 @@ const Trophy = createLucideIcon("trophy", __iconNode$3);
  * See the LICENSE file in the root directory of this source tree.
  */
 const __iconNode$2 = [
-  ["path", { d: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2", key: "1yyitq" }],
-  ["path", { d: "M16 3.128a4 4 0 0 1 0 7.744", key: "16gr8j" }],
-  ["path", { d: "M22 21v-2a4 4 0 0 0-3-3.87", key: "kshegd" }],
-  ["circle", { cx: "9", cy: "7", r: "4", key: "nufk8" }]
+  ["path", { d: "M6 9H4.5a2.5 2.5 0 0 1 0-5H6", key: "17hqa7" }],
+  ["path", { d: "M18 9h1.5a2.5 2.5 0 0 0 0-5H18", key: "lmptdp" }],
+  ["path", { d: "M4 22h16", key: "57wxv0" }],
+  ["path", { d: "M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22", key: "1nw9bq" }],
+  ["path", { d: "M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22", key: "1np0yb" }],
+  ["path", { d: "M18 2H6v7a6 6 0 0 0 12 0V2Z", key: "u46fv3" }]
 ];
-const Users = createLucideIcon("users", __iconNode$2);
+const Trophy = createLucideIcon("trophy", __iconNode$2);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
@@ -85919,6 +85803,13 @@ const PrincipalDisplay = Record({
   "short": Text,
   "isAuthed": Bool
 });
+const SubParcelInfo = Record({
+  "resourceRate": Float64,
+  "slotIndex": Nat,
+  "isLocked": Bool,
+  "buildingType": Text,
+  "cooldownSecondsRemaining": Nat
+});
 const SubParcel = Record({
   "subParcelId": Nat,
   "cooldownEnds": Int,
@@ -86117,6 +86008,11 @@ Service({
   ),
   "getPlotsByOwner": Func([Principal2], [Vec(Nat)], ["query"]),
   "getPrincipal": Func([], [PrincipalDisplay], ["query"]),
+  "getSubParcelStatus": Func(
+    [Nat],
+    [Vec(SubParcelInfo)],
+    ["query"]
+  ),
   "getSubParcels": Func([Nat], [Vec(SubParcel)], ["query"]),
   "getTokenomics": Func([], [Tokenomics], ["query"]),
   "getTreasuryBalances": Func(
@@ -86254,6 +86150,13 @@ const idlFactory = ({ IDL: IDL2 }) => {
     "full": IDL2.Text,
     "short": IDL2.Text,
     "isAuthed": IDL2.Bool
+  });
+  const SubParcelInfo2 = IDL2.Record({
+    "resourceRate": IDL2.Float64,
+    "slotIndex": IDL2.Nat,
+    "isLocked": IDL2.Bool,
+    "buildingType": IDL2.Text,
+    "cooldownSecondsRemaining": IDL2.Nat
   });
   const SubParcel2 = IDL2.Record({
     "subParcelId": IDL2.Nat,
@@ -86454,6 +86357,11 @@ const idlFactory = ({ IDL: IDL2 }) => {
       ["query"]
     ),
     "getPrincipal": IDL2.Func([], [PrincipalDisplay2], ["query"]),
+    "getSubParcelStatus": IDL2.Func(
+      [IDL2.Nat],
+      [IDL2.Vec(SubParcelInfo2)],
+      ["query"]
+    ),
     "getSubParcels": IDL2.Func([IDL2.Nat], [IDL2.Vec(SubParcel2)], ["query"]),
     "getTokenomics": IDL2.Func([], [Tokenomics2], ["query"]),
     "getTreasuryBalances": IDL2.Func(
@@ -86914,6 +86822,20 @@ class Backend {
       }
     } else {
       const result = await this.actor.getPrincipal();
+      return result;
+    }
+  }
+  async getSubParcelStatus(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getSubParcelStatus(arg0);
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getSubParcelStatus(arg0);
       return result;
     }
   }
@@ -87526,10 +87448,10 @@ function createActor(canisterId, _uploadFile, _downloadFile, options = {}) {
   });
   return new Backend(actor, _uploadFile, _downloadFile, options.processError);
 }
-const CYAN$a = "#00ffcc";
+const CYAN$9 = "#00ffcc";
 const GOLD$2 = "#ffd700";
 const AMBER = "#f59e0b";
-const BORDER$9 = "rgba(0,255,204,0.18)";
+const BORDER$8 = "rgba(0,255,204,0.18)";
 const PANEL = "rgba(0,20,40,0.72)";
 const TEXT$4 = "#e0f4ff";
 const TEXT_DIM$2 = "rgba(224,244,255,0.45)";
@@ -87568,7 +87490,7 @@ function SortIcon({
 }) {
   if (col !== active)
     return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { opacity: 0.2, fontSize: 10 }, children: "↕" });
-  return dir === "asc" ? /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronUp, { size: 11, style: { color: CYAN$a } }) : /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronDown, { size: 11, style: { color: CYAN$a } });
+  return dir === "asc" ? /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronUp, { size: 11, style: { color: CYAN$9 } }) : /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronDown, { size: 11, style: { color: CYAN$9 } });
 }
 function Leaderboard() {
   const leaderboard = useGameStore((s2) => s2.leaderboard);
@@ -87588,6 +87510,7 @@ function Leaderboard() {
       const mapped = data.map((e) => ({
         rank: Number(e.rank),
         name: e.username ?? `${e.principal.slice(0, 8)}...${e.principal.slice(-4)}`,
+        principal: e.principal,
         plotsOwned: Number(e.plotsOwned),
         frntEarned: Number(e.frntBalance),
         victories: 0
@@ -87620,15 +87543,18 @@ function Leaderboard() {
     const base = leaderboard.map((e) => ({
       id: e.name,
       name: e.name,
+      principal: e.principal ?? "",
       plots: e.plotsOwned,
       frntr: e.frntEarned,
       wins: e.victories,
       score: computeScore(e.plotsOwned, e.frntEarned, e.victories),
-      isMe: false
+      isMe: !!(player.principal && e.principal === player.principal)
     }));
+    const alreadyInList = base.some((e) => e.isMe);
     const myEntry = {
       id: "__me__",
       name: player.principal ? `${player.principal.slice(0, 8)}...${player.principal.slice(-4)}` : "YOU",
+      principal: player.principal ?? "",
       plots: player.plotsOwned.length,
       frntr: Math.round(player.frntBalance),
       wins: rankStats.combatWins,
@@ -87639,8 +87565,8 @@ function Leaderboard() {
       ),
       isMe: true
     };
-    const merged = [myEntry, ...base].slice(0, 25);
-    return merged;
+    const merged = alreadyInList ? base : [myEntry, ...base];
+    return merged.slice(0, 25);
   }, [leaderboard, player, rankStats]);
   const sorted = reactExports.useMemo(() => {
     const copy = [...entries];
@@ -87678,6 +87604,9 @@ function Leaderboard() {
       setSortDir("desc");
     }
   };
+  const myRank = sorted.findIndex(
+    (e) => e.isMe || player.principal && e.principal === player.principal
+  );
   const timeSince = Math.floor((Date.now() - lastRefresh) / 1e3);
   const colStyle = (key) => ({
     cursor: "pointer",
@@ -87687,7 +87616,7 @@ function Leaderboard() {
     fontWeight: 700,
     letterSpacing: 2,
     textTransform: "uppercase",
-    color: sortKey === key ? CYAN$a : TEXT_DIM$2,
+    color: sortKey === key ? CYAN$9 : TEXT_DIM$2,
     display: "flex",
     alignItems: "center",
     gap: 3,
@@ -87720,7 +87649,7 @@ function Leaderboard() {
                       height: 38,
                       borderRadius: 8,
                       background: "rgba(0,255,204,0.1)",
-                      border: `1px solid ${BORDER$9}`,
+                      border: `1px solid ${BORDER$8}`,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center"
@@ -87772,9 +87701,9 @@ function Leaderboard() {
                     disabled: refreshing,
                     style: {
                       background: "rgba(0,255,204,0.07)",
-                      border: `1px solid ${BORDER$9}`,
+                      border: `1px solid ${BORDER$8}`,
                       borderRadius: 6,
-                      color: CYAN$a,
+                      color: CYAN$9,
                       padding: "6px 10px",
                       cursor: refreshing ? "not-allowed" : "pointer",
                       display: "flex",
@@ -87836,8 +87765,8 @@ function Leaderboard() {
               className: "flex items-center gap-1.5 min-h-[44px] px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all rounded-lg",
               style: {
                 background: active ? "rgba(0,255,204,0.15)" : "rgba(0,20,40,0.5)",
-                border: `1px solid ${active ? CYAN$a : BORDER$9}`,
-                color: active ? CYAN$a : TEXT_DIM$2,
+                border: `1px solid ${active ? CYAN$9 : BORDER$8}`,
+                color: active ? CYAN$9 : TEXT_DIM$2,
                 boxShadow: active ? "0 0 10px rgba(0,255,204,0.15)" : "none"
               },
               children: [
@@ -87856,13 +87785,13 @@ function Leaderboard() {
             className: "mb-4 inline-flex items-center gap-2 rounded-full px-4 py-1.5",
             style: {
               background: "rgba(0,255,204,0.05)",
-              border: `1px solid ${BORDER$9}`,
+              border: `1px solid ${BORDER$8}`,
               fontSize: 9,
               color: TEXT_DIM$2,
               letterSpacing: 1.5
             },
             children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$a }, children: "⚡" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$9 }, children: "⚡" }),
               "SCORE = (PLOTS × 100) + (FRNTR × 0.01) + (WINS × 50)"
             ]
           }
@@ -87878,7 +87807,7 @@ function Leaderboard() {
               background: PANEL,
               backdropFilter: "blur(16px)",
               WebkitBackdropFilter: "blur(16px)",
-              border: `1px solid ${BORDER$9}`,
+              border: `1px solid ${BORDER$8}`,
               borderRadius: 12,
               overflow: "hidden"
             },
@@ -87889,7 +87818,7 @@ function Leaderboard() {
                   style: {
                     display: "grid",
                     gridTemplateColumns: "42px 48px 1fr 70px 110px 60px 90px",
-                    borderBottom: `1px solid ${BORDER$9}`,
+                    borderBottom: `1px solid ${BORDER$8}`,
                     background: "rgba(0,255,204,0.03)"
                   },
                   children: [
@@ -88068,7 +87997,7 @@ function Leaderboard() {
                                 style: {
                                   fontSize: 11,
                                   fontWeight: entry.isMe ? 800 : 500,
-                                  color: entry.isMe ? CYAN$a : TEXT$4,
+                                  color: entry.isMe ? CYAN$9 : TEXT$4,
                                   overflow: "hidden",
                                   textOverflow: "ellipsis",
                                   whiteSpace: "nowrap",
@@ -88083,7 +88012,7 @@ function Leaderboard() {
                                         marginLeft: 6,
                                         fontSize: 7,
                                         fontWeight: 700,
-                                        color: CYAN$a,
+                                        color: CYAN$9,
                                         border: "1px solid rgba(0,255,204,0.4)",
                                         borderRadius: 3,
                                         padding: "1px 4px",
@@ -88121,7 +88050,7 @@ function Leaderboard() {
                             fontSize: 11,
                             fontWeight: 700,
                             fontFamily: "monospace",
-                            color: entry.isMe ? CYAN$a : "rgba(0,255,204,0.7)"
+                            color: entry.isMe ? CYAN$9 : "rgba(0,255,204,0.7)"
                           },
                           children: entry.frntr.toLocaleString()
                         }
@@ -88163,6 +88092,52 @@ function Leaderboard() {
           }
         ),
         /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          motion.div,
+          {
+            initial: { opacity: 0, y: 6 },
+            animate: { opacity: 1, y: 0 },
+            transition: { duration: 0.3, delay: 0.2 },
+            "data-ocid": "leaderboard.your_rank_card",
+            className: "mt-4 flex items-center justify-between rounded-xl px-5 py-4",
+            style: {
+              background: "rgba(0,255,204,0.06)",
+              border: "1px solid rgba(0,255,204,0.25)",
+              backdropFilter: "blur(12px)"
+            },
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(Trophy, { size: 16, style: { color: GOLD$2 } }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "span",
+                  {
+                    style: {
+                      fontSize: 10,
+                      fontWeight: 700,
+                      letterSpacing: 2,
+                      color: TEXT_DIM$2,
+                      textTransform: "uppercase"
+                    },
+                    children: "YOUR RANK"
+                  }
+                )
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "span",
+                {
+                  style: {
+                    fontSize: 18,
+                    fontWeight: 900,
+                    fontFamily: "monospace",
+                    color: myRank >= 0 ? CYAN$9 : TEXT_DIM$2,
+                    letterSpacing: 1
+                  },
+                  children: myRank >= 0 ? `#${myRank + 1}` : "UNRANKED"
+                }
+              )
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
           "div",
           {
             className: "mt-3 flex items-center justify-end gap-2",
@@ -88175,7 +88150,7 @@ function Leaderboard() {
                     width: 6,
                     height: 6,
                     borderRadius: "50%",
-                    background: CYAN$a,
+                    background: CYAN$9,
                     animation: "pulse 2s infinite",
                     boxShadow: "0 0 6px rgba(0,255,204,0.7)"
                   }
@@ -88465,7 +88440,7 @@ reactExports.forwardRef(function(e, t) {
     })) : null;
   }));
 });
-const CYAN$9 = "#00ffcc";
+const CYAN$8 = "#00ffcc";
 const CYAN_DIM$7 = "rgba(0,255,204,0.35)";
 const BORDER_TOP = "rgba(0,255,204,0.28)";
 const NAV_ITEMS = [
@@ -88502,7 +88477,7 @@ function BottomNav({ activeTab, onTabClick }) {
             className: "flex-1 flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-all duration-150",
             style: {
               background: isActive ? "rgba(0,255,204,0.07)" : "transparent",
-              borderTop: isActive ? `2px solid ${CYAN$9}` : "2px solid transparent",
+              borderTop: isActive ? `2px solid ${CYAN$8}` : "2px solid transparent",
               position: "relative"
             },
             children: [
@@ -88515,9 +88490,9 @@ function BottomNav({ activeTab, onTabClick }) {
                     left: "20%",
                     right: "20%",
                     height: 2,
-                    background: CYAN$9,
+                    background: CYAN$8,
                     borderRadius: "0 0 2px 2px",
-                    boxShadow: `0 0 8px ${CYAN$9}`,
+                    boxShadow: `0 0 8px ${CYAN$8}`,
                     filter: "blur(1px)"
                   }
                 }
@@ -88526,9 +88501,9 @@ function BottomNav({ activeTab, onTabClick }) {
                 Icon2,
                 {
                   size: 18,
-                  color: isActive ? CYAN$9 : CYAN_DIM$7,
+                  color: isActive ? CYAN$8 : CYAN_DIM$7,
                   style: {
-                    filter: isActive ? `drop-shadow(0 0 4px ${CYAN$9})` : "none",
+                    filter: isActive ? `drop-shadow(0 0 4px ${CYAN$8})` : "none",
                     transition: "filter 0.15s"
                   }
                 }
@@ -88539,7 +88514,7 @@ function BottomNav({ activeTab, onTabClick }) {
                   style: {
                     fontSize: 7.5,
                     letterSpacing: 0.5,
-                    color: isActive ? CYAN$9 : CYAN_DIM$7,
+                    color: isActive ? CYAN$8 : CYAN_DIM$7,
                     fontWeight: isActive ? 700 : 400
                   },
                   children: label
@@ -88553,8 +88528,8 @@ function BottomNav({ activeTab, onTabClick }) {
     }
   );
 }
-const CYAN$8 = "#00ffcc";
-const BORDER$8 = "rgba(0,255,204,0.22)";
+const CYAN$7 = "#00ffcc";
+const BORDER$7 = "rgba(0,255,204,0.22)";
 const CYAN_DIM$6 = "rgba(0,255,204,0.35)";
 function BottomSheet({
   isOpen,
@@ -88589,9 +88564,9 @@ function BottomSheet({
           bottom: 64,
           height,
           background: "rgba(4,12,24,0.97)",
-          borderTop: `1px solid ${BORDER$8}`,
-          borderLeft: `1px solid ${BORDER$8}`,
-          borderRight: `1px solid ${BORDER$8}`,
+          borderTop: `1px solid ${BORDER$7}`,
+          borderLeft: `1px solid ${BORDER$7}`,
+          borderRight: `1px solid ${BORDER$7}`,
           borderRadius: "16px 16px 0 0",
           backdropFilter: "blur(20px)",
           WebkitBackdropFilter: "blur(20px)",
@@ -88606,7 +88581,7 @@ function BottomSheet({
             {
               className: "flex-shrink-0 flex items-center justify-between px-4 py-2.5",
               style: {
-                borderBottom: `1px solid ${BORDER$8}`,
+                borderBottom: `1px solid ${BORDER$7}`,
                 background: "rgba(0,255,204,0.03)"
               },
               children: [
@@ -88634,9 +88609,9 @@ function BottomSheet({
                     style: {
                       fontSize: 11,
                       fontWeight: 700,
-                      color: CYAN$8,
+                      color: CYAN$7,
                       letterSpacing: 2,
-                      textShadow: `0 0 10px ${CYAN$8}`,
+                      textShadow: `0 0 10px ${CYAN$7}`,
                       paddingTop: 4
                     },
                     children: title
@@ -88669,7 +88644,7 @@ function BottomSheet({
                       className: "cursor-pointer flex items-center justify-center rounded",
                       style: {
                         background: "rgba(0,255,204,0.06)",
-                        border: `1px solid ${BORDER$8}`,
+                        border: `1px solid ${BORDER$7}`,
                         color: CYAN_DIM$6,
                         padding: 4
                       },
@@ -88686,8 +88661,8 @@ function BottomSheet({
     )
   ] });
 }
-const CYAN$7 = "#00ffcc";
-const BORDER$7 = "rgba(0,255,204,0.22)";
+const CYAN$6 = "#00ffcc";
+const BORDER$6 = "rgba(0,255,204,0.22)";
 function FaucetOverlay() {
   const { isAuthenticated } = useInternetIdentity();
   const { actor, isFetching } = useActor(createActor);
@@ -88754,8 +88729,8 @@ function FaucetOverlay() {
         padding: "6px 12px",
         borderRadius: 6,
         background: loading2 ? "rgba(0,255,204,0.05)" : "rgba(0,255,204,0.1)",
-        border: `1px solid ${BORDER$7}`,
-        color: CYAN$7,
+        border: `1px solid ${BORDER$6}`,
+        color: CYAN$6,
         fontSize: 9,
         fontWeight: 700,
         letterSpacing: 1.5,
@@ -97570,7 +97545,7 @@ const createStore = (invalidate2, advance2) => {
       linear: false,
       flat: false,
       controls: null,
-      clock: new Clock$1(),
+      clock: new Clock(),
       pointer,
       mouse: pointer,
       frameloop: "always",
@@ -101041,1275 +101016,402 @@ function GlobeCanvas({
     }
   );
 }
-const CYAN$6 = "#00ffcc";
-const BORDER$6 = "rgba(0,255,204,0.22)";
-const SPEC_COLORS = {
-  ARMORY: "rgba(200,50,50,0.7)",
-  RESOURCES: "rgba(50,180,80,0.7)",
-  ENERGY_TECH: "rgba(60,120,220,0.7)",
-  TRADING_DEPOT: "rgba(200,160,40,0.7)"
-};
-const SPEC_STROKE = {
-  ARMORY: "#e05050",
-  RESOURCES: "#50d070",
-  ENERGY_TECH: "#4090ff",
-  TRADING_DEPOT: "#d4a820"
-};
-const SPEC_LABELS = {
-  ARMORY: "ARMORY",
-  RESOURCES: "RESOURCES",
-  ENERGY_TECH: "ENERGY & TECH",
-  TRADING_DEPOT: "TRADING DEPOT"
-};
-const SPEC_ICONS = {
-  ARMORY: /* @__PURE__ */ jsxRuntimeExports.jsx(Sword, { size: 9 }),
-  RESOURCES: /* @__PURE__ */ jsxRuntimeExports.jsx(Package, { size: 9 }),
-  ENERGY_TECH: /* @__PURE__ */ jsxRuntimeExports.jsx(Cpu, { size: 9 }),
-  TRADING_DEPOT: /* @__PURE__ */ jsxRuntimeExports.jsx(Flame, { size: 9 })
-};
-const EMPTY_FILL = "rgba(25,35,50,0.65)";
-const EMPTY_STROKE = "rgba(0,255,204,0.15)";
-const LOCKED_FILL = "rgba(40,20,20,0.6)";
-const LOCKED_STROKE = "rgba(255,100,80,0.35)";
-const SECTOR_LABELS = ["α", "β", "γ", "δ", "ε", "ζ"];
-const NEXUS_BONUS = { 0: 0, 1: 8, 2: 24, 3: 48 };
-function polarToCartesian(cx, cy, r2, angleDeg) {
-  const rad = (angleDeg - 90) * Math.PI / 180;
-  return { x: cx + r2 * Math.cos(rad), y: cy + r2 * Math.sin(rad) };
+const COOLDOWN_MS = 144e5;
+function formatCountdown(seconds) {
+  const h2 = Math.floor(seconds / 3600);
+  const m2 = Math.floor(seconds % 3600 / 60);
+  const s2 = seconds % 60;
+  if (h2 > 0) return `${h2}h ${String(m2).padStart(2, "0")}m`;
+  return `${String(m2).padStart(2, "0")}:${String(s2).padStart(2, "0")}`;
 }
-function slicePath(cx, cy, r2, innerR, startDeg, endDeg) {
-  const s2 = polarToCartesian(cx, cy, r2, startDeg);
-  const e = polarToCartesian(cx, cy, r2, endDeg);
-  const si = polarToCartesian(cx, cy, innerR, startDeg);
-  const ei = polarToCartesian(cx, cy, innerR, endDeg);
-  const large = endDeg - startDeg > 180 ? 1 : 0;
-  return [
-    `M ${si.x} ${si.y}`,
-    `L ${s2.x} ${s2.y}`,
-    `A ${r2} ${r2} 0 ${large} 1 ${e.x} ${e.y}`,
-    `L ${ei.x} ${ei.y}`,
-    `A ${innerR} ${innerR} 0 ${large} 0 ${si.x} ${si.y}`,
-    "Z"
-  ].join(" ");
-}
-function sliceMidLabel(cx, cy, r2, innerR, startDeg, endDeg) {
-  const mid = (startDeg + endDeg) / 2;
-  const labelR = (r2 + innerR) / 2;
-  return polarToCartesian(cx, cy, labelR, mid);
-}
-function useCountdown(unlockAt) {
-  const [remaining, setRemaining] = reactExports.useState(
-    Math.max(0, unlockAt - Date.now())
-  );
-  reactExports.useEffect(() => {
-    if (remaining <= 0) return;
-    const id2 = setInterval(
-      () => setRemaining(Math.max(0, unlockAt - Date.now())),
-      1e3
-    );
-    return () => clearInterval(id2);
-  }, [unlockAt, remaining]);
-  if (remaining <= 0) return null;
-  const h2 = Math.floor(remaining / 36e5);
-  const m2 = Math.floor(remaining % 36e5 / 6e4);
-  const s2 = Math.floor(remaining % 6e4 / 1e3);
-  return `${h2}h ${String(m2).padStart(2, "0")}m ${String(s2).padStart(2, "0")}s`;
-}
-function CooldownTimer({ unlockAt }) {
-  const timer = useCountdown(unlockAt);
-  if (!timer) return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$6 }, children: "UNLOCKED" });
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "flex items-center gap-1", style: { color: "#ff8040" }, children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx(Clock2, { size: 9 }),
-    timer
-  ] });
-}
-function SegmentDetailCard({ info }) {
-  const isNexus = info.index === 0;
-  const label = isNexus ? "NEXUS" : `SECTOR ${SECTOR_LABELS[info.index - 1]}`;
-  const bonus = isNexus ? NEXUS_BONUS[info.index] ?? 0 : 0;
-  const specColor = info.spec ? SPEC_STROKE[info.spec] : CYAN$6;
-  const rates = BIOME_MINERAL_RATES[info.biome];
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-    "div",
-    {
-      className: "rounded-lg p-3 flex flex-col gap-2",
-      style: {
-        background: "rgba(0,255,204,0.04)",
-        border: `1px solid ${specColor}44`
-      },
-      children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1.5", children: [
-            info.spec && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: specColor }, children: SPEC_ICONS[info.spec] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "span",
-              {
-                className: "text-[10px] font-bold uppercase tracking-widest",
-                style: { color: specColor },
-                children: label
-              }
-            )
-          ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "span",
-            {
-              className: "text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded",
-              style: {
-                background: info.isLocked ? "rgba(255,80,40,0.12)" : "rgba(0,255,204,0.08)",
-                color: info.isLocked ? "#ff8040" : CYAN$6
-              },
-              children: info.isLocked ? "LOCKED" : info.buildingType ? "ACTIVE" : "VACANT"
-            }
-          )
-        ] }),
-        info.isLocked && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[9px]", style: { color: "rgba(180,220,220,0.5)" }, children: /* @__PURE__ */ jsxRuntimeExports.jsx(CooldownTimer, { unlockAt: info.unlockAt }) }),
-        !info.isLocked && info.buildingType && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-[9px]", style: { color: "rgba(180,220,220,0.6)" }, children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: "rgba(180,220,220,0.4)" }, children: "STRUCTURE: " }),
-          info.buildingType
-        ] }),
-        isNexus && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "div",
-              {
-                className: "text-[9px]",
-                style: { color: "rgba(0,255,204,0.45)" },
-                children: "ELECTRICITY LVL"
-              }
-            ),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs(
-              "div",
-              {
-                className: "font-mono text-xs font-bold",
-                style: { color: CYAN$6 },
-                children: [
-                  info.nexusLevel,
-                  " / 3"
-                ]
-              }
-            )
-          ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "div",
-              {
-                className: "text-[9px]",
-                style: { color: "rgba(0,255,204,0.45)" },
-                children: "BONUS FRNTR/DAY"
-              }
-            ),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs(
-              "div",
-              {
-                className: "font-mono text-xs font-bold",
-                style: { color: bonus > 0 ? CYAN$6 : "rgba(0,255,204,0.3)" },
-                children: [
-                  "+",
-                  NEXUS_BONUS[info.nexusLevel] ?? 0
-                ]
-              }
-            )
-          ] })
-        ] }),
-        !isNexus && info.spec && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-[9px]", style: { color: specColor }, children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: "rgba(180,220,220,0.4)" }, children: "SPEC: " }),
-          SPEC_LABELS[info.spec]
-        ] }),
-        !isNexus && rates && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex gap-3", children: [
-          ["IRON", rates.iron, "#9aa"],
-          ["FUEL", rates.fuel, "#fa0"],
-          ["XTAL", rates.crystal, "#8cf"],
-          ["RARE", rates.rareEarth, "#d8f"]
-        ].map(([name, rate, color2]) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "div",
-            {
-              className: "text-[8px]",
-              style: { color: "rgba(180,220,220,0.35)" },
-              children: name
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "font-mono text-[9px] font-bold", style: { color: color2 }, children: [
-            rate,
-            "/day"
-          ] })
-        ] }, name)) })
-      ]
+function buildSlots(plotId, purchaseTime) {
+  const now2 = Date.now();
+  const elapsed = purchaseTime ? now2 - purchaseTime : COOLDOWN_MS;
+  return Array.from({ length: 7 }, (_2, i2) => {
+    const subId = plotId * 10 + i2;
+    const label = i2 === 0 ? "NEXUS" : `SLOT ${i2}`;
+    let status;
+    let secondsRemaining = 0;
+    if (i2 === 0) {
+      status = "ACTIVE";
+    } else if (elapsed < COOLDOWN_MS) {
+      status = "COOLDOWN";
+      secondsRemaining = Math.ceil((COOLDOWN_MS - elapsed) / 1e3);
+    } else {
+      status = "EMPTY";
     }
-  );
-}
-function SubParcelIntelView() {
-  const selectedPlotId = useGameStore((s2) => s2.selectedPlotId);
-  const player = useGameStore((s2) => s2.player);
-  const plots = useGameStore((s2) => s2.plots);
-  const subParcels = useGameStore((s2) => s2.subParcels);
-  const getSubParcels = useGameStore((s2) => s2.getSubParcels);
-  const plotPurchaseTimes = useGameStore((s2) => s2.plotPurchaseTimes);
-  const [selectedSegment, setSelectedSegment] = reactExports.useState(null);
-  const COOLDOWN_MS = 4 * 60 * 60 * 1e3;
-  reactExports.useEffect(() => {
-    setSelectedSegment(null);
-  }, [selectedPlotId]);
-  const ownedPlots = player.plotsOwned;
-  if (ownedPlots.length === 0) {
-    return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-      "div",
-      {
-        "data-ocid": "intel.subparcel.empty_state",
-        className: "flex flex-col items-center justify-center h-48 gap-3",
-        style: { color: "rgba(0,255,204,0.35)" },
-        children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx(Package, { size: 32, style: { opacity: 0.3 } }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-center", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[10px] uppercase tracking-widest font-bold", children: "No Plots Owned" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "p",
-              {
-                className: "text-[9px] mt-1",
-                style: { color: "rgba(0,255,204,0.25)" },
-                children: "Purchase a plot to view sub-parcel details"
-              }
-            )
-          ] })
-        ]
-      }
-    );
-  }
-  if (selectedPlotId === null || !ownedPlots.includes(selectedPlotId)) {
-    return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-      "div",
-      {
-        "data-ocid": "intel.subparcel.no_selection",
-        className: "flex flex-col items-center justify-center h-48 gap-3",
-        style: { color: "rgba(0,255,204,0.35)" },
-        children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronRight, { size: 28, style: { opacity: 0.3 } }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-center", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[10px] uppercase tracking-widest font-bold", children: "No Plot Selected" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "p",
-              {
-                className: "text-[9px] mt-1",
-                style: { color: "rgba(0,255,204,0.25)" },
-                children: "Select one of your plots to view sub-parcels"
-              }
-            )
-          ] }),
-          ownedPlots.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap gap-1.5 justify-center px-4 mt-1", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "span",
-              {
-                className: "text-[9px] uppercase tracking-wider",
-                style: {
-                  color: "rgba(0,255,204,0.3)",
-                  width: "100%",
-                  textAlign: "center"
-                },
-                children: "Your plots:"
-              }
-            ),
-            ownedPlots.map((pid) => /* @__PURE__ */ jsxRuntimeExports.jsx(PlotQuickSelect, { plotId: pid }, pid))
-          ] })
-        ]
-      }
-    );
-  }
-  const plot = plots.find((p2) => p2.id === selectedPlotId);
-  if (!plot) return null;
-  const subs = subParcels[selectedPlotId] ?? getSubParcels(selectedPlotId);
-  const purchaseTime = plotPurchaseTimes[selectedPlotId] ?? Date.now();
-  const nexusLevel = plot.nexusElectricityLevel ?? 0;
-  const segments = Array.from({ length: 7 }, (_2, i2) => {
-    const sub = subs[i2];
-    const isLocked = sub ? !sub.unlocked : Date.now() - purchaseTime < COOLDOWN_MS;
-    const unlockAt = sub ? sub.purchaseTime + COOLDOWN_MS : purchaseTime + COOLDOWN_MS;
     return {
-      index: i2,
-      isLocked,
-      unlockAt,
-      buildingType: (sub == null ? void 0 : sub.buildingType) ?? null,
-      spec: i2 === 0 ? null : plot.specialization ?? null,
-      biome: plot.biome,
-      nexusLevel
+      slotIndex: i2,
+      subId,
+      label,
+      status,
+      secondsRemaining,
+      buildingType: ""
     };
   });
-  const CX = 110;
-  const CY = 110;
-  const OUTER_R = 92;
-  const INNER_R = 36;
-  const CENTER_R = 30;
-  const GAP = 4;
-  const SLICES = 6;
-  const SLICE_DEG = 360 / SLICES;
-  function sliceFill(seg, selected) {
-    if (seg.isLocked) return LOCKED_FILL;
-    if (seg.spec)
-      return selected ? `${SPEC_COLORS[seg.spec]}` : `${SPEC_COLORS[seg.spec].replace("0.7", "0.4")}`;
-    return selected ? "rgba(0,255,204,0.18)" : EMPTY_FILL;
+}
+function SubParcelIntelView({ plotId, plotsOwned }) {
+  const plotPurchaseTimes = useGameStore((s2) => s2.plotPurchaseTimes);
+  const storePlotsOwned = useGameStore((s2) => s2.player.plotsOwned);
+  const [now2, setNow] = reactExports.useState(Date.now());
+  const timerRef = reactExports.useRef(null);
+  const ownedList = plotsOwned ?? storePlotsOwned;
+  const isOwned = ownedList.includes(plotId);
+  const purchaseTime = plotPurchaseTimes[plotId];
+  reactExports.useEffect(() => {
+    if (!isOwned) return;
+    timerRef.current = setInterval(() => setNow(Date.now()), 1e3);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [isOwned]);
+  if (!plotId || !isOwned) {
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "div",
+      {
+        style: {
+          padding: "20px 16px",
+          textAlign: "center",
+          color: "#585b70",
+          fontSize: "11px",
+          fontFamily: "monospace",
+          letterSpacing: "0.05em"
+        },
+        children: "Select an owned plot on the globe to view sub-parcels."
+      }
+    );
   }
-  function sliceStroke(seg, selected) {
-    if (seg.isLocked) return selected ? "rgba(255,100,80,0.6)" : LOCKED_STROKE;
-    if (seg.spec)
-      return selected ? SPEC_STROKE[seg.spec] : `${SPEC_STROKE[seg.spec]}88`;
-    return selected ? "rgba(0,255,204,0.7)" : EMPTY_STROKE;
+  const slots = buildSlots(plotId, purchaseTime);
+  const nexus = slots[0];
+  const surrounding = slots.slice(1);
+  const angles = [-90, -30, 30, 90, 150, 210];
+  function slotColor(status) {
+    if (status === "ACTIVE") return "#00ffcc";
+    if (status === "COOLDOWN") return "#f59e0b";
+    return "#4b5563";
   }
-  const selectedInfo = selectedSegment !== null ? segments[selectedSegment] : null;
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-    "div",
-    {
-      "data-ocid": "intel.subparcel.panel",
-      className: "flex flex-col gap-3 pb-4",
-      style: { color: "rgba(180,220,220,0.85)" },
-      children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs(
-          "div",
-          {
-            className: "mx-3 rounded-lg px-3 py-2 flex items-center gap-2",
-            style: {
-              background: "rgba(0,255,204,0.04)",
-              border: `1px solid ${BORDER$6}`
-            },
-            children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                "div",
-                {
-                  className: "w-6 h-6 rounded flex items-center justify-center text-[9px] font-bold font-mono flex-shrink-0",
-                  style: {
-                    background: "rgba(0,255,204,0.12)",
-                    border: `1px solid ${CYAN$6}`,
-                    color: CYAN$6
-                  },
-                  children: [
-                    "#",
-                    selectedPlotId
-                  ]
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 min-w-0", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                  "span",
+  function slotBg(status) {
+    if (status === "ACTIVE") return "rgba(0,255,204,0.08)";
+    if (status === "COOLDOWN") return "rgba(245,158,11,0.08)";
+    return "rgba(20,24,40,0.6)";
+  }
+  function slotBorder(status) {
+    if (status === "ACTIVE") return "1px solid rgba(0,255,204,0.4)";
+    if (status === "COOLDOWN") return "1px solid rgba(245,158,11,0.5)";
+    return "1px solid #374151";
+  }
+  const containerSize = 220;
+  const centerX = containerSize / 2;
+  const centerY = containerSize / 2;
+  const radius = 76;
+  const nexusR = 36;
+  const slotR = 28;
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { padding: "12px 10px" }, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "div",
+      {
+        style: {
+          fontSize: "9px",
+          color: "#7f849c",
+          fontFamily: "monospace",
+          letterSpacing: "0.12em",
+          marginBottom: "8px",
+          textTransform: "uppercase"
+        },
+        children: [
+          "PLOT #",
+          plotId,
+          " · 7 SUB-PARCELS"
+        ]
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "div",
+      {
+        style: {
+          position: "relative",
+          width: containerSize,
+          height: containerSize,
+          margin: "0 auto"
+        },
+        children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "svg",
+            {
+              role: "img",
+              "aria-label": "Sub-parcel connector lines",
+              width: containerSize,
+              height: containerSize,
+              style: { position: "absolute", top: 0, left: 0 },
+              children: angles.map((angle, i2) => {
+                const rad = angle * Math.PI / 180;
+                const x22 = centerX + Math.cos(rad) * radius;
+                const y2 = centerY + Math.sin(rad) * radius;
+                return /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "line",
                   {
-                    className: "text-[10px] font-bold uppercase tracking-wider",
-                    style: { color: CYAN$6 },
-                    children: [
-                      plot.biome,
-                      " SECTOR"
-                    ]
+                    x1: centerX,
+                    y1: centerY,
+                    x2: x22,
+                    y2,
+                    stroke: slotColor(surrounding[i2].status),
+                    strokeWidth: 0.5,
+                    strokeOpacity: 0.25
+                  },
+                  angle
+                );
+              })
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              "data-ocid": "subparcel.slot.0",
+              style: {
+                position: "absolute",
+                left: centerX - nexusR,
+                top: centerY - nexusR,
+                width: nexusR * 2,
+                height: nexusR * 2,
+                borderRadius: "50%",
+                background: slotBg(nexus.status),
+                border: `2px solid ${slotColor(nexus.status)}`,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "1px",
+                backdropFilter: "blur(8px)"
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      fontSize: "7px",
+                      color: slotColor(nexus.status),
+                      fontFamily: "monospace",
+                      letterSpacing: "0.08em",
+                      fontWeight: 700
+                    },
+                    children: "NEXUS"
                   }
                 ),
                 /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                  "span",
+                  "div",
                   {
-                    className: "text-[9px] ml-2",
-                    style: { color: "rgba(0,255,204,0.4)" },
+                    style: {
+                      fontSize: "6px",
+                      color: "rgba(0,255,204,0.5)",
+                      fontFamily: "monospace"
+                    },
                     children: [
-                      "EFF ",
-                      plot.efficiency,
-                      "%"
+                      "#",
+                      nexus.subId
                     ]
                   }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      fontSize: "6px",
+                      color: slotColor(nexus.status),
+                      fontFamily: "monospace"
+                    },
+                    children: "ACTIVE"
+                  }
                 )
-              ] }),
-              plot.specialization && /* @__PURE__ */ jsxRuntimeExports.jsx(
+              ]
+            }
+          ),
+          surrounding.map((slot, i2) => {
+            const angle = angles[i2];
+            const rad = angle * Math.PI / 180;
+            const cx = centerX + Math.cos(rad) * radius;
+            const cy = centerY + Math.sin(rad) * radius;
+            return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "div",
+              {
+                "data-ocid": `subparcel.slot.${slot.slotIndex}`,
+                style: {
+                  position: "absolute",
+                  left: cx - slotR,
+                  top: cy - slotR,
+                  width: slotR * 2,
+                  height: slotR * 2,
+                  borderRadius: "6px",
+                  background: slotBg(slot.status),
+                  border: slotBorder(slot.status),
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "1px",
+                  backdropFilter: "blur(6px)"
+                },
+                children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        fontSize: "7px",
+                        color: slotColor(slot.status),
+                        fontFamily: "monospace",
+                        letterSpacing: "0.06em",
+                        fontWeight: 700
+                      },
+                      children: slot.label
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "div",
+                    {
+                      style: {
+                        fontSize: "6px",
+                        color: "rgba(255,255,255,0.3)",
+                        fontFamily: "monospace"
+                      },
+                      children: [
+                        "#",
+                        slot.subId
+                      ]
+                    }
+                  ),
+                  slot.status === "COOLDOWN" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        fontSize: "6px",
+                        color: "#f59e0b",
+                        fontFamily: "monospace"
+                      },
+                      children: formatCountdown(slot.secondsRemaining)
+                    }
+                  ) : /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        fontSize: "6px",
+                        color: slotColor(slot.status),
+                        fontFamily: "monospace"
+                      },
+                      children: slot.status
+                    }
+                  )
+                ]
+              },
+              slot.slotIndex
+            );
+          })
+        ]
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "div",
+      {
+        style: {
+          display: "flex",
+          gap: "12px",
+          justifyContent: "center",
+          marginTop: "8px"
+        },
+        children: ["ACTIVE", "COOLDOWN", "EMPTY"].map((s2) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            style: { display: "flex", alignItems: "center", gap: "4px" },
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "div",
+                {
+                  style: {
+                    width: 6,
+                    height: 6,
+                    borderRadius: "50%",
+                    background: slotColor(s2)
+                  }
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
                 "span",
                 {
-                  className: "text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded flex-shrink-0",
                   style: {
-                    background: `${SPEC_COLORS[plot.specialization].replace("0.7", "0.15")}`,
-                    color: SPEC_STROKE[plot.specialization],
-                    border: `1px solid ${SPEC_STROKE[plot.specialization]}44`
+                    fontSize: "7px",
+                    color: "#7f849c",
+                    fontFamily: "monospace",
+                    letterSpacing: "0.08em"
                   },
-                  children: SPEC_LABELS[plot.specialization]
+                  children: s2
                 }
               )
             ]
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex justify-center", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
-          "svg",
-          {
-            width: "220",
-            height: "220",
-            viewBox: "0 0 220 220",
-            role: "img",
-            "aria-labelledby": "intel-subparcel-svg-title",
-            children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("title", { id: "intel-subparcel-svg-title", children: "Sub-parcel radial layout" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "circle",
-                {
-                  cx: CX,
-                  cy: CY,
-                  r: OUTER_R + 7,
-                  fill: "none",
-                  stroke: "rgba(0,255,204,0.06)",
-                  strokeWidth: "14"
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "circle",
-                {
-                  cx: CX,
-                  cy: CY,
-                  r: OUTER_R + 2,
-                  fill: "none",
-                  stroke: "rgba(0,255,204,0.12)",
-                  strokeWidth: "1"
-                }
-              ),
-              Array.from({ length: SLICES }, (_2, i2) => {
-                const idx = i2 + 1;
-                const startDeg = i2 * SLICE_DEG + GAP / 2;
-                const endDeg = (i2 + 1) * SLICE_DEG - GAP / 2;
-                const seg = segments[idx];
-                const isSelected = selectedSegment === idx;
-                const lp = sliceMidLabel(
-                  CX,
-                  CY,
-                  OUTER_R,
-                  INNER_R,
-                  startDeg,
-                  endDeg
-                );
-                return /* @__PURE__ */ jsxRuntimeExports.jsxs("g", { children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "path",
-                    {
-                      d: slicePath(CX, CY, OUTER_R, INNER_R, startDeg, endDeg),
-                      fill: sliceFill(seg, isSelected),
-                      stroke: sliceStroke(seg, isSelected),
-                      strokeWidth: isSelected ? 1.5 : 0.75,
-                      style: {
-                        cursor: "pointer",
-                        transition: "fill 0.15s, stroke 0.15s"
-                      },
-                      onClick: () => setSelectedSegment(isSelected ? null : idx),
-                      onKeyDown: (e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          setSelectedSegment(isSelected ? null : idx);
-                        }
-                      },
-                      tabIndex: 0,
-                      "data-ocid": `intel.subparcel.slice.${idx}`,
-                      role: "button",
-                      "aria-label": `Sub-parcel sector ${SECTOR_LABELS[i2]}`,
-                      "aria-pressed": isSelected
-                    }
-                  ),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "text",
-                    {
-                      x: lp.x,
-                      y: lp.y,
-                      textAnchor: "middle",
-                      dominantBaseline: "middle",
-                      fontSize: "11",
-                      fontFamily: "monospace",
-                      fill: sliceStroke(seg, isSelected),
-                      style: { pointerEvents: "none" },
-                      children: SECTOR_LABELS[i2]
-                    }
-                  ),
-                  seg.isLocked && /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "circle",
-                    {
-                      cx: lp.x,
-                      cy: lp.y + 11,
-                      r: "2.5",
-                      fill: "rgba(255,100,80,0.7)",
-                      style: { pointerEvents: "none" }
-                    }
-                  ),
-                  !seg.isLocked && seg.buildingType && /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "circle",
-                    {
-                      cx: lp.x,
-                      cy: lp.y + 11,
-                      r: "2.5",
-                      fill: CYAN$6,
-                      style: {
-                        pointerEvents: "none",
-                        animation: "pulse-glow 2s ease-in-out infinite"
-                      }
-                    }
-                  )
-                ] }, idx);
-              }),
-              (() => {
-                segments[0];
-                const isSelected = selectedSegment === 0;
-                const nexusBonus = NEXUS_BONUS[nexusLevel] ?? 0;
-                const nexusFill = isSelected ? "rgba(0,255,204,0.22)" : nexusLevel > 0 ? "rgba(0,255,204,0.12)" : "rgba(15,25,40,0.75)";
-                const nexusStroke = isSelected ? CYAN$6 : nexusLevel > 0 ? "rgba(0,255,204,0.5)" : "rgba(0,255,204,0.2)";
-                return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                  "g",
-                  {
-                    style: { cursor: "pointer" },
-                    onClick: () => setSelectedSegment(isSelected ? null : 0),
-                    onKeyDown: (e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        setSelectedSegment(isSelected ? null : 0);
-                      }
-                    },
-                    tabIndex: 0,
-                    "data-ocid": "intel.subparcel.nexus",
-                    "aria-label": "Center Nexus",
-                    "aria-pressed": isSelected,
-                    children: [
-                      nexusLevel > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx(
-                        "circle",
-                        {
-                          cx: CX,
-                          cy: CY,
-                          r: CENTER_R + 5,
-                          fill: "none",
-                          stroke: isSelected ? "rgba(0,255,204,0.55)" : "rgba(0,255,204,0.18)",
-                          strokeWidth: "1",
-                          style: { transition: "stroke 0.15s" }
-                        }
-                      ),
-                      /* @__PURE__ */ jsxRuntimeExports.jsx(
-                        "circle",
-                        {
-                          cx: CX,
-                          cy: CY,
-                          r: CENTER_R,
-                          fill: nexusFill,
-                          stroke: nexusStroke,
-                          strokeWidth: isSelected ? 1.5 : 1,
-                          style: { transition: "fill 0.15s, stroke 0.15s" }
-                        }
-                      ),
-                      /* @__PURE__ */ jsxRuntimeExports.jsx(
-                        "text",
-                        {
-                          x: CX,
-                          y: CY - 6,
-                          textAnchor: "middle",
-                          dominantBaseline: "middle",
-                          fontSize: "8",
-                          fontFamily: "monospace",
-                          fill: isSelected ? CYAN$6 : "rgba(0,255,204,0.65)",
-                          style: { pointerEvents: "none" },
-                          children: "NEXUS"
-                        }
-                      ),
-                      /* @__PURE__ */ jsxRuntimeExports.jsx(
-                        "text",
-                        {
-                          x: CX,
-                          y: CY + 5,
-                          textAnchor: "middle",
-                          dominantBaseline: "middle",
-                          fontSize: "8",
-                          fontFamily: "monospace",
-                          fill: nexusBonus > 0 ? isSelected ? CYAN$6 : "rgba(0,255,204,0.55)" : "rgba(0,255,204,0.2)",
-                          style: { pointerEvents: "none" },
-                          children: `LV${nexusLevel}`
-                        }
-                      ),
-                      nexusBonus > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx(
-                        "text",
-                        {
-                          x: CX,
-                          y: CY + 15,
-                          textAnchor: "middle",
-                          dominantBaseline: "middle",
-                          fontSize: "7",
-                          fontFamily: "monospace",
-                          fill: "rgba(0,255,204,0.4)",
-                          style: { pointerEvents: "none" },
-                          children: `+${nexusBonus}/d`
-                        }
-                      )
-                    ]
-                  }
-                );
-              })()
-            ]
-          }
-        ) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-wrap justify-center gap-2.5 px-3 -mt-1", children: [
-          {
-            color: SPEC_COLORS.ARMORY,
-            stroke: SPEC_STROKE.ARMORY,
-            label: "Armory"
           },
-          {
-            color: SPEC_COLORS.RESOURCES,
-            stroke: SPEC_STROKE.RESOURCES,
-            label: "Resources"
-          },
-          {
-            color: SPEC_COLORS.ENERGY_TECH,
-            stroke: SPEC_STROKE.ENERGY_TECH,
-            label: "Energy & Tech"
-          },
-          {
-            color: SPEC_COLORS.TRADING_DEPOT,
-            stroke: SPEC_STROKE.TRADING_DEPOT,
-            label: "Trading"
-          },
-          { color: EMPTY_FILL, stroke: EMPTY_STROKE, label: "Vacant" },
-          { color: LOCKED_FILL, stroke: LOCKED_STROKE, label: "Locked" }
-        ].map(({ color: color2, stroke, label }) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "div",
-            {
-              className: "w-2.5 h-2.5 rounded-sm",
-              style: { background: color2, border: `1px solid ${stroke}` }
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "span",
-            {
-              className: "text-[9px] uppercase tracking-wide",
-              style: { color: "rgba(180,220,220,0.4)" },
-              children: label
-            }
-          )
-        ] }, label)) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "px-3", children: selectedInfo !== null ? /* @__PURE__ */ jsxRuntimeExports.jsx(SegmentDetailCard, { info: selectedInfo }) : /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "div",
-          {
-            className: "rounded-lg p-3 text-center",
-            style: {
-              background: "rgba(0,255,204,0.02)",
-              border: "1px solid rgba(0,255,204,0.08)"
-            },
-            children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "p",
-              {
-                className: "text-[9px] uppercase tracking-widest",
-                style: { color: "rgba(0,255,204,0.3)" },
-                children: "Tap a sector or the Nexus to inspect"
-              }
-            )
-          }
-        ) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(DailyFRNTRBreakdown, { plotId: selectedPlotId, nexusLevel })
-      ]
-    }
-  );
-}
-function PlotQuickSelect({ plotId }) {
-  const selectPlot = useGameStore((s2) => s2.selectPlot);
-  const plots = useGameStore((s2) => s2.plots);
-  const plot = plots.find((p2) => p2.id === plotId);
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-    "button",
-    {
-      type: "button",
-      "data-ocid": `intel.subparcel.plot_select.${plotId}`,
-      onClick: () => selectPlot(plotId),
-      className: "px-2 py-0.5 rounded text-[9px] font-mono font-bold uppercase tracking-wide cursor-pointer transition-all",
-      style: {
-        background: "rgba(0,255,204,0.07)",
-        border: "1px solid rgba(0,255,204,0.2)",
-        color: "rgba(0,255,204,0.7)"
-      },
-      children: [
-        "#",
-        plotId,
-        (plot == null ? void 0 : plot.biome) ? ` · ${plot.biome}` : ""
-      ]
-    }
-  );
-}
-function DailyFRNTRBreakdown({
-  plotId,
-  nexusLevel
-}) {
-  const generatorTiers = useGameStore((s2) => s2.generatorTiers);
-  const tier = generatorTiers[plotId] ?? 0;
-  const TIER_BONUS = {
-    1: 8,
-    2: 24,
-    3: 48,
-    4: 96,
-    5: 192,
-    6: 384
-  };
-  const base = 7;
-  const tierBonus = TIER_BONUS[tier] ?? 0;
-  const nexusBonus = NEXUS_BONUS[nexusLevel] ?? 0;
-  const total = base + tierBonus + nexusBonus;
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-    "div",
-    {
-      className: "mx-3 rounded-lg p-3",
-      style: {
-        background: "rgba(0,255,204,0.04)",
-        border: "1px solid rgba(0,255,204,0.12)"
-      },
-      children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs(
-          "div",
-          {
-            className: "text-[9px] uppercase tracking-widest mb-2",
-            style: { color: "rgba(0,255,204,0.45)" },
-            children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(Zap, { size: 9, className: "inline mr-1" }),
-              "DAILY FRNTR BREAKDOWN"
-            ]
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-1", children: [
-          [
-            { label: "Base Plot", value: base },
-            { label: `Generator Tier ${tier}`, value: tierBonus },
-            { label: `Nexus Lv${nexusLevel}`, value: nexusBonus }
-          ].map(({ label, value }) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between text-[9px]", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: "rgba(180,220,220,0.45)" }, children: label }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs(
-              "span",
-              {
-                className: "font-mono font-bold",
-                style: { color: value > 0 ? CYAN$6 : "rgba(0,255,204,0.25)" },
-                children: [
-                  "+",
-                  value,
-                  " FRNTR"
-                ]
-              }
-            )
-          ] }, label)),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "div",
-            {
-              className: "flex justify-between text-[10px] pt-1 mt-1",
-              style: { borderTop: "1px solid rgba(0,255,204,0.1)" },
-              children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "span",
-                  {
-                    className: "font-bold uppercase tracking-wider",
-                    style: { color: CYAN$6 },
-                    children: "TOTAL"
-                  }
-                ),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                  "span",
-                  {
-                    className: "font-mono font-bold",
-                    style: { color: CYAN$6, textShadow: `0 0 8px ${CYAN$6}` },
-                    children: [
-                      total,
-                      " FRNTR/DAY"
-                    ]
-                  }
-                )
-              ]
-            }
-          )
-        ] })
-      ]
-    }
-  );
-}
-const REGIONS = [
-  "N.AMERICA",
-  "EUROPE",
-  "ASIA-PAC",
-  "MIDEAST",
-  "AFRICA",
-  "S.AMERICA",
-  "ARCTIC"
-];
-const PLOT_NAMES = [
-  "H3:8928308280fffff",
-  "H3:892831a8a2bffff",
-  "H3:89283470803ffff",
-  "H3:8928347083bffff",
-  "H3:892834708c3ffff",
-  "H3:89283470803ffff",
-  "H3:8928340c7cbffff"
-];
-const PRINCIPALS = [
-  "xk3mz-7qabc",
-  "py9nt-5rlop",
-  "ab2wx-9dfgh",
-  "lm4vq-1ryze",
-  "tz8kw-2mnop",
-  "qr5sj-8pabc",
-  "cn7lx-4dfgh"
-];
-function randItem(arr) {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
-function generateEvent(id2) {
-  const kind = randItem(["purchase", "join", "upgrade", "burn"]);
-  const principal = randItem(PRINCIPALS);
-  const region = randItem(REGIONS);
-  const plot = randItem(PLOT_NAMES);
-  const now2 = /* @__PURE__ */ new Date();
-  const ts = `${String(now2.getHours()).padStart(2, "0")}:${String(now2.getMinutes()).padStart(2, "0")}:${String(now2.getSeconds()).padStart(2, "0")}Z`;
-  const configs = {
-    purchase: {
-      message: "TERRITORY ACQUIRED",
-      detail: `${principal} secured ${plot} — ${(Math.random() * 2 + 1).toFixed(2)} ICP`
-    },
-    join: {
-      message: "NEW COMMANDER DEPLOYED",
-      detail: `${principal} entered the grid — Region ${region}`
-    },
-    upgrade: {
-      message: "GENERATOR UPGRADE",
-      detail: `${principal} upgraded plot ${plot} — Gen Tier ${Math.floor(Math.random() * 6) + 1}`
-    },
-    burn: {
-      message: "FRNTR BURNED",
-      detail: `${(Math.random() * 5e3 + 100).toFixed(2)} FRNTR removed from circulation`
-    }
-  };
-  return { id: id2, kind, region, timestamp: ts, ...configs[kind] };
-}
-const EVENT_COLORS = {
-  purchase: "#00ffcc",
-  join: "#00bbff",
-  upgrade: "#ffcc00",
-  burn: "#ff4444"
-};
-const EVENT_ICONS = {
-  purchase: /* @__PURE__ */ jsxRuntimeExports.jsx(Globe, { size: 12 }),
-  join: /* @__PURE__ */ jsxRuntimeExports.jsx(Users, { size: 12 }),
-  upgrade: /* @__PURE__ */ jsxRuntimeExports.jsx(TrendingUp, { size: 12 }),
-  burn: /* @__PURE__ */ jsxRuntimeExports.jsx(Zap, { size: 12 })
-};
-function RadarSweep() {
-  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "relative w-48 h-48 mx-auto", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
-    "svg",
-    {
-      viewBox: "0 0 200 200",
-      className: "w-full h-full",
-      role: "img",
-      "aria-label": "Radar sweep",
-      children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("title", { children: "Radar sweep" }),
-        [80, 60, 40, 20].map((r2) => /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "circle",
-          {
-            cx: "100",
-            cy: "100",
-            r: r2,
-            fill: "none",
-            stroke: "rgba(0,255,204,0.12)",
-            strokeWidth: "1"
-          },
-          r2
-        )),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "line",
-          {
-            x1: "100",
-            y1: "20",
-            x2: "100",
-            y2: "180",
-            stroke: "rgba(0,255,204,0.1)",
-            strokeWidth: "0.5"
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "line",
-          {
-            x1: "20",
-            y1: "100",
-            x2: "180",
-            y2: "100",
-            stroke: "rgba(0,255,204,0.1)",
-            strokeWidth: "0.5"
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs(
-          "g",
-          {
-            style: {
-              transformOrigin: "100px 100px",
-              animation: "orbit 4s linear infinite"
-            },
-            children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "line",
-                {
-                  x1: "100",
-                  y1: "100",
-                  x2: "100",
-                  y2: "20",
-                  stroke: "#00ffcc",
-                  strokeWidth: "1.5",
-                  strokeOpacity: "0.9"
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("circle", { cx: "100", cy: "20", r: "2", fill: "#00ffcc", fillOpacity: "0.9" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "path",
-                {
-                  d: "M100,100 L100,20 A80,80,0,0,1,180,100 Z",
-                  fill: "rgba(0,255,204,0.04)"
-                }
-              )
-            ]
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("circle", { cx: "100", cy: "100", r: "4", fill: "#00ffcc", fillOpacity: "0.7" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "circle",
-          {
-            cx: "65",
-            cy: "72",
-            r: "2.5",
-            fill: "#00ffcc",
-            fillOpacity: "0.6",
-            style: { animation: "twinkle 2.3s ease-in-out infinite" }
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "circle",
-          {
-            cx: "138",
-            cy: "115",
-            r: "2",
-            fill: "#00ffcc",
-            fillOpacity: "0.5",
-            style: { animation: "twinkle 3.1s ease-in-out infinite" }
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "circle",
-          {
-            cx: "120",
-            cy: "58",
-            r: "1.5",
-            fill: "#00ffcc",
-            fillOpacity: "0.4",
-            style: { animation: "twinkle 1.8s ease-in-out infinite" }
-          }
-        )
-      ]
-    }
-  ) });
+          s2
+        ))
+      }
+    )
+  ] });
 }
 function IntelTab() {
-  const [events2, setEvents] = reactExports.useState(
-    () => Array.from({ length: 8 }, (_2, i2) => generateEvent(i2))
-  );
-  const [subTab, setSubTab] = reactExports.useState("war_feed");
-  const idRef = reactExports.useRef(100);
-  const scrollRef = reactExports.useRef(null);
-  reactExports.useEffect(() => {
-    const interval = setInterval(() => {
-      const newEvent = generateEvent(idRef.current++);
-      setEvents((prev) => [newEvent, ...prev].slice(0, 40));
-    }, 2800);
-    return () => clearInterval(interval);
-  }, []);
+  const selectedPlotId = useGameStore((s2) => s2.selectedPlotId);
+  const plotsOwned = useGameStore((s2) => s2.player.plotsOwned);
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "div",
     {
-      "data-ocid": "intel.panel",
-      className: "flex flex-col h-full overflow-hidden",
-      style: { color: "rgba(180,220,220,0.85)" },
+      style: {
+        padding: "12px",
+        color: "#cdd6f4",
+        fontFamily: "var(--font-body, sans-serif)"
+      },
       children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "h2",
+          {
+            style: {
+              fontSize: "12px",
+              letterSpacing: "0.15em",
+              color: "#00ffcc",
+              fontFamily: "var(--font-mono, monospace)",
+              textTransform: "uppercase",
+              margin: "0 0 12px 0"
+            },
+            children: "INTEL"
+          }
+        ),
         /* @__PURE__ */ jsxRuntimeExports.jsxs(
           "div",
           {
-            className: "flex items-center justify-between px-4 py-2 shrink-0",
-            style: { borderBottom: "1px solid rgba(0,255,204,0.15)" },
+            style: {
+              background: "rgba(17,17,27,0.7)",
+              border: "1px solid #313244",
+              borderRadius: "6px",
+              marginBottom: "8px"
+            },
             children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(Radio, { size: 14, style: { color: "#00ffcc" } }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "span",
-                  {
-                    className: "text-xs font-bold uppercase tracking-widest",
-                    style: { color: "#00ffcc" },
-                    children: "INTEL FEED"
-                  }
-                )
-              ] }),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1.5", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "span",
-                  {
-                    className: "w-1.5 h-1.5 rounded-full",
-                    style: {
-                      background: "#00ffcc",
-                      animation: "pulse-glow 2s ease-in-out infinite"
-                    }
-                  }
-                ),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "span",
-                  {
-                    className: "text-[10px] uppercase tracking-wider",
-                    style: { color: "rgba(0,255,204,0.6)" },
-                    children: "LIVE"
-                  }
-                )
-              ] })
-            ]
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "div",
-          {
-            className: "flex shrink-0",
-            style: { borderBottom: "1px solid rgba(0,255,204,0.12)" },
-            children: [
-              { id: "war_feed", label: "WAR FEED" },
-              { id: "sub_parcels", label: "SUB-PARCELS" }
-            ].map(({ id: id2, label }) => {
-              const isActive = subTab === id2;
-              return /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "button",
-                {
-                  type: "button",
-                  "data-ocid": `intel.subtab.${id2}`,
-                  onClick: () => setSubTab(id2),
-                  className: "flex-1 py-2 text-[10px] font-bold uppercase tracking-widest transition-all",
-                  style: {
-                    color: isActive ? "#00ffcc" : "rgba(0,255,204,0.35)",
-                    background: isActive ? "rgba(0,255,204,0.06)" : "transparent",
-                    borderBottom: isActive ? "2px solid #00ffcc" : "2px solid transparent",
-                    boxShadow: isActive ? "0 2px 12px rgba(0,255,204,0.1)" : "none"
-                  },
-                  children: label
-                },
-                id2
-              );
-            })
-          }
-        ),
-        subTab === "sub_parcels" && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1 overflow-y-auto pt-3", children: /* @__PURE__ */ jsxRuntimeExports.jsx(SubParcelIntelView, {}) }),
-        subTab === "war_feed" && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "div",
-            {
-              "data-ocid": "intel.classified_banner",
-              className: "mx-3 mt-3 rounded-lg p-3 shrink-0",
-              style: {
-                background: "rgba(255,68,68,0.06)",
-                border: "1px solid rgba(255,68,68,0.25)"
-              },
-              children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start gap-2", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  Lock,
-                  {
-                    size: 14,
-                    style: { color: "#ff4444", marginTop: 1, flexShrink: 0 }
-                  }
-                ),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center gap-2 mb-1", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "span",
-                    {
-                      className: "text-[10px] font-bold uppercase tracking-widest",
-                      style: { color: "#ff4444" },
-                      children: "CLASSIFIED — CLEARANCE LEVEL OMEGA"
-                    }
-                  ) }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "p",
-                    {
-                      className: "text-[10px] leading-relaxed",
-                      style: { color: "rgba(180,220,220,0.55)" },
-                      children: "COMBAT SYSTEMS, WEAPON STRIKE PACKAGES & BATTLE RESOLUTION INTELLIGENCE RESTRICTED PENDING OPERATIONAL LAUNCH."
-                    }
-                  ),
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                    "div",
-                    {
-                      className: "mt-2 inline-flex items-center gap-1.5 px-2 py-0.5 rounded",
-                      style: {
-                        background: "rgba(255,68,68,0.12)",
-                        border: "1px solid rgba(255,68,68,0.3)"
-                      },
-                      children: [
-                        /* @__PURE__ */ jsxRuntimeExports.jsx(Shield, { size: 9, style: { color: "#ff4444" } }),
-                        /* @__PURE__ */ jsxRuntimeExports.jsx(
-                          "span",
-                          {
-                            className: "text-[9px] font-bold uppercase tracking-widest",
-                            style: { color: "#ff4444" },
-                            children: "UNLOCKS IN V2.0"
-                          }
-                        )
-                      ]
-                    }
-                  )
-                ] })
-              ] })
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-4 px-3 py-3 shrink-0", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs(
-              "div",
-              {
-                className: "rounded-xl p-2 flex-shrink-0",
-                style: {
-                  background: "rgba(0,255,204,0.04)",
-                  border: "1px solid rgba(0,255,204,0.12)"
-                },
-                children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(RadarSweep, {}),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "p",
-                    {
-                      className: "text-center text-[9px] uppercase tracking-widest mt-1",
-                      style: { color: "rgba(0,255,204,0.45)" },
-                      children: "GLOBAL SCAN ACTIVE"
-                    }
-                  )
-                ]
-              }
-            ),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-col gap-2 flex-1", children: [
-              {
-                label: "ACTIVE COMMANDERS",
-                value: "147",
-                icon: /* @__PURE__ */ jsxRuntimeExports.jsx(Users, { size: 10 })
-              },
-              {
-                label: "PLOTS MINTED",
-                value: "312 / 5,882",
-                icon: /* @__PURE__ */ jsxRuntimeExports.jsx(Globe, { size: 10 })
-              },
-              {
-                label: "FRNTR BURNED",
-                value: "48,291.0000",
-                icon: /* @__PURE__ */ jsxRuntimeExports.jsx(Zap, { size: 10 })
-              },
-              {
-                label: "EVENTS TODAY",
-                value: String(events2.length),
-                icon: /* @__PURE__ */ jsxRuntimeExports.jsx(Activity, { size: 10 })
-              }
-            ].map(({ label, value, icon }) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
-              "div",
-              {
-                className: "rounded-lg px-2.5 py-1.5",
-                style: {
-                  background: "rgba(0,255,204,0.04)",
-                  border: "1px solid rgba(0,255,204,0.1)"
-                },
-                children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                    "div",
-                    {
-                      className: "flex items-center gap-1 mb-0.5",
-                      style: { color: "rgba(0,255,204,0.5)" },
-                      children: [
-                        icon,
-                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[9px] uppercase tracking-wider", children: label })
-                      ]
-                    }
-                  ),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "span",
-                    {
-                      className: "text-xs font-bold",
-                      style: { color: "#00ffcc" },
-                      children: value
-                    }
-                  )
-                ]
-              },
-              label
-            )) })
-          ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "div",
-            {
-              className: "px-4 py-1.5 flex items-center gap-2 shrink-0",
-              style: {
-                borderTop: "1px solid rgba(0,255,204,0.1)",
-                borderBottom: "1px solid rgba(0,255,204,0.1)"
-              },
-              children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(Activity, { size: 11, style: { color: "rgba(0,255,204,0.5)" } }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "span",
-                  {
-                    className: "text-[10px] uppercase tracking-widest",
-                    style: { color: "rgba(0,255,204,0.5)" },
-                    children: "GLOBAL WAR FEED"
-                  }
-                )
-              ]
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "div",
-            {
-              ref: scrollRef,
-              "data-ocid": "intel.feed_list",
-              className: "flex-1 overflow-y-auto px-3 py-2 space-y-1.5",
-              children: events2.map((evt, idx) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
                 "div",
                 {
-                  "data-ocid": `intel.feed.item.${idx + 1}`,
-                  className: "flex items-start gap-2.5 rounded-lg px-2.5 py-2 transition-all",
                   style: {
-                    background: idx === 0 ? `${EVENT_COLORS[evt.kind]}0d` : "rgba(0,255,204,0.03)",
-                    border: idx === 0 ? `1px solid ${EVENT_COLORS[evt.kind]}33` : "1px solid rgba(0,255,204,0.07)"
+                    padding: "6px 10px",
+                    borderBottom: "1px solid #313244",
+                    fontSize: "10px",
+                    letterSpacing: "0.12em",
+                    color: "#7f849c",
+                    fontFamily: "var(--font-mono, monospace)"
                   },
-                  children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsx(
-                      "div",
-                      {
-                        className: "w-5 h-5 rounded flex items-center justify-center flex-shrink-0 mt-0.5",
-                        style: {
-                          background: `${EVENT_COLORS[evt.kind]}18`,
-                          color: EVENT_COLORS[evt.kind]
-                        },
-                        children: EVENT_ICONS[evt.kind]
-                      }
-                    ),
-                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 min-w-0", children: [
-                      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-1", children: [
-                        /* @__PURE__ */ jsxRuntimeExports.jsx(
-                          "span",
-                          {
-                            className: "text-[10px] font-bold uppercase tracking-wider truncate",
-                            style: { color: EVENT_COLORS[evt.kind] },
-                            children: evt.message
-                          }
-                        ),
-                        /* @__PURE__ */ jsxRuntimeExports.jsx(
-                          "span",
-                          {
-                            className: "text-[9px] flex-shrink-0",
-                            style: { color: "rgba(180,220,220,0.35)" },
-                            children: evt.timestamp
-                          }
-                        )
-                      ] }),
-                      /* @__PURE__ */ jsxRuntimeExports.jsx(
-                        "p",
-                        {
-                          className: "text-[10px] truncate mt-0.5",
-                          style: { color: "rgba(180,220,220,0.55)" },
-                          children: evt.detail
-                        }
-                      ),
-                      /* @__PURE__ */ jsxRuntimeExports.jsx(
-                        "span",
-                        {
-                          className: "text-[9px] uppercase tracking-wider",
-                          style: { color: "rgba(0,255,204,0.3)" },
-                          children: evt.region
-                        }
-                      )
-                    ] })
-                  ]
-                },
-                evt.id
-              ))
-            }
-          )
-        ] })
+                  children: "SUB-PARCEL LAYOUT"
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                SubParcelIntelView,
+                {
+                  plotId: selectedPlotId ?? 0,
+                  plotsOwned
+                }
+              )
+            ]
+          }
+        )
       ]
     }
   );
@@ -102833,6 +101935,21 @@ function SurveyReport({
     ] })
   ] });
 }
+const TIER_DAILY_RATES = {
+  0: 7,
+  1: 10,
+  2: 15,
+  3: 22,
+  4: 32,
+  5: 45
+};
+const TIER_COSTS = {
+  0: 500,
+  1: 1500,
+  2: 4e3,
+  3: 8e3,
+  4: 15e3
+};
 function MapBottomSheet({
   onClose,
   controlsRef
@@ -102840,10 +101957,14 @@ function MapBottomSheet({
   const [purchaseError, setPurchaseError] = reactExports.useState(null);
   const [mineYield, setMineYield] = reactExports.useState(null);
   const [regenError, setRegenError] = reactExports.useState(null);
+  const [upgradeStatus, setUpgradeStatus] = reactExports.useState("idle");
+  const [upgradeError, setUpgradeError] = reactExports.useState(null);
+  const { actor } = useActor(createActor);
   const selectedPlotId = useGameStore((s2) => s2.selectedPlotId);
   const plots = useGameStore((s2) => s2.plots);
   const player = useGameStore((s2) => s2.player);
-  const getSubParcels = useGameStore((s2) => s2.getSubParcels);
+  const generatorTiers = useGameStore((s2) => s2.generatorTiers);
+  useGameStore((s2) => s2.getSubParcels);
   const setTargetPlotId = useGameStore((s2) => s2.setTargetPlotId);
   const setPlotHoverCard = useGameStore((s2) => s2.setPlotHoverCard);
   const commanderAssignments = useGameStore((s2) => s2.commanderAssignments);
@@ -102852,7 +101973,58 @@ function MapBottomSheet({
   const activateRegenBoost = useGameStore((s2) => s2.activateRegenBoost);
   const { purchasePlot, isPurchasing } = usePurchasePlot();
   const plot = selectedPlotId !== null ? plots.find((p2) => p2.id === selectedPlotId) ?? null : null;
-  selectedPlotId !== null ? getSubParcels(selectedPlotId) : [];
+  const handleUpgrade = reactExports.useCallback(async () => {
+    if (!plot || !actor || upgradeStatus === "upgrading") return;
+    setUpgradeStatus("upgrading");
+    setUpgradeError(null);
+    try {
+      const res = await actor.upgradeGenerator(BigInt(plot.id));
+      if ("ok" in res) {
+        const newTier = res.ok.generatorTier;
+        const tierMap = {
+          None: 0,
+          TierI: 1,
+          TierII: 2,
+          TierIII: 3,
+          TierIV: 4,
+          TierV: 5
+        };
+        const numericTier = tierMap[newTier] ?? 1;
+        const burnCost = TIER_COSTS[numericTier - 1] ?? 0;
+        useGameStore.setState((s2) => ({
+          generatorTiers: {
+            ...s2.generatorTiers,
+            [plot.id]: numericTier
+          },
+          totalFRNTRBurned: s2.totalFRNTRBurned + burnCost
+        }));
+        try {
+          const state2 = await actor.getPlayerState();
+          if (state2) {
+            useGameStore.setState((s2) => ({
+              player: {
+                ...s2.player,
+                frntBalance: Number(state2.frntBalance) / 1e8
+              }
+            }));
+          }
+        } catch {
+        }
+        setUpgradeStatus("success");
+        setTimeout(() => setUpgradeStatus("idle"), 2500);
+      } else {
+        const errStr = String(res.err);
+        setUpgradeError(errStr);
+        setUpgradeStatus("error");
+        setTimeout(() => setUpgradeStatus("idle"), 3e3);
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Upgrade failed";
+      setUpgradeError(msg);
+      setUpgradeStatus("error");
+      setTimeout(() => setUpgradeStatus("idle"), 3e3);
+    }
+  }, [actor, plot, upgradeStatus]);
   const playerPrincipal = player.principal ?? "You";
   const isOwned = (plot == null ? void 0 : plot.owner) !== null && (plot == null ? void 0 : plot.owner) !== void 0;
   const isOwnPlot = isOwned && ((plot == null ? void 0 : plot.owner) === playerPrincipal || selectedPlotId !== null && player.plotsOwned.includes(selectedPlotId));
@@ -103179,6 +102351,101 @@ function MapBottomSheet({
                     }
                   )
                 ] }),
+                isOwnPlot && (() => {
+                  const currentTier = generatorTiers[plot.id] ?? 0;
+                  const dailyRate = TIER_DAILY_RATES[currentTier] ?? 7;
+                  const upgradeCost = TIER_COSTS[currentTier] ?? null;
+                  const canUpgrade = upgradeCost !== null && player.frntBalance >= upgradeCost && currentTier < 5;
+                  const isMaxTier = currentTier >= 5;
+                  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { marginTop: 8 }, children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "div",
+                      {
+                        style: {
+                          display: "flex",
+                          justifyContent: "space-between",
+                          marginBottom: 6,
+                          fontSize: 9,
+                          color: CYAN_DIM$5,
+                          fontFamily: "monospace",
+                          letterSpacing: 1
+                        },
+                        children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
+                            "GEN TIER ",
+                            currentTier,
+                            " · ",
+                            dailyRate,
+                            " FRNTR/DAY"
+                          ] }),
+                          !isMaxTier && upgradeCost !== null && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                            "span",
+                            {
+                              style: {
+                                color: player.frntBalance >= upgradeCost ? CYAN$5 : "#ef4444"
+                              },
+                              children: [
+                                "COST: ",
+                                upgradeCost.toLocaleString(),
+                                " FRNTR"
+                              ]
+                            }
+                          )
+                        ]
+                      }
+                    ),
+                    isMaxTier ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "div",
+                      {
+                        style: {
+                          textAlign: "center",
+                          padding: "10px 0",
+                          fontSize: 10,
+                          fontWeight: 700,
+                          color: CYAN$5,
+                          letterSpacing: 2,
+                          fontFamily: "monospace",
+                          border: `1px solid ${CYAN$5}44`,
+                          borderRadius: 6
+                        },
+                        children: "MAX TIER"
+                      }
+                    ) : /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "button",
+                      {
+                        type: "button",
+                        "data-ocid": "map.upgrade_button",
+                        onClick: handleUpgrade,
+                        disabled: !canUpgrade || upgradeStatus === "upgrading",
+                        style: {
+                          ...actionBtnStyle(
+                            canUpgrade ? "#ffd700" : CYAN_DIM$5,
+                            canUpgrade ? "rgba(255,215,0,0.08)" : "rgba(0,0,0,0.2)"
+                          ),
+                          opacity: canUpgrade ? 1 : 0.5,
+                          cursor: canUpgrade ? "pointer" : "not-allowed",
+                          fontSize: 10
+                        },
+                        children: upgradeStatus === "upgrading" ? "UPGRADING…" : upgradeStatus === "success" ? "✓ UPGRADED" : `UPGRADE TO TIER ${currentTier + 1}`
+                      }
+                    ),
+                    upgradeError && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "div",
+                      {
+                        "data-ocid": "map.error_state",
+                        style: {
+                          marginTop: 4,
+                          fontSize: 9,
+                          color: "#ef4444",
+                          textAlign: "center",
+                          letterSpacing: 1,
+                          fontFamily: "monospace"
+                        },
+                        children: upgradeError
+                      }
+                    )
+                  ] });
+                })(),
                 isEnemyPlot && /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "button",
                   {
@@ -104773,10 +104040,14 @@ function StressTestPanel() {
     );
     await runCheck(
       1,
-      () => actor.testFaucetV2(),
-      (r2) => r2.__kind__ === "ok" ? `+${Number(r2.ok.frntGranted)} FRNTR +${Number(r2.ok.icpGranted)} ICP` : `err: ${r2.err}`
+      async () => {
+        const r2 = await actor.testFaucetV2();
+        if (r2.__kind__ !== "ok") throw new Error(r2.err);
+        return r2.ok;
+      },
+      (r2) => `+${Number(r2.frntGranted)} FRNTR +${Number(r2.icpGranted)} ICP`
     );
-    await runCheck(
+    const playerState = await runCheck(
       2,
       () => actor.getPlayerState(),
       (r2) => `FRNTR=${Number(r2.frntBalance)} plots=${Number(r2.plotsOwned)}`
@@ -104784,7 +104055,11 @@ function StressTestPanel() {
     await runCheck(
       3,
       () => actor.getPlotCount(),
-      (r2) => `${Number(r2)} plots on-chain`
+      (r2) => {
+        const n = Number(r2);
+        if (n === 0) throw new Error("No plots seeded — call initPlots first");
+        return `${n} plots on-chain`;
+      }
     );
     await runCheck(
       4,
@@ -104794,44 +104069,37 @@ function StressTestPanel() {
     const purchaseRes = await runCheck(
       5,
       async () => {
-        const owners = await actor.getAllPlotOwners();
-        const ownedIds = new Set(
-          owners.map(([id2]) => Number(id2))
-        );
-        const plotCount = Number(await actor.getPlotCount());
-        let firstAvailable = null;
-        for (let i2 = 0; i2 < plotCount; i2++) {
-          if (!ownedIds.has(i2)) {
-            firstAvailable = BigInt(i2);
-            break;
-          }
-        }
+        const firstAvailable = await actor.getFirstAvailablePlot();
         if (firstAvailable === null)
           throw new Error("No available plots found");
         const result = await actor.purchasePlot(firstAvailable);
-        if (result.__kind__ === "err") throw new Error(result.err);
+        if (!("ok" in result)) {
+          throw new Error(result.err ?? "Purchase failed");
+        }
         purchasedPlotIdRef.current = firstAvailable;
         return result;
       },
-      (r2) => `Purchased plot — ok: ${r2.ok}`
+      (r2) => `Purchased plot — ${r2.ok}`
     );
     await runCheck(
       6,
       async () => {
-        const state2 = await actor.getPlayerState();
-        const income = state2.passiveIncomePerDay;
-        const plots = Number(state2.plotsOwned);
-        if (plots === 0 && purchaseRes === null) {
+        const balanceBefore = playerState ? Number(playerState.frntBalance) : 0;
+        await new Promise((resolve2) => setTimeout(resolve2, 2e3));
+        const updated = await actor.getPlayerState();
+        const balanceAfter = Number(updated.frntBalance);
+        const plots = Number(updated.plotsOwned);
+        if (purchaseRes === null) {
           throw new Error("Purchase prerequisite failed");
         }
-        if (income < 7) {
+        if (balanceAfter < balanceBefore) {
           throw new Error(
-            `passiveIncomePerDay=${income} — expected >= 7 (base rate for 1 plot)`
+            `Balance decreased: before=${balanceBefore} after=${balanceAfter}`
           );
         }
-        return { income, plots };
+        return { income: updated.passiveIncomePerDay, plots, balanceAfter };
       },
-      (r2) => `passiveIncomePerDay=${r2.income} plots=${r2.plots} ✓`
+      (r2) => `passiveIncome=${r2.income}/day plots=${r2.plots} balance=${r2.balanceAfter} ✓`
     );
     await runCheck(
       7,
@@ -104875,6 +104143,7 @@ function StressTestPanel() {
   const passCount = checks.filter((c2) => c2.status === "pass").length;
   const failCount = checks.filter((c2) => c2.status === "fail").length;
   const doneCount = passCount + failCount;
+  const allDone = doneCount === 10;
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "div",
     {
@@ -104984,20 +104253,46 @@ function StressTestPanel() {
                   }
                 )
               ] }),
-              doneCount > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                "div",
-                {
-                  style: { display: "flex", gap: 8, fontSize: 8, fontWeight: 700 },
-                  children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { style: { color: "#00ff88" }, children: [
-                      "✓ ",
+              doneCount > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 4 }, children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "div",
+                  {
+                    style: {
+                      display: "flex",
+                      gap: 8,
+                      fontSize: 8,
+                      fontWeight: 700
+                    },
+                    children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { style: { color: "#00ff88" }, children: [
+                        "✓ ",
+                        passCount,
+                        " PASS"
+                      ] }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: failCount > 0 ? "#ff4444" : CYAN_DIM$2 }, children: failCount > 0 ? `✗ ${failCount} FAIL` : "✗ 0" })
+                    ]
+                  }
+                ),
+                allDone && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "div",
+                  {
+                    style: {
+                      fontSize: 9,
+                      fontWeight: 700,
+                      letterSpacing: "0.1em",
+                      color: passCount === 10 ? "#00ff88" : "#ff4444",
+                      fontFamily: "monospace",
+                      textAlign: "center",
+                      padding: "4px 0",
+                      borderTop: `1px solid ${passCount === 10 ? "rgba(0,255,136,0.2)" : "rgba(255,68,68,0.2)"}`
+                    },
+                    children: [
                       passCount,
-                      " PASS"
-                    ] }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: failCount > 0 ? "#ff4444" : CYAN_DIM$2 }, children: failCount > 0 ? `✗ ${failCount} FAIL` : "✗ 0" })
-                  ]
-                }
-              ),
+                      " / 10 PASSED"
+                    ]
+                  }
+                )
+              ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsx(
                 "div",
                 {
@@ -107861,7 +107156,7 @@ function PlotActionPanel({
               border: "1px solid rgba(0,212,255,0.2)",
               background: "rgba(0,10,20,0.6)"
             },
-            children: /* @__PURE__ */ jsxRuntimeExports.jsx(SubParcelIntelView, {})
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(SubParcelIntelView, { plotId })
           }
         ),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [

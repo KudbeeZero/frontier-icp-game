@@ -994,7 +994,7 @@ function PlotActionPanel({
           background: "rgba(0,10,20,0.6)",
         }}
       >
-        <SubParcelIntelView />
+        {<SubParcelIntelView plotId={plotId} />}
       </div>
 
       {/* Plot title */}

@@ -25,6 +25,7 @@ import CoreApiMixin "mixins/core-api";
 import TokenTypes "token/types";
 import FrntrLedgerApiMixin "mixins/frntr-ledger-api";
 import Blob "mo:core/Blob";
+import Debug "mo:core/Debug";
 
 
 
@@ -1030,26 +1031,42 @@ func missileStats(missileType : Text) : MissileStats {
       case (?p) { p };
     };
 
-    let icpAmt : Nat = 200_000_000; // 2 ICP in e8s (minimum plot price)
-
-    // Deduct ICP from caller's wallet via ICRC-2 transfer_from on ICP ledger
-    let icpLedger = actor(ICP_LEDGER_ID) : actor {
-      icrc2_transfer_from : (ICRC2TransferFromArgs) -> async ICRC2TransferFromResult
-    };
-    let transferArgs : ICRC2TransferFromArgs = {
-      from             = { owner = caller; subaccount = null };
-      to               = { owner = Principal.fromText(selfPrincipalText); subaccount = null };
-      amount           = icpAmt;
-      fee              = ?10_000; // standard ICP transfer fee
-      memo             = null;
-      created_at_time  = null;
-      spender_subaccount = null;
-    };
-    switch (await icpLedger.icrc2_transfer_from(transferArgs)) {
-      case (#Err(err)) {
-        return #err("ICP transfer failed: " # debug_show(err));
+    // Dynamic pricing via getPlotPriceById — never hardcode ICP amount
+    let icpAmt : Nat = do {
+      let richness : Nat = switch (plots.get(plotId)) {
+        case (null)  { 78 + ((plotId * 2_654_435_761) % 21) };
+        case (?plot) { plot.richness };
       };
-      case (#Ok(_)) {};
+      let pricing = pricingState.pricing;
+      if (richness < 90) {
+        pricing.commonMin + ((pricing.commonMax - pricing.commonMin) * (richness - 78) / 11);
+      } else if (richness < 97) {
+        pricing.rareMin + ((pricing.rareMax - pricing.rareMin) * (richness - 90) / 6);
+      } else {
+        pricing.epicMin + ((pricing.epicMax - pricing.epicMin) * (richness - 97) / 2);
+      };
+    };
+
+    // In TESTNET_MODE skip real ICP ledger transfer
+    if (not TESTNET_MODE) {
+      let icpLedger = actor(ICP_LEDGER_ID) : actor {
+        icrc2_transfer_from : (ICRC2TransferFromArgs) -> async ICRC2TransferFromResult
+      };
+      let transferArgs : ICRC2TransferFromArgs = {
+        from             = { owner = caller; subaccount = null };
+        to               = { owner = Principal.fromText(selfPrincipalText); subaccount = null };
+        amount           = icpAmt;
+        fee              = ?10_000;
+        memo             = null;
+        created_at_time  = null;
+        spender_subaccount = null;
+      };
+      switch (await icpLedger.icrc2_transfer_from(transferArgs)) {
+        case (#Err(err)) {
+          return #err("ICP transfer failed: " # debug_show(err));
+        };
+        case (#Ok(_)) {};
+      };
     };
 
     // ICP transfer succeeded — assign ownership
@@ -1162,6 +1179,78 @@ func missileStats(missileType : Text) : MissileStats {
         case (?sp) { result := result.concat([sp]) };
         case (null) {};
       };
+      slot += 1;
+    };
+    result;
+  };
+
+  /// Returns 7 SubParcelInfo entries (slots 0-6) for a plot.
+  /// isLocked = true during the 4-hour post-purchase cooldown.
+  /// cooldownSecondsRemaining = 0 when not locked.
+  /// Sub-parcel ID = plotId * 10 + slotIndex.
+  public query func getSubParcelStatus(plotId : Nat) : async [GameTypes.SubParcelInfo] {
+    let now : Int = Time.now();
+    let fourHoursNs : Int = 14_400_000_000_000;
+
+    // Determine lock state from purchaseTimestamp
+    let (isLocked, cooldownRemaining) : (Bool, Nat) = switch (plots.get(plotId)) {
+      case (null) { (false, 0) };
+      case (?plot) {
+        switch (plot.purchaseTimestamp) {
+          case (null) { (false, 0) };
+          case (?ts) {
+            let unlockAt : Int = ts + fourHoursNs;
+            if (now < unlockAt) {
+              let remaining : Int = unlockAt - now;
+              // Convert nanoseconds to seconds
+              let remainingSecs : Nat = (remaining / 1_000_000_000).toNat();
+              (true, remainingSecs);
+            } else {
+              (false, 0);
+            };
+          };
+        };
+      };
+    };
+
+    // Build 7 SubParcelInfo entries (slot 0 = Nexus, slots 1-6 = surrounding)
+    var result : [GameTypes.SubParcelInfo] = [];
+    var slot = 0;
+    while (slot < 7) {
+      let subId = plotId * 10 + slot;
+      let (buildingType, resourceRate) : (Text, Float) = switch (subParcels.get(subId)) {
+        case (null) { ("", 0.0) };
+        case (?sp) {
+          let bType = switch (sp.building) {
+            case (null) { if (slot == 0) { "Nexus" } else { "" } };
+            case (?b)   { b };
+          };
+          let rate : Float = if (slot == 0) {
+            // Nexus slot produces from nexusElectricityLevel
+            switch (plots.get(plotId)) {
+              case (null) { 0.0 };
+              case (?plot) {
+                switch (plot.nexusElectricityLevel) {
+                  case (1) { 8.0 };
+                  case (2) { 24.0 };
+                  case (3) { 48.0 };
+                  case (_) { 0.0 };
+                };
+              };
+            };
+          } else {
+            0.0;
+          };
+          (bType, rate);
+        };
+      };
+      result := result.concat([{
+        slotIndex                = slot;
+        isLocked                 = isLocked;
+        cooldownSecondsRemaining = cooldownRemaining;
+        buildingType             = buildingType;
+        resourceRate             = resourceRate;
+      }]);
       slot += 1;
     };
     result;

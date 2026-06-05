@@ -101,6 +101,12 @@ export interface StressActionResult {
     errorMsg?: string;
     durationMs: bigint;
 }
+export interface MineResult {
+    efficiency: number;
+    plotId: PlotId;
+    resourceYields: Array<[ResourceType, number]>;
+    frntRate: number;
+}
 export type ResetResult = {
     __kind__: "ok";
     ok: string;
@@ -108,12 +114,6 @@ export type ResetResult = {
     __kind__: "err";
     err: string;
 };
-export interface MineResult {
-    efficiency: number;
-    plotId: PlotId;
-    resourceYields: Array<[ResourceType, number]>;
-    frntRate: number;
-}
 export interface PlotUpgradesView {
     tierName: string;
     plotId: PlotId;
@@ -154,6 +154,13 @@ export interface FaucetClaimSummary {
     lastClaim?: bigint;
     totalClaims: bigint;
 }
+export interface SubParcelInfo {
+    resourceRate: number;
+    slotIndex: bigint;
+    isLocked: boolean;
+    buildingType: string;
+    cooldownSecondsRemaining: bigint;
+}
 export type FaucetResult = {
     __kind__: "ok";
     ok: FaucetGrant;
@@ -161,6 +168,14 @@ export type FaucetResult = {
     __kind__: "err";
     err: string;
 };
+export interface PlotProductionRate {
+    totalPerDay: number;
+    plotId: bigint;
+    tierBonus: number;
+    baseFRNTRPerDay: number;
+    generatorTier: bigint;
+    nexusBonus: number;
+}
 export interface CombatEvent {
     attacker: Principal;
     intercepted: boolean;
@@ -172,14 +187,6 @@ export interface CombatEvent {
     success: boolean;
     missileType?: string;
     defPower: bigint;
-}
-export interface PlotProductionRate {
-    totalPerDay: number;
-    plotId: bigint;
-    tierBonus: number;
-    baseFRNTRPerDay: number;
-    generatorTier: bigint;
-    nexusBonus: number;
 }
 export interface Tokenomics {
     burnRate: bigint;
@@ -345,6 +352,13 @@ export interface backendInterface {
      * / Returns the caller's principal display info for wallet/identity UI.
      */
     getPrincipal(): Promise<PrincipalDisplay>;
+    /**
+     * / Returns 7 SubParcelInfo entries (slots 0-6) for a plot.
+     * / isLocked = true during the 4-hour post-purchase cooldown.
+     * / cooldownSecondsRemaining = 0 when not locked.
+     * / Sub-parcel ID = plotId * 10 + slotIndex.
+     */
+    getSubParcelStatus(plotId: bigint): Promise<Array<SubParcelInfo>>;
     /**
      * / Returns all 7 sub-parcels for a given plot ID.
      */
@@ -902,6 +916,20 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.getPrincipal();
+            return result;
+        }
+    }
+    async getSubParcelStatus(arg0: bigint): Promise<Array<SubParcelInfo>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getSubParcelStatus(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getSubParcelStatus(arg0);
             return result;
         }
     }

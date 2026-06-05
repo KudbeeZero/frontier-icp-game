@@ -18,6 +18,14 @@ type Tokenomics =
    totalBurned: nat;
  };
 type Timestamp = int;
+type SubParcelInfo = 
+ record {
+   buildingType: text;
+   cooldownSecondsRemaining: nat;
+   isLocked: bool;
+   resourceRate: float64;
+   slotIndex: nat;
+ };
 type SubParcel = 
  record {
    building: opt text;
@@ -259,6 +267,11 @@ service : {
   getPlotsByOwner: (owner: principal) -> (vec nat) query;
   /// Returns the caller's principal display info for wallet/identity UI.
   getPrincipal: () -> (PrincipalDisplay) query;
+  /// Returns 7 SubParcelInfo entries (slots 0-6) for a plot.
+  /// isLocked = true during the 4-hour post-purchase cooldown.
+  /// cooldownSecondsRemaining = 0 when not locked.
+  /// Sub-parcel ID = plotId * 10 + slotIndex.
+  getSubParcelStatus: (plotId: nat) -> (vec SubParcelInfo) query;
   /// Returns all 7 sub-parcels for a given plot ID.
   getSubParcels: (plotId: nat) -> (vec SubParcel) query;
   getTokenomics: () -> (Tokenomics) query;

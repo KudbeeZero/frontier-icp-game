@@ -108,6 +108,7 @@ export default function Leaderboard() {
         rank: Number(e.rank),
         name:
           e.username ?? `${e.principal.slice(0, 8)}...${e.principal.slice(-4)}`,
+        principal: e.principal,
         plotsOwned: Number(e.plotsOwned),
         frntEarned: Number(e.frntBalance),
         victories: 0,
@@ -148,19 +149,22 @@ export default function Leaderboard() {
     const base = leaderboard.map((e) => ({
       id: e.name,
       name: e.name,
+      principal: e.principal ?? "",
       plots: e.plotsOwned,
       frntr: e.frntEarned,
       wins: e.victories,
       score: computeScore(e.plotsOwned, e.frntEarned, e.victories),
-      isMe: false,
+      isMe: !!(player.principal && e.principal === player.principal),
     }));
 
-    // Insert current player
+    // Insert current player if not already in list
+    const alreadyInList = base.some((e) => e.isMe);
     const myEntry = {
       id: "__me__",
       name: player.principal
         ? `${player.principal.slice(0, 8)}...${player.principal.slice(-4)}`
         : "YOU",
+      principal: player.principal ?? "",
       plots: player.plotsOwned.length,
       frntr: Math.round(player.frntBalance),
       wins: rankStats.combatWins,
@@ -172,9 +176,9 @@ export default function Leaderboard() {
       isMe: true,
     };
 
-    // Merge, dedup by name
-    const merged = [myEntry, ...base].slice(0, 25);
-    return merged;
+    // Merge, dedup: if player already in leaderboard data, don't insert duplicate
+    const merged = alreadyInList ? base : [myEntry, ...base];
+    return merged.slice(0, 25);
   }, [leaderboard, player, rankStats]);
 
   const sorted = useMemo(() => {
@@ -216,6 +220,10 @@ export default function Leaderboard() {
       setSortDir("desc");
     }
   };
+
+  const myRank = sorted.findIndex(
+    (e) => e.isMe || (player.principal && e.principal === player.principal),
+  );
 
   const timeSince = Math.floor((Date.now() - lastRefresh) / 1000);
 
@@ -674,6 +682,46 @@ export default function Leaderboard() {
               })}
             </div>
           )}
+        </motion.div>
+
+        {/* YOUR RANK card */}
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.2 }}
+          data-ocid="leaderboard.your_rank_card"
+          className="mt-4 flex items-center justify-between rounded-xl px-5 py-4"
+          style={{
+            background: "rgba(0,255,204,0.06)",
+            border: "1px solid rgba(0,255,204,0.25)",
+            backdropFilter: "blur(12px)",
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <Trophy size={16} style={{ color: GOLD }} />
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: 2,
+                color: TEXT_DIM,
+                textTransform: "uppercase",
+              }}
+            >
+              YOUR RANK
+            </span>
+          </div>
+          <span
+            style={{
+              fontSize: 18,
+              fontWeight: 900,
+              fontFamily: "monospace",
+              color: myRank >= 0 ? CYAN : TEXT_DIM,
+              letterSpacing: 1,
+            }}
+          >
+            {myRank >= 0 ? `#${myRank + 1}` : "UNRANKED"}
+          </span>
         </motion.div>
 
         {/* Auto-refresh indicator */}

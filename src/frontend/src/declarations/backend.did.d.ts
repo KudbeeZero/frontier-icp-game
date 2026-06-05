@@ -101,6 +101,13 @@ export interface SubParcel {
   'slotIndex' : bigint,
   'specialization' : string,
 }
+export interface SubParcelInfo {
+  'resourceRate' : number,
+  'slotIndex' : bigint,
+  'isLocked' : boolean,
+  'buildingType' : string,
+  'cooldownSecondsRemaining' : bigint,
+}
 export type Timestamp = bigint;
 export interface Tokenomics {
   'burnRate' : bigint,
@@ -259,6 +266,13 @@ export interface _SERVICE {
    * / Returns the caller's principal display info for wallet/identity UI.
    */
   'getPrincipal' : ActorMethod<[], PrincipalDisplay>,
+  /**
+   * / Returns 7 SubParcelInfo entries (slots 0-6) for a plot.
+   * / isLocked = true during the 4-hour post-purchase cooldown.
+   * / cooldownSecondsRemaining = 0 when not locked.
+   * / Sub-parcel ID = plotId * 10 + slotIndex.
+   */
+  'getSubParcelStatus' : ActorMethod<[bigint], Array<SubParcelInfo>>,
   /**
    * / Returns all 7 sub-parcels for a given plot ID.
    */

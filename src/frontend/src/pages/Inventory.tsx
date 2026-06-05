@@ -15,12 +15,12 @@ const TEXT_DIM = "rgba(224,244,255,0.45)";
 // Daily production by generator tier
 const TIER_DAILY: Record<GeneratorTier, number> = {
   0: 7,
-  1: 15,
-  2: 31,
-  3: 55,
-  4: 103,
-  5: 199,
-  6: 391,
+  1: 10,
+  2: 15,
+  3: 22,
+  4: 32,
+  5: 45,
+  6: 45, // tier 6 same cap as 5 for display
 };
 
 const TIER_LABELS: Record<GeneratorTier, string> = {
@@ -261,8 +261,8 @@ function PlotCard({ plotId, index }: { plotId: number; index: number }) {
   const fuelPerDay = (drip[1] * 86400 * effFactor).toFixed(2);
   const crystalPerDay = (drip[2] * 86400 * effFactor).toFixed(2);
   const rarePerDay = (drip[3] * 86400 * effFactor).toFixed(2);
-  const upgradeCosts = [500, 1500, 4000, 10000, 25000, 60000];
-  const upgradeCost = tier < 6 ? upgradeCosts[tier] : null;
+  const upgradeCosts = [500, 1500, 4000, 8000, 15000];
+  const upgradeCost = tier < 5 ? upgradeCosts[tier] : null;
   const canUpgrade = upgradeCost !== null && player.frntBalance >= upgradeCost;
   const isLoggedIn = !!player.principal;
   const eff = plot.efficiency;

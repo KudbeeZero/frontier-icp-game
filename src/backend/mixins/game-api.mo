@@ -8,6 +8,8 @@ import Nat         "mo:core/Nat";
 import CommonTypes "../types/common";
 import GameTypes   "../types/game";
 import GameLib     "../lib/game";
+import TestnetTypes "../types/testnet";
+import Blob "mo:core/Blob";
 
 mixin (
   // State slices injected from main.mo
@@ -15,7 +17,7 @@ mixin (
   plotUpgrades : Map.Map<GameTypes.PlotId, GameTypes.PlotUpgrades>,
   plotRarities : Map.Map<GameTypes.PlotId, GameTypes.PlotRarity>,
   generatorTiers : Map.Map<Nat, GameTypes.GeneratorTier>,
-  plots        : Map.Map<Nat, { plotId : Nat; biome : Text; owner : ?Principal; nexusElectricityLevel : Nat; purchaseTimestamp : ?Int; var richness : Nat; lat : Float; lng : Float; iron : Nat; fuel : Nat; crystal : Nat; lastTick : Int; defenses : { turrets : Nat; shields : Nat; walls : Nat }; facilities : { electricityPlant : Bool; blockchainNode : Bool; dataCentre : Bool; aiLab : Bool }; attackCooldown : Int; faction : ?Text; morale : Nat; interceptorSystem : ?Text; nftTokenId : ?Nat }>,
+  plots        : Map.Map<Nat, { plotId : Nat; biome : Text; owner : ?Principal; nexusElectricityLevel : Nat; purchaseTimestamp : ?Int; richness : Nat; lat : Float; lng : Float; iron : Nat; fuel : Nat; crystal : Nat; lastTick : Int; defenses : { turrets : Nat; shields : Nat; walls : Nat }; facilities : { electricityPlant : Bool; blockchainNode : Bool; dataCentre : Bool; aiLab : Bool }; attackCooldown : Int; faction : ?Text; morale : Nat; interceptorSystem : ?Text; nftTokenId : ?Nat }>,
   players      : Map.Map<Principal, { iron : Nat; fuel : Nat; crystal : Nat; frntBalance : Nat; plotsOwned : Nat; combatVictories : Nat; commanderType : ?Text; commanderAtk : Nat; commanderDef : Nat; satelliteExpiry : Int; reconTargets : [(Nat, Int)]; empTargets : [(Nat, Int)]; totalFRNTRBurned : Float; passiveIncomePerDay : Float }>,
   adminState   : { var adminPrincipal : Text },
 ) {
@@ -69,7 +71,9 @@ mixin (
 
   /// Upgrade a plot's generator to the next tier.
   /// Caller must own the plot and have sufficient FRNTR.
-  public shared ({ caller }) func upgradeGenerator(plotId : Nat) : async GameTypes.UpgradeResult {
+  /// FRNTR cost is burned via icrc1_transfer to burn address; 0.075% routed to treasury.
+  /// Returns PlotUpgradesView (not PlotUpgrades) so callers see tier name + bonus.
+  public shared ({ caller }) func upgradeGenerator(plotId : Nat) : async { #ok : GameTypes.PlotUpgradesView; #err : GameTypes.UpgradeError } {
     // Verify the plot exists and the caller owns it.
     let plot = switch (plots.get(plotId)) {
       case (?p) { p };
@@ -112,7 +116,7 @@ mixin (
     plotUpgrades.add(plotId, newUpgrades);
     // Keep generatorTiers map in sync so plotDailyRate uses the updated tier.
     generatorTiers.add(plotId, next);
-    #ok(newUpgrades);
+    #ok(GameLib.upgradesView(newUpgrades));
   };
 
   // ---------------------------------------------------------------------------
@@ -188,6 +192,207 @@ mixin (
     let updatedPlayer = { player with plotsOwned = player.plotsOwned + 1 };
     players.add(caller, updatedPlayer);
     #ok("Plot " # Nat.toText(plotId) # " purchased for " # Nat.toText(priceE8s) # " e8s");
+  };
+
+  // ---------------------------------------------------------------------------
+  // Sub-parcel slot status
+  // ---------------------------------------------------------------------------
+
+  /// Return 7 SubParcelInfo entries for a plot (slots 0-6).
+  /// slotIndex 0 = center Nexus, 1-6 = surrounding sub-parcels.
+  /// isLocked = true during the 4-hour post-purchase cooldown.
+  /// cooldownSecondsRemaining = 0 when not locked.
+  /// Sub-parcel ID = plotId * 10 + slotIndex (O(1) lookup).
+  public query func getSubParcelStatus(plotId : Nat) : async [GameTypes.SubParcelInfo] {
+    let now : Int = Time.now();
+    let fourHoursNs : Int = 14_400_000_000_000;
+
+    // Determine lock state from purchaseTimestamp
+    let (isLocked, cooldownRemaining) : (Bool, Nat) = switch (plots.get(plotId)) {
+      case (null) { (false, 0) };
+      case (?plot) {
+        switch (plot.purchaseTimestamp) {
+          case (null) { (false, 0) };
+          case (?ts) {
+            let unlockAt : Int = ts + fourHoursNs;
+            if (now < unlockAt) {
+              let remaining : Int = unlockAt - now;
+              let remainingSecs : Nat = (remaining / 1_000_000_000).toNat();
+              (true, remainingSecs);
+            } else {
+              (false, 0);
+            };
+          };
+        };
+      };
+    };
+
+    // Build 7 SubParcelInfo entries (slot 0 = Nexus, slots 1-6 = surrounding)
+    var result : [GameTypes.SubParcelInfo] = [];
+    var slot = 0;
+    while (slot < 7) {
+      let (buildingType, resourceRate) : (Text, Float) = if (slot == 0) {
+        let rate : Float = switch (plots.get(plotId)) {
+          case (null) { 0.0 };
+          case (?plot) {
+            switch (plot.nexusElectricityLevel) {
+              case (1) { 8.0 };
+              case (2) { 24.0 };
+              case (3) { 48.0 };
+              case (_) { 0.0 };
+            };
+          };
+        };
+        ("Nexus", rate);
+      } else {
+        ("", 0.0);
+      };
+      result := result.concat([{
+        slotIndex                = slot;
+        isLocked                 = isLocked;
+        cooldownSecondsRemaining = cooldownRemaining;
+        buildingType             = buildingType;
+        resourceRate             = resourceRate;
+      }]);
+      slot += 1;
+    };
+    result;
+  };
+
+  // ---------------------------------------------------------------------------
+  // ICP-denominated plot purchase (ICRC-2 flow)
+  // ---------------------------------------------------------------------------
+
+  /// Purchase a plot with ICP using the ICRC-2 approve + transfer_from flow.
+  /// The frontend must call icrc2_approve on the ICP ledger before calling this.
+  /// Steps (atomic): verify plot exists and is unowned, call icrc2_transfer_from
+  /// on ICP ledger (ryjl3-tyaaa-aaaaa-aaaba-cai), assign ownership, notify treasury.
+  /// If any step fails, return {#err: reason} and do NOT assign ownership.
+  public shared ({ caller }) func purchasePlot(plotId : Nat) : async { #ok : Text; #err : Text } {
+    if (caller.isAnonymous()) { return #err("Anonymous users cannot purchase plots") };
+
+    let plot = switch (plots.get(plotId)) {
+      case (null) { return #err("Plot does not exist!") };
+      case (?p)   { p };
+    };
+
+    switch (plot.owner) {
+      case (?owner) {
+        if (owner == caller) { return #err("You already own this plot") };
+        return #err("Plot already owned");
+      };
+      case (null) {};
+    };
+
+    // Resolve canonical price in e8s from rarity
+    let rarity = switch (plotRarities.get(plotId)) {
+      case (?r) { r };
+      case (null) {
+        let r = GameLib.rarityFromBiome(plot.biome, plotId);
+        plotRarities.add(plotId, r);
+        r;
+      };
+    };
+    let icpAmt : Nat = GameLib.priceForRarity(rarity, pricingState.pricing);
+
+    // ICRC-2 types for ICP ledger
+    type ICRC2Account = { owner : Principal; subaccount : ?Blob };
+    type ICRC2TransferFromArgs = {
+      from             : ICRC2Account;
+      to               : ICRC2Account;
+      amount           : Nat;
+      fee              : ?Nat;
+      memo             : ?Blob;
+      created_at_time  : ?Nat64;
+      spender_subaccount : ?Blob;
+    };
+    type ICRC2TransferFromError = {
+      #InsufficientFunds    : { balance : Nat };
+      #InsufficientAllowance : { allowance : Nat };
+      #TooOld;
+      #CreatedInFuture      : { ledger_time : Nat64 };
+      #Duplicate            : { duplicate_of : Nat };
+      #TemporarilyUnavailable;
+      #GenericError         : { error_code : Nat; message : Text };
+      #BadFee               : { expected_fee : Nat };
+      #BadBurn              : { min_burn_amount : Nat };
+    };
+    type ICRC2TransferFromResult = { #Ok : Nat; #Err : ICRC2TransferFromError };
+
+    let icpLedger = actor("ryjl3-tyaaa-aaaaa-aaaba-cai") : actor {
+      icrc2_transfer_from : (ICRC2TransferFromArgs) -> async ICRC2TransferFromResult
+    };
+
+    // Get game canister self-principal from admin state (stored as adminPrincipal)
+    // The caller must have pre-approved the game canister as ICRC-2 spender
+    let selfText = adminState.adminPrincipal; // fallback; proper deployment sets selfPrincipalText
+    let selfPrincipal = Principal.fromText(selfText);
+
+    let transferArgs : ICRC2TransferFromArgs = {
+      from             = { owner = caller; subaccount = null };
+      to               = { owner = selfPrincipal; subaccount = null };
+      amount           = icpAmt;
+      fee              = ?10_000;
+      memo             = null;
+      created_at_time  = null;
+      spender_subaccount = null;
+    };
+    switch (await icpLedger.icrc2_transfer_from(transferArgs)) {
+      case (#Err(err)) {
+        return #err("ICP transfer failed: " # debug_show(err));
+      };
+      case (#Ok(_)) {};
+    };
+
+    // ICP transfer succeeded — assign ownership
+    let player = switch (players.get(caller)) {
+      case (?p) { p };
+      case (null) {
+        {
+          iron = 0; fuel = 0; crystal = 0; frntBalance = 600_00000000;
+          plotsOwned = 0; combatVictories = 0; commanderType = null;
+          commanderAtk = 0; commanderDef = 0; satelliteExpiry = 0;
+          reconTargets = []; empTargets = []; totalFRNTRBurned = 0.0;
+          passiveIncomePerDay = 0.0;
+        };
+      };
+    };
+
+    let updatedPlayer = { player with plotsOwned = player.plotsOwned + 1 };
+    players.add(caller, updatedPlayer);
+
+    let updatedPlot = { plot with owner = ?caller; purchaseTimestamp = ?(Time.now()) };
+    plots.add(plotId, updatedPlot);
+
+    // Initialize upgrade record for this plot
+    plotUpgrades.add(plotId, GameLib.defaultUpgrades(plotId));
+
+    #ok("Plot " # Nat.toText(plotId) # " purchased successfully");
+  };
+
+  // ---------------------------------------------------------------------------
+  // Testnet faucet (no cooldown)
+  // ---------------------------------------------------------------------------
+
+  /// Claim 500 FRNTR + 2 ICP for testnet testing. Always succeeds, no cooldown.
+  public shared ({ caller }) func testFaucetV2() : async { #ok : TestnetTypes.FaucetGrant; #err : Text } {
+    if (caller.isAnonymous()) { return #err("Must be authenticated") };
+    // Ensure player record exists
+    switch (players.get(caller)) {
+      case (null) {
+        players.add(caller, {
+          iron = 0; fuel = 0; crystal = 0; frntBalance = 600_00000000;
+          plotsOwned = 0; combatVictories = 0; commanderType = null;
+          commanderAtk = 0; commanderDef = 0; satelliteExpiry = 0;
+          reconTargets = []; empTargets = []; totalFRNTRBurned = 0.0;
+          passiveIncomePerDay = 0.0;
+        });
+      };
+      case (?_) {};
+    };
+    // Return the standard grant — ledger transfer handled by caller on frontend
+    // or via main.mo testFaucetV2 which performs the actual icrc1_transfer
+    #ok({ frntGranted = 500_00000000; icpGranted = 2_00000000 });
   };
 
   // ---------------------------------------------------------------------------

@@ -57,6 +57,13 @@ export const PrincipalDisplay = IDL.Record({
   'short' : IDL.Text,
   'isAuthed' : IDL.Bool,
 });
+export const SubParcelInfo = IDL.Record({
+  'resourceRate' : IDL.Float64,
+  'slotIndex' : IDL.Nat,
+  'isLocked' : IDL.Bool,
+  'buildingType' : IDL.Text,
+  'cooldownSecondsRemaining' : IDL.Nat,
+});
 export const SubParcel = IDL.Record({
   'subParcelId' : IDL.Nat,
   'cooldownEnds' : IDL.Int,
@@ -256,6 +263,11 @@ export const idlService = IDL.Service({
     ),
   'getPlotsByOwner' : IDL.Func([IDL.Principal], [IDL.Vec(IDL.Nat)], ['query']),
   'getPrincipal' : IDL.Func([], [PrincipalDisplay], ['query']),
+  'getSubParcelStatus' : IDL.Func(
+      [IDL.Nat],
+      [IDL.Vec(SubParcelInfo)],
+      ['query'],
+    ),
   'getSubParcels' : IDL.Func([IDL.Nat], [IDL.Vec(SubParcel)], ['query']),
   'getTokenomics' : IDL.Func([], [Tokenomics], ['query']),
   'getTreasuryBalances' : IDL.Func(
@@ -396,6 +408,13 @@ export const idlFactory = ({ IDL }) => {
     'full' : IDL.Text,
     'short' : IDL.Text,
     'isAuthed' : IDL.Bool,
+  });
+  const SubParcelInfo = IDL.Record({
+    'resourceRate' : IDL.Float64,
+    'slotIndex' : IDL.Nat,
+    'isLocked' : IDL.Bool,
+    'buildingType' : IDL.Text,
+    'cooldownSecondsRemaining' : IDL.Nat,
   });
   const SubParcel = IDL.Record({
     'subParcelId' : IDL.Nat,
@@ -597,6 +616,11 @@ export const idlFactory = ({ IDL }) => {
         ['query'],
       ),
     'getPrincipal' : IDL.Func([], [PrincipalDisplay], ['query']),
+    'getSubParcelStatus' : IDL.Func(
+        [IDL.Nat],
+        [IDL.Vec(SubParcelInfo)],
+        ['query'],
+      ),
     'getSubParcels' : IDL.Func([IDL.Nat], [IDL.Vec(SubParcel)], ['query']),
     'getTokenomics' : IDL.Func([], [Tokenomics], ['query']),
     'getTreasuryBalances' : IDL.Func(

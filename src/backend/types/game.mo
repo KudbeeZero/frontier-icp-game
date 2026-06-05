@@ -96,4 +96,28 @@ module {
     priceE8s     : Nat;         // canonical price for this plot
     rarityLabel  : Text;        // "Common", "Rare", "Epic"
   };
+  // Sub-parcel slot status — 7 slots per plot (0=Nexus center, 1-6=surrounding).
+  // Sub-parcel ID formula: plotId * 10 + slotIndex.
+  public type SubParcelStatus = {
+    subParcelId  : Nat;   // plotId * 10 + slotIndex
+    slotIndex    : Nat;   // 0-6
+    buildingType : ?Text; // null when empty
+    cooldownEnd  : Int;   // nanoseconds timestamp; 0 means not locked
+    isLocked     : Bool;  // true during 4-hour post-purchase cooldown
+    productionRate : Float; // FRNTR/day contribution from this slot
+  };
+
+  // Public-facing sub-parcel info returned by getSubParcelStatus.
+  // slotIndex 0 = center Nexus, 1-6 = surrounding sub-parcels.
+  // cooldownSecondsRemaining is 0 when not locked.
+  public type SubParcelInfo = {
+    slotIndex                : Nat;
+    isLocked                 : Bool;
+    cooldownSecondsRemaining : Nat;
+    buildingType             : Text;  // "" when empty
+    resourceRate             : Float; // FRNTR/day contribution
+  };
+
+  // Faucet result for testFaucetV2 is defined in types/testnet.mo as FaucetGrant.
 };
+
