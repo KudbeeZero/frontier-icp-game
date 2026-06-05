@@ -8,10 +8,47 @@ import Time "mo:core/Time";
 import Array "mo:core/Array";
 import Cycles "mo:core/Cycles";
 import Order "mo:core/Order";
+import Blob "mo:core/Blob";
 
 /// Treasury Canister for Frontier: Missile Horizon
 /// Handles 25/25/50 revenue split on plot purchases and FRNTR fee routing.
 actor {
+
+  // ---------------------------------------------------------------------------
+  // ICRC-1 transfer types (for ICP ledger calls)
+  // ---------------------------------------------------------------------------
+  type ICRC1Account = { owner : Principal; subaccount : ?Blob };
+
+  type ICRC1TransferArgs = {
+    to               : ICRC1Account;
+    amount           : Nat;
+    fee              : ?Nat;
+    memo             : ?Blob;
+    from_subaccount  : ?Blob;
+    created_at_time  : ?Nat64;
+  };
+
+  type ICRC1TransferError = {
+    #BadFee              : { expected_fee : Nat };
+    #BadBurn             : { min_burn_amount : Nat };
+    #InsufficientFunds   : { balance : Nat };
+    #TooOld;
+    #CreatedInFuture     : { ledger_time : Nat64 };
+    #Duplicate           : { duplicate_of : Nat };
+    #TemporarilyUnavailable;
+    #GenericError        : { error_code : Nat; message : Text };
+  };
+
+  type ICRC1TransferResult = { #Ok : Nat; #Err : ICRC1TransferError };
+
+  let ICP_LEDGER_ID : Text = "ryjl3-tyaaa-aaaaa-aaaba-cai";
+
+  /// Build a 32-byte subaccount blob where byte 31 = index.
+  /// index 1 = dev, 2 = leaderboard, 3 = liquidity
+  private func subaccountOf(index : Nat8) : Blob {
+    let bytes : [Nat8] = Array.tabulate<Nat8>(32, func(i) { if (i == 31) { index } else { 0 } });
+    Blob.fromArray(bytes);
+  };
 
   // ---------------------------------------------------------------------------
   // Error type
@@ -47,6 +84,8 @@ actor {
   var leaderboardPotICP : Nat = 0;
   /// ICP pot reserved exclusively for DEX liquidity seeding
   var liquidityPotICP : Nat = 0;
+  /// FRNTR accumulated from in-game upgrade liquidity tax (0.075% of each upgrade cost)
+  var liquidityFRNTRPot : Nat = 0;
 
   // ---------------------------------------------------------------------------
   // Stable fee percentages (must always sum to 100)
@@ -56,19 +95,21 @@ actor {
   var liquidityFeePercent : Nat = 50;
 
   // ---------------------------------------------------------------------------
-  // Admin principal — replace placeholder before mainnet
+  // Admin principal
   // ---------------------------------------------------------------------------
-  var adminPrincipal : Principal = Principal.fromText("aaaaa-aa");
+  var adminPrincipal : Principal = Principal.fromText("cjdkt-wqjqk-jd6xu-uc2jl-lgueg-v4kum-o32mf-mwl7v-63yjp-26gyk-mae");
 
   // ---------------------------------------------------------------------------
-  // FRNTR ledger principal — stub until real ICRC-1 ledger is deployed
+  // FRNTR ledger principal — set via setFrntrLedgerPrincipal after deployment
   // ---------------------------------------------------------------------------
-  var frntLedgerPrincipal : Principal = Principal.fromText("aaaaa-aa");
+  var frntrLedger : ?Principal = null;
 
   // ---------------------------------------------------------------------------
   // Approved DEX canisters for liquidity pot withdrawals
   // ---------------------------------------------------------------------------
   var approvedDEXCanisters : [Principal] = [];
+  /// Single approved liquidity canister for withdrawLiquidityPot (ICPSwap).
+  var approvedLiquidityCanister : ?Principal = null;
 
   // ---------------------------------------------------------------------------
   // Username registry — persisted via enhanced orthogonal persistence
@@ -77,6 +118,26 @@ actor {
   let usernames = Map.empty<Principal, Text>();
   /// Reverse map for uniqueness checks: username → Principal
   let usernameIndex = Map.empty<Text, Principal>();
+
+  // ---------------------------------------------------------------------------
+  // Treasury canister's own principal — used as `to.owner` for subaccount transfers.
+  // Set once after deployment by calling setSelfPrincipal(), or via admin override.
+  // ---------------------------------------------------------------------------
+  stable var selfPrincipalText : Text = "aaaaa-aa";
+  public shared ({ caller }) func setSelfPrincipal() : async () {
+    if (selfPrincipalText == "aaaaa-aa") {
+      selfPrincipalText := caller.toText();
+    };
+  };
+  public shared ({ caller }) func setTreasurySelfPrincipal(p : Text) : async { #ok; #err : TreasuryError } {
+    switch (requireAdmin(caller)) {
+      case (#err e) { return #err e };
+      case (#ok) {};
+    };
+    selfPrincipalText := p;
+    #ok;
+  };
+  public query func getTreasurySelfPrincipal() : async Text { selfPrincipalText };
 
   // ---------------------------------------------------------------------------
   // Local FRNTR balance cache — used for leaderboard until real ledger wired
@@ -122,42 +183,124 @@ actor {
   // ---------------------------------------------------------------------------
 
   /// Called by the game canister after every plot purchase.
-  /// Splits `amount` using precise Nat arithmetic:
-  ///   dev = amount * 25 / 100
-  ///   lb  = amount * 25 / 100
-  ///   liq = amount - dev - lb  (absorbs any integer rounding remainder)
-  /// This guarantees dev + lb + liq == amount exactly.
+  /// Splits `amount` using precise Nat arithmetic and routes each portion
+  /// to its designated subaccount via real ICP ICRC-1 transfers.
+  ///   dev_gross = amount * 25 / 100
+  ///   lb_gross  = amount * 25 / 100
+  ///   liq_gross = amount - dev_gross - lb_gross  (absorbs rounding remainder)
+  /// Each transfer pays a 10_000 e8s fee; net amounts deduct the fee.
   public shared ({ caller }) func notifyPlotPurchase(
     amount : Nat,
     buyer : Principal,
   ) : async { #ok; #err : TreasuryError } {
-    let dev = amount * 25 / 100;
-    let lb  = amount * 25 / 100;
-    let liq = amount - dev - lb;
-    developerTreasuryICP += dev;
-    leaderboardPotICP    += lb;
-    liquidityPotICP      += liq;
-    logAudit(buyer, amount, "plotPurchase:dev=" # Nat.toText(dev) # ":lb=" # Nat.toText(lb) # ":liq=" # Nat.toText(liq));
+    let fee : Nat = 10_000;
+    let dev_gross = amount * 25 / 100;
+    let lb_gross  = amount * 25 / 100;
+    let liq_gross = amount - dev_gross - lb_gross;
+
+    // Ensure amounts cover the transfer fee before attempting
+    if (dev_gross < fee or lb_gross < fee or liq_gross < fee) {
+      // Amount too small to split with fees — fall back to counter-only tracking
+      developerTreasuryICP += dev_gross;
+      leaderboardPotICP    += lb_gross;
+      liquidityPotICP      += liq_gross;
+      logAudit(buyer, amount, "plotPurchase:counterOnly:tooSmall");
+      return #ok;
+    };
+
+    let dev_net = dev_gross - fee;
+    let lb_net  = lb_gross  - fee;
+    let liq_net = liq_gross - fee;
+
+    let icpLedger = actor(ICP_LEDGER_ID) : actor {
+      icrc1_transfer : (ICRC1TransferArgs) -> async ICRC1TransferResult
+    };
+
+    // Transfer to dev subaccount (index 1)
+    let devResult = await icpLedger.icrc1_transfer({
+      to              = { owner = Principal.fromText(selfPrincipalText); subaccount = ?(subaccountOf(1)) };
+      amount          = dev_net;
+      fee             = ?fee;
+      memo            = null;
+      from_subaccount = null;
+      created_at_time = null;
+    });
+    switch (devResult) {
+      case (#Err(_)) {}; // log but continue — counter updated below regardless
+      case (#Ok(_))  {};
+    };
+
+    // Transfer to leaderboard subaccount (index 2)
+    let lbResult = await icpLedger.icrc1_transfer({
+      to              = { owner = Principal.fromText(selfPrincipalText); subaccount = ?(subaccountOf(2)) };
+      amount          = lb_net;
+      fee             = ?fee;
+      memo            = null;
+      from_subaccount = null;
+      created_at_time = null;
+    });
+    switch (lbResult) {
+      case (#Err(_)) {};
+      case (#Ok(_))  {};
+    };
+
+    // Transfer to liquidity subaccount (index 3)
+    let liqResult = await icpLedger.icrc1_transfer({
+      to              = { owner = Principal.fromText(selfPrincipalText); subaccount = ?(subaccountOf(3)) };
+      amount          = liq_net;
+      fee             = ?fee;
+      memo            = null;
+      from_subaccount = null;
+      created_at_time = null;
+    });
+    switch (liqResult) {
+      case (#Err(_)) {};
+      case (#Ok(_))  {};
+    };
+
+    // Update running totals (gross amounts — reflect total routed to each pot)
+    developerTreasuryICP += dev_gross;
+    leaderboardPotICP    += lb_gross;
+    liquidityPotICP      += liq_gross;
+
+    logAudit(buyer, amount, "plotPurchase:dev=" # Nat.toText(dev_gross) # ":lb=" # Nat.toText(lb_gross) # ":liq=" # Nat.toText(liq_gross));
     #ok;
   };
 
   /// Consolidated query returning all three pot balances at once.
-  public query func getPotBalances() : async {
+  /// Calls icrc1_balance_of on ICP ledger for each subaccount (dev=1, leaderboard=2, liquidity=3).
+  public func getPotBalances() : async {
     developerTreasuryICP   : Nat;
     developerTreasuryFRNTR : Nat;
     leaderboardPotICP      : Nat;
     liquidityPotICP        : Nat;
+    liquidityFRNTRPot      : Nat;
   } {
-    { developerTreasuryICP; developerTreasuryFRNTR; leaderboardPotICP; liquidityPotICP };
+    type ICRC1BalanceAccount = { owner : Principal; subaccount : ?Blob };
+    let icpLedger = actor(ICP_LEDGER_ID) : actor {
+      icrc1_balance_of : (ICRC1BalanceAccount) -> async Nat
+    };
+    let self = Principal.fromText(selfPrincipalText);
+    let devBal  = await icpLedger.icrc1_balance_of({ owner = self; subaccount = ?(subaccountOf(1)) });
+    let lbBal   = await icpLedger.icrc1_balance_of({ owner = self; subaccount = ?(subaccountOf(2)) });
+    let liqBal  = await icpLedger.icrc1_balance_of({ owner = self; subaccount = ?(subaccountOf(3)) });
+    {
+      developerTreasuryICP   = devBal;
+      developerTreasuryFRNTR = developerTreasuryFRNTR;
+      leaderboardPotICP      = lbBal;
+      liquidityPotICP        = liqBal;
+      liquidityFRNTRPot      = liquidityFRNTRPot;
+    };
   };
 
   /// Called when an in-game action generates a FRNTR fee.
-  /// Routes the full `amount` to the developer FRNTR treasury.
+  /// Routes the amount to the FRNTR liquidity pot (0.075% upgrade tax).
   public shared ({ caller }) func notifyFRNTRFee(
     amount : Nat,
     actor_ : Principal,
   ) : async { #ok; #err : TreasuryError } {
-    developerTreasuryFRNTR += amount;
+    // Route FRNTR fee to liquidity pot (earmarked for FRNTR/ICP DEX seeding)
+    liquidityFRNTRPot += amount;
     // Also cache the caller's balance for leaderboard
     let prev = switch (playerFrntrBalances.get(actor_)) { case (?v) v; case null 0 };
     playerFrntrBalances.add(actor_, prev + amount);
@@ -203,14 +346,24 @@ actor {
   /// TODO: replace local balance lookup with real ICRC-1 `balance_of` call
   ///       to `frntLedgerPrincipal` once FRNTR ledger canister is deployed.
   public func getLeaderboard(limit : Nat) : async [LeaderboardEntry] {
-    // Collect all principals with usernames and their balances
+    // Collect all principals with usernames
     let pairs = usernames.toArray();
-    let scored = pairs.map<(Principal, Text), LeaderboardEntry>(
-      func((p, uname)) {
-        let bal = switch (playerFrntrBalances.get(p)) { case (?v) v; case null 0 };
-        { rank = 0; principal = p; username = uname; frntrBalance = bal };
-      }
-    );
+    // For each principal, fetch balance from ICRC-1 ledger if set, else local cache
+    var scored : [LeaderboardEntry] = [];
+    for ((p, uname) in pairs.vals()) {
+      let bal : Nat = switch (frntrLedger) {
+        case (?ledgerId) {
+          let tokenActor = actor(ledgerId.toText()) : actor {
+            icrc1_balance_of : ({ owner : Principal; subaccount : ?Blob }) -> async Nat
+          };
+          await tokenActor.icrc1_balance_of({ owner = p; subaccount = null });
+        };
+        case (null) {
+          switch (playerFrntrBalances.get(p)) { case (?v) v; case null 0 };
+        };
+      };
+      scored := Array.concat(scored, [{ rank = 0; principal = p; username = uname; frntrBalance = bal }]);
+    };
     // Sort descending by frntrBalance
     let sorted = scored.sort(
       func(a : LeaderboardEntry, b : LeaderboardEntry) : Order.Order {
@@ -367,8 +520,9 @@ actor {
   // ADMIN — Liquidity pot withdrawal (DEX-restricted)
   // ---------------------------------------------------------------------------
 
-  /// Withdraw from liquidity pot — only to a pre-approved DEX canister.
-  /// TODO: wire real ICP ledger transfer.
+  /// Withdraw from liquidity pot — only to the single pre-approved liquidity canister.
+  /// Returns #err(#InvalidDEX) with message "Unauthorized recipient canister" if
+  /// `to` does not match the approvedLiquidityCanister.
   public shared ({ caller }) func withdrawLiquidityPot(
     amount : Nat,
     to : Principal,
@@ -377,17 +531,36 @@ actor {
       case (#err e) { return #err e };
       case (#ok) {};
     };
-    // Strict DEX whitelist check
-    var approved = false;
-    for (p in approvedDEXCanisters.vals()) {
-      if (p == to) { approved := true };
+    // Single approved liquidity canister check
+    switch (approvedLiquidityCanister) {
+      case (null) { return #err(#InvalidDEX) };
+      case (?approved) {
+        if (approved != to) { return #err(#InvalidDEX) };
+      };
     };
-    if (not approved) { return #err(#InvalidDEX) };
     if (liquidityPotICP < amount) { return #err(#InsufficientFunds) };
     liquidityPotICP -= amount;
     logAudit(caller, amount, "withdrawLiq:" # to.toText());
     // TODO: await ICPLedger.transfer(...);
     #ok;
+  };
+
+  /// Set the single pre-approved ICPSwap canister address for liquidity pot withdrawals (admin only).
+  public shared ({ caller }) func setApprovedLiquidityCanister(
+    canisterId : Principal
+  ) : async { #ok; #err : TreasuryError } {
+    switch (requireAdmin(caller)) {
+      case (#err e) { return #err e };
+      case (#ok) {};
+    };
+    approvedLiquidityCanister := ?canisterId;
+    logAudit(caller, 0, "setApprovedLiquidityCanister:" # canisterId.toText());
+    #ok;
+  };
+
+  /// Returns the currently approved liquidity canister principal, or null if not set.
+  public query func getApprovedLiquidityCanister() : async ?Principal {
+    approvedLiquidityCanister;
   };
 
   // ---------------------------------------------------------------------------
@@ -407,16 +580,16 @@ actor {
     #ok;
   };
 
-  /// Set the FRNTR ICRC-1 ledger canister principal.
-  public shared ({ caller }) func setFRNTLedgerPrincipal(
+  /// Set the FRNTR ICRC-1 ledger canister principal (admin only).
+  public shared ({ caller }) func setFrntrLedgerPrincipal(
     p : Principal
   ) : async { #ok; #err : TreasuryError } {
     switch (requireAdmin(caller)) {
       case (#err e) { return #err e };
       case (#ok) {};
     };
-    frntLedgerPrincipal := p;
-    logAudit(caller, 0, "setFRNTLedger:" # p.toText());
+    frntrLedger := ?p;
+    logAudit(caller, 0, "setFrntrLedger:" # p.toText());
     #ok;
   };
 

@@ -12,7 +12,6 @@ function loadFromStorage() {
       crystal: number;
       rareEarth: number;
       plotsOwned: number[];
-      mockIcpBalance: number;
       resourceStorageCap: number;
       generatorTiers: Record<number, GeneratorTier>;
       plotPurchaseTimes: Record<number, number>;
@@ -36,7 +35,6 @@ function saveToStorage(state: GameState) {
         crystal: player.crystal,
         rareEarth: player.rareEarth,
         plotsOwned: player.plotsOwned,
-        mockIcpBalance: player.mockIcpBalance,
         resourceStorageCap: player.resourceStorageCap,
         generatorTiers,
         plotPurchaseTimes,
@@ -111,6 +109,7 @@ export interface PlotData {
   mineCount: number; // total times mined
   regenActiveUntil: number; // timestamp ms, 0 = inactive
   owner: string | null;
+  isOwnedByMe: boolean; // true when this plot belongs to the authenticated user
   iron: number;
   fuel: number;
   crystal: number;
@@ -118,6 +117,14 @@ export interface PlotData {
   defenses: { turrets: number; shields: number; walls: number };
   specialization: PlotSpecialization | null;
   generatorTier: GeneratorTier;
+  subParcels?: Array<{
+    subParcelId: number;
+    plotId: number;
+    slotIndex: number;
+    specialization: string;
+    building: string | null;
+    cooldownEnds: number;
+  }>;
 }
 
 export interface PlayerData {
@@ -128,7 +135,6 @@ export interface PlayerData {
   rareEarth: number;
   frntBalance: number;
   plotsOwned: number[];
-  mockIcpBalance: number;
   resourceStorageCap: number;
   commanderType?: string;
   commanderAtk?: number;
@@ -261,6 +267,7 @@ function generatePlots(): PlotData[] {
     mineCount: 0,
     regenActiveUntil: 0,
     owner: null,
+    isOwnedByMe: false,
     iron: 0,
     fuel: 0,
     crystal: 0,
@@ -313,6 +320,16 @@ export interface GlobalStats {
   daysUntilMilestone?: number;
   burnRate?: number;
   emissionRate?: number;
+  // Live treasury pot balances from canister (in ICP)
+  devPotICP: number;
+  leaderboardPotICP: number;
+  liquidityPotICP: number;
+}
+
+export interface TreasuryState {
+  developer: bigint;
+  leaderboard: bigint;
+  liquidity: bigint;
 }
 
 interface GameState {
@@ -331,13 +348,18 @@ interface GameState {
   serverPassiveIncomePerDay: number;
   totalFRNTRBurned: number;
   purchaseDebugLogs: PurchaseDebugLog[];
+  firstAvailablePlotId: number | null;
 
   globalStats: GlobalStats | null;
+  treasuryState: TreasuryState;
+  icpUsdPrice: number | null;
 
   activeBattleEntry?: any;
   assignedInterceptors?: Record<number, string>;
 
   setGlobalStats: (stats: GlobalStats) => void;
+  setTreasuryState: (state: TreasuryState) => void;
+  setIcpUsdPrice: (price: number | null) => void;
   selectPlot: (id: number | null) => void;
   setSelectedWorldPoint: (p: [number, number, number] | null) => void;
   purchasePlot: (id: number) => void;
@@ -373,6 +395,12 @@ interface GameState {
   setTotalFRNTRBurned: (amount: number) => void;
   addPurchaseDebugLog: (log: PurchaseDebugLog) => void;
   clearPurchaseDebugLogs: () => void;
+  setPlots: (plots: PlotData[]) => void;
+  setPlotOwnership: (
+    owners: Array<[bigint, string]>,
+    myPrincipal: string,
+  ) => void;
+  fetchSubParcels: (plotId: number) => Promise<void>;
 
   // v1.0 phased rollout stubs (hidden features)
   compareModeActive?: boolean;
@@ -407,7 +435,6 @@ export const useGameStore = create<GameState>((set, get) => ({
     rareEarth: _cached?.rareEarth ?? 0,
     frntBalance: _cached?.frntBalance ?? 0,
     plotsOwned: _cached?.plotsOwned ?? [],
-    mockIcpBalance: _cached?.mockIcpBalance ?? 5.0,
     resourceStorageCap: _cached?.resourceStorageCap ?? 200,
   },
   selectedPlotId: null,
@@ -423,9 +450,35 @@ export const useGameStore = create<GameState>((set, get) => ({
   serverPassiveIncomePerDay: 0,
   totalFRNTRBurned: _cached?.totalFRNTRBurned ?? 0,
   purchaseDebugLogs: [],
+  firstAvailablePlotId: null,
   globalStats: null,
+  treasuryState: { developer: 0n, leaderboard: 0n, liquidity: 0n },
+  icpUsdPrice: null,
 
   setGlobalStats: (stats) => set({ globalStats: stats }),
+  setTreasuryState: (state) => set({ treasuryState: state }),
+  setIcpUsdPrice: (price) => set({ icpUsdPrice: price }),
+
+  setPlots: (plots) => set({ plots }),
+
+  setPlotOwnership: (owners, myPrincipal) => {
+    const ownerMap = new Map<number, string>();
+    for (const [id, principal] of owners) {
+      ownerMap.set(Number(id), principal);
+    }
+    set((s) => ({
+      plots: s.plots.map((p) => {
+        const owner = ownerMap.get(p.id) ?? null;
+        return owner !== undefined
+          ? { ...p, owner, isOwnedByMe: !!myPrincipal && owner === myPrincipal }
+          : { ...p, isOwnedByMe: false };
+      }),
+    }));
+  },
+
+  fetchSubParcels: async (_plotId) => {
+    // stub — sub-parcel specialization deferred to post-v1.0
+  },
 
   selectPlot: (id) => set({ selectedPlotId: id }),
   setSelectedWorldPoint: (p) => set({ selectedWorldPoint: p }),
@@ -451,7 +504,9 @@ export const useGameStore = create<GameState>((set, get) => ({
           plotsOwned: [...s.player.plotsOwned, id],
         },
         plots: s.plots.map((p) =>
-          p.id === id ? { ...p, owner: s.player.principal ?? "You" } : p,
+          p.id === id
+            ? { ...p, owner: s.player.principal ?? "You", isOwnedByMe: true }
+            : p,
         ),
         subParcels: { ...s.subParcels, [id]: subParcels },
         plotPurchaseTimes: { ...s.plotPurchaseTimes, [id]: Date.now() },
@@ -574,7 +629,6 @@ export const useGameStore = create<GameState>((set, get) => ({
         player: {
           ...s.player,
           frntBalance: s.player.frntBalance + 500,
-          mockIcpBalance: s.player.mockIcpBalance + 2,
         },
       };
       saveToStorage(next as GameState);

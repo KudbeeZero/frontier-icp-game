@@ -1,3 +1,12 @@
+type UpgradeError = 
+ variant {
+   AlreadyMaxTier;
+   InsufficientFRNTR;
+   InvalidTier;
+   NotOwner;
+   PlotNotFound;
+   SubParcelLocked;
+ };
 type Tokenomics = 
  record {
    burnRate: nat;
@@ -7,6 +16,16 @@ type Tokenomics =
    maxSupply: nat;
    remainingMineable: nat;
    totalBurned: nat;
+ };
+type Timestamp = int;
+type SubParcel = 
+ record {
+   building: opt text;
+   cooldownEnds: int;
+   plotId: nat;
+   slotIndex: nat;
+   specialization: text;
+   subParcelId: nat;
  };
 type StressTestResult = 
  variant {
@@ -38,6 +57,15 @@ type PrincipalDisplay =
    full: text;
    isAuthed: bool;
    short: text;
+ };
+type PlotUpgradesView = 
+ record {
+   bonusPerDay: float64;
+   generatorTier: GeneratorTier;
+   installedAt: opt Timestamp;
+   nextTierCost: opt nat;
+   plotId: PlotId;
+   tierName: text;
  };
 type PlotProductionRate = 
  record {
@@ -73,6 +101,16 @@ type GeneratorTierInfo =
    costFRNTR: nat;
    name: text;
    tierIndex: nat;
+ };
+type GeneratorTier = 
+ variant {
+   None;
+   TierI;
+   TierII;
+   TierIII;
+   TierIV;
+   TierV;
+   TierVI;
  };
 type FaucetResult = 
  variant {
@@ -117,7 +155,31 @@ service : {
   getCoreGeneratorTiers: () -> (vec GeneratorTierInfo) query;
   /// Returns total faucet claims for a principal (debug/analytics).
   getFaucetClaims: ("principal": principal) -> (FaucetClaimSummary) query;
+  /// Returns the first plot ID with no owner, or null if all plots are owned.
+  /// Used by the stress-test to find a purchasable plot without hardcoding an ID.
+  getFirstAvailablePlot: () -> (opt nat) query;
+  getFrntrLedger: () -> (text) query;
+  getGameCanisterPrincipal: () -> (text) query;
+  /// Live global game stats for the UNIVERSE panel (v2 — detailed fields).
+  /// totalSupply = 10B hard cap; remainingMineable = 5B mineable cap minus total burned.
+  getGameStats: () ->
+   (record {
+      emissionRatePerDay: nat;
+      remainingMineable: nat;
+      totalBurned: nat;
+      totalFrntrBurned: nat;
+      totalPlayers: nat;
+      totalPlots: nat;
+      totalSupply: nat;
+    }) query;
   getGlobalStats: () -> (GlobalStats) query;
+  /// ICP/USD price oracle — performs HTTP outcall to CoinGecko API with 60s cache.
+  /// URL: https://api.coingecko.com/api/v3/simple/price?ids=internet-computer&vs_currencies=usd
+  /// Returns the current ICP/USD price as a Float.
+  getIcpUsdPrice: () -> (float64);
+  /// Returns the cached ICP/USD price without an HTTP outcall.
+  /// Returns 0.0 if the price has never been fetched.
+  getIcpUsdPriceCached: () -> (float64) query;
   /// Public leaderboard query: top players by FRNTR balance.
   getLeaderboard: (limit: nat) ->
    (vec
@@ -160,7 +222,7 @@ service : {
                             };
       totalFRNTRBurned: float64;
       username: opt text;
-    }) query;
+    });
   /// Query the full player state for a given principal.
   /// Returns a zeroed state if the principal has not played yet.
   getPlayerStateByPrincipal: ("principal": principal) ->
@@ -189,13 +251,37 @@ service : {
   getPlotCount: () -> (nat) query;
   /// Returns the canonical ICP price (e8s) for a plot identified by its H3 index.
   getPlotPrice: (h3Index: text) -> (nat) query;
+  /// Returns the ICP price in e8s for a plot identified by its numeric plot ID.
+  /// Price tier is derived from biome richness stored in the plots map.
+  getPlotPriceById: (plotId: nat) -> (nat) query;
   getPlotProductionRate: (plotId: nat) -> (PlotProductionRate) query;
+  /// Returns all plot IDs owned by a given principal.
+  getPlotsByOwner: (owner: principal) -> (vec nat) query;
   /// Returns the caller's principal display info for wallet/identity UI.
   getPrincipal: () -> (PrincipalDisplay) query;
+  /// Returns all 7 sub-parcels for a given plot ID.
+  getSubParcels: (plotId: nat) -> (vec SubParcel) query;
   getTokenomics: () -> (Tokenomics) query;
+  getTreasuryBalances: () ->
+   (record {
+      devPot: nat;
+      leaderboardPot: nat;
+      liquidityPot: nat;
+    });
   /// Query the current treasury canister principal.
   getTreasuryPrincipal: () -> (text) query;
+  /// Returns current balances of the three treasury pots in e8s.
+  /// devPot: 25% of plot ICP; leaderboardPot: 25%; liquidityPot: 50%.
+  /// getTreasuryState: alias for getTreasuryBalances, returns the 25/25/50 split balances.
+  /// Shape: { developer: Nat; leaderboard: Nat; liquidity: Nat } (all in e8s).
+  getTreasuryState: () ->
+   (record {
+      developer: nat;
+      leaderboard: nat;
+      liquidity: nat;
+    }) query;
   /// Seed plots from the frontend (admin only). Skips plots that already exist.
+  /// Also creates 7 sub-parcels per plot (slot 0 = center Nexus, slots 1-6 = surrounding).
   initPlots: (plotData: vec record {
                               nat;
                               text;
@@ -218,10 +304,22 @@ service : {
                                     err: text;
                                     ok: text;
                                   });
+  /// Admin: wipe all game state (plots, players, usernames, faucetClaims,
+  /// generatorTiers, subParcels, statsState, plotSoldCount) back to empty.
+  /// Used before migrating to mainnet for a clean slate.
+  resetAllData: () -> ();
   /// Admin: clear all player state for a clean test run (TESTNET_MODE only).
   resetTestState: () -> (ResetResult);
   /// Set a new admin principal. Guarded by current admin.
   setAdminPrincipal: (p: principal) -> ();
+  setApprovedLiquidityCanister: (dexCanister: principal) ->
+   (variant {
+      err: text;
+      ok;
+    });
+  setFrntrLedger: (canisterId: principal) -> ();
+  setGameCanisterPrincipal: (p: text) -> ();
+  setSelfPrincipal: () -> ();
   /// Update the treasury canister principal (admin only).
   setTreasuryPrincipal: (p: principal) -> ();
   /// Set a unique username (3-16 alphanumeric + underscore).
@@ -235,14 +333,29 @@ service : {
   stressMintPlots: (count: nat) -> (StressTestResult);
   /// Run `count` upgrade cycles across owned plots (TESTNET_MODE only).
   stressUpgradePlots: (count: nat) -> (StressTestResult);
-  /// Testnet faucet: grants exactly 500 FRNTR + 2 ICP (200_000_000 e8s simulated) per click.
-  /// No cooldown, no rate limit.
+  /// Testnet faucet: grants exactly 500 FRNTR per click.
+  /// No cooldown, no rate limit. ICP is real and not simulated.
   testFaucet: () -> (variant {
                        err: text;
                        ok: text;
                      });
   /// Testnet faucet: grants 500 FRNTR + 2 ICP (simulated) per click.
   /// No cooldown, no auth check beyond TESTNET_MODE=true.
+  /// Testnet faucet: grants 500 FRNTR + 2 ICP (simulated) per click.
+  /// Auto-creates a player record (600 FRNTR seed) if one doesn't exist.
+  /// No cooldown, no auth check beyond TESTNET_MODE=true.
   testFaucetV2: () -> (FaucetResult);
   updateAdminPrincipalAuth: (newPrincipal: text) -> ();
+  /// Upgrade the generator tier for an owned plot.
+  /// Deducts FRNTR cost from player balance, tracks burn, sends 0.075% liquidity tax to treasury.
+  upgradeGenerator: (plotId: nat) ->
+   (variant {
+      err: UpgradeError;
+      ok: PlotUpgradesView;
+    });
+  withdrawLiquidityPot: (amountE8s: nat, recipient: principal) ->
+   (variant {
+      err: text;
+      ok;
+    });
 }

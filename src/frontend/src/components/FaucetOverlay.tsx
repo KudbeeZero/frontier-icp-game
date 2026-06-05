@@ -30,7 +30,7 @@ export default function FaucetOverlay() {
     try {
       if (actor) {
         const result = await actor.testFaucetV2();
-        if (result.__kind__ === "ok") {
+        if ("ok" in result) {
           const _grant = result.ok;
           try {
             const state = await actor.getPlayerState();
@@ -38,11 +38,11 @@ export default function FaucetOverlay() {
               useGameStore.setState((s) => ({
                 player: {
                   ...s.player,
-                  frntBalance: Number(state.frntBalance),
-                  iron: Number(state.iron),
-                  fuel: Number(state.fuel),
-                  crystal: Number(state.crystal),
-                  mockIcpBalance: s.player.mockIcpBalance + 2,
+                  frntBalance: Number(state.frntBalance) / 100_000_000,
+                  iron: Number(state.iron) / 100_000_000,
+                  fuel: Number(state.fuel) / 100_000_000,
+                  crystal: Number(state.crystal) / 100_000_000,
+                  // ICP balance is now read from the real ledger via useIcpBalance()
                 },
               }));
             }

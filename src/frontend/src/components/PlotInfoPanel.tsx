@@ -102,6 +102,22 @@ function PlanetThumb({ biome }: { biome: string }) {
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
+// ── Price formatting ─────────────────────────────────────────────────────────
+function formatIcpPrice(priceE8s: number, icpUsdPrice: number | null): string {
+  const icp = priceE8s / 1e8;
+  const icpStr = icp.toFixed(4);
+  if (icpUsdPrice === null) return `${icpStr} ICP ($ unavailable)`;
+  const usd = (icp * icpUsdPrice).toFixed(2);
+  return `${icpStr} ICP (~$${usd})`;
+}
+
+// Derive price in e8s from efficiency (matches MapBottomSheet logic)
+function getPlotPriceE8s(efficiency: number): number {
+  if (efficiency >= 90) return 30_0000_0000; // 30 ICP
+  if (efficiency >= 80) return 9_0000_0000; // 9 ICP
+  return 2_5000_0000; // 2.5 ICP
+}
+
 export default function PlotInfoPanel() {
   const selectedPlotId = useGameStore((s) => s.selectedPlotId);
   const plots = useGameStore((s) => s.plots);
@@ -109,6 +125,7 @@ export default function PlotInfoPanel() {
   const purchasePlot = useGameStore((s) => s.purchasePlot);
   const attack = useGameStore((s) => s.attack);
   const playerData = useGameStore((s) => s.player);
+  const icpUsdPrice = useGameStore((s) => s.icpUsdPrice);
 
   const plot: PlotData | null =
     selectedPlotId !== null ? (plots[selectedPlotId] ?? null) : null;
@@ -141,6 +158,10 @@ export default function PlotInfoPanel() {
     if (selectedPlotId === null) return;
     purchasePlot(selectedPlotId);
   }
+
+  const plotPriceLabel = plot
+    ? formatIcpPrice(getPlotPriceE8s(plot.efficiency), icpUsdPrice)
+    : "";
 
   const panelStyle: React.CSSProperties = {
     ...glass,
@@ -411,6 +432,28 @@ export default function PlotInfoPanel() {
             >
               ⊕ COLONIZE
             </button>
+
+            {/* Purchase price display (only for unowned plots) */}
+            {plot && !plot.owner && (
+              <div
+                data-ocid="plot_info.price_display"
+                style={{
+                  gridColumn: "1 / -1",
+                  marginTop: 4,
+                  padding: "6px 8px",
+                  background: "rgba(0,255,204,0.06)",
+                  border: `1px solid ${BORDER}`,
+                  borderRadius: 6,
+                  fontSize: 11,
+                  color: CYAN,
+                  fontFamily: "monospace",
+                  textAlign: "center",
+                  letterSpacing: "0.08em",
+                }}
+              >
+                {plotPriceLabel}
+              </div>
+            )}
             <button
               type="button"
               data-ocid="plot_info.scan_button"

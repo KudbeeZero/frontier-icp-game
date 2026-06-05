@@ -228,3 +228,45 @@ export const GEODESIC_TILES: GeodesicTile[] = buildGeodesicGrid(32);
  */
 export const PLOT_POSITION_CACHE: Float32Array =
   buildPositionCache(GEODESIC_TILES);
+
+// ---------------------------------------------------------------------------
+// Ocean detection via lat/lng bounding boxes
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns true if the given lat/lng coordinates fall within known ocean
+ * bounding boxes. Used by assignBiome to accurately reflect real-world
+ * geography — ocean tiles produce Fuel and Rare Earth resources.
+ */
+export function isOceanTile(lat: number, lng: number): boolean {
+  // Pacific: lat -60 to 65, lng 120 to 180 or -180 to -70
+  if (lat >= -60 && lat <= 65) {
+    if (lng >= 120 && lng <= 180) return true;
+    if (lng >= -180 && lng <= -70) return true;
+  }
+  // Atlantic: lat -60 to 70, lng -70 to 20
+  if (lat >= -60 && lat <= 70 && lng >= -70 && lng <= 20) return true;
+  // Indian: lat -60 to 30, lng 20 to 120
+  if (lat >= -60 && lat <= 30 && lng >= 20 && lng <= 120) return true;
+  // Arctic: lat > 70
+  if (lat > 70) return true;
+  // Antarctic: lat < -60
+  if (lat < -60) return true;
+  return false;
+}
+
+/**
+ * Assign a biome based on latitude and longitude.
+ * Oceans are detected first via isOceanTile; land biomes fall back to
+ * latitude-based classification for now.
+ */
+export function assignBiome(lat: number, lng: number): string {
+  if (isOceanTile(lat, lng)) return "Ocean";
+  if (lat > 60) return "Arctic";
+  if (lat > 35) return lat > 45 ? "Mountain" : "Forest";
+  if (lat > 15) return "Grassland";
+  if (lat > -15) return lat > 5 ? "Desert" : "Toxic";
+  if (lat > -35) return "Forest";
+  if (lat > -60) return "Grassland";
+  return "Arctic";
+}

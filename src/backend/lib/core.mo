@@ -95,7 +95,8 @@ module {
     let circulating : Nat =
       PRE_MINTED + totalFRNTRMined -
       (if (totalFRNTRBurned > PRE_MINTED + totalFRNTRMined) { PRE_MINTED + totalFRNTRMined } else { totalFRNTRBurned });
-    let remaining   : Nat = if (MINEABLE_CAP > totalFRNTRMined) { MINEABLE_CAP - totalFRNTRMined } else { 0 };
+    // mineableRemaining depletes as tokens are burned (per tokenomics spec)
+    let remaining   : Nat = if (MINEABLE_CAP > totalFRNTRBurned) { MINEABLE_CAP - totalFRNTRBurned } else { 0 };
     let dailyRate   : Nat = if (currentDailyRate > 0) { currentDailyRate } else { plotsSold * 7 };
     let burnRateEst : Nat = if (plotsSold > 0) { plotsSold * 100 / 10 } else { 0 };
     let toNext      : Nat = if (circulating % MILESTONE_SIZE == 0) { MILESTONE_SIZE }

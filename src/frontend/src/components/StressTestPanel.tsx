@@ -1,6 +1,6 @@
 import { useActor, useInternetIdentity } from "@caffeineai/core-infrastructure";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { createActor } from "../backend";
 
 const CYAN = "#00ffcc";
@@ -49,13 +49,13 @@ const INITIAL_CHECKS: CheckResult[] = [
     durationMs: 0,
   },
   {
-    label: "6. Purchase plot — buy plot #1",
+    label: "6. Purchase plot — buy first available",
     status: "idle",
     detail: "",
     durationMs: 0,
   },
   {
-    label: "7. FRNTR accrual — balance updated",
+    label: "7. FRNTR accrual — passive income > 0",
     status: "idle",
     detail: "",
     durationMs: 0,
@@ -86,6 +86,8 @@ export default function StressTestPanel() {
   const [running, setRunning] = useState(false);
   const { actor } = useActor(createActor);
   const { isAuthenticated } = useInternetIdentity();
+  // Persist purchased plotId so test #7 can reference it
+  const purchasedPlotIdRef = useRef<bigint | null>(null);
 
   function updateCheck(index: number, patch: Partial<CheckResult>) {
     setChecks((prev) =>
@@ -146,7 +148,7 @@ export default function StressTestPanel() {
           : `err: ${r.err}`,
     );
 
-    const playerState = await runCheck(
+    const _playerState = await runCheck(
       2,
       () => actor.getPlayerState(),
       (r) => `FRNTR=${Number(r.frntBalance)} plots=${Number(r.plotsOwned)}`,
@@ -164,33 +166,53 @@ export default function StressTestPanel() {
       (r) => `${r.length} owned plots`,
     );
 
+    // Test #6: find first unowned plot, then purchase it
     const purchaseRes = await runCheck(
       5,
-      () => actor.purchasePlot(1n),
-      (r) => (r.__kind__ === "ok" ? `ok: ${r.ok}` : `err: ${r.err}`),
+      async () => {
+        // Get all owned plot IDs (backend uses sequential bigint IDs)
+        const owners = await actor.getAllPlotOwners();
+        const ownedIds = new Set(
+          owners.map(([id]: [bigint, string]) => Number(id)),
+        );
+        // Find the first sequential plot ID that has no owner
+        const plotCount = Number(await actor.getPlotCount());
+        let firstAvailable: bigint | null = null;
+        for (let i = 0; i < plotCount; i++) {
+          if (!ownedIds.has(i)) {
+            firstAvailable = BigInt(i);
+            break;
+          }
+        }
+        if (firstAvailable === null)
+          throw new Error("No available plots found");
+        const result = await actor.purchasePlot(firstAvailable);
+        if (result.__kind__ === "err") throw new Error(result.err);
+        purchasedPlotIdRef.current = firstAvailable;
+        return result;
+      },
+      (r) => `Purchased plot — ok: ${r.ok}`,
     );
 
-    if (purchaseRes?.__kind__ !== "ok") {
-      updateCheck(6, {
-        status: "fail",
-        detail: "Purchase prerequisite failed",
-        durationMs: 0,
-      });
-    } else {
-      await runCheck(
-        6,
-        async () => {
-          const before = playerState ? Number(playerState.frntBalance) : 0;
-          const after = await actor.getPlayerState();
-          return {
-            before,
-            after: Number(after.frntBalance),
-            diff: Number(after.frntBalance) - before,
-          };
-        },
-        (r) => `before=${r.before} after=${r.after} Δ=${r.diff}`,
-      );
-    }
+    // Test #7: verify passive income > 0 (independent — works if player owns any plot)
+    await runCheck(
+      6,
+      async () => {
+        const state = await actor.getPlayerState();
+        const income = state.passiveIncomePerDay;
+        const plots = Number(state.plotsOwned);
+        if (plots === 0 && purchaseRes === null) {
+          throw new Error("Purchase prerequisite failed");
+        }
+        if (income < 7) {
+          throw new Error(
+            `passiveIncomePerDay=${income} — expected >= 7 (base rate for 1 plot)`,
+          );
+        }
+        return { income, plots };
+      },
+      (r) => `passiveIncomePerDay=${r.income} plots=${r.plots} ✓`,
+    );
 
     await runCheck(
       7,

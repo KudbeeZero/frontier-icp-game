@@ -57,6 +57,14 @@ export const PrincipalDisplay = IDL.Record({
   'short' : IDL.Text,
   'isAuthed' : IDL.Bool,
 });
+export const SubParcel = IDL.Record({
+  'subParcelId' : IDL.Nat,
+  'cooldownEnds' : IDL.Int,
+  'plotId' : IDL.Nat,
+  'building' : IDL.Opt(IDL.Text),
+  'slotIndex' : IDL.Nat,
+  'specialization' : IDL.Text,
+});
 export const Tokenomics = IDL.Record({
   'burnRate' : IDL.Nat,
   'emissionRate' : IDL.Nat,
@@ -93,6 +101,32 @@ export const FaucetResult = IDL.Variant({
   'ok' : FaucetGrant,
   'err' : IDL.Text,
 });
+export const Timestamp = IDL.Int;
+export const GeneratorTier = IDL.Variant({
+  'TierIII' : IDL.Null,
+  'None' : IDL.Null,
+  'TierII' : IDL.Null,
+  'TierIV' : IDL.Null,
+  'TierVI' : IDL.Null,
+  'TierI' : IDL.Null,
+  'TierV' : IDL.Null,
+});
+export const PlotUpgradesView = IDL.Record({
+  'tierName' : IDL.Text,
+  'plotId' : PlotId,
+  'installedAt' : IDL.Opt(Timestamp),
+  'bonusPerDay' : IDL.Float64,
+  'nextTierCost' : IDL.Opt(IDL.Nat),
+  'generatorTier' : GeneratorTier,
+});
+export const UpgradeError = IDL.Variant({
+  'SubParcelLocked' : IDL.Null,
+  'PlotNotFound' : IDL.Null,
+  'InvalidTier' : IDL.Null,
+  'NotOwner' : IDL.Null,
+  'AlreadyMaxTier' : IDL.Null,
+  'InsufficientFRNTR' : IDL.Null,
+});
 
 export const idlService = IDL.Service({
   'assignInterceptor' : IDL.Func([IDL.Nat, IDL.Text], [], []),
@@ -119,7 +153,27 @@ export const idlService = IDL.Service({
       [FaucetClaimSummary],
       ['query'],
     ),
+  'getFirstAvailablePlot' : IDL.Func([], [IDL.Opt(IDL.Nat)], ['query']),
+  'getFrntrLedger' : IDL.Func([], [IDL.Text], ['query']),
+  'getGameCanisterPrincipal' : IDL.Func([], [IDL.Text], ['query']),
+  'getGameStats' : IDL.Func(
+      [],
+      [
+        IDL.Record({
+          'totalPlayers' : IDL.Nat,
+          'totalFrntrBurned' : IDL.Nat,
+          'totalSupply' : IDL.Nat,
+          'totalBurned' : IDL.Nat,
+          'totalPlots' : IDL.Nat,
+          'emissionRatePerDay' : IDL.Nat,
+          'remainingMineable' : IDL.Nat,
+        }),
+      ],
+      ['query'],
+    ),
   'getGlobalStats' : IDL.Func([], [GlobalStats], ['query']),
+  'getIcpUsdPrice' : IDL.Func([], [IDL.Float64], []),
+  'getIcpUsdPriceCached' : IDL.Func([], [IDL.Float64], ['query']),
   'getLeaderboard' : IDL.Func(
       [IDL.Nat],
       [
@@ -169,7 +223,7 @@ export const idlService = IDL.Service({
           'passiveIncomePerDay' : IDL.Float64,
         }),
       ],
-      ['query'],
+      [],
     ),
   'getPlayerStateByPrincipal' : IDL.Func(
       [IDL.Principal],
@@ -194,14 +248,39 @@ export const idlService = IDL.Service({
     ),
   'getPlotCount' : IDL.Func([], [IDL.Nat], ['query']),
   'getPlotPrice' : IDL.Func([IDL.Text], [IDL.Nat], ['query']),
+  'getPlotPriceById' : IDL.Func([IDL.Nat], [IDL.Nat], ['query']),
   'getPlotProductionRate' : IDL.Func(
       [IDL.Nat],
       [PlotProductionRate],
       ['query'],
     ),
+  'getPlotsByOwner' : IDL.Func([IDL.Principal], [IDL.Vec(IDL.Nat)], ['query']),
   'getPrincipal' : IDL.Func([], [PrincipalDisplay], ['query']),
+  'getSubParcels' : IDL.Func([IDL.Nat], [IDL.Vec(SubParcel)], ['query']),
   'getTokenomics' : IDL.Func([], [Tokenomics], ['query']),
+  'getTreasuryBalances' : IDL.Func(
+      [],
+      [
+        IDL.Record({
+          'leaderboardPot' : IDL.Nat,
+          'devPot' : IDL.Nat,
+          'liquidityPot' : IDL.Nat,
+        }),
+      ],
+      [],
+    ),
   'getTreasuryPrincipal' : IDL.Func([], [IDL.Text], ['query']),
+  'getTreasuryState' : IDL.Func(
+      [],
+      [
+        IDL.Record({
+          'leaderboard' : IDL.Nat,
+          'liquidity' : IDL.Nat,
+          'developer' : IDL.Nat,
+        }),
+      ],
+      ['query'],
+    ),
   'initPlots' : IDL.Func(
       [
         IDL.Vec(
@@ -227,8 +306,17 @@ export const idlService = IDL.Service({
       [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
       [],
     ),
+  'resetAllData' : IDL.Func([], [], []),
   'resetTestState' : IDL.Func([], [ResetResult], []),
   'setAdminPrincipal' : IDL.Func([IDL.Principal], [], []),
+  'setApprovedLiquidityCanister' : IDL.Func(
+      [IDL.Principal],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+      [],
+    ),
+  'setFrntrLedger' : IDL.Func([IDL.Principal], [], []),
+  'setGameCanisterPrincipal' : IDL.Func([IDL.Text], [], []),
+  'setSelfPrincipal' : IDL.Func([], [], []),
   'setTreasuryPrincipal' : IDL.Func([IDL.Principal], [], []),
   'setUsername' : IDL.Func(
       [IDL.Text],
@@ -245,6 +333,16 @@ export const idlService = IDL.Service({
     ),
   'testFaucetV2' : IDL.Func([], [FaucetResult], []),
   'updateAdminPrincipalAuth' : IDL.Func([IDL.Text], [], []),
+  'upgradeGenerator' : IDL.Func(
+      [IDL.Nat],
+      [IDL.Variant({ 'ok' : PlotUpgradesView, 'err' : UpgradeError })],
+      [],
+    ),
+  'withdrawLiquidityPot' : IDL.Func(
+      [IDL.Nat, IDL.Principal],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+      [],
+    ),
 });
 
 export const idlInitArgs = [];
@@ -299,6 +397,14 @@ export const idlFactory = ({ IDL }) => {
     'short' : IDL.Text,
     'isAuthed' : IDL.Bool,
   });
+  const SubParcel = IDL.Record({
+    'subParcelId' : IDL.Nat,
+    'cooldownEnds' : IDL.Int,
+    'plotId' : IDL.Nat,
+    'building' : IDL.Opt(IDL.Text),
+    'slotIndex' : IDL.Nat,
+    'specialization' : IDL.Text,
+  });
   const Tokenomics = IDL.Record({
     'burnRate' : IDL.Nat,
     'emissionRate' : IDL.Nat,
@@ -332,6 +438,32 @@ export const idlFactory = ({ IDL }) => {
     'frntGranted' : IDL.Nat,
   });
   const FaucetResult = IDL.Variant({ 'ok' : FaucetGrant, 'err' : IDL.Text });
+  const Timestamp = IDL.Int;
+  const GeneratorTier = IDL.Variant({
+    'TierIII' : IDL.Null,
+    'None' : IDL.Null,
+    'TierII' : IDL.Null,
+    'TierIV' : IDL.Null,
+    'TierVI' : IDL.Null,
+    'TierI' : IDL.Null,
+    'TierV' : IDL.Null,
+  });
+  const PlotUpgradesView = IDL.Record({
+    'tierName' : IDL.Text,
+    'plotId' : PlotId,
+    'installedAt' : IDL.Opt(Timestamp),
+    'bonusPerDay' : IDL.Float64,
+    'nextTierCost' : IDL.Opt(IDL.Nat),
+    'generatorTier' : GeneratorTier,
+  });
+  const UpgradeError = IDL.Variant({
+    'SubParcelLocked' : IDL.Null,
+    'PlotNotFound' : IDL.Null,
+    'InvalidTier' : IDL.Null,
+    'NotOwner' : IDL.Null,
+    'AlreadyMaxTier' : IDL.Null,
+    'InsufficientFRNTR' : IDL.Null,
+  });
   
   return IDL.Service({
     'assignInterceptor' : IDL.Func([IDL.Nat, IDL.Text], [], []),
@@ -358,7 +490,27 @@ export const idlFactory = ({ IDL }) => {
         [FaucetClaimSummary],
         ['query'],
       ),
+    'getFirstAvailablePlot' : IDL.Func([], [IDL.Opt(IDL.Nat)], ['query']),
+    'getFrntrLedger' : IDL.Func([], [IDL.Text], ['query']),
+    'getGameCanisterPrincipal' : IDL.Func([], [IDL.Text], ['query']),
+    'getGameStats' : IDL.Func(
+        [],
+        [
+          IDL.Record({
+            'totalPlayers' : IDL.Nat,
+            'totalFrntrBurned' : IDL.Nat,
+            'totalSupply' : IDL.Nat,
+            'totalBurned' : IDL.Nat,
+            'totalPlots' : IDL.Nat,
+            'emissionRatePerDay' : IDL.Nat,
+            'remainingMineable' : IDL.Nat,
+          }),
+        ],
+        ['query'],
+      ),
     'getGlobalStats' : IDL.Func([], [GlobalStats], ['query']),
+    'getIcpUsdPrice' : IDL.Func([], [IDL.Float64], []),
+    'getIcpUsdPriceCached' : IDL.Func([], [IDL.Float64], ['query']),
     'getLeaderboard' : IDL.Func(
         [IDL.Nat],
         [
@@ -408,7 +560,7 @@ export const idlFactory = ({ IDL }) => {
             'passiveIncomePerDay' : IDL.Float64,
           }),
         ],
-        ['query'],
+        [],
       ),
     'getPlayerStateByPrincipal' : IDL.Func(
         [IDL.Principal],
@@ -433,14 +585,43 @@ export const idlFactory = ({ IDL }) => {
       ),
     'getPlotCount' : IDL.Func([], [IDL.Nat], ['query']),
     'getPlotPrice' : IDL.Func([IDL.Text], [IDL.Nat], ['query']),
+    'getPlotPriceById' : IDL.Func([IDL.Nat], [IDL.Nat], ['query']),
     'getPlotProductionRate' : IDL.Func(
         [IDL.Nat],
         [PlotProductionRate],
         ['query'],
       ),
+    'getPlotsByOwner' : IDL.Func(
+        [IDL.Principal],
+        [IDL.Vec(IDL.Nat)],
+        ['query'],
+      ),
     'getPrincipal' : IDL.Func([], [PrincipalDisplay], ['query']),
+    'getSubParcels' : IDL.Func([IDL.Nat], [IDL.Vec(SubParcel)], ['query']),
     'getTokenomics' : IDL.Func([], [Tokenomics], ['query']),
+    'getTreasuryBalances' : IDL.Func(
+        [],
+        [
+          IDL.Record({
+            'leaderboardPot' : IDL.Nat,
+            'devPot' : IDL.Nat,
+            'liquidityPot' : IDL.Nat,
+          }),
+        ],
+        [],
+      ),
     'getTreasuryPrincipal' : IDL.Func([], [IDL.Text], ['query']),
+    'getTreasuryState' : IDL.Func(
+        [],
+        [
+          IDL.Record({
+            'leaderboard' : IDL.Nat,
+            'liquidity' : IDL.Nat,
+            'developer' : IDL.Nat,
+          }),
+        ],
+        ['query'],
+      ),
     'initPlots' : IDL.Func(
         [
           IDL.Vec(
@@ -466,8 +647,17 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
         [],
       ),
+    'resetAllData' : IDL.Func([], [], []),
     'resetTestState' : IDL.Func([], [ResetResult], []),
     'setAdminPrincipal' : IDL.Func([IDL.Principal], [], []),
+    'setApprovedLiquidityCanister' : IDL.Func(
+        [IDL.Principal],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+        [],
+      ),
+    'setFrntrLedger' : IDL.Func([IDL.Principal], [], []),
+    'setGameCanisterPrincipal' : IDL.Func([IDL.Text], [], []),
+    'setSelfPrincipal' : IDL.Func([], [], []),
     'setTreasuryPrincipal' : IDL.Func([IDL.Principal], [], []),
     'setUsername' : IDL.Func(
         [IDL.Text],
@@ -484,6 +674,16 @@ export const idlFactory = ({ IDL }) => {
       ),
     'testFaucetV2' : IDL.Func([], [FaucetResult], []),
     'updateAdminPrincipalAuth' : IDL.Func([IDL.Text], [], []),
+    'upgradeGenerator' : IDL.Func(
+        [IDL.Nat],
+        [IDL.Variant({ 'ok' : PlotUpgradesView, 'err' : UpgradeError })],
+        [],
+      ),
+    'withdrawLiquidityPot' : IDL.Func(
+        [IDL.Nat, IDL.Principal],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+        [],
+      ),
   });
 };
 

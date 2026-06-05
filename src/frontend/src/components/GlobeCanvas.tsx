@@ -1,7 +1,7 @@
-import { OrbitControls, useTexture } from "@react-three/drei";
+import { OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import type React from "react";
-import { Suspense, useEffect, useMemo, useRef } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import type { MissileConfig } from "../constants/missiles";
 import { useGameStore } from "../store/gameStore";
@@ -89,9 +89,10 @@ const _Y = new THREE.Vector3(0, 1, 0);
 // State colours
 const COL_BASE = new THREE.Color(0.05, 0.07, 0.07);
 const COL_OWNED = new THREE.Color(0x00f5ff); // bright cyan
+const COL_OTHERS_OWNED = new THREE.Color(0xff8c00); // orange — other players
 const COL_HOVER = new THREE.Color(1.0, 1.0, 1.0);
 const COL_SELECTED = new THREE.Color(1.0, 1.0, 1.0);
-const COL_FACTION: Record<string, THREE.Color> = {
+const _COL_FACTION: Record<string, THREE.Color> = {
   "NEXUS-7": new THREE.Color(0xef4444),
   KRONOS: new THREE.Color(0x8b5cf6),
   VANGUARD: new THREE.Color(0x22c3c9),
@@ -128,15 +129,22 @@ function GlobeHexGrid() {
     mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
   }, []);
 
-  // Colour updates
+  // Colour updates — use isOwnedByMe flag, never COL_FACTION principal lookup
   useEffect(() => {
     const mesh = meshRef.current;
     if (!mesh) return;
     for (let i = 0; i < count; i++) mesh.setColorAt(i, COL_BASE);
+    // Orange: other players' plots
     for (const p of plots) {
-      if (p.owner && COL_FACTION[p.owner])
-        mesh.setColorAt(p.id, COL_FACTION[p.owner]);
+      if (p.owner && !p.isOwnedByMe && p.id >= 0 && p.id < count)
+        mesh.setColorAt(p.id, COL_OTHERS_OWNED);
     }
+    // Cyan: my plots — wins over orange
+    for (const p of plots) {
+      if (p.isOwnedByMe && p.id >= 0 && p.id < count)
+        mesh.setColorAt(p.id, COL_OWNED);
+    }
+    // Also color by ownedPlots array as fallback (local store)
     for (const pid of ownedPlots) {
       if (pid >= 0 && pid < count) mesh.setColorAt(pid, COL_OWNED);
     }
@@ -147,6 +155,7 @@ function GlobeHexGrid() {
       mesh.setColorAt(selectedId, COL_SELECTED);
     }
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    mesh.instanceColor!.needsUpdate = true;
   }, [plots, hoveredId, selectedId, ownedPlots, count]);
 
   // Distance-based opacity fade (tiles — not the selection ring)
@@ -195,9 +204,11 @@ function SelectedTileHighlight() {
   const hoverMeshRef = useRef<THREE.Mesh>(null);
 
   function positionAt(mesh: THREE.Mesh, plotId: number) {
-    const tile = GEODESIC_TILES[plotId];
+    // Look up tile by plotId; GEODESIC_TILES is indexed by tile.id === position in array
+    const tile =
+      GEODESIC_TILES[plotId] ?? GEODESIC_TILES.find((t) => t.id === plotId);
     if (!tile) {
-      mesh.visible = false;
+      // Don't hide ring — place it at a default position to avoid invisible selection
       return;
     }
     _selPos.set(tile.nx, tile.ny, tile.nz);
@@ -306,13 +317,36 @@ const earthDayNightFrag = /* glsl */ `
 // ---------------------------------------------------------------------------
 // EarthSphere — globe mesh + hex grid + click handling
 // ---------------------------------------------------------------------------
+function useResilientTexture(url: string) {
+  const [texture, setTexture] = useState<THREE.Texture | null>(null);
+  useEffect(() => {
+    const loader = new THREE.TextureLoader();
+    loader.load(
+      url,
+      (tex) => {
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.needsUpdate = true;
+        setTexture(tex);
+      },
+      undefined,
+      () => {
+        // graceful failure — texture stays null; globe will use fallback material
+        setTexture(null);
+      },
+    );
+  }, [url]);
+  return texture;
+}
+
 function EarthSphere({
   onPlotSelect,
 }: { onPlotSelect?: (plotId: number) => void }) {
-  const [dayTex, cloudsTex] = useTexture([
+  const dayTex = useResilientTexture(
     "/assets/generated/earth-day.dim_4096x2048.jpg",
+  );
+  const cloudsTex = useResilientTexture(
     "/assets/generated/earth-clouds.dim_2048x1024.jpg",
-  ]);
+  );
   const globeRef = useRef<THREE.Group>(null);
   const cloudsRef = useRef<THREE.Mesh>(null);
 
@@ -331,10 +365,14 @@ function EarthSphere({
 
   const earthUniforms = useMemo(
     () => ({
-      dayMap: { value: dayTex },
+      dayMap: { value: null as THREE.Texture | null },
     }),
-    [dayTex],
+    [],
   );
+
+  useEffect(() => {
+    earthUniforms.dayMap.value = dayTex;
+  }, [dayTex, earthUniforms]);
 
   useFrame(() => {
     if (globeRef.current) globeRef.current.rotation.y += 0.0001;
@@ -393,23 +431,33 @@ function EarthSphere({
         onPointerLeave={handlePointerLeave}
       >
         <sphereGeometry args={[1, 64, 64]} />
-        <shaderMaterial
-          vertexShader={earthDayNightVert}
-          fragmentShader={earthDayNightFrag}
-          uniforms={earthUniforms}
-        />
+        {dayTex ? (
+          <shaderMaterial
+            vertexShader={earthDayNightVert}
+            fragmentShader={earthDayNightFrag}
+            uniforms={earthUniforms}
+          />
+        ) : (
+          <meshStandardMaterial
+            color={new THREE.Color(0x1a3a5c)}
+            roughness={0.8}
+            metalness={0.1}
+          />
+        )}
       </mesh>
 
-      <mesh ref={cloudsRef}>
-        <sphereGeometry args={[1.008, 64, 64]} />
-        <meshPhongMaterial
-          map={cloudsTex}
-          transparent
-          opacity={0.4}
-          depthWrite={false}
-          blending={THREE.AdditiveBlending}
-        />
-      </mesh>
+      {cloudsTex && (
+        <mesh ref={cloudsRef}>
+          <sphereGeometry args={[1.008, 64, 64]} />
+          <meshPhongMaterial
+            map={cloudsTex}
+            transparent
+            opacity={0.4}
+            depthWrite={false}
+            blending={THREE.AdditiveBlending}
+          />
+        </mesh>
+      )}
 
       <mesh>
         <sphereGeometry args={[1.15, 32, 32]} />
@@ -437,8 +485,8 @@ function Starfield() {
   const meshRef = useRef<THREE.Points>(null);
 
   const positions = useMemo(() => {
-    const arr = new Float32Array(800 * 3);
-    for (let i = 0; i < 800; i++) {
+    const arr = new Float32Array(2000 * 3);
+    for (let i = 0; i < 2000; i++) {
       // Random point on sphere of radius 200
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.acos(2 * Math.random() - 1);
@@ -461,10 +509,10 @@ function Starfield() {
       </bufferGeometry>
       <pointsMaterial
         color={0xffffff}
-        size={0.3}
-        sizeAttenuation
-        transparent
-        opacity={0.85}
+        size={2.5}
+        sizeAttenuation={false}
+        transparent={false}
+        opacity={1.0}
         depthWrite={false}
       />
     </points>

@@ -12,19 +12,34 @@ import List     "mo:core/List";
 import Map      "mo:core/Map";
 import Time     "mo:core/Time";
 import Runtime  "mo:core/Runtime";
+import Blob     "mo:core/Blob";
+import Array    "mo:core/Array";
 import TTypes   "../types/treasury";
 import TLib     "../lib/treasury";
-import Array "mo:core/Array";
 
 mixin (
-  plotsSold         : { var value : Nat },
-  payoutHistory     : List.List<TTypes.PayoutEvent>,
-  leaderboardPotICP : { var value : Nat },
-  devTreasuryICP    : { var value : Nat },
-  liquidityPotICP   : { var value : Nat },
-  adminPrincipal    : { var value : Principal },
-  usernames         : Map.Map<Principal, Text>,
+  plotsSold            : { var value : Nat },
+  payoutHistory        : List.List<TTypes.PayoutEvent>,
+  leaderboardPotICP    : { var value : Nat },
+  devTreasuryICP       : { var value : Nat },
+  liquidityPotICP      : { var value : Nat },
+  adminPrincipal       : { var value : Principal },
+  usernames            : Map.Map<Principal, Text>,
+  approvedDexPrincipal : { var value : ?Principal },
+  selfPrincipal        : { var value : Principal },
 ) {
+
+  // ICP ledger actor reference for balance queries
+  let icpLedger : actor {
+    icrc1_balance_of : ({ owner : Principal; subaccount : ?Blob }) -> async Nat;
+  } = actor("ryjl3-tyaaa-aaaaa-aaaba-cai");
+
+  /// Build a 32-byte subaccount blob where byte 31 = index.
+  /// 1 = dev, 2 = leaderboard, 3 = liquidity
+  private func subaccountOf(index : Nat8) : Blob {
+    let bytes : [Nat8] = Array.tabulate<Nat8>(32, func(i) { if (i == 31) index else 0 });
+    Blob.fromArray(bytes);
+  };
 
   // -------------------------------------------------------------------------
   // INTERNAL — admin guard helper
@@ -124,16 +139,21 @@ mixin (
   // QUERY — All three pot balances
   // -------------------------------------------------------------------------
 
-  /// Returns current ICP e8s balances for all three treasury pots.
-  public query func getTreasuryBalances() : async {
+  /// Returns live ICP e8s balances for all three treasury pots by querying
+  /// the ICP ledger subaccounts directly (subaccount byte31: 1=dev, 2=leaderboard, 3=liquidity).
+  public func getTreasuryBalances() : async {
     devTreasuryE8s    : Nat;
     leaderboardPotE8s : Nat;
     liquidityPotE8s   : Nat;
   } {
+    let canisterId = selfPrincipal.value;
+    let devBal    = await icpLedger.icrc1_balance_of({ owner = canisterId; subaccount = ?subaccountOf(1) });
+    let ldrBal    = await icpLedger.icrc1_balance_of({ owner = canisterId; subaccount = ?subaccountOf(2) });
+    let liqBal    = await icpLedger.icrc1_balance_of({ owner = canisterId; subaccount = ?subaccountOf(3) });
     {
-      devTreasuryE8s    = devTreasuryICP.value;
-      leaderboardPotE8s = leaderboardPotICP.value;
-      liquidityPotE8s   = liquidityPotICP.value;
+      devTreasuryE8s    = devBal;
+      leaderboardPotE8s = ldrBal;
+      liquidityPotE8s   = liqBal;
     };
   };
 
@@ -228,21 +248,43 @@ mixin (
   // -------------------------------------------------------------------------
 
   /// Admin-only: mark liquidity pot ICP as deployed to a pre-approved DEX.
-  /// Actual inter-canister transfer to ICPSwap pool wired at mainnet deployment.
+  /// The recipient must equal the stored approvedDexPrincipal — set via setApprovedLiquidityCanister.
   public shared ({ caller }) func withdrawLiquidityPot(
-    amountE8s       : Nat,
-    approvedDexCanister : Principal,
+    amountE8s           : Nat,
+    recipient           : Principal,
   ) : async { #ok; #err : { #NotAuthorized; #InsufficientFunds } } {
     if (caller != adminPrincipal.value) {
       return #err(#NotAuthorized);
     };
-    // The approved DEX canister is validated by the admin's off-chain key;
-    // on-chain whitelisting can be added in the next sprint.
-    ignore approvedDexCanister;
+    // Whitelist check: recipient must match the stored approved DEX principal.
+    switch (approvedDexPrincipal.value) {
+      case null { Runtime.trap("Unauthorized: no approved DEX canister set") };
+      case (?approved) {
+        if (recipient != approved) {
+          Runtime.trap("Unauthorized: recipient not whitelisted");
+        };
+      };
+    };
     if (amountE8s > liquidityPotICP.value) {
       return #err(#InsufficientFunds);
     };
     liquidityPotICP.value -= amountE8s;
+    #ok;
+  };
+
+  // -------------------------------------------------------------------------
+  // ADMIN UPDATE — Set the approved DEX canister for liquidity withdrawals
+  // -------------------------------------------------------------------------
+
+  /// Admin-only: register the single approved DEX canister that may receive
+  /// liquidity pot withdrawals (e.g. ICPSwap FRNTR/ICP pool canister).
+  public shared ({ caller }) func setApprovedLiquidityCanister(
+    dexCanister : Principal,
+  ) : async { #ok; #err : { #NotAuthorized } } {
+    if (caller != adminPrincipal.value) {
+      return #err(#NotAuthorized);
+    };
+    approvedDexPrincipal.value := ?dexCanister;
     #ok;
   };
 

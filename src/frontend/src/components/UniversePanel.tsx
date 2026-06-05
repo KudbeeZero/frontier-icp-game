@@ -1,6 +1,8 @@
+import { useActor } from "@caffeineai/core-infrastructure";
 import { X } from "lucide-react";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
+import { createActor } from "../backend";
 import { useGameStore } from "../store/gameStore";
 
 const CYAN = "#00ffcc";
@@ -125,13 +127,68 @@ interface Props {
 }
 
 export default function UniversePanel({ onClose, inline = false }: Props) {
+  const { actor } = useActor(createActor);
   const player = useGameStore((s) => s.player);
   const totalFRNTRBurned = useGameStore((s) => s.totalFRNTRBurned);
   const generatorTiers = useGameStore((s) => s.generatorTiers);
+  // icpUsdPrice from gameStore — polled every 60s by usePlayerSync (foundation)
+  const icpUsdPrice = useGameStore((s) => s.icpUsdPrice);
+  const setTreasuryState = useGameStore((s) => s.setTreasuryState);
+  // FRNTR/ICP price — shown as 'Pool not yet seeded' if unavailable
+  const [frntrIcpPrice, _setFrntrIcpPrice] = useState<number | null>(null);
+
+  // ── Pot balances fetched directly every 10 seconds ──
+  const [potBalances, setPotBalances] = useState<{
+    dev: number;
+    leaderboard: number;
+    liquidity: number;
+  }>({ dev: 0, leaderboard: 0, liquidity: 0 });
+
+  useEffect(() => {
+    if (!actor) return;
+    const fetchPots = () => {
+      actor
+        .getTreasuryBalances()
+        .then((res) => {
+          setPotBalances({
+            dev: Number(res.devPot) / 1e8,
+            leaderboard: Number(res.leaderboardPot) / 1e8,
+            liquidity: Number(res.liquidityPot) / 1e8,
+          });
+        })
+        .catch(() => {});
+    };
+    fetchPots();
+    const id = setInterval(fetchPots, 10_000);
+    return () => clearInterval(id);
+  }, [actor]);
+
+  // ── Treasury auto-refresh every 10 seconds (store sync) ──
+  useEffect(() => {
+    if (!actor) return;
+    const fetchTreasury = () => {
+      actor
+        .getTreasuryState()
+        .then((res) =>
+          setTreasuryState({
+            developer: res.developer,
+            leaderboard: res.leaderboard,
+            liquidity: res.liquidity,
+          }),
+        )
+        .catch(() => {});
+    };
+    fetchTreasury();
+    const id = setInterval(fetchTreasury, 10_000);
+    return () => clearInterval(id);
+  }, [actor, setTreasuryState]);
+
   // Use all plots from the store for accurate global stats
   const allPlots = useGameStore((s) => s.plots);
   // Live on-chain global stats synced every 30s
   const globalStats = useGameStore((s) => s.globalStats);
+  // Live treasury state from canister (polled every 10s in this component)
+  const _treasuryState = useGameStore((s) => s.treasuryState);
 
   // ── Global counts: prefer on-chain data, fall back to local plot state ──
   const globalOwnedPlots = allPlots.filter((p) => p.owner !== null);
@@ -194,15 +251,6 @@ export default function UniversePanel({ onClose, inline = false }: Props) {
 
   // ── Burn rate: scales with global plot activity ──
   const burnRate = 0.00042 + totalPlotsOwned * 0.0000015;
-
-  // ── Treasury pots: reflect real ICP from all sold plots ──
-  const avgIcpPerPlot = 2.5;
-  const prizePoolIcp = globalStats?.leaderboardPrizePool
-    ? (globalStats.leaderboardPrizePool / 1e8).toFixed(4)
-    : (totalPlotsOwned * avgIcpPerPlot * 0.25).toFixed(3);
-  const devPot = (totalPlotsOwned * avgIcpPerPlot * 0.25).toFixed(3);
-  const leaderPot = prizePoolIcp;
-  const liquidPot = (totalPlotsOwned * avgIcpPerPlot * 0.5).toFixed(3);
 
   /** Inner scrollable content — shared between inline and overlay modes */
   const content = (
@@ -739,94 +787,139 @@ export default function UniversePanel({ onClose, inline = false }: Props) {
         </div>
       </GlowCard>
 
-      {/* TREASURY */}
-      <SectionTitle>Treasury</SectionTitle>
-      <GlowCard style={{ marginBottom: 16 }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {[
+      {/* TREASURY STATUS */}
+      <SectionTitle>Treasury Status</SectionTitle>
+      {/* FRNTR/ICP rate badge */}
+      <div style={{ marginBottom: 10 }}>
+        {frntrIcpPrice !== null && frntrIcpPrice > 0 ? (
+          <span
+            style={{
+              display: "inline-block",
+              background: "rgba(0,255,204,0.08)",
+              border: `1px solid ${BORDER}`,
+              borderRadius: 6,
+              padding: "3px 10px",
+              fontSize: 9,
+              color: CYAN,
+              fontFamily: "monospace",
+              letterSpacing: 1,
+            }}
+          >
+            FRNTR/ICP: {frntrIcpPrice.toFixed(6)}
+          </span>
+        ) : (
+          <span
+            style={{
+              display: "inline-block",
+              background: "rgba(100,100,100,0.12)",
+              border: "1px solid rgba(150,150,150,0.25)",
+              borderRadius: 6,
+              padding: "3px 10px",
+              fontSize: 9,
+              color: TEXT_DIM,
+              fontFamily: "monospace",
+              letterSpacing: 1,
+            }}
+          >
+            Pool not yet seeded
+          </span>
+        )}
+      </div>
+      <div
+        data-ocid="universe.treasury_status"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr",
+          gap: 8,
+          marginBottom: 16,
+        }}
+      >
+        {(
+          [
             {
-              label: "Developer Treasury",
+              key: "dev",
+              name: "DEVELOPER",
               pct: "25%",
-              value: `${devPot} ICP`,
-              color: GOLD,
+              balance: potBalances.dev,
+              accentClass: "treasury-pot-accent-border",
+              accentStyle: { borderTopColor: "rgba(255,200,100,0.8)" },
             },
             {
-              label: "Leaderboard Pot",
+              key: "leaderboard",
+              name: "LEADERBOARD",
               pct: "25%",
-              value: `${leaderPot} ICP`,
-              color: "#22c55e",
+              balance: potBalances.leaderboard,
+              accentClass: "treasury-pot-accent-border",
+              accentStyle: { borderTopColor: "rgba(100,220,230,0.8)" },
             },
             {
-              label: "Liquidity Pot",
+              key: "liquidity",
+              name: "LIQUIDITY",
               pct: "50%",
-              value: `${liquidPot} ICP`,
-              color: "#3b82f6",
+              balance: potBalances.liquidity,
+              accentClass: "treasury-pot-accent-border",
+              accentStyle: { borderTopColor: "rgba(0,255,204,0.8)" },
             },
-          ].map((pot) => (
-            <div key={pot.label}>
+          ] as const
+        ).map((pot) => {
+          const icpDisplay = `${pot.balance.toFixed(4)} ICP`;
+          const usdDisplay =
+            icpUsdPrice !== null
+              ? `${(pot.balance * icpUsdPrice).toFixed(2)} USD`
+              : "$ --";
+          return (
+            <div
+              key={pot.key}
+              className={`treasury-card-enhanced ${pot.accentClass}`}
+              data-ocid={`universe.treasury_${pot.key}`}
+              style={pot.accentStyle}
+            >
               <div
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
-                  marginBottom: 5,
+                  alignItems: "flex-start",
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <div>
                   <div
                     style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: 2,
-                      background: pot.color,
-                    }}
-                  />
-                  <span style={{ fontSize: 9, color: TEXT, fontWeight: 600 }}>
-                    {pot.label}
-                  </span>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span
-                    style={{
                       fontSize: 8,
-                      color: pot.color,
-                      fontFamily: "monospace",
+                      fontWeight: 700,
+                      letterSpacing: 2,
+                      color: CYAN,
+                      textTransform: "uppercase" as const,
+                      marginBottom: 2,
                     }}
                   >
-                    {pot.value}
-                  </span>
-                  <span
+                    {pot.name}
+                  </div>
+                  <div
                     style={{
                       fontSize: 8,
                       color: TEXT_DIM,
-                      fontFamily: "monospace",
+                      letterSpacing: 1,
                     }}
                   >
-                    {pot.pct}
-                  </span>
+                    {pot.pct} of purchases
+                  </div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div className="monospace-number" style={{ fontSize: 13 }}>
+                    {icpDisplay}
+                  </div>
+                  <div
+                    className="monospace-number"
+                    style={{ fontSize: 10, opacity: 0.7 }}
+                  >
+                    {usdDisplay}
+                  </div>
                 </div>
               </div>
-              <div
-                style={{
-                  height: 4,
-                  background: "rgba(255,255,255,0.06)",
-                  borderRadius: 3,
-                  overflow: "hidden",
-                }}
-              >
-                <div
-                  style={{
-                    height: "100%",
-                    width: pot.pct,
-                    background: pot.color,
-                    borderRadius: 3,
-                    boxShadow: `0 0 6px ${pot.color}66`,
-                  }}
-                />
-              </div>
             </div>
-          ))}
-        </div>
-      </GlowCard>
+          );
+        })}
+      </div>
 
       {/* LEADERBOARD MILESTONE */}
       <SectionTitle>Leaderboard Milestone</SectionTitle>
@@ -880,7 +973,7 @@ export default function UniversePanel({ onClose, inline = false }: Props) {
                 fontFamily: "monospace",
               }}
             >
-              {leaderPot} ICP
+              {potBalances.leaderboard.toFixed(4)} ICP
             </div>
           </div>
         </div>
@@ -923,6 +1016,281 @@ export default function UniversePanel({ onClose, inline = false }: Props) {
         <div style={{ fontSize: 8, color: TEXT_DIM }}>
           Top FRNTR holders receive ICP payout from prize pool every 1,500 plot
           mints
+        </div>
+      </GlowCard>
+
+      {/* ── SYSTEM HEALTH ── */}
+      <SectionTitle>System Health</SectionTitle>
+      <GlowCard style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {[
+            {
+              label: "Backend Canister",
+              status: globalStats ? "ONLINE" : "CONNECTING",
+              ok: !!globalStats,
+            },
+            {
+              label: "FRNTR Token",
+              status: globalStats ? "OPERATIONAL" : "CONNECTING",
+              ok: !!globalStats,
+            },
+            {
+              label: "Plot Registry",
+              status: globalStats ? "OPERATIONAL" : "CONNECTING",
+              ok: !!globalStats,
+            },
+            {
+              label: "Leaderboard",
+              status: globalStats ? "ACTIVE" : "CONNECTING",
+              ok: !!globalStats,
+            },
+          ].map((row) => (
+            <div
+              key={row.label}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div
+                  style={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: "50%",
+                    background: row.ok ? "#00FF88" : "#FF4444",
+                    boxShadow: `0 0 6px ${row.ok ? "#00FF88" : "#FF4444"}`,
+                    flexShrink: 0,
+                  }}
+                />
+                <span style={{ fontSize: 9, color: TEXT, fontWeight: 600 }}>
+                  {row.label}
+                </span>
+              </div>
+              <span
+                style={{
+                  fontSize: 8,
+                  color: row.ok ? "#00FF88" : "#FF4444",
+                  fontFamily: "monospace",
+                  letterSpacing: 1,
+                }}
+              >
+                {row.status}
+              </span>
+            </div>
+          ))}
+        </div>
+        <div
+          style={{
+            marginTop: 10,
+            paddingTop: 10,
+            borderTop: `1px solid ${BORDER}`,
+            fontSize: 7,
+            color: TEXT_DIM,
+            letterSpacing: 0.5,
+          }}
+        >
+          {globalStats
+            ? `All systems nominal · Last sync: ${new Date().toLocaleTimeString()}`
+            : "Connecting to ICP network…"}
+        </div>
+      </GlowCard>
+
+      {/* ── FUND YOUR WALLET ── */}
+      <SectionTitle>Fund Your Wallet</SectionTitle>
+      <GlowCard style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {[
+            {
+              step: "1",
+              title: "Buy ICP on any major exchange",
+              detail: "Coinbase, Kraken, Binance, or any ICP-listed exchange",
+            },
+            {
+              step: "2",
+              title: "Transfer ICP to your wallet address",
+              detail: player.principal
+                ? player.principal
+                : "Login with Internet Identity to see your address",
+              mono: !!player.principal,
+            },
+            {
+              step: "3",
+              title: "Get free test tokens",
+              detail:
+                "Use the TESTNET FAUCET button (upper right of globe) — no cost",
+            },
+            {
+              step: "4",
+              title: "Purchase a plot to start earning",
+              detail:
+                "Common plots start at 2–3 ICP · FRNTR accrues immediately",
+            },
+          ].map((item) => (
+            <div key={item.step} style={{ display: "flex", gap: 10 }}>
+              <div
+                style={{
+                  width: 20,
+                  height: 20,
+                  borderRadius: 4,
+                  background: `${CYAN}18`,
+                  border: `1px solid ${CYAN}44`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 9,
+                  fontWeight: 900,
+                  color: CYAN,
+                  flexShrink: 0,
+                }}
+              >
+                {item.step}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 700,
+                    color: TEXT,
+                    marginBottom: 2,
+                  }}
+                >
+                  {item.title}
+                </div>
+                <div
+                  style={{
+                    fontSize: 8,
+                    color: TEXT_DIM,
+                    fontFamily: item.mono ? "monospace" : undefined,
+                    wordBreak: item.mono ? "break-all" : undefined,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {item.detail}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </GlowCard>
+
+      {/* ── LIQUIDITY ── */}
+      <SectionTitle>Liquidity</SectionTitle>
+      <GlowCard style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-end",
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  fontSize: 7,
+                  color: TEXT_DIM,
+                  letterSpacing: 1.5,
+                  marginBottom: 3,
+                }}
+              >
+                ICP / USD
+              </div>
+              <div
+                style={{
+                  fontSize: 16,
+                  fontWeight: 900,
+                  color: GOLD,
+                  fontFamily: "monospace",
+                }}
+              >
+                ${icpUsdPrice != null ? icpUsdPrice.toFixed(2) : "--"} USD
+              </div>
+            </div>
+            <div
+              style={{
+                fontSize: 7,
+                color: TEXT_DIM,
+                fontStyle: "italic",
+                textAlign: "right",
+              }}
+            >
+              Live pricing
+              <br />
+              coming soon
+            </div>
+          </div>
+          <div style={{ height: 1, background: BORDER }} />
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-end",
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  fontSize: 7,
+                  color: TEXT_DIM,
+                  letterSpacing: 1.5,
+                  marginBottom: 3,
+                }}
+              >
+                FRNTR / ICP
+              </div>
+              <div
+                style={{
+                  fontSize: 16,
+                  fontWeight: 900,
+                  color: CYAN,
+                  fontFamily: "monospace",
+                }}
+              >
+                TBD
+              </div>
+            </div>
+            <div style={{ fontSize: 7, color: CYAN_DIM, textAlign: "right" }}>
+              Pool launch
+              <br />
+              pending
+            </div>
+          </div>
+          <div style={{ height: 1, background: BORDER }} />
+          <div>
+            <div
+              style={{
+                fontSize: 7,
+                color: TEXT_DIM,
+                letterSpacing: 1.5,
+                marginBottom: 3,
+              }}
+            >
+              LIQUIDITY POT BALANCE
+            </div>
+            <div
+              style={{
+                fontSize: 16,
+                fontWeight: 900,
+                color: "#3b82f6",
+                fontFamily: "monospace",
+              }}
+            >
+              {globalStats?.liquidityPotICP != null
+                ? `${globalStats.liquidityPotICP.toFixed(6)} ICP`
+                : `${potBalances.liquidity.toFixed(4)} ICP`}
+            </div>
+            <div
+              style={{
+                fontSize: 8,
+                color: "rgba(59,130,246,0.6)",
+                marginTop: 2,
+              }}
+            >
+              Available for DEX seeding (ICPSwap FRNTR/ICP)
+            </div>
+          </div>
         </div>
       </GlowCard>
 

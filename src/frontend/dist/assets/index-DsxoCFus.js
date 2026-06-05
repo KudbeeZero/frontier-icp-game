@@ -1264,6 +1264,14 @@ let Principal$1 = class Principal {
     return cmp == "gt" || cmp == "eq";
   }
 };
+const index$1 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  JSON_KEY_PRINCIPAL,
+  Principal: Principal$1,
+  base32Decode,
+  base32Encode,
+  getCrc32
+}, Symbol.toStringTag, { value: "Module" }));
 var ErrorKindEnum;
 (function(ErrorKindEnum2) {
   ErrorKindEnum2["Trust"] = "Trust";
@@ -5582,7 +5590,7 @@ function createHasher(Point, mapToCurve, defaults) {
   function map(num) {
     return Point.fromAffine(mapToCurve(num));
   }
-  function clear2(initial) {
+  function clear(initial) {
     const P2 = initial.clearCofactor();
     if (P2.equals(Point.ZERO))
       return Point.ZERO;
@@ -5596,14 +5604,14 @@ function createHasher(Point, mapToCurve, defaults) {
       const u = hash_to_field(msg, 2, opts);
       const u0 = map(u[0]);
       const u1 = map(u[1]);
-      return clear2(u0.add(u1));
+      return clear(u0.add(u1));
     },
     encodeToCurve(msg, options) {
       const optsDst = defaults.encodeDST ? { DST: defaults.encodeDST } : {};
       const opts = Object.assign({}, defaults, optsDst, options);
       const u = hash_to_field(msg, 1, opts);
       const u0 = map(u[0]);
-      return clear2(u0);
+      return clear(u0);
     },
     /** See {@link H2CHasher} */
     mapToCurve(scalars) {
@@ -5612,7 +5620,7 @@ function createHasher(Point, mapToCurve, defaults) {
       for (const i2 of scalars)
         if (typeof i2 !== "bigint")
           throw new Error("expected array of bigints");
-      return clear2(map(scalars));
+      return clear(map(scalars));
     },
     // hash_to_scalar can produce 0: https://www.rfc-editor.org/errata/eid8393
     // RFC 9380, draft-irtf-cfrg-bbs-signatures-08
@@ -9859,10 +9867,10 @@ const _HttpAgent = class _HttpAgent {
       tries: 0
     };
     const makeQuery = async () => {
-      const query2 = await __privateMethod(this, _HttpAgent_instances, requestAndRetryQuery_fn).call(this, args);
+      const query = await __privateMethod(this, _HttpAgent_instances, requestAndRetryQuery_fn).call(this, args);
       return {
         requestDetails: request2,
-        ...query2
+        ...query
       };
     };
     const getSubnetStatus = async () => {
@@ -11364,13 +11372,13 @@ function isValidTimeout(value) {
 function timeUntilStale(updatedAt, staleTime) {
   return Math.max(updatedAt + (staleTime || 0) - Date.now(), 0);
 }
-function resolveStaleTime(staleTime, query2) {
-  return typeof staleTime === "function" ? staleTime(query2) : staleTime;
+function resolveStaleTime(staleTime, query) {
+  return typeof staleTime === "function" ? staleTime(query) : staleTime;
 }
-function resolveEnabled(enabled, query2) {
-  return typeof enabled === "function" ? enabled(query2) : enabled;
+function resolveEnabled(enabled, query) {
+  return typeof enabled === "function" ? enabled(query) : enabled;
 }
-function matchQuery(filters, query2) {
+function matchQuery(filters, query) {
   const {
     type = "all",
     exact,
@@ -11381,15 +11389,15 @@ function matchQuery(filters, query2) {
   } = filters;
   if (queryKey) {
     if (exact) {
-      if (query2.queryHash !== hashQueryKeyByOptions(queryKey, query2.options)) {
+      if (query.queryHash !== hashQueryKeyByOptions(queryKey, query.options)) {
         return false;
       }
-    } else if (!partialMatchKey(query2.queryKey, queryKey)) {
+    } else if (!partialMatchKey(query.queryKey, queryKey)) {
       return false;
     }
   }
   if (type !== "all") {
-    const isActive = query2.isActive();
+    const isActive = query.isActive();
     if (type === "active" && !isActive) {
       return false;
     }
@@ -11397,13 +11405,13 @@ function matchQuery(filters, query2) {
       return false;
     }
   }
-  if (typeof stale === "boolean" && query2.isStale() !== stale) {
+  if (typeof stale === "boolean" && query.isStale() !== stale) {
     return false;
   }
-  if (fetchStatus && fetchStatus !== query2.state.fetchStatus) {
+  if (fetchStatus && fetchStatus !== query.state.fetchStatus) {
     return false;
   }
-  if (predicate && !predicate(query2)) {
+  if (predicate && !predicate(query)) {
     return false;
   }
   return true;
@@ -12436,8 +12444,8 @@ var QueryObserver = (_g = class extends Subscribable {
     }
   }
   getOptimisticResult(options) {
-    const query2 = __privateGet(this, _client2).getQueryCache().build(__privateGet(this, _client2), options);
-    const result = this.createResult(query2, options);
+    const query = __privateGet(this, _client2).getQueryCache().build(__privateGet(this, _client2), options);
+    const result = this.createResult(query, options);
     if (shouldAssignObserverCurrentProperties(this, result)) {
       __privateSet(this, _currentResult, result);
       __privateSet(this, _currentResultOptions, this.options);
@@ -12480,8 +12488,8 @@ var QueryObserver = (_g = class extends Subscribable {
   }
   fetchOptimistic(options) {
     const defaultedOptions = __privateGet(this, _client2).defaultQueryOptions(options);
-    const query2 = __privateGet(this, _client2).getQueryCache().build(__privateGet(this, _client2), defaultedOptions);
-    return query2.fetch().then(() => this.createResult(query2, defaultedOptions));
+    const query = __privateGet(this, _client2).getQueryCache().build(__privateGet(this, _client2), defaultedOptions);
+    return query.fetch().then(() => this.createResult(query, defaultedOptions));
   }
   fetch(fetchOptions) {
     return __privateMethod(this, _QueryObserver_instances, executeFetch_fn).call(this, {
@@ -12492,27 +12500,27 @@ var QueryObserver = (_g = class extends Subscribable {
       return __privateGet(this, _currentResult);
     });
   }
-  createResult(query2, options) {
+  createResult(query, options) {
     var _a3;
     const prevQuery = __privateGet(this, _currentQuery);
     const prevOptions = this.options;
     const prevResult = __privateGet(this, _currentResult);
     const prevResultState = __privateGet(this, _currentResultState);
     const prevResultOptions = __privateGet(this, _currentResultOptions);
-    const queryChange = query2 !== prevQuery;
-    const queryInitialState = queryChange ? query2.state : __privateGet(this, _currentQueryInitialState);
-    const { state: state2 } = query2;
+    const queryChange = query !== prevQuery;
+    const queryInitialState = queryChange ? query.state : __privateGet(this, _currentQueryInitialState);
+    const { state: state2 } = query;
     let newState = { ...state2 };
     let isPlaceholderData = false;
     let data;
     if (options._optimisticResults) {
       const mounted = this.hasListeners();
-      const fetchOnMount = !mounted && shouldFetchOnMount(query2, options);
-      const fetchOptionally = mounted && shouldFetchOptionally(query2, prevQuery, options, prevOptions);
+      const fetchOnMount = !mounted && shouldFetchOnMount(query, options);
+      const fetchOptionally = mounted && shouldFetchOptionally(query, prevQuery, options, prevOptions);
       if (fetchOnMount || fetchOptionally) {
         newState = {
           ...newState,
-          ...fetchState(state2.data, query2.options)
+          ...fetchState(state2.data, query.options)
         };
       }
       if (options._optimisticResults === "isRestoring") {
@@ -12584,7 +12592,7 @@ var QueryObserver = (_g = class extends Subscribable {
       failureCount: newState.fetchFailureCount,
       failureReason: newState.fetchFailureReason,
       errorUpdateCount: newState.errorUpdateCount,
-      isFetched: query2.isFetched(),
+      isFetched: query.isFetched(),
       isFetchedAfterMount: newState.dataUpdateCount > queryInitialState.dataUpdateCount || newState.errorUpdateCount > queryInitialState.errorUpdateCount,
       isFetching,
       isRefetching: isFetching && !isPending,
@@ -12592,10 +12600,10 @@ var QueryObserver = (_g = class extends Subscribable {
       isPaused: newState.fetchStatus === "paused",
       isPlaceholderData,
       isRefetchError: isError && hasData,
-      isStale: isStale(query2, options),
+      isStale: isStale(query, options),
       refetch: this.refetch,
       promise: __privateGet(this, _currentThenable),
-      isEnabled: resolveEnabled(options.enabled, query2) !== false
+      isEnabled: resolveEnabled(options.enabled, query) !== false
     };
     const nextResult = result;
     if (this.options.experimental_prefetchInRender) {
@@ -12615,7 +12623,7 @@ var QueryObserver = (_g = class extends Subscribable {
       const prevThenable = __privateGet(this, _currentThenable);
       switch (prevThenable.status) {
         case "pending":
-          if (query2.queryHash === prevQuery.queryHash) {
+          if (query.queryHash === prevQuery.queryHash) {
             finalizeThenableIfPossible(prevThenable);
           }
           break;
@@ -12727,16 +12735,16 @@ var QueryObserver = (_g = class extends Subscribable {
     __privateSet(this, _refetchIntervalId, void 0);
   }
 }, updateQuery_fn = function() {
-  const query2 = __privateGet(this, _client2).getQueryCache().build(__privateGet(this, _client2), this.options);
-  if (query2 === __privateGet(this, _currentQuery)) {
+  const query = __privateGet(this, _client2).getQueryCache().build(__privateGet(this, _client2), this.options);
+  if (query === __privateGet(this, _currentQuery)) {
     return;
   }
   const prevQuery = __privateGet(this, _currentQuery);
-  __privateSet(this, _currentQuery, query2);
-  __privateSet(this, _currentQueryInitialState, query2.state);
+  __privateSet(this, _currentQuery, query);
+  __privateSet(this, _currentQueryInitialState, query.state);
   if (this.hasListeners()) {
     prevQuery == null ? void 0 : prevQuery.removeObserver(this);
-    query2.addObserver(this);
+    query.addObserver(this);
   }
 }, notify_fn = function(notifyOptions) {
   notifyManager.batch(() => {
@@ -12751,24 +12759,24 @@ var QueryObserver = (_g = class extends Subscribable {
     });
   });
 }, _g);
-function shouldLoadOnMount(query2, options) {
-  return resolveEnabled(options.enabled, query2) !== false && query2.state.data === void 0 && !(query2.state.status === "error" && options.retryOnMount === false);
+function shouldLoadOnMount(query, options) {
+  return resolveEnabled(options.enabled, query) !== false && query.state.data === void 0 && !(query.state.status === "error" && options.retryOnMount === false);
 }
-function shouldFetchOnMount(query2, options) {
-  return shouldLoadOnMount(query2, options) || query2.state.data !== void 0 && shouldFetchOn(query2, options, options.refetchOnMount);
+function shouldFetchOnMount(query, options) {
+  return shouldLoadOnMount(query, options) || query.state.data !== void 0 && shouldFetchOn(query, options, options.refetchOnMount);
 }
-function shouldFetchOn(query2, options, field) {
-  if (resolveEnabled(options.enabled, query2) !== false && resolveStaleTime(options.staleTime, query2) !== "static") {
-    const value = typeof field === "function" ? field(query2) : field;
-    return value === "always" || value !== false && isStale(query2, options);
+function shouldFetchOn(query, options, field) {
+  if (resolveEnabled(options.enabled, query) !== false && resolveStaleTime(options.staleTime, query) !== "static") {
+    const value = typeof field === "function" ? field(query) : field;
+    return value === "always" || value !== false && isStale(query, options);
   }
   return false;
 }
-function shouldFetchOptionally(query2, prevQuery, options, prevOptions) {
-  return (query2 !== prevQuery || resolveEnabled(prevOptions.enabled, query2) === false) && (!options.suspense || query2.state.status !== "error") && isStale(query2, options);
+function shouldFetchOptionally(query, prevQuery, options, prevOptions) {
+  return (query !== prevQuery || resolveEnabled(prevOptions.enabled, query) === false) && (!options.suspense || query.state.status !== "error") && isStale(query, options);
 }
-function isStale(query2, options) {
-  return resolveEnabled(options.enabled, query2) !== false && query2.isStaleByTime(resolveStaleTime(options.staleTime, query2));
+function isStale(query, options) {
+  return resolveEnabled(options.enabled, query) !== false && query.isStaleByTime(resolveStaleTime(options.staleTime, query));
 }
 function shouldAssignObserverCurrentProperties(observer2, optimisticResult) {
   if (!shallowEqualObjects(observer2.getCurrentResult(), optimisticResult)) {
@@ -12778,7 +12786,7 @@ function shouldAssignObserverCurrentProperties(observer2, optimisticResult) {
 }
 function infiniteQueryBehavior(pages) {
   return {
-    onFetch: (context2, query2) => {
+    onFetch: (context2, query) => {
       var _a3, _b3, _c2, _d2, _e2;
       const options = context2.options;
       const direction = (_c2 = (_b3 = (_a3 = context2.fetchOptions) == null ? void 0 : _a3.meta) == null ? void 0 : _b3.fetchMore) == null ? void 0 : _c2.direction;
@@ -12857,7 +12865,7 @@ function infiniteQueryBehavior(pages) {
               meta: context2.options.meta,
               signal: context2.signal
             },
-            query2
+            query
           );
         };
       } else {
@@ -13289,9 +13297,9 @@ var QueryCache = (_j = class extends Subscribable {
   build(client2, options, state2) {
     const queryKey = options.queryKey;
     const queryHash = options.queryHash ?? hashQueryKeyByOptions(queryKey, options);
-    let query2 = this.get(queryHash);
-    if (!query2) {
-      query2 = new Query({
+    let query = this.get(queryHash);
+    if (!query) {
+      query = new Query({
         client: client2,
         queryKey,
         queryHash,
@@ -13299,33 +13307,33 @@ var QueryCache = (_j = class extends Subscribable {
         state: state2,
         defaultOptions: client2.getQueryDefaults(queryKey)
       });
-      this.add(query2);
+      this.add(query);
     }
-    return query2;
+    return query;
   }
-  add(query2) {
-    if (!__privateGet(this, _queries).has(query2.queryHash)) {
-      __privateGet(this, _queries).set(query2.queryHash, query2);
+  add(query) {
+    if (!__privateGet(this, _queries).has(query.queryHash)) {
+      __privateGet(this, _queries).set(query.queryHash, query);
       this.notify({
         type: "added",
-        query: query2
+        query
       });
     }
   }
-  remove(query2) {
-    const queryInMap = __privateGet(this, _queries).get(query2.queryHash);
+  remove(query) {
+    const queryInMap = __privateGet(this, _queries).get(query.queryHash);
     if (queryInMap) {
-      query2.destroy();
-      if (queryInMap === query2) {
-        __privateGet(this, _queries).delete(query2.queryHash);
+      query.destroy();
+      if (queryInMap === query) {
+        __privateGet(this, _queries).delete(query.queryHash);
       }
-      this.notify({ type: "removed", query: query2 });
+      this.notify({ type: "removed", query });
     }
   }
   clear() {
     notifyManager.batch(() => {
-      this.getAll().forEach((query2) => {
-        this.remove(query2);
+      this.getAll().forEach((query) => {
+        this.remove(query);
       });
     });
   }
@@ -13338,12 +13346,12 @@ var QueryCache = (_j = class extends Subscribable {
   find(filters) {
     const defaultedFilters = { exact: true, ...filters };
     return this.getAll().find(
-      (query2) => matchQuery(defaultedFilters, query2)
+      (query) => matchQuery(defaultedFilters, query)
     );
   }
   findAll(filters = {}) {
     const queries = this.getAll();
-    return Object.keys(filters).length > 0 ? queries.filter((query2) => matchQuery(filters, query2)) : queries;
+    return Object.keys(filters).length > 0 ? queries.filter((query) => matchQuery(filters, query)) : queries;
   }
   notify(event) {
     notifyManager.batch(() => {
@@ -13354,15 +13362,15 @@ var QueryCache = (_j = class extends Subscribable {
   }
   onFocus() {
     notifyManager.batch(() => {
-      this.getAll().forEach((query2) => {
-        query2.onFocus();
+      this.getAll().forEach((query) => {
+        query.onFocus();
       });
     });
   }
   onOnline() {
     notifyManager.batch(() => {
-      this.getAll().forEach((query2) => {
-        query2.onOnline();
+      this.getAll().forEach((query) => {
+        query.onOnline();
       });
     });
   }
@@ -13429,12 +13437,12 @@ var QueryClient = (_k = class {
   }
   ensureQueryData(options) {
     const defaultedOptions = this.defaultQueryOptions(options);
-    const query2 = __privateGet(this, _queryCache).build(this, defaultedOptions);
-    const cachedData = query2.state.data;
+    const query = __privateGet(this, _queryCache).build(this, defaultedOptions);
+    const cachedData = query.state.data;
     if (cachedData === void 0) {
       return this.fetchQuery(options);
     }
-    if (options.revalidateIfStale && query2.isStaleByTime(resolveStaleTime(defaultedOptions.staleTime, query2))) {
+    if (options.revalidateIfStale && query.isStaleByTime(resolveStaleTime(defaultedOptions.staleTime, query))) {
       void this.prefetchQuery(defaultedOptions);
     }
     return Promise.resolve(cachedData);
@@ -13447,10 +13455,10 @@ var QueryClient = (_k = class {
   }
   setQueryData(queryKey, updater, options) {
     const defaultedOptions = this.defaultQueryOptions({ queryKey });
-    const query2 = __privateGet(this, _queryCache).get(
+    const query = __privateGet(this, _queryCache).get(
       defaultedOptions.queryHash
     );
-    const prevData = query2 == null ? void 0 : query2.state.data;
+    const prevData = query == null ? void 0 : query.state.data;
     const data = functionalUpdate$1(updater, prevData);
     if (data === void 0) {
       return void 0;
@@ -13475,16 +13483,16 @@ var QueryClient = (_k = class {
   removeQueries(filters) {
     const queryCache = __privateGet(this, _queryCache);
     notifyManager.batch(() => {
-      queryCache.findAll(filters).forEach((query2) => {
-        queryCache.remove(query2);
+      queryCache.findAll(filters).forEach((query) => {
+        queryCache.remove(query);
       });
     });
   }
   resetQueries(filters, options) {
     const queryCache = __privateGet(this, _queryCache);
     return notifyManager.batch(() => {
-      queryCache.findAll(filters).forEach((query2) => {
-        query2.reset();
+      queryCache.findAll(filters).forEach((query) => {
+        query.reset();
       });
       return this.refetchQueries(
         {
@@ -13498,14 +13506,14 @@ var QueryClient = (_k = class {
   cancelQueries(filters, cancelOptions = {}) {
     const defaultedCancelOptions = { revert: true, ...cancelOptions };
     const promises = notifyManager.batch(
-      () => __privateGet(this, _queryCache).findAll(filters).map((query2) => query2.cancel(defaultedCancelOptions))
+      () => __privateGet(this, _queryCache).findAll(filters).map((query) => query.cancel(defaultedCancelOptions))
     );
     return Promise.all(promises).then(noop$7).catch(noop$7);
   }
   invalidateQueries(filters, options = {}) {
     return notifyManager.batch(() => {
-      __privateGet(this, _queryCache).findAll(filters).forEach((query2) => {
-        query2.invalidate();
+      __privateGet(this, _queryCache).findAll(filters).forEach((query) => {
+        query.invalidate();
       });
       if ((filters == null ? void 0 : filters.refetchType) === "none") {
         return Promise.resolve();
@@ -13525,12 +13533,12 @@ var QueryClient = (_k = class {
       cancelRefetch: options.cancelRefetch ?? true
     };
     const promises = notifyManager.batch(
-      () => __privateGet(this, _queryCache).findAll(filters).filter((query2) => !query2.isDisabled() && !query2.isStatic()).map((query2) => {
-        let promise = query2.fetch(void 0, fetchOptions);
+      () => __privateGet(this, _queryCache).findAll(filters).filter((query) => !query.isDisabled() && !query.isStatic()).map((query) => {
+        let promise = query.fetch(void 0, fetchOptions);
         if (!fetchOptions.throwOnError) {
           promise = promise.catch(noop$7);
         }
-        return query2.state.fetchStatus === "paused" ? Promise.resolve() : promise;
+        return query.state.fetchStatus === "paused" ? Promise.resolve() : promise;
       })
     );
     return Promise.all(promises).then(noop$7);
@@ -13540,10 +13548,10 @@ var QueryClient = (_k = class {
     if (defaultedOptions.retry === void 0) {
       defaultedOptions.retry = false;
     }
-    const query2 = __privateGet(this, _queryCache).build(this, defaultedOptions);
-    return query2.isStaleByTime(
-      resolveStaleTime(defaultedOptions.staleTime, query2)
-    ) ? query2.fetch(defaultedOptions) : Promise.resolve(query2.state.data);
+    const query = __privateGet(this, _queryCache).build(this, defaultedOptions);
+    return query.isStaleByTime(
+      resolveStaleTime(defaultedOptions.staleTime, query)
+    ) ? query.fetch(defaultedOptions) : Promise.resolve(query.state.data);
   }
   prefetchQuery(options) {
     return this.fetchQuery(options).then(noop$7).catch(noop$7);
@@ -14136,8 +14144,8 @@ function createValue() {
 }
 var QueryErrorResetBoundaryContext = reactExports.createContext(createValue());
 var useQueryErrorResetBoundary = () => reactExports.useContext(QueryErrorResetBoundaryContext);
-var ensurePreventErrorBoundaryRetry = (options, errorResetBoundary, query2) => {
-  const throwOnError = (query2 == null ? void 0 : query2.state.error) && typeof options.throwOnError === "function" ? shouldThrowError(options.throwOnError, [query2.state.error, query2]) : options.throwOnError;
+var ensurePreventErrorBoundaryRetry = (options, errorResetBoundary, query) => {
+  const throwOnError = (query == null ? void 0 : query.state.error) && typeof options.throwOnError === "function" ? shouldThrowError(options.throwOnError, [query.state.error, query]) : options.throwOnError;
   if (options.suspense || options.experimental_prefetchInRender || throwOnError) {
     if (!errorResetBoundary.isReset()) {
       options.retryOnMount = false;
@@ -14153,10 +14161,10 @@ var getHasError = ({
   result,
   errorResetBoundary,
   throwOnError,
-  query: query2,
+  query,
   suspense
 }) => {
-  return result.isError && !errorResetBoundary.isReset() && !result.isFetching && query2 && (suspense && result.data === void 0 || shouldThrowError(throwOnError, [result.error, query2]));
+  return result.isError && !errorResetBoundary.isReset() && !result.isFetching && query && (suspense && result.data === void 0 || shouldThrowError(throwOnError, [result.error, query]));
 };
 var ensureSuspenseTimers = (defaultedOptions) => {
   if (defaultedOptions.suspense) {
@@ -14187,10 +14195,10 @@ function useBaseQuery(options, Observer, queryClient2) {
     _a3,
     defaultedOptions
   );
-  const query2 = client2.getQueryCache().get(defaultedOptions.queryHash);
+  const query = client2.getQueryCache().get(defaultedOptions.queryHash);
   defaultedOptions._optimisticResults = isRestoring ? "isRestoring" : "optimistic";
   ensureSuspenseTimers(defaultedOptions);
-  ensurePreventErrorBoundaryRetry(defaultedOptions, errorResetBoundary, query2);
+  ensurePreventErrorBoundaryRetry(defaultedOptions, errorResetBoundary, query);
   useClearResetErrorBoundary(errorResetBoundary);
   const isNewCacheEntry = !client2.getQueryCache().get(defaultedOptions.queryHash);
   const [observer2] = reactExports.useState(
@@ -14223,7 +14231,7 @@ function useBaseQuery(options, Observer, queryClient2) {
     result,
     errorResetBoundary,
     throwOnError: defaultedOptions.throwOnError,
-    query: query2,
+    query,
     suspense: defaultedOptions.suspense
   })) {
     throw result.error;
@@ -14239,7 +14247,7 @@ function useBaseQuery(options, Observer, queryClient2) {
       fetchOptimistic(defaultedOptions, observer2, errorResetBoundary)
     ) : (
       // subscribe to the "cache promise" so that we can finalize the currentThenable once data comes in
-      query2 == null ? void 0 : query2.promise
+      query == null ? void 0 : query.promise
     );
     promise == null ? void 0 : promise.catch(noop$7).finally(() => {
       observer2.updateResult();
@@ -15634,7 +15642,7 @@ function InternetIdentityProvider({ children, createOptions }) {
     setStatus("logging-in");
     void authClient.login(options);
   }, [authClient, handleLoginError, handleLoginSuccess, setErrorMessage]);
-  const clear2 = reactExports.useCallback(() => {
+  const clear = reactExports.useCallback(() => {
     if (!authClient) {
       setErrorMessage("Auth client not initialized");
       return;
@@ -15687,7 +15695,7 @@ function InternetIdentityProvider({ children, createOptions }) {
   const value = reactExports.useMemo(() => ({
     identity: identity2,
     login,
-    clear: clear2,
+    clear,
     loginStatus,
     isInitializing: loginStatus === "initializing",
     isLoginIdle: loginStatus === "idle",
@@ -15696,7 +15704,7 @@ function InternetIdentityProvider({ children, createOptions }) {
     isLoginError: loginStatus === "loginError",
     isAuthenticated: !!identity2 && !identity2.getPrincipal().isAnonymous(),
     loginError
-  }), [identity2, login, clear2, loginStatus, loginError]);
+  }), [identity2, login, clear, loginStatus, loginError]);
   return reactExports.createElement(InternetIdentityReactContext.Provider, {
     value,
     children
@@ -15734,13 +15742,13 @@ function useActor(createActor2) {
   reactExports.useEffect(() => {
     if (actorQuery.data) {
       queryClient2.invalidateQueries({
-        predicate: (query2) => {
-          return !query2.queryKey.includes(ACTOR_QUERY_KEY);
+        predicate: (query) => {
+          return !query.queryKey.includes(ACTOR_QUERY_KEY);
         }
       });
       queryClient2.refetchQueries({
-        predicate: (query2) => {
-          return !query2.queryKey.includes(ACTOR_QUERY_KEY);
+        predicate: (query) => {
+          return !query.queryKey.includes(ACTOR_QUERY_KEY);
         }
       });
     }
@@ -26098,7 +26106,7 @@ ReactDOMSharedInternals.d = {
   r: requestFormReset,
   D: prefetchDNS,
   C: preconnect,
-  L: preload$1,
+  L: preload,
   m: preloadModule,
   X: preinitScript,
   S: preinitStyle,
@@ -26130,7 +26138,7 @@ function preconnect(href, crossOrigin) {
   previousDispatcher.C(href, crossOrigin);
   preconnectAs("preconnect", href, crossOrigin);
 }
-function preload$1(href, as, options) {
+function preload(href, as, options) {
   previousDispatcher.L(href, as, options);
   var ownerDocument = globalDocument;
   if (ownerDocument && href && as) {
@@ -28073,7 +28081,7 @@ function createControlledPromise(onResolve) {
   };
   return controlledPromise;
 }
-function isPromise$1(value) {
+function isPromise(value) {
   return Boolean(
     value && typeof value === "object" && typeof value.then === "function"
   );
@@ -29014,17 +29022,17 @@ function parseSearchWith(parser) {
     if (searchStr[0] === "?") {
       searchStr = searchStr.substring(1);
     }
-    const query2 = decode(searchStr);
-    for (const key in query2) {
-      const value = query2[key];
+    const query = decode(searchStr);
+    for (const key in query) {
+      const value = query[key];
       if (typeof value === "string") {
         try {
-          query2[key] = parser(value);
+          query[key] = parser(value);
         } catch (_err) {
         }
       }
     }
-    return query2;
+    return query;
   };
 }
 function stringifySearchWith(stringify, parser) {
@@ -29287,7 +29295,7 @@ const isBeforeLoadSsr = (inner, matchId, index2, route) => {
     }))
   };
   const tempSsr = route.options.ssr(ssrFnContext);
-  if (isPromise$1(tempSsr)) {
+  if (isPromise(tempSsr)) {
     return tempSsr.then((ssr) => {
       existingMatch.ssr = parentOverride(ssr ?? defaultSsr);
     });
@@ -29370,12 +29378,12 @@ const executeBeforeLoad = (inner, matchId, index2, route) => {
   }
   match._nonReactive.beforeLoadPromise = createControlledPromise();
   const { search, params, cause } = match;
-  const preload2 = resolvePreload(inner, matchId);
+  const preload3 = resolvePreload(inner, matchId);
   const beforeLoadFnContext = {
     search,
     abortController,
     params,
-    preload: preload2,
+    preload: preload3,
     context: context2,
     location: inner.location,
     navigate: (opts) => inner.router.navigate({
@@ -29383,7 +29391,7 @@ const executeBeforeLoad = (inner, matchId, index2, route) => {
       _fromLocation: inner.location
     }),
     buildLocation: inner.router.buildLocation,
-    cause: preload2 ? "preload" : cause,
+    cause: preload3 ? "preload" : cause,
     matches: inner.matches
   };
   const updateContext = (beforeLoadContext2) => {
@@ -29414,7 +29422,7 @@ const executeBeforeLoad = (inner, matchId, index2, route) => {
   let beforeLoadContext;
   try {
     beforeLoadContext = route.options.beforeLoad(beforeLoadFnContext);
-    if (isPromise$1(beforeLoadContext)) {
+    if (isPromise(beforeLoadContext)) {
       pending();
       return beforeLoadContext.catch((err) => {
         handleSerialError(inner, index2, err, "BEFORE_LOAD");
@@ -29433,14 +29441,14 @@ const handleBeforeLoad = (inner, index2) => {
   const serverSsr = () => {
     if (inner.router.isServer) {
       const maybePromise = isBeforeLoadSsr(inner, matchId, index2, route);
-      if (isPromise$1(maybePromise)) return maybePromise.then(queueExecution);
+      if (isPromise(maybePromise)) return maybePromise.then(queueExecution);
     }
     return queueExecution();
   };
   const queueExecution = () => {
     if (shouldSkipLoader(inner, matchId)) return;
     const result = preBeforeLoadSetup(inner, matchId, route);
-    return isPromise$1(result) ? result.then(execute) : execute();
+    return isPromise(result) ? result.then(execute) : execute();
   };
   const execute = () => executeBeforeLoad(inner, matchId, index2, route);
   return serverSsr();
@@ -29482,11 +29490,11 @@ const executeHead = (inner, matchId, route) => {
 const getLoaderContext = (inner, matchId, index2, route) => {
   const parentMatchPromise = inner.matchPromises[index2 - 1];
   const { params, loaderDeps, abortController, context: context2, cause } = inner.router.getMatch(matchId);
-  const preload2 = resolvePreload(inner, matchId);
+  const preload3 = resolvePreload(inner, matchId);
   return {
     params,
     deps: loaderDeps,
-    preload: !!preload2,
+    preload: !!preload3,
     parentMatchPromise,
     abortController,
     context: context2,
@@ -29495,7 +29503,7 @@ const getLoaderContext = (inner, matchId, index2, route) => {
       ...opts,
       _fromLocation: inner.location
     }),
-    cause: preload2 ? "preload" : cause,
+    cause: preload3 ? "preload" : cause,
     route
   };
 };
@@ -29511,7 +29519,7 @@ const runLoader = async (inner, matchId, index2, route) => {
         _a3,
         getLoaderContext(inner, matchId, index2, route)
       );
-      const loaderResultIsPromise = route.options.loader && isPromise$1(loaderResult);
+      const loaderResultIsPromise = route.options.loader && isPromise(loaderResult);
       const willLoadSomething = !!(loaderResultIsPromise || route._lazyPromise || route._componentsPromise || route.options.head || route.options.scripts || route.options.headers || match._nonReactive.minPendingPromise);
       if (willLoadSomething) {
         inner.updateMatch(matchId, (prev) => ({
@@ -29619,11 +29627,11 @@ const loadRouteMatch = async (inner, index2) => {
       }
     } else {
       const age = Date.now() - prevMatch.updatedAt;
-      const preload2 = resolvePreload(inner, matchId);
-      const staleAge = preload2 ? route.options.preloadStaleTime ?? inner.router.options.defaultPreloadStaleTime ?? 3e4 : route.options.staleTime ?? inner.router.options.defaultStaleTime ?? 0;
+      const preload3 = resolvePreload(inner, matchId);
+      const staleAge = preload3 ? route.options.preloadStaleTime ?? inner.router.options.defaultPreloadStaleTime ?? 3e4 : route.options.staleTime ?? inner.router.options.defaultStaleTime ?? 0;
       const shouldReloadOption = route.options.shouldReload;
       const shouldReload = typeof shouldReloadOption === "function" ? shouldReloadOption(getLoaderContext(inner, matchId, index2, route)) : shouldReloadOption;
-      const nextPreload = !!preload2 && !inner.router.state.matches.some((d2) => d2.id === matchId);
+      const nextPreload = !!preload3 && !inner.router.state.matches.some((d2) => d2.id === matchId);
       const match2 = inner.router.getMatch(matchId);
       match2._nonReactive.loaderPromise = createControlledPromise();
       if (nextPreload !== match2.preload) {
@@ -29634,7 +29642,7 @@ const loadRouteMatch = async (inner, index2) => {
       }
       const { status, invalid } = match2;
       loaderShouldRunAsync = status === "success" && (invalid || (shouldReload ?? age > staleAge));
-      if (preload2 && route.options.preload === false) ;
+      if (preload3 && route.options.preload === false) ;
       else if (loaderShouldRunAsync && !inner.sync) {
         loaderIsRunningAsync = true;
         (async () => {
@@ -29696,7 +29704,7 @@ async function loadMatches(arg) {
   try {
     for (let i2 = 0; i2 < inner.matches.length; i2++) {
       const beforeLoad = handleBeforeLoad(inner, i2);
-      if (isPromise$1(beforeLoad)) await beforeLoad;
+      if (isPromise(beforeLoad)) await beforeLoad;
     }
     const max = inner.firstBadMatchIndex ?? inner.matches.length;
     for (let i2 = 0; i2 < max; i2++) {
@@ -29704,11 +29712,11 @@ async function loadMatches(arg) {
     }
     await Promise.all(inner.matchPromises);
     const readyPromise = triggerOnReady(inner);
-    if (isPromise$1(readyPromise)) await readyPromise;
+    if (isPromise(readyPromise)) await readyPromise;
   } catch (err) {
     if (isNotFound(err) && !inner.preload) {
       const readyPromise = triggerOnReady(inner);
-      if (isPromise$1(readyPromise)) await readyPromise;
+      if (isPromise(readyPromise)) await readyPromise;
       throw err;
     }
     if (isRedirect(err)) {
@@ -29735,8 +29743,8 @@ async function loadRouteChunk(route) {
       var _a3;
       const preloads = [];
       for (const type of componentTypes) {
-        const preload2 = (_a3 = route.options[type]) == null ? void 0 : _a3.preload;
-        if (preload2) preloads.push(preload2());
+        const preload3 = (_a3 = route.options[type]) == null ? void 0 : _a3.preload;
+        if (preload3) preloads.push(preload3());
       }
       if (preloads.length)
         return Promise.all(preloads).then(() => {
@@ -31616,7 +31624,7 @@ function useLinkProps(options, forwardedRef) {
     [router2, _options2]
   );
   const isExternal = type === "external";
-  const preload2 = options.reloadDocument || isExternal ? false : userPreload ?? router2.options.defaultPreload;
+  const preload3 = options.reloadDocument || isExternal ? false : userPreload ?? router2.options.defaultPreload;
   const preloadDelay = userPreloadDelay ?? router2.options.defaultPreloadDelay ?? 0;
   const isActive = useRouterState({
     select: (s2) => {
@@ -31677,17 +31685,17 @@ function useLinkProps(options, forwardedRef) {
     innerRef,
     preloadViewportIoCallback,
     intersectionObserverOptions,
-    { disabled: !!disabled || !(preload2 === "viewport") }
+    { disabled: !!disabled || !(preload3 === "viewport") }
   );
   reactExports.useEffect(() => {
     if (hasRenderFetched.current) {
       return;
     }
-    if (!disabled && preload2 === "render") {
+    if (!disabled && preload3 === "render") {
       doPreload();
       hasRenderFetched.current = true;
     }
-  }, [disabled, doPreload, preload2]);
+  }, [disabled, doPreload, preload3]);
   const handleClick = (e) => {
     const elementTarget = e.currentTarget.target;
     const effectiveTarget = target !== void 0 ? target : elementTarget;
@@ -31731,13 +31739,13 @@ function useLinkProps(options, forwardedRef) {
   }
   const handleFocus = (_2) => {
     if (disabled) return;
-    if (preload2) {
+    if (preload3) {
       doPreload();
     }
   };
   const handleTouchStart = handleFocus;
   const handleEnter = (e) => {
-    if (disabled || !preload2) return;
+    if (disabled || !preload3) return;
     if (!preloadDelay) {
       doPreload();
     } else {
@@ -31753,7 +31761,7 @@ function useLinkProps(options, forwardedRef) {
     }
   };
   const handleLeave = (e) => {
-    if (disabled || !preload2 || !preloadDelay) return;
+    if (disabled || !preload3 || !preloadDelay) return;
     const eventTarget = e.target;
     const id2 = timeoutMap.get(eventTarget);
     if (id2) {
@@ -32537,7 +32545,13 @@ const BIOME_MINERAL_RATES = {
   Coastal: { iron: 5, fuel: 7, crystal: 4, rareEarth: 3 },
   Volcanic: { iron: 8, fuel: 6, crystal: 3, rareEarth: 6 },
   Equatorial: { iron: 6, fuel: 8, crystal: 5, rareEarth: 2 },
-  Ocean: { iron: 2, fuel: 5, crystal: 7, rareEarth: 5 },
+  Ocean: { iron: 0.6, fuel: 0.9, crystal: 0.7, rareEarth: 1 },
+  "Coastal Shipping Lane": {
+    iron: 0.4,
+    fuel: 1,
+    crystal: 0.5,
+    rareEarth: 0.8
+  },
   Mountain: { iron: 9, fuel: 3, crystal: 6, rareEarth: 4 },
   Toxic: { iron: 4, fuel: 2, crystal: 9, rareEarth: 7 }
 };
@@ -73877,7 +73891,7 @@ function buildGeodesicGrid(freq) {
     return new Vector3(x3 / len, y2 / len, z2 / len);
   });
   const PREC = 1e4;
-  const seen = /* @__PURE__ */ new Map();
+  const seen2 = /* @__PURE__ */ new Map();
   for (const [i0, i1, i2] of ICO_FACES) {
     const a2 = V2[i0];
     const b2 = V2[i1];
@@ -73893,15 +73907,15 @@ function buildGeodesicGrid(freq) {
         const ny = ry / rLen;
         const nz = rz / rLen;
         const key = `${Math.round(nx * PREC)},${Math.round(ny * PREC)},${Math.round(nz * PREC)}`;
-        if (!seen.has(key)) {
+        if (!seen2.has(key)) {
           const lat = Math.asin(Math.max(-1, Math.min(1, ny))) * (180 / Math.PI);
           const lng = Math.atan2(nz, -nx) * (180 / Math.PI);
-          seen.set(key, { id: seen.size, lat, lng, nx, ny, nz });
+          seen2.set(key, { id: seen2.size, lat, lng, nx, ny, nz });
         }
       }
     }
   }
-  return Array.from(seen.values());
+  return Array.from(seen2.values());
 }
 function buildPositionCache(tiles) {
   const arr = new Float32Array(tiles.length * 3);
@@ -73927,6 +73941,27 @@ function findNearestTile(nx, ny, nz, cache) {
 }
 const GEODESIC_TILES = buildGeodesicGrid(32);
 const PLOT_POSITION_CACHE = buildPositionCache(GEODESIC_TILES);
+function isOceanTile(lat, lng) {
+  if (lat >= -60 && lat <= 65) {
+    if (lng >= 120 && lng <= 180) return true;
+    if (lng >= -180 && lng <= -70) return true;
+  }
+  if (lat >= -60 && lat <= 70 && lng >= -70 && lng <= 20) return true;
+  if (lat >= -60 && lat <= 30 && lng >= 20 && lng <= 120) return true;
+  if (lat > 70) return true;
+  if (lat < -60) return true;
+  return false;
+}
+function assignBiome(lat, lng) {
+  if (isOceanTile(lat, lng)) return "Ocean";
+  if (lat > 60) return "Arctic";
+  if (lat > 35) return lat > 45 ? "Mountain" : "Forest";
+  if (lat > 15) return "Grassland";
+  if (lat > -15) return lat > 5 ? "Desert" : "Toxic";
+  if (lat > -35) return "Forest";
+  if (lat > -60) return "Grassland";
+  return "Arctic";
+}
 const LS_KEY = "frontier_player_state_v1";
 function loadFromStorage() {
   try {
@@ -73949,7 +73984,6 @@ function saveToStorage(state2) {
         crystal: player.crystal,
         rareEarth: player.rareEarth,
         plotsOwned: player.plotsOwned,
-        mockIcpBalance: player.mockIcpBalance,
         resourceStorageCap: player.resourceStorageCap,
         generatorTiers,
         plotPurchaseTimes,
@@ -74054,6 +74088,7 @@ function generatePlots() {
     mineCount: 0,
     regenActiveUntil: 0,
     owner: null,
+    isOwnedByMe: false,
     iron: 0,
     fuel: 0,
     crystal: 0,
@@ -74092,7 +74127,6 @@ const useGameStore = create((set, get) => ({
     rareEarth: (_cached == null ? void 0 : _cached.rareEarth) ?? 0,
     frntBalance: (_cached == null ? void 0 : _cached.frntBalance) ?? 0,
     plotsOwned: (_cached == null ? void 0 : _cached.plotsOwned) ?? [],
-    mockIcpBalance: (_cached == null ? void 0 : _cached.mockIcpBalance) ?? 5,
     resourceStorageCap: (_cached == null ? void 0 : _cached.resourceStorageCap) ?? 200
   },
   selectedPlotId: null,
@@ -74108,8 +74142,28 @@ const useGameStore = create((set, get) => ({
   serverPassiveIncomePerDay: 0,
   totalFRNTRBurned: (_cached == null ? void 0 : _cached.totalFRNTRBurned) ?? 0,
   purchaseDebugLogs: [],
+  firstAvailablePlotId: null,
   globalStats: null,
+  treasuryState: { developer: 0n, leaderboard: 0n, liquidity: 0n },
+  icpUsdPrice: null,
   setGlobalStats: (stats) => set({ globalStats: stats }),
+  setTreasuryState: (state2) => set({ treasuryState: state2 }),
+  setIcpUsdPrice: (price) => set({ icpUsdPrice: price }),
+  setPlots: (plots) => set({ plots }),
+  setPlotOwnership: (owners, myPrincipal) => {
+    const ownerMap = /* @__PURE__ */ new Map();
+    for (const [id2, principal] of owners) {
+      ownerMap.set(Number(id2), principal);
+    }
+    set((s2) => ({
+      plots: s2.plots.map((p2) => {
+        const owner = ownerMap.get(p2.id) ?? null;
+        return owner !== void 0 ? { ...p2, owner, isOwnedByMe: !!myPrincipal && owner === myPrincipal } : { ...p2, isOwnedByMe: false };
+      })
+    }));
+  },
+  fetchSubParcels: async (_plotId) => {
+  },
   selectPlot: (id2) => set({ selectedPlotId: id2 }),
   setSelectedWorldPoint: (p2) => set({ selectedWorldPoint: p2 }),
   setTargetPlotId: (id2) => set({ targetPlotId: id2 }),
@@ -74132,7 +74186,7 @@ const useGameStore = create((set, get) => ({
           plotsOwned: [...s2.player.plotsOwned, id2]
         },
         plots: s2.plots.map(
-          (p2) => p2.id === id2 ? { ...p2, owner: s2.player.principal ?? "You" } : p2
+          (p2) => p2.id === id2 ? { ...p2, owner: s2.player.principal ?? "You", isOwnedByMe: true } : p2
         ),
         subParcels: { ...s2.subParcels, [id2]: subParcels },
         plotPurchaseTimes: { ...s2.plotPurchaseTimes, [id2]: Date.now() }
@@ -74236,8 +74290,7 @@ const useGameStore = create((set, get) => ({
       ...s2,
       player: {
         ...s2.player,
-        frntBalance: s2.player.frntBalance + 500,
-        mockIcpBalance: s2.player.mockIcpBalance + 2
+        frntBalance: s2.player.frntBalance + 500
       }
     };
     saveToStorage(next);
@@ -74411,11 +74464,11 @@ const useGameStore = create((set, get) => ({
   },
   faction: null
 }));
-const CYAN$c = "#00ffcc";
+const CYAN$b = "#00ffcc";
 const GOLD$3 = "#ffd700";
 const AMBER$1 = "#f59e0b";
 const PURPLE = "#a855f7";
-const BORDER$b = "rgba(0,255,204,0.18)";
+const BORDER$a = "rgba(0,255,204,0.18)";
 const PANEL$1 = "rgba(0,20,40,0.70)";
 const TEXT$5 = "#e0f4ff";
 const TEXT_DIM$3 = "rgba(224,244,255,0.45)";
@@ -74496,7 +74549,7 @@ function FRNTRCounter() {
         background: PANEL$1,
         backdropFilter: "blur(16px)",
         WebkitBackdropFilter: "blur(16px)",
-        border: `1px solid ${BORDER$b}`,
+        border: `1px solid ${BORDER$a}`,
         borderRadius: 10,
         padding: "14px 16px",
         marginBottom: 14
@@ -74509,7 +74562,7 @@ function FRNTRCounter() {
               fontSize: 9,
               fontWeight: 700,
               letterSpacing: 3,
-              color: CYAN$c,
+              color: CYAN$b,
               textTransform: "uppercase",
               marginBottom: 8
             },
@@ -74550,7 +74603,7 @@ function ResourceStockpiles() {
   const resources = [
     { label: "IRON", val: player.iron, color: "#94a3b8", icon: "⚙️" },
     { label: "FUEL", val: player.fuel, color: AMBER$1, icon: "⛽" },
-    { label: "CRYSTAL", val: player.crystal, color: CYAN$c, icon: "💎" },
+    { label: "CRYSTAL", val: player.crystal, color: CYAN$b, icon: "💎" },
     { label: "RARE EARTH", val: player.rareEarth, color: PURPLE, icon: "🔮" }
   ];
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -74560,7 +74613,7 @@ function ResourceStockpiles() {
         background: PANEL$1,
         backdropFilter: "blur(16px)",
         WebkitBackdropFilter: "blur(16px)",
-        border: `1px solid ${BORDER$b}`,
+        border: `1px solid ${BORDER$a}`,
         borderRadius: 10,
         padding: "12px 14px",
         marginBottom: 14
@@ -74573,7 +74626,7 @@ function ResourceStockpiles() {
               fontSize: 9,
               fontWeight: 700,
               letterSpacing: 3,
-              color: CYAN$c,
+              color: CYAN$b,
               textTransform: "uppercase",
               marginBottom: 10
             },
@@ -74668,7 +74721,7 @@ function PlotCard({ plotId, index: index2 }) {
   const tier = generatorTiers[plotId] ?? 0;
   const tierLabel = TIER_LABELS[tier];
   const dailyRate = TIER_DAILY[tier];
-  const biomeColor = BIOME_DOT[plot.biome] ?? CYAN$c;
+  const biomeColor = BIOME_DOT[plot.biome] ?? CYAN$b;
   const h3Short = shortH3(plotId);
   const drip = BIOME_DRIP[plot.biome] ?? [1e-3, 1e-3, 1e-3, 1e-3];
   const effFactor = plot.efficiency / 100;
@@ -74695,7 +74748,7 @@ function PlotCard({ plotId, index: index2 }) {
       "data-ocid": `inventory.item.${index2}`,
       style: {
         background: "rgba(0,20,40,0.55)",
-        border: `1px solid ${BORDER$b}`,
+        border: `1px solid ${BORDER$a}`,
         borderRadius: 10,
         padding: "12px 14px",
         position: "relative",
@@ -74711,7 +74764,7 @@ function PlotCard({ plotId, index: index2 }) {
               left: 0,
               width: `${tier / 6 * 100}%`,
               height: 2,
-              background: `linear-gradient(90deg, ${CYAN$c}, ${GOLD$3})`
+              background: `linear-gradient(90deg, ${CYAN$b}, ${GOLD$3})`
             }
           }
         ),
@@ -74760,11 +74813,11 @@ function PlotCard({ plotId, index: index2 }) {
                   style: {
                     padding: "3px 8px",
                     background: tier > 0 ? "rgba(0,255,204,0.12)" : "rgba(255,255,255,0.05)",
-                    border: `1px solid ${tier > 0 ? BORDER$b : "rgba(255,255,255,0.08)"}`,
+                    border: `1px solid ${tier > 0 ? BORDER$a : "rgba(255,255,255,0.08)"}`,
                     borderRadius: 4,
                     fontSize: 8,
                     fontWeight: 700,
-                    color: tier > 0 ? CYAN$c : TEXT_DIM$3,
+                    color: tier > 0 ? CYAN$b : TEXT_DIM$3,
                     letterSpacing: 1,
                     whiteSpace: "nowrap"
                   },
@@ -74899,7 +74952,7 @@ function PlotCard({ plotId, index: index2 }) {
                     style: {
                       fontSize: 10,
                       fontWeight: 700,
-                      color: CYAN$c,
+                      color: CYAN$b,
                       fontFamily: "monospace"
                     },
                     children: crystalPerDay
@@ -74936,9 +74989,9 @@ function PlotCard({ plotId, index: index2 }) {
                 flex: 1,
                 padding: "8px 0",
                 background: "rgba(0,255,204,0.08)",
-                border: `1px solid ${BORDER$b}`,
+                border: `1px solid ${BORDER$a}`,
                 borderRadius: 6,
-                color: isLoggedIn ? CYAN$c : TEXT_DIM$3,
+                color: isLoggedIn ? CYAN$b : TEXT_DIM$3,
                 fontSize: 9,
                 fontWeight: 700,
                 letterSpacing: 1.5,
@@ -75008,7 +75061,7 @@ function Inventory() {
               fontSize: 9,
               fontWeight: 700,
               letterSpacing: 3,
-              color: CYAN$c,
+              color: CYAN$b,
               textTransform: "uppercase",
               marginBottom: 10,
               display: "flex",
@@ -77681,7 +77734,7 @@ const createLucideIcon = (iconName, iconNode) => {
  * This source code is licensed under the ISC license.
  * See the LICENSE file in the root directory of this source tree.
  */
-const __iconNode$m = [
+const __iconNode$l = [
   [
     "path",
     {
@@ -77690,42 +77743,31 @@ const __iconNode$m = [
     }
   ]
 ];
-const Activity = createLucideIcon("activity", __iconNode$m);
+const Activity = createLucideIcon("activity", __iconNode$l);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
  * This source code is licensed under the ISC license.
  * See the LICENSE file in the root directory of this source tree.
  */
-const __iconNode$l = [["path", { d: "m6 9 6 6 6-6", key: "qrunsl" }]];
-const ChevronDown = createLucideIcon("chevron-down", __iconNode$l);
+const __iconNode$k = [["path", { d: "m6 9 6 6 6-6", key: "qrunsl" }]];
+const ChevronDown = createLucideIcon("chevron-down", __iconNode$k);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
  * This source code is licensed under the ISC license.
  * See the LICENSE file in the root directory of this source tree.
  */
-const __iconNode$k = [["path", { d: "m9 18 6-6-6-6", key: "mthhwq" }]];
-const ChevronRight = createLucideIcon("chevron-right", __iconNode$k);
+const __iconNode$j = [["path", { d: "m9 18 6-6-6-6", key: "mthhwq" }]];
+const ChevronRight = createLucideIcon("chevron-right", __iconNode$j);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
  * This source code is licensed under the ISC license.
  * See the LICENSE file in the root directory of this source tree.
  */
-const __iconNode$j = [["path", { d: "m18 15-6-6-6 6", key: "153udz" }]];
-const ChevronUp = createLucideIcon("chevron-up", __iconNode$j);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$i = [
-  ["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }],
-  ["polyline", { points: "12 6 12 12 16 14", key: "68esgv" }]
-];
-const Clock2 = createLucideIcon("clock", __iconNode$i);
+const __iconNode$i = [["path", { d: "m18 15-6-6-6 6", key: "153udz" }]];
+const ChevronUp = createLucideIcon("chevron-up", __iconNode$i);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
@@ -77733,6 +77775,17 @@ const Clock2 = createLucideIcon("clock", __iconNode$i);
  * See the LICENSE file in the root directory of this source tree.
  */
 const __iconNode$h = [
+  ["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }],
+  ["polyline", { points: "12 6 12 12 16 14", key: "68esgv" }]
+];
+const Clock2 = createLucideIcon("clock", __iconNode$h);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$g = [
   ["path", { d: "M12 20v2", key: "1lh1kg" }],
   ["path", { d: "M12 2v2", key: "tus03m" }],
   ["path", { d: "M17 20v2", key: "1rnc9c" }],
@@ -77748,23 +77801,7 @@ const __iconNode$h = [
   ["rect", { x: "4", y: "4", width: "16", height: "16", rx: "2", key: "1vbyd7" }],
   ["rect", { x: "8", y: "8", width: "8", height: "8", rx: "1", key: "z9xiuo" }]
 ];
-const Cpu = createLucideIcon("cpu", __iconNode$h);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$g = [
-  [
-    "path",
-    {
-      d: "M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z",
-      key: "96xj49"
-    }
-  ]
-];
-const Flame = createLucideIcon("flame", __iconNode$g);
+const Cpu = createLucideIcon("cpu", __iconNode$g);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
@@ -77775,14 +77812,12 @@ const __iconNode$f = [
   [
     "path",
     {
-      d: "M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2",
-      key: "18mbvz"
+      d: "M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z",
+      key: "96xj49"
     }
-  ],
-  ["path", { d: "M6.453 15h11.094", key: "3shlmq" }],
-  ["path", { d: "M8.5 2h7", key: "csnxdl" }]
+  ]
 ];
-const FlaskConical = createLucideIcon("flask-conical", __iconNode$f);
+const Flame = createLucideIcon("flame", __iconNode$f);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
@@ -77790,11 +77825,17 @@ const FlaskConical = createLucideIcon("flask-conical", __iconNode$f);
  * See the LICENSE file in the root directory of this source tree.
  */
 const __iconNode$e = [
-  ["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }],
-  ["path", { d: "M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20", key: "13o1zl" }],
-  ["path", { d: "M2 12h20", key: "9i4pu4" }]
+  [
+    "path",
+    {
+      d: "M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2",
+      key: "18mbvz"
+    }
+  ],
+  ["path", { d: "M6.453 15h11.094", key: "3shlmq" }],
+  ["path", { d: "M8.5 2h7", key: "csnxdl" }]
 ];
-const Globe = createLucideIcon("globe", __iconNode$e);
+const FlaskConical = createLucideIcon("flask-conical", __iconNode$e);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
@@ -77802,12 +77843,11 @@ const Globe = createLucideIcon("globe", __iconNode$e);
  * See the LICENSE file in the root directory of this source tree.
  */
 const __iconNode$d = [
-  ["rect", { width: "7", height: "9", x: "3", y: "3", rx: "1", key: "10lvy0" }],
-  ["rect", { width: "7", height: "5", x: "14", y: "3", rx: "1", key: "16une8" }],
-  ["rect", { width: "7", height: "9", x: "14", y: "12", rx: "1", key: "1hutg5" }],
-  ["rect", { width: "7", height: "5", x: "3", y: "16", rx: "1", key: "ldoo1y" }]
+  ["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }],
+  ["path", { d: "M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20", key: "13o1zl" }],
+  ["path", { d: "M2 12h20", key: "9i4pu4" }]
 ];
-const LayoutDashboard = createLucideIcon("layout-dashboard", __iconNode$d);
+const Globe = createLucideIcon("globe", __iconNode$d);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
@@ -77815,10 +77855,12 @@ const LayoutDashboard = createLucideIcon("layout-dashboard", __iconNode$d);
  * See the LICENSE file in the root directory of this source tree.
  */
 const __iconNode$c = [
-  ["rect", { width: "18", height: "11", x: "3", y: "11", rx: "2", ry: "2", key: "1w4ew1" }],
-  ["path", { d: "M7 11V7a5 5 0 0 1 10 0v4", key: "fwvmzm" }]
+  ["rect", { width: "7", height: "9", x: "3", y: "3", rx: "1", key: "10lvy0" }],
+  ["rect", { width: "7", height: "5", x: "14", y: "3", rx: "1", key: "16une8" }],
+  ["rect", { width: "7", height: "9", x: "14", y: "12", rx: "1", key: "1hutg5" }],
+  ["rect", { width: "7", height: "5", x: "3", y: "16", rx: "1", key: "ldoo1y" }]
 ];
-const Lock = createLucideIcon("lock", __iconNode$c);
+const LayoutDashboard = createLucideIcon("layout-dashboard", __iconNode$c);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
@@ -77826,11 +77868,10 @@ const Lock = createLucideIcon("lock", __iconNode$c);
  * See the LICENSE file in the root directory of this source tree.
  */
 const __iconNode$b = [
-  ["path", { d: "m16 17 5-5-5-5", key: "1bji2h" }],
-  ["path", { d: "M21 12H9", key: "dn1m92" }],
-  ["path", { d: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4", key: "1uf3rs" }]
+  ["rect", { width: "18", height: "11", x: "3", y: "11", rx: "2", ry: "2", key: "1w4ew1" }],
+  ["path", { d: "M7 11V7a5 5 0 0 1 10 0v4", key: "fwvmzm" }]
 ];
-const LogOut = createLucideIcon("log-out", __iconNode$b);
+const Lock = createLucideIcon("lock", __iconNode$b);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
@@ -85878,6 +85919,14 @@ const PrincipalDisplay = Record({
   "short": Text,
   "isAuthed": Bool
 });
+const SubParcel = Record({
+  "subParcelId": Nat,
+  "cooldownEnds": Int,
+  "plotId": Nat,
+  "building": Opt(Text),
+  "slotIndex": Nat,
+  "specialization": Text
+});
 const Tokenomics = Record({
   "burnRate": Nat,
   "emissionRate": Nat,
@@ -85914,6 +85963,32 @@ const FaucetResult = Variant({
   "ok": FaucetGrant,
   "err": Text
 });
+const Timestamp = Int;
+const GeneratorTier = Variant({
+  "TierIII": Null,
+  "None": Null,
+  "TierII": Null,
+  "TierIV": Null,
+  "TierVI": Null,
+  "TierI": Null,
+  "TierV": Null
+});
+const PlotUpgradesView = Record({
+  "tierName": Text,
+  "plotId": PlotId,
+  "installedAt": Opt(Timestamp),
+  "bonusPerDay": Float64,
+  "nextTierCost": Opt(Nat),
+  "generatorTier": GeneratorTier
+});
+const UpgradeError = Variant({
+  "SubParcelLocked": Null,
+  "PlotNotFound": Null,
+  "InvalidTier": Null,
+  "NotOwner": Null,
+  "AlreadyMaxTier": Null,
+  "InsufficientFRNTR": Null
+});
 Service({
   "assignInterceptor": Func([Nat, Text], [], []),
   "getAdjacentPlots": Func([Nat], [Vec(Nat)], ["query"]),
@@ -85939,7 +86014,27 @@ Service({
     [FaucetClaimSummary],
     ["query"]
   ),
+  "getFirstAvailablePlot": Func([], [Opt(Nat)], ["query"]),
+  "getFrntrLedger": Func([], [Text], ["query"]),
+  "getGameCanisterPrincipal": Func([], [Text], ["query"]),
+  "getGameStats": Func(
+    [],
+    [
+      Record({
+        "totalPlayers": Nat,
+        "totalFrntrBurned": Nat,
+        "totalSupply": Nat,
+        "totalBurned": Nat,
+        "totalPlots": Nat,
+        "emissionRatePerDay": Nat,
+        "remainingMineable": Nat
+      })
+    ],
+    ["query"]
+  ),
   "getGlobalStats": Func([], [GlobalStats], ["query"]),
+  "getIcpUsdPrice": Func([], [Float64], []),
+  "getIcpUsdPriceCached": Func([], [Float64], ["query"]),
   "getLeaderboard": Func(
     [Nat],
     [
@@ -85989,7 +86084,7 @@ Service({
         "passiveIncomePerDay": Float64
       })
     ],
-    ["query"]
+    []
   ),
   "getPlayerStateByPrincipal": Func(
     [Principal2],
@@ -86014,14 +86109,39 @@ Service({
   ),
   "getPlotCount": Func([], [Nat], ["query"]),
   "getPlotPrice": Func([Text], [Nat], ["query"]),
+  "getPlotPriceById": Func([Nat], [Nat], ["query"]),
   "getPlotProductionRate": Func(
     [Nat],
     [PlotProductionRate],
     ["query"]
   ),
+  "getPlotsByOwner": Func([Principal2], [Vec(Nat)], ["query"]),
   "getPrincipal": Func([], [PrincipalDisplay], ["query"]),
+  "getSubParcels": Func([Nat], [Vec(SubParcel)], ["query"]),
   "getTokenomics": Func([], [Tokenomics], ["query"]),
+  "getTreasuryBalances": Func(
+    [],
+    [
+      Record({
+        "leaderboardPot": Nat,
+        "devPot": Nat,
+        "liquidityPot": Nat
+      })
+    ],
+    []
+  ),
   "getTreasuryPrincipal": Func([], [Text], ["query"]),
+  "getTreasuryState": Func(
+    [],
+    [
+      Record({
+        "leaderboard": Nat,
+        "liquidity": Nat,
+        "developer": Nat
+      })
+    ],
+    ["query"]
+  ),
   "initPlots": Func(
     [
       Vec(
@@ -86047,8 +86167,17 @@ Service({
     [Variant({ "ok": Text, "err": Text })],
     []
   ),
+  "resetAllData": Func([], [], []),
   "resetTestState": Func([], [ResetResult], []),
   "setAdminPrincipal": Func([Principal2], [], []),
+  "setApprovedLiquidityCanister": Func(
+    [Principal2],
+    [Variant({ "ok": Null, "err": Text })],
+    []
+  ),
+  "setFrntrLedger": Func([Principal2], [], []),
+  "setGameCanisterPrincipal": Func([Text], [], []),
+  "setSelfPrincipal": Func([], [], []),
   "setTreasuryPrincipal": Func([Principal2], [], []),
   "setUsername": Func(
     [Text],
@@ -86064,7 +86193,17 @@ Service({
     []
   ),
   "testFaucetV2": Func([], [FaucetResult], []),
-  "updateAdminPrincipalAuth": Func([Text], [], [])
+  "updateAdminPrincipalAuth": Func([Text], [], []),
+  "upgradeGenerator": Func(
+    [Nat],
+    [Variant({ "ok": PlotUpgradesView, "err": UpgradeError })],
+    []
+  ),
+  "withdrawLiquidityPot": Func(
+    [Nat, Principal2],
+    [Variant({ "ok": Null, "err": Text })],
+    []
+  )
 });
 const idlFactory = ({ IDL: IDL2 }) => {
   const CombatEvent2 = IDL2.Record({
@@ -86116,6 +86255,14 @@ const idlFactory = ({ IDL: IDL2 }) => {
     "short": IDL2.Text,
     "isAuthed": IDL2.Bool
   });
+  const SubParcel2 = IDL2.Record({
+    "subParcelId": IDL2.Nat,
+    "cooldownEnds": IDL2.Int,
+    "plotId": IDL2.Nat,
+    "building": IDL2.Opt(IDL2.Text),
+    "slotIndex": IDL2.Nat,
+    "specialization": IDL2.Text
+  });
   const Tokenomics2 = IDL2.Record({
     "burnRate": IDL2.Nat,
     "emissionRate": IDL2.Nat,
@@ -86149,6 +86296,32 @@ const idlFactory = ({ IDL: IDL2 }) => {
     "frntGranted": IDL2.Nat
   });
   const FaucetResult2 = IDL2.Variant({ "ok": FaucetGrant2, "err": IDL2.Text });
+  const Timestamp2 = IDL2.Int;
+  const GeneratorTier2 = IDL2.Variant({
+    "TierIII": IDL2.Null,
+    "None": IDL2.Null,
+    "TierII": IDL2.Null,
+    "TierIV": IDL2.Null,
+    "TierVI": IDL2.Null,
+    "TierI": IDL2.Null,
+    "TierV": IDL2.Null
+  });
+  const PlotUpgradesView2 = IDL2.Record({
+    "tierName": IDL2.Text,
+    "plotId": PlotId2,
+    "installedAt": IDL2.Opt(Timestamp2),
+    "bonusPerDay": IDL2.Float64,
+    "nextTierCost": IDL2.Opt(IDL2.Nat),
+    "generatorTier": GeneratorTier2
+  });
+  const UpgradeError2 = IDL2.Variant({
+    "SubParcelLocked": IDL2.Null,
+    "PlotNotFound": IDL2.Null,
+    "InvalidTier": IDL2.Null,
+    "NotOwner": IDL2.Null,
+    "AlreadyMaxTier": IDL2.Null,
+    "InsufficientFRNTR": IDL2.Null
+  });
   return IDL2.Service({
     "assignInterceptor": IDL2.Func([IDL2.Nat, IDL2.Text], [], []),
     "getAdjacentPlots": IDL2.Func([IDL2.Nat], [IDL2.Vec(IDL2.Nat)], ["query"]),
@@ -86174,7 +86347,27 @@ const idlFactory = ({ IDL: IDL2 }) => {
       [FaucetClaimSummary2],
       ["query"]
     ),
+    "getFirstAvailablePlot": IDL2.Func([], [IDL2.Opt(IDL2.Nat)], ["query"]),
+    "getFrntrLedger": IDL2.Func([], [IDL2.Text], ["query"]),
+    "getGameCanisterPrincipal": IDL2.Func([], [IDL2.Text], ["query"]),
+    "getGameStats": IDL2.Func(
+      [],
+      [
+        IDL2.Record({
+          "totalPlayers": IDL2.Nat,
+          "totalFrntrBurned": IDL2.Nat,
+          "totalSupply": IDL2.Nat,
+          "totalBurned": IDL2.Nat,
+          "totalPlots": IDL2.Nat,
+          "emissionRatePerDay": IDL2.Nat,
+          "remainingMineable": IDL2.Nat
+        })
+      ],
+      ["query"]
+    ),
     "getGlobalStats": IDL2.Func([], [GlobalStats2], ["query"]),
+    "getIcpUsdPrice": IDL2.Func([], [IDL2.Float64], []),
+    "getIcpUsdPriceCached": IDL2.Func([], [IDL2.Float64], ["query"]),
     "getLeaderboard": IDL2.Func(
       [IDL2.Nat],
       [
@@ -86224,7 +86417,7 @@ const idlFactory = ({ IDL: IDL2 }) => {
           "passiveIncomePerDay": IDL2.Float64
         })
       ],
-      ["query"]
+      []
     ),
     "getPlayerStateByPrincipal": IDL2.Func(
       [IDL2.Principal],
@@ -86249,14 +86442,43 @@ const idlFactory = ({ IDL: IDL2 }) => {
     ),
     "getPlotCount": IDL2.Func([], [IDL2.Nat], ["query"]),
     "getPlotPrice": IDL2.Func([IDL2.Text], [IDL2.Nat], ["query"]),
+    "getPlotPriceById": IDL2.Func([IDL2.Nat], [IDL2.Nat], ["query"]),
     "getPlotProductionRate": IDL2.Func(
       [IDL2.Nat],
       [PlotProductionRate2],
       ["query"]
     ),
+    "getPlotsByOwner": IDL2.Func(
+      [IDL2.Principal],
+      [IDL2.Vec(IDL2.Nat)],
+      ["query"]
+    ),
     "getPrincipal": IDL2.Func([], [PrincipalDisplay2], ["query"]),
+    "getSubParcels": IDL2.Func([IDL2.Nat], [IDL2.Vec(SubParcel2)], ["query"]),
     "getTokenomics": IDL2.Func([], [Tokenomics2], ["query"]),
+    "getTreasuryBalances": IDL2.Func(
+      [],
+      [
+        IDL2.Record({
+          "leaderboardPot": IDL2.Nat,
+          "devPot": IDL2.Nat,
+          "liquidityPot": IDL2.Nat
+        })
+      ],
+      []
+    ),
     "getTreasuryPrincipal": IDL2.Func([], [IDL2.Text], ["query"]),
+    "getTreasuryState": IDL2.Func(
+      [],
+      [
+        IDL2.Record({
+          "leaderboard": IDL2.Nat,
+          "liquidity": IDL2.Nat,
+          "developer": IDL2.Nat
+        })
+      ],
+      ["query"]
+    ),
     "initPlots": IDL2.Func(
       [
         IDL2.Vec(
@@ -86282,8 +86504,17 @@ const idlFactory = ({ IDL: IDL2 }) => {
       [IDL2.Variant({ "ok": IDL2.Text, "err": IDL2.Text })],
       []
     ),
+    "resetAllData": IDL2.Func([], [], []),
     "resetTestState": IDL2.Func([], [ResetResult2], []),
     "setAdminPrincipal": IDL2.Func([IDL2.Principal], [], []),
+    "setApprovedLiquidityCanister": IDL2.Func(
+      [IDL2.Principal],
+      [IDL2.Variant({ "ok": IDL2.Null, "err": IDL2.Text })],
+      []
+    ),
+    "setFrntrLedger": IDL2.Func([IDL2.Principal], [], []),
+    "setGameCanisterPrincipal": IDL2.Func([IDL2.Text], [], []),
+    "setSelfPrincipal": IDL2.Func([], [], []),
     "setTreasuryPrincipal": IDL2.Func([IDL2.Principal], [], []),
     "setUsername": IDL2.Func(
       [IDL2.Text],
@@ -86299,7 +86530,17 @@ const idlFactory = ({ IDL: IDL2 }) => {
       []
     ),
     "testFaucetV2": IDL2.Func([], [FaucetResult2], []),
-    "updateAdminPrincipalAuth": IDL2.Func([IDL2.Text], [], [])
+    "updateAdminPrincipalAuth": IDL2.Func([IDL2.Text], [], []),
+    "upgradeGenerator": IDL2.Func(
+      [IDL2.Nat],
+      [IDL2.Variant({ "ok": PlotUpgradesView2, "err": UpgradeError2 })],
+      []
+    ),
+    "withdrawLiquidityPot": IDL2.Func(
+      [IDL2.Nat, IDL2.Principal],
+      [IDL2.Variant({ "ok": IDL2.Null, "err": IDL2.Text })],
+      []
+    )
   });
 };
 function record_opt_to_undefined(arg) {
@@ -86424,6 +86665,62 @@ class Backend {
       return from_candid_FaucetClaimSummary_n5(this._uploadFile, this._downloadFile, result);
     }
   }
+  async getFirstAvailablePlot() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getFirstAvailablePlot();
+        return from_candid_opt_n8(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getFirstAvailablePlot();
+      return from_candid_opt_n8(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async getFrntrLedger() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getFrntrLedger();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getFrntrLedger();
+      return result;
+    }
+  }
+  async getGameCanisterPrincipal() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getGameCanisterPrincipal();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getGameCanisterPrincipal();
+      return result;
+    }
+  }
+  async getGameStats() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getGameStats();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getGameStats();
+      return result;
+    }
+  }
   async getGlobalStats() {
     if (this.processError) {
       try {
@@ -86438,18 +86735,46 @@ class Backend {
       return result;
     }
   }
+  async getIcpUsdPrice() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getIcpUsdPrice();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getIcpUsdPrice();
+      return result;
+    }
+  }
+  async getIcpUsdPriceCached() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getIcpUsdPriceCached();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getIcpUsdPriceCached();
+      return result;
+    }
+  }
   async getLeaderboard(arg0) {
     if (this.processError) {
       try {
         const result = await this.actor.getLeaderboard(arg0);
-        return from_candid_vec_n8(this._uploadFile, this._downloadFile, result);
+        return from_candid_vec_n9(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.getLeaderboard(arg0);
-      return from_candid_vec_n8(this._uploadFile, this._downloadFile, result);
+      return from_candid_vec_n9(this._uploadFile, this._downloadFile, result);
     }
   }
   async getLeaderboardStats() {
@@ -86484,28 +86809,28 @@ class Backend {
     if (this.processError) {
       try {
         const result = await this.actor.getPlayerState();
-        return from_candid_record_n10(this._uploadFile, this._downloadFile, result);
+        return from_candid_record_n11(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.getPlayerState();
-      return from_candid_record_n10(this._uploadFile, this._downloadFile, result);
+      return from_candid_record_n11(this._uploadFile, this._downloadFile, result);
     }
   }
   async getPlayerStateByPrincipal(arg0) {
     if (this.processError) {
       try {
         const result = await this.actor.getPlayerStateByPrincipal(arg0);
-        return from_candid_record_n10(this._uploadFile, this._downloadFile, result);
+        return from_candid_record_n11(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.getPlayerStateByPrincipal(arg0);
-      return from_candid_record_n10(this._uploadFile, this._downloadFile, result);
+      return from_candid_record_n11(this._uploadFile, this._downloadFile, result);
     }
   }
   async getPlotCount() {
@@ -86536,6 +86861,20 @@ class Backend {
       return result;
     }
   }
+  async getPlotPriceById(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getPlotPriceById(arg0);
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getPlotPriceById(arg0);
+      return result;
+    }
+  }
   async getPlotProductionRate(arg0) {
     if (this.processError) {
       try {
@@ -86547,6 +86886,20 @@ class Backend {
       }
     } else {
       const result = await this.actor.getPlotProductionRate(arg0);
+      return result;
+    }
+  }
+  async getPlotsByOwner(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getPlotsByOwner(arg0);
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getPlotsByOwner(arg0);
       return result;
     }
   }
@@ -86564,6 +86917,20 @@ class Backend {
       return result;
     }
   }
+  async getSubParcels(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getSubParcels(arg0);
+        return from_candid_vec_n16(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getSubParcels(arg0);
+      return from_candid_vec_n16(this._uploadFile, this._downloadFile, result);
+    }
+  }
   async getTokenomics() {
     if (this.processError) {
       try {
@@ -86578,6 +86945,20 @@ class Backend {
       return result;
     }
   }
+  async getTreasuryBalances() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getTreasuryBalances();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getTreasuryBalances();
+      return result;
+    }
+  }
   async getTreasuryPrincipal() {
     if (this.processError) {
       try {
@@ -86589,6 +86970,20 @@ class Backend {
       }
     } else {
       const result = await this.actor.getTreasuryPrincipal();
+      return result;
+    }
+  }
+  async getTreasuryState() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getTreasuryState();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getTreasuryState();
       return result;
     }
   }
@@ -86624,56 +87019,70 @@ class Backend {
     if (this.processError) {
       try {
         const result = await this.actor.launchMissile(arg0, arg1, arg2);
-        return from_candid_variant_n15(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n19(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.launchMissile(arg0, arg1, arg2);
-      return from_candid_variant_n15(this._uploadFile, this._downloadFile, result);
+      return from_candid_variant_n19(this._uploadFile, this._downloadFile, result);
     }
   }
   async mineResources(arg0) {
     if (this.processError) {
       try {
         const result = await this.actor.mineResources(arg0);
-        return from_candid_variant_n16(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n20(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.mineResources(arg0);
-      return from_candid_variant_n16(this._uploadFile, this._downloadFile, result);
+      return from_candid_variant_n20(this._uploadFile, this._downloadFile, result);
     }
   }
   async purchasePlot(arg0) {
     if (this.processError) {
       try {
         const result = await this.actor.purchasePlot(arg0);
-        return from_candid_variant_n15(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n19(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.purchasePlot(arg0);
-      return from_candid_variant_n15(this._uploadFile, this._downloadFile, result);
+      return from_candid_variant_n19(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async resetAllData() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.resetAllData();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.resetAllData();
+      return result;
     }
   }
   async resetTestState() {
     if (this.processError) {
       try {
         const result = await this.actor.resetTestState();
-        return from_candid_ResetResult_n19(this._uploadFile, this._downloadFile, result);
+        return from_candid_ResetResult_n23(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.resetTestState();
-      return from_candid_ResetResult_n19(this._uploadFile, this._downloadFile, result);
+      return from_candid_ResetResult_n23(this._uploadFile, this._downloadFile, result);
     }
   }
   async setAdminPrincipal(arg0) {
@@ -86687,6 +87096,62 @@ class Backend {
       }
     } else {
       const result = await this.actor.setAdminPrincipal(arg0);
+      return result;
+    }
+  }
+  async setApprovedLiquidityCanister(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.setApprovedLiquidityCanister(arg0);
+        return from_candid_variant_n24(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.setApprovedLiquidityCanister(arg0);
+      return from_candid_variant_n24(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async setFrntrLedger(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.setFrntrLedger(arg0);
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.setFrntrLedger(arg0);
+      return result;
+    }
+  }
+  async setGameCanisterPrincipal(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.setGameCanisterPrincipal(arg0);
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.setGameCanisterPrincipal(arg0);
+      return result;
+    }
+  }
+  async setSelfPrincipal() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.setSelfPrincipal();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.setSelfPrincipal();
       return result;
     }
   }
@@ -86708,84 +87173,84 @@ class Backend {
     if (this.processError) {
       try {
         const result = await this.actor.setUsername(arg0);
-        return from_candid_variant_n20(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n24(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.setUsername(arg0);
-      return from_candid_variant_n20(this._uploadFile, this._downloadFile, result);
+      return from_candid_variant_n24(this._uploadFile, this._downloadFile, result);
     }
   }
   async stressBuyPlots(arg0) {
     if (this.processError) {
       try {
         const result = await this.actor.stressBuyPlots(arg0);
-        return from_candid_StressTestResult_n21(this._uploadFile, this._downloadFile, result);
+        return from_candid_StressTestResult_n25(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.stressBuyPlots(arg0);
-      return from_candid_StressTestResult_n21(this._uploadFile, this._downloadFile, result);
+      return from_candid_StressTestResult_n25(this._uploadFile, this._downloadFile, result);
     }
   }
   async stressMintPlots(arg0) {
     if (this.processError) {
       try {
         const result = await this.actor.stressMintPlots(arg0);
-        return from_candid_StressTestResult_n21(this._uploadFile, this._downloadFile, result);
+        return from_candid_StressTestResult_n25(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.stressMintPlots(arg0);
-      return from_candid_StressTestResult_n21(this._uploadFile, this._downloadFile, result);
+      return from_candid_StressTestResult_n25(this._uploadFile, this._downloadFile, result);
     }
   }
   async stressUpgradePlots(arg0) {
     if (this.processError) {
       try {
         const result = await this.actor.stressUpgradePlots(arg0);
-        return from_candid_StressTestResult_n21(this._uploadFile, this._downloadFile, result);
+        return from_candid_StressTestResult_n25(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.stressUpgradePlots(arg0);
-      return from_candid_StressTestResult_n21(this._uploadFile, this._downloadFile, result);
+      return from_candid_StressTestResult_n25(this._uploadFile, this._downloadFile, result);
     }
   }
   async testFaucet() {
     if (this.processError) {
       try {
         const result = await this.actor.testFaucet();
-        return from_candid_variant_n15(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n19(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.testFaucet();
-      return from_candid_variant_n15(this._uploadFile, this._downloadFile, result);
+      return from_candid_variant_n19(this._uploadFile, this._downloadFile, result);
     }
   }
   async testFaucetV2() {
     if (this.processError) {
       try {
         const result = await this.actor.testFaucetV2();
-        return from_candid_FaucetResult_n26(this._uploadFile, this._downloadFile, result);
+        return from_candid_FaucetResult_n30(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.testFaucetV2();
-      return from_candid_FaucetResult_n26(this._uploadFile, this._downloadFile, result);
+      return from_candid_FaucetResult_n30(this._uploadFile, this._downloadFile, result);
     }
   }
   async updateAdminPrincipalAuth(arg0) {
@@ -86802,6 +87267,34 @@ class Backend {
       return result;
     }
   }
+  async upgradeGenerator(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.upgradeGenerator(arg0);
+        return from_candid_variant_n32(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.upgradeGenerator(arg0);
+      return from_candid_variant_n32(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async withdrawLiquidityPot(arg0, arg1) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.withdrawLiquidityPot(arg0, arg1);
+        return from_candid_variant_n24(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.withdrawLiquidityPot(arg0, arg1);
+      return from_candid_variant_n24(this._uploadFile, this._downloadFile, result);
+    }
+  }
 }
 function from_candid_CombatEvent_n3(_uploadFile, _downloadFile, value) {
   return from_candid_record_n4(_uploadFile, _downloadFile, value);
@@ -86809,33 +87302,60 @@ function from_candid_CombatEvent_n3(_uploadFile, _downloadFile, value) {
 function from_candid_FaucetClaimSummary_n5(_uploadFile, _downloadFile, value) {
   return from_candid_record_n6(_uploadFile, _downloadFile, value);
 }
-function from_candid_FaucetResult_n26(_uploadFile, _downloadFile, value) {
-  return from_candid_variant_n27(_uploadFile, _downloadFile, value);
+function from_candid_FaucetResult_n30(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n31(_uploadFile, _downloadFile, value);
 }
-function from_candid_MineResult_n17(_uploadFile, _downloadFile, value) {
-  return from_candid_record_n18(_uploadFile, _downloadFile, value);
+function from_candid_GeneratorTier_n36(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n37(_uploadFile, _downloadFile, value);
 }
-function from_candid_ResetResult_n19(_uploadFile, _downloadFile, value) {
+function from_candid_MineResult_n21(_uploadFile, _downloadFile, value) {
+  return from_candid_record_n22(_uploadFile, _downloadFile, value);
+}
+function from_candid_PlotUpgradesView_n33(_uploadFile, _downloadFile, value) {
+  return from_candid_record_n34(_uploadFile, _downloadFile, value);
+}
+function from_candid_ResetResult_n23(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n19(_uploadFile, _downloadFile, value);
+}
+function from_candid_ResourceType_n14(_uploadFile, _downloadFile, value) {
   return from_candid_variant_n15(_uploadFile, _downloadFile, value);
 }
-function from_candid_ResourceType_n13(_uploadFile, _downloadFile, value) {
-  return from_candid_variant_n14(_uploadFile, _downloadFile, value);
+function from_candid_StressActionResult_n28(_uploadFile, _downloadFile, value) {
+  return from_candid_record_n29(_uploadFile, _downloadFile, value);
 }
-function from_candid_StressActionResult_n24(_uploadFile, _downloadFile, value) {
-  return from_candid_record_n25(_uploadFile, _downloadFile, value);
+function from_candid_StressTestResult_n25(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n26(_uploadFile, _downloadFile, value);
 }
-function from_candid_StressTestResult_n21(_uploadFile, _downloadFile, value) {
-  return from_candid_variant_n22(_uploadFile, _downloadFile, value);
+function from_candid_SubParcel_n17(_uploadFile, _downloadFile, value) {
+  return from_candid_record_n18(_uploadFile, _downloadFile, value);
+}
+function from_candid_UpgradeError_n38(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n39(_uploadFile, _downloadFile, value);
 }
 function from_candid_opt_n1(_uploadFile, _downloadFile, value) {
+  return value.length === 0 ? null : value[0];
+}
+function from_candid_opt_n35(_uploadFile, _downloadFile, value) {
   return value.length === 0 ? null : value[0];
 }
 function from_candid_opt_n7(_uploadFile, _downloadFile, value) {
   return value.length === 0 ? null : value[0];
 }
+function from_candid_opt_n8(_uploadFile, _downloadFile, value) {
+  return value.length === 0 ? null : value[0];
+}
 function from_candid_record_n10(_uploadFile, _downloadFile, value) {
   return {
-    resourceBalances: from_candid_vec_n11(_uploadFile, _downloadFile, value.resourceBalances),
+    principal: value.principal,
+    username: record_opt_to_undefined(from_candid_opt_n1(_uploadFile, _downloadFile, value.username)),
+    rank: value.rank,
+    frntBalance: value.frntBalance,
+    plotsOwned: value.plotsOwned
+  };
+}
+function from_candid_record_n11(_uploadFile, _downloadFile, value) {
+  return {
+    resourceBalances: from_candid_vec_n12(_uploadFile, _downloadFile, value.resourceBalances),
     username: record_opt_to_undefined(from_candid_opt_n1(_uploadFile, _downloadFile, value.username)),
     fuel: value.fuel,
     iron: value.iron,
@@ -86852,19 +87372,39 @@ function from_candid_record_n10(_uploadFile, _downloadFile, value) {
 }
 function from_candid_record_n18(_uploadFile, _downloadFile, value) {
   return {
+    subParcelId: value.subParcelId,
+    cooldownEnds: value.cooldownEnds,
+    plotId: value.plotId,
+    building: record_opt_to_undefined(from_candid_opt_n1(_uploadFile, _downloadFile, value.building)),
+    slotIndex: value.slotIndex,
+    specialization: value.specialization
+  };
+}
+function from_candid_record_n22(_uploadFile, _downloadFile, value) {
+  return {
     efficiency: value.efficiency,
     plotId: value.plotId,
-    resourceYields: from_candid_vec_n11(_uploadFile, _downloadFile, value.resourceYields),
+    resourceYields: from_candid_vec_n12(_uploadFile, _downloadFile, value.resourceYields),
     frntRate: value.frntRate
   };
 }
-function from_candid_record_n25(_uploadFile, _downloadFile, value) {
+function from_candid_record_n29(_uploadFile, _downloadFile, value) {
   return {
     ok: value.ok,
     action: value.action,
     index: value.index,
     errorMsg: record_opt_to_undefined(from_candid_opt_n1(_uploadFile, _downloadFile, value.errorMsg)),
     durationMs: value.durationMs
+  };
+}
+function from_candid_record_n34(_uploadFile, _downloadFile, value) {
+  return {
+    tierName: value.tierName,
+    plotId: value.plotId,
+    installedAt: record_opt_to_undefined(from_candid_opt_n35(_uploadFile, _downloadFile, value.installedAt)),
+    bonusPerDay: value.bonusPerDay,
+    nextTierCost: record_opt_to_undefined(from_candid_opt_n8(_uploadFile, _downloadFile, value.nextTierCost)),
+    generatorTier: from_candid_GeneratorTier_n36(_uploadFile, _downloadFile, value.generatorTier)
   };
 }
 function from_candid_record_n4(_uploadFile, _downloadFile, value) {
@@ -86888,37 +87428,19 @@ function from_candid_record_n6(_uploadFile, _downloadFile, value) {
     totalClaims: value.totalClaims
   };
 }
-function from_candid_record_n9(_uploadFile, _downloadFile, value) {
-  return {
-    principal: value.principal,
-    username: record_opt_to_undefined(from_candid_opt_n1(_uploadFile, _downloadFile, value.username)),
-    rank: value.rank,
-    frntBalance: value.frntBalance,
-    plotsOwned: value.plotsOwned
-  };
-}
-function from_candid_tuple_n12(_uploadFile, _downloadFile, value) {
+function from_candid_tuple_n13(_uploadFile, _downloadFile, value) {
   return [
-    from_candid_ResourceType_n13(_uploadFile, _downloadFile, value[0]),
+    from_candid_ResourceType_n14(_uploadFile, _downloadFile, value[0]),
     value[1]
   ];
 }
-function from_candid_variant_n14(_uploadFile, _downloadFile, value) {
+function from_candid_variant_n15(_uploadFile, _downloadFile, value) {
   return "RareEarth" in value ? "RareEarth" : "Fuel" in value ? "Fuel" : "Iron" in value ? "Iron" : "Crystal" in value ? "Crystal" : value;
 }
-function from_candid_variant_n15(_uploadFile, _downloadFile, value) {
+function from_candid_variant_n19(_uploadFile, _downloadFile, value) {
   return "ok" in value ? {
     __kind__: "ok",
     ok: value.ok
-  } : "err" in value ? {
-    __kind__: "err",
-    err: value.err
-  } : value;
-}
-function from_candid_variant_n16(_uploadFile, _downloadFile, value) {
-  return "ok" in value ? {
-    __kind__: "ok",
-    ok: from_candid_MineResult_n17(_uploadFile, _downloadFile, value.ok)
   } : "err" in value ? {
     __kind__: "err",
     err: value.err
@@ -86927,22 +87449,13 @@ function from_candid_variant_n16(_uploadFile, _downloadFile, value) {
 function from_candid_variant_n20(_uploadFile, _downloadFile, value) {
   return "ok" in value ? {
     __kind__: "ok",
-    ok: value.ok
+    ok: from_candid_MineResult_n21(_uploadFile, _downloadFile, value.ok)
   } : "err" in value ? {
     __kind__: "err",
     err: value.err
   } : value;
 }
-function from_candid_variant_n22(_uploadFile, _downloadFile, value) {
-  return "ok" in value ? {
-    __kind__: "ok",
-    ok: from_candid_vec_n23(_uploadFile, _downloadFile, value.ok)
-  } : "err" in value ? {
-    __kind__: "err",
-    err: value.err
-  } : value;
-}
-function from_candid_variant_n27(_uploadFile, _downloadFile, value) {
+function from_candid_variant_n24(_uploadFile, _downloadFile, value) {
   return "ok" in value ? {
     __kind__: "ok",
     ok: value.ok
@@ -86951,17 +87464,53 @@ function from_candid_variant_n27(_uploadFile, _downloadFile, value) {
     err: value.err
   } : value;
 }
-function from_candid_vec_n11(_uploadFile, _downloadFile, value) {
-  return value.map((x3) => from_candid_tuple_n12(_uploadFile, _downloadFile, x3));
+function from_candid_variant_n26(_uploadFile, _downloadFile, value) {
+  return "ok" in value ? {
+    __kind__: "ok",
+    ok: from_candid_vec_n27(_uploadFile, _downloadFile, value.ok)
+  } : "err" in value ? {
+    __kind__: "err",
+    err: value.err
+  } : value;
+}
+function from_candid_variant_n31(_uploadFile, _downloadFile, value) {
+  return "ok" in value ? {
+    __kind__: "ok",
+    ok: value.ok
+  } : "err" in value ? {
+    __kind__: "err",
+    err: value.err
+  } : value;
+}
+function from_candid_variant_n32(_uploadFile, _downloadFile, value) {
+  return "ok" in value ? {
+    __kind__: "ok",
+    ok: from_candid_PlotUpgradesView_n33(_uploadFile, _downloadFile, value.ok)
+  } : "err" in value ? {
+    __kind__: "err",
+    err: from_candid_UpgradeError_n38(_uploadFile, _downloadFile, value.err)
+  } : value;
+}
+function from_candid_variant_n37(_uploadFile, _downloadFile, value) {
+  return "TierIII" in value ? "TierIII" : "None" in value ? "None" : "TierII" in value ? "TierII" : "TierIV" in value ? "TierIV" : "TierVI" in value ? "TierVI" : "TierI" in value ? "TierI" : "TierV" in value ? "TierV" : value;
+}
+function from_candid_variant_n39(_uploadFile, _downloadFile, value) {
+  return "SubParcelLocked" in value ? "SubParcelLocked" : "PlotNotFound" in value ? "PlotNotFound" : "InvalidTier" in value ? "InvalidTier" : "NotOwner" in value ? "NotOwner" : "AlreadyMaxTier" in value ? "AlreadyMaxTier" : "InsufficientFRNTR" in value ? "InsufficientFRNTR" : value;
+}
+function from_candid_vec_n12(_uploadFile, _downloadFile, value) {
+  return value.map((x3) => from_candid_tuple_n13(_uploadFile, _downloadFile, x3));
+}
+function from_candid_vec_n16(_uploadFile, _downloadFile, value) {
+  return value.map((x3) => from_candid_SubParcel_n17(_uploadFile, _downloadFile, x3));
 }
 function from_candid_vec_n2(_uploadFile, _downloadFile, value) {
   return value.map((x3) => from_candid_CombatEvent_n3(_uploadFile, _downloadFile, x3));
 }
-function from_candid_vec_n23(_uploadFile, _downloadFile, value) {
-  return value.map((x3) => from_candid_StressActionResult_n24(_uploadFile, _downloadFile, x3));
+function from_candid_vec_n27(_uploadFile, _downloadFile, value) {
+  return value.map((x3) => from_candid_StressActionResult_n28(_uploadFile, _downloadFile, x3));
 }
-function from_candid_vec_n8(_uploadFile, _downloadFile, value) {
-  return value.map((x3) => from_candid_record_n9(_uploadFile, _downloadFile, x3));
+function from_candid_vec_n9(_uploadFile, _downloadFile, value) {
+  return value.map((x3) => from_candid_record_n10(_uploadFile, _downloadFile, x3));
 }
 function createActor(canisterId, _uploadFile, _downloadFile, options = {}) {
   const agent = options.agent || HttpAgent.createSync({
@@ -86977,10 +87526,10 @@ function createActor(canisterId, _uploadFile, _downloadFile, options = {}) {
   });
   return new Backend(actor, _uploadFile, _downloadFile, options.processError);
 }
-const CYAN$b = "#00ffcc";
+const CYAN$a = "#00ffcc";
 const GOLD$2 = "#ffd700";
 const AMBER = "#f59e0b";
-const BORDER$a = "rgba(0,255,204,0.18)";
+const BORDER$9 = "rgba(0,255,204,0.18)";
 const PANEL = "rgba(0,20,40,0.72)";
 const TEXT$4 = "#e0f4ff";
 const TEXT_DIM$2 = "rgba(224,244,255,0.45)";
@@ -87019,7 +87568,7 @@ function SortIcon({
 }) {
   if (col !== active)
     return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { opacity: 0.2, fontSize: 10 }, children: "↕" });
-  return dir === "asc" ? /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronUp, { size: 11, style: { color: CYAN$b } }) : /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronDown, { size: 11, style: { color: CYAN$b } });
+  return dir === "asc" ? /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronUp, { size: 11, style: { color: CYAN$a } }) : /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronDown, { size: 11, style: { color: CYAN$a } });
 }
 function Leaderboard() {
   const leaderboard = useGameStore((s2) => s2.leaderboard);
@@ -87138,7 +87687,7 @@ function Leaderboard() {
     fontWeight: 700,
     letterSpacing: 2,
     textTransform: "uppercase",
-    color: sortKey === key ? CYAN$b : TEXT_DIM$2,
+    color: sortKey === key ? CYAN$a : TEXT_DIM$2,
     display: "flex",
     alignItems: "center",
     gap: 3,
@@ -87171,7 +87720,7 @@ function Leaderboard() {
                       height: 38,
                       borderRadius: 8,
                       background: "rgba(0,255,204,0.1)",
-                      border: `1px solid ${BORDER$a}`,
+                      border: `1px solid ${BORDER$9}`,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center"
@@ -87223,9 +87772,9 @@ function Leaderboard() {
                     disabled: refreshing,
                     style: {
                       background: "rgba(0,255,204,0.07)",
-                      border: `1px solid ${BORDER$a}`,
+                      border: `1px solid ${BORDER$9}`,
                       borderRadius: 6,
-                      color: CYAN$b,
+                      color: CYAN$a,
                       padding: "6px 10px",
                       cursor: refreshing ? "not-allowed" : "pointer",
                       display: "flex",
@@ -87287,8 +87836,8 @@ function Leaderboard() {
               className: "flex items-center gap-1.5 min-h-[44px] px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all rounded-lg",
               style: {
                 background: active ? "rgba(0,255,204,0.15)" : "rgba(0,20,40,0.5)",
-                border: `1px solid ${active ? CYAN$b : BORDER$a}`,
-                color: active ? CYAN$b : TEXT_DIM$2,
+                border: `1px solid ${active ? CYAN$a : BORDER$9}`,
+                color: active ? CYAN$a : TEXT_DIM$2,
                 boxShadow: active ? "0 0 10px rgba(0,255,204,0.15)" : "none"
               },
               children: [
@@ -87307,13 +87856,13 @@ function Leaderboard() {
             className: "mb-4 inline-flex items-center gap-2 rounded-full px-4 py-1.5",
             style: {
               background: "rgba(0,255,204,0.05)",
-              border: `1px solid ${BORDER$a}`,
+              border: `1px solid ${BORDER$9}`,
               fontSize: 9,
               color: TEXT_DIM$2,
               letterSpacing: 1.5
             },
             children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$b }, children: "⚡" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$a }, children: "⚡" }),
               "SCORE = (PLOTS × 100) + (FRNTR × 0.01) + (WINS × 50)"
             ]
           }
@@ -87329,7 +87878,7 @@ function Leaderboard() {
               background: PANEL,
               backdropFilter: "blur(16px)",
               WebkitBackdropFilter: "blur(16px)",
-              border: `1px solid ${BORDER$a}`,
+              border: `1px solid ${BORDER$9}`,
               borderRadius: 12,
               overflow: "hidden"
             },
@@ -87340,7 +87889,7 @@ function Leaderboard() {
                   style: {
                     display: "grid",
                     gridTemplateColumns: "42px 48px 1fr 70px 110px 60px 90px",
-                    borderBottom: `1px solid ${BORDER$a}`,
+                    borderBottom: `1px solid ${BORDER$9}`,
                     background: "rgba(0,255,204,0.03)"
                   },
                   children: [
@@ -87519,7 +88068,7 @@ function Leaderboard() {
                                 style: {
                                   fontSize: 11,
                                   fontWeight: entry.isMe ? 800 : 500,
-                                  color: entry.isMe ? CYAN$b : TEXT$4,
+                                  color: entry.isMe ? CYAN$a : TEXT$4,
                                   overflow: "hidden",
                                   textOverflow: "ellipsis",
                                   whiteSpace: "nowrap",
@@ -87534,7 +88083,7 @@ function Leaderboard() {
                                         marginLeft: 6,
                                         fontSize: 7,
                                         fontWeight: 700,
-                                        color: CYAN$b,
+                                        color: CYAN$a,
                                         border: "1px solid rgba(0,255,204,0.4)",
                                         borderRadius: 3,
                                         padding: "1px 4px",
@@ -87572,7 +88121,7 @@ function Leaderboard() {
                             fontSize: 11,
                             fontWeight: 700,
                             fontFamily: "monospace",
-                            color: entry.isMe ? CYAN$b : "rgba(0,255,204,0.7)"
+                            color: entry.isMe ? CYAN$a : "rgba(0,255,204,0.7)"
                           },
                           children: entry.frntr.toLocaleString()
                         }
@@ -87626,7 +88175,7 @@ function Leaderboard() {
                     width: 6,
                     height: 6,
                     borderRadius: "50%",
-                    background: CYAN$b,
+                    background: CYAN$a,
                     animation: "pulse 2s infinite",
                     boxShadow: "0 0 6px rgba(0,255,204,0.7)"
                   }
@@ -87916,8 +88465,8 @@ reactExports.forwardRef(function(e, t) {
     })) : null;
   }));
 });
-const CYAN$a = "#00ffcc";
-const CYAN_DIM$8 = "rgba(0,255,204,0.35)";
+const CYAN$9 = "#00ffcc";
+const CYAN_DIM$7 = "rgba(0,255,204,0.35)";
 const BORDER_TOP = "rgba(0,255,204,0.28)";
 const NAV_ITEMS = [
   { id: "map", label: "MAP", Icon: Map$1 },
@@ -87953,7 +88502,7 @@ function BottomNav({ activeTab, onTabClick }) {
             className: "flex-1 flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-all duration-150",
             style: {
               background: isActive ? "rgba(0,255,204,0.07)" : "transparent",
-              borderTop: isActive ? `2px solid ${CYAN$a}` : "2px solid transparent",
+              borderTop: isActive ? `2px solid ${CYAN$9}` : "2px solid transparent",
               position: "relative"
             },
             children: [
@@ -87966,9 +88515,9 @@ function BottomNav({ activeTab, onTabClick }) {
                     left: "20%",
                     right: "20%",
                     height: 2,
-                    background: CYAN$a,
+                    background: CYAN$9,
                     borderRadius: "0 0 2px 2px",
-                    boxShadow: `0 0 8px ${CYAN$a}`,
+                    boxShadow: `0 0 8px ${CYAN$9}`,
                     filter: "blur(1px)"
                   }
                 }
@@ -87977,9 +88526,9 @@ function BottomNav({ activeTab, onTabClick }) {
                 Icon2,
                 {
                   size: 18,
-                  color: isActive ? CYAN$a : CYAN_DIM$8,
+                  color: isActive ? CYAN$9 : CYAN_DIM$7,
                   style: {
-                    filter: isActive ? `drop-shadow(0 0 4px ${CYAN$a})` : "none",
+                    filter: isActive ? `drop-shadow(0 0 4px ${CYAN$9})` : "none",
                     transition: "filter 0.15s"
                   }
                 }
@@ -87990,7 +88539,7 @@ function BottomNav({ activeTab, onTabClick }) {
                   style: {
                     fontSize: 7.5,
                     letterSpacing: 0.5,
-                    color: isActive ? CYAN$a : CYAN_DIM$8,
+                    color: isActive ? CYAN$9 : CYAN_DIM$7,
                     fontWeight: isActive ? 700 : 400
                   },
                   children: label
@@ -88004,9 +88553,9 @@ function BottomNav({ activeTab, onTabClick }) {
     }
   );
 }
-const CYAN$9 = "#00ffcc";
-const BORDER$9 = "rgba(0,255,204,0.22)";
-const CYAN_DIM$7 = "rgba(0,255,204,0.35)";
+const CYAN$8 = "#00ffcc";
+const BORDER$8 = "rgba(0,255,204,0.22)";
+const CYAN_DIM$6 = "rgba(0,255,204,0.35)";
 function BottomSheet({
   isOpen,
   title,
@@ -88040,9 +88589,9 @@ function BottomSheet({
           bottom: 64,
           height,
           background: "rgba(4,12,24,0.97)",
-          borderTop: `1px solid ${BORDER$9}`,
-          borderLeft: `1px solid ${BORDER$9}`,
-          borderRight: `1px solid ${BORDER$9}`,
+          borderTop: `1px solid ${BORDER$8}`,
+          borderLeft: `1px solid ${BORDER$8}`,
+          borderRight: `1px solid ${BORDER$8}`,
           borderRadius: "16px 16px 0 0",
           backdropFilter: "blur(20px)",
           WebkitBackdropFilter: "blur(20px)",
@@ -88057,7 +88606,7 @@ function BottomSheet({
             {
               className: "flex-shrink-0 flex items-center justify-between px-4 py-2.5",
               style: {
-                borderBottom: `1px solid ${BORDER$9}`,
+                borderBottom: `1px solid ${BORDER$8}`,
                 background: "rgba(0,255,204,0.03)"
               },
               children: [
@@ -88085,9 +88634,9 @@ function BottomSheet({
                     style: {
                       fontSize: 11,
                       fontWeight: 700,
-                      color: CYAN$9,
+                      color: CYAN$8,
                       letterSpacing: 2,
-                      textShadow: `0 0 10px ${CYAN$9}`,
+                      textShadow: `0 0 10px ${CYAN$8}`,
                       paddingTop: 4
                     },
                     children: title
@@ -88105,7 +88654,7 @@ function BottomSheet({
                       style: {
                         background: "none",
                         border: "none",
-                        color: CYAN_DIM$7,
+                        color: CYAN_DIM$6,
                         padding: 4
                       },
                       children: /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronDown, { size: 18 })
@@ -88120,8 +88669,8 @@ function BottomSheet({
                       className: "cursor-pointer flex items-center justify-center rounded",
                       style: {
                         background: "rgba(0,255,204,0.06)",
-                        border: `1px solid ${BORDER$9}`,
-                        color: CYAN_DIM$7,
+                        border: `1px solid ${BORDER$8}`,
+                        color: CYAN_DIM$6,
                         padding: 4
                       },
                       children: /* @__PURE__ */ jsxRuntimeExports.jsx(X$1, { size: 14 })
@@ -88137,8 +88686,8 @@ function BottomSheet({
     )
   ] });
 }
-const CYAN$8 = "#00ffcc";
-const BORDER$8 = "rgba(0,255,204,0.22)";
+const CYAN$7 = "#00ffcc";
+const BORDER$7 = "rgba(0,255,204,0.22)";
 function FaucetOverlay() {
   const { isAuthenticated } = useInternetIdentity();
   const { actor, isFetching } = useActor(createActor);
@@ -88155,7 +88704,7 @@ function FaucetOverlay() {
     try {
       if (actor) {
         const result = await actor.testFaucetV2();
-        if (result.__kind__ === "ok") {
+        if ("ok" in result) {
           const _grant = result.ok;
           try {
             const state2 = await actor.getPlayerState();
@@ -88163,11 +88712,11 @@ function FaucetOverlay() {
               useGameStore.setState((s2) => ({
                 player: {
                   ...s2.player,
-                  frntBalance: Number(state2.frntBalance),
-                  iron: Number(state2.iron),
-                  fuel: Number(state2.fuel),
-                  crystal: Number(state2.crystal),
-                  mockIcpBalance: s2.player.mockIcpBalance + 2
+                  frntBalance: Number(state2.frntBalance) / 1e8,
+                  iron: Number(state2.iron) / 1e8,
+                  fuel: Number(state2.fuel) / 1e8,
+                  crystal: Number(state2.crystal) / 1e8
+                  // ICP balance is now read from the real ledger via useIcpBalance()
                 }
               }));
             }
@@ -88205,8 +88754,8 @@ function FaucetOverlay() {
         padding: "6px 12px",
         borderRadius: 6,
         background: loading2 ? "rgba(0,255,204,0.05)" : "rgba(0,255,204,0.1)",
-        border: `1px solid ${BORDER$8}`,
-        color: CYAN$8,
+        border: `1px solid ${BORDER$7}`,
+        color: CYAN$7,
         fontSize: 9,
         fontWeight: 700,
         letterSpacing: 1.5,
@@ -96255,62 +96804,6 @@ var reactReconciler_productionExports = reactReconciler_production.exports;
 }
 var reactReconcilerExports = reactReconciler.exports;
 const Reconciler = /* @__PURE__ */ getDefaultExportFromCjs(reactReconcilerExports);
-const isPromise = (promise) => typeof promise === "object" && typeof promise.then === "function";
-const globalCache = [];
-function shallowEqualArrays(arrA, arrB, equal = (a2, b2) => a2 === b2) {
-  if (arrA === arrB) return true;
-  if (!arrA || !arrB) return false;
-  const len = arrA.length;
-  if (arrB.length !== len) return false;
-  for (let i2 = 0; i2 < len; i2++) if (!equal(arrA[i2], arrB[i2])) return false;
-  return true;
-}
-function query(fn, keys = null, preload2 = false, config = {}) {
-  if (keys === null) keys = [fn];
-  for (const entry2 of globalCache) {
-    if (shallowEqualArrays(keys, entry2.keys, entry2.equal)) {
-      if (preload2) return void 0;
-      if (Object.prototype.hasOwnProperty.call(entry2, "error")) throw entry2.error;
-      if (Object.prototype.hasOwnProperty.call(entry2, "response")) {
-        if (config.lifespan && config.lifespan > 0) {
-          if (entry2.timeout) clearTimeout(entry2.timeout);
-          entry2.timeout = setTimeout(entry2.remove, config.lifespan);
-        }
-        return entry2.response;
-      }
-      if (!preload2) throw entry2.promise;
-    }
-  }
-  const entry = {
-    keys,
-    equal: config.equal,
-    remove: () => {
-      const index2 = globalCache.indexOf(entry);
-      if (index2 !== -1) globalCache.splice(index2, 1);
-    },
-    promise: (
-      // Execute the promise
-      (isPromise(fn) ? fn : fn(...keys)).then((response) => {
-        entry.response = response;
-        if (config.lifespan && config.lifespan > 0) {
-          entry.timeout = setTimeout(entry.remove, config.lifespan);
-        }
-      }).catch((error) => entry.error = error)
-    )
-  };
-  globalCache.push(entry);
-  if (!preload2) throw entry.promise;
-  return void 0;
-}
-const suspend = (fn, keys, config) => query(fn, keys, false, config);
-const preload = (fn, keys, config) => void query(fn, keys, true, config);
-const clear = (keys) => {
-  if (keys === void 0 || keys.length === 0) globalCache.splice(0, globalCache.length);
-  else {
-    const entry = globalCache.find((entry2) => shallowEqualArrays(keys, entry2.keys, entry2.equal));
-    if (entry) entry.remove();
-  }
-};
 function i$1(e, t, r2) {
   if (!e) return;
   if (r2(e) === true) return e;
@@ -96490,21 +96983,6 @@ const is = {
     return true;
   }
 };
-function buildGraph(object) {
-  const data = {
-    nodes: {},
-    materials: {},
-    meshes: {}
-  };
-  if (object) {
-    object.traverse((obj) => {
-      if (obj.name) data.nodes[obj.name] = obj;
-      if (obj.material && !data.materials[obj.material.name]) data.materials[obj.material.name] = obj.material;
-      if (obj.isMesh && !data.meshes[obj.name]) data.meshes[obj.name] = obj;
-    });
-  }
-  return data;
-}
 function dispose(obj) {
   if (obj.type !== "Scene") obj.dispose == null ? void 0 : obj.dispose();
   for (const p2 in obj) {
@@ -97255,45 +97733,6 @@ function useFrame(callback, renderPriority = 0) {
   useIsomorphicLayoutEffect(() => subscribe2(ref, renderPriority, store), [renderPriority, subscribe2, store]);
   return null;
 }
-const memoizedLoaders = /* @__PURE__ */ new WeakMap();
-const isConstructor$1 = (value) => {
-  var _value$prototype;
-  return typeof value === "function" && (value == null ? void 0 : (_value$prototype = value.prototype) == null ? void 0 : _value$prototype.constructor) === value;
-};
-function loadingFn(extensions, onProgress) {
-  return function(Proto, ...input) {
-    let loader;
-    if (isConstructor$1(Proto)) {
-      loader = memoizedLoaders.get(Proto);
-      if (!loader) {
-        loader = new Proto();
-        memoizedLoaders.set(Proto, loader);
-      }
-    } else {
-      loader = Proto;
-    }
-    if (extensions) extensions(loader);
-    return Promise.all(input.map((input2) => new Promise((res, reject) => loader.load(input2, (data) => {
-      if (isObject3D(data == null ? void 0 : data.scene)) Object.assign(data, buildGraph(data.scene));
-      res(data);
-    }, onProgress, (error) => reject(new Error(`Could not load ${input2}: ${error == null ? void 0 : error.message}`))))));
-  };
-}
-function useLoader(loader, input, extensions, onProgress) {
-  const keys = Array.isArray(input) ? input : [input];
-  const results = suspend(loadingFn(extensions, onProgress), [loader, ...keys], {
-    equal: is.equ
-  });
-  return Array.isArray(input) ? results : results[0];
-}
-useLoader.preload = function(loader, input, extensions) {
-  const keys = Array.isArray(input) ? input : [input];
-  return preload(loadingFn(extensions), [loader, ...keys]);
-};
-useLoader.clear = function(loader, input) {
-  const keys = Array.isArray(input) ? input : [input];
-  return clear([loader, ...keys]);
-};
 function createReconciler(config) {
   const reconciler2 = Reconciler(config);
   reconciler2.injectIntoDevTools({
@@ -99231,44 +99670,6 @@ let OrbitControls$1 = class OrbitControls extends EventDispatcher2 {
     this.update();
   }
 };
-const IsObject = (url) => url === Object(url) && !Array.isArray(url) && typeof url !== "function";
-function useTexture(input, onLoad) {
-  const gl = useThree((state2) => state2.gl);
-  const textures = useLoader(TextureLoader, IsObject(input) ? Object.values(input) : input);
-  reactExports.useLayoutEffect(() => {
-    onLoad == null || onLoad(textures);
-  }, [onLoad]);
-  reactExports.useEffect(() => {
-    if ("initTexture" in gl) {
-      let textureArray = [];
-      if (Array.isArray(textures)) {
-        textureArray = textures;
-      } else if (textures instanceof Texture) {
-        textureArray = [textures];
-      } else if (IsObject(textures)) {
-        textureArray = Object.values(textures);
-      }
-      textureArray.forEach((texture) => {
-        if (texture instanceof Texture) {
-          gl.initTexture(texture);
-        }
-      });
-    }
-  }, [gl, textures]);
-  const mappedTextures = reactExports.useMemo(() => {
-    if (IsObject(input)) {
-      const keyed = {};
-      let i2 = 0;
-      for (const key in input) keyed[key] = textures[i2++];
-      return keyed;
-    } else {
-      return textures;
-    }
-  }, [input, textures]);
-  return mappedTextures;
-}
-useTexture.preload = (url) => useLoader.preload(TextureLoader, url);
-useTexture.clear = (input) => useLoader.clear(TextureLoader, input);
 const OrbitControls2 = /* @__PURE__ */ reactExports.forwardRef(({
   makeDefault,
   camera,
@@ -99340,6 +99741,70 @@ const OrbitControls2 = /* @__PURE__ */ reactExports.forwardRef(({
     enableDamping
   }, restProps));
 });
+const scriptRel = "modulepreload";
+const assetsURL = function(dep) {
+  return "/" + dep;
+};
+const seen = {};
+const __vitePreload = function preload2(baseModule, deps, importerUrl) {
+  let promise = Promise.resolve();
+  if (deps && deps.length > 0) {
+    document.getElementsByTagName("link");
+    const cspNonceMeta = document.querySelector(
+      "meta[property=csp-nonce]"
+    );
+    const cspNonce = (cspNonceMeta == null ? void 0 : cspNonceMeta.nonce) || (cspNonceMeta == null ? void 0 : cspNonceMeta.getAttribute("nonce"));
+    promise = Promise.allSettled(
+      deps.map((dep) => {
+        dep = assetsURL(dep);
+        if (dep in seen) return;
+        seen[dep] = true;
+        const isCss = dep.endsWith(".css");
+        const cssSelector = isCss ? '[rel="stylesheet"]' : "";
+        if (document.querySelector(`link[href="${dep}"]${cssSelector}`)) {
+          return;
+        }
+        const link = document.createElement("link");
+        link.rel = isCss ? "stylesheet" : scriptRel;
+        if (!isCss) {
+          link.as = "script";
+        }
+        link.crossOrigin = "";
+        link.href = dep;
+        if (cspNonce) {
+          link.setAttribute("nonce", cspNonce);
+        }
+        document.head.appendChild(link);
+        if (isCss) {
+          return new Promise((res, rej) => {
+            link.addEventListener("load", res);
+            link.addEventListener(
+              "error",
+              () => rej(new Error(`Unable to preload CSS for ${dep}`))
+            );
+          });
+        }
+      })
+    );
+  }
+  function handlePreloadError(err) {
+    const e = new Event("vite:preloadError", {
+      cancelable: true
+    });
+    e.payload = err;
+    window.dispatchEvent(e);
+    if (!e.defaultPrevented) {
+      throw err;
+    }
+  }
+  return promise.then((res) => {
+    for (const item of res || []) {
+      if (item.status !== "rejected") continue;
+      handlePreloadError(item.reason);
+    }
+    return baseModule().catch(handlePreloadError);
+  });
+};
 function latLngToXYZ(lat, lng, r2) {
   const phi = (90 - lat) * (Math.PI / 180);
   const theta = (lng + 180) * (Math.PI / 180);
@@ -99403,14 +99868,15 @@ const _pos = new Vector3();
 const _Y = new Vector3(0, 1, 0);
 const COL_BASE = new Color(0.05, 0.07, 0.07);
 const COL_OWNED = new Color(62975);
+const COL_OTHERS_OWNED = new Color(16747520);
 const COL_HOVER = new Color(1, 1, 1);
 const COL_SELECTED = new Color(1, 1, 1);
-const COL_FACTION = {
+({
   "NEXUS-7": new Color(15680580),
   KRONOS: new Color(9133302),
   VANGUARD: new Color(2278345),
   SPECTRE: new Color(16096779)
-};
+});
 function GlobeHexGrid() {
   const plots = useGameStore((s2) => s2.plots);
   const hoveredId = useGameStore((s2) => s2.hoveredPlotId);
@@ -99439,8 +99905,12 @@ function GlobeHexGrid() {
     if (!mesh) return;
     for (let i2 = 0; i2 < count; i2++) mesh.setColorAt(i2, COL_BASE);
     for (const p2 of plots) {
-      if (p2.owner && COL_FACTION[p2.owner])
-        mesh.setColorAt(p2.id, COL_FACTION[p2.owner]);
+      if (p2.owner && !p2.isOwnedByMe && p2.id >= 0 && p2.id < count)
+        mesh.setColorAt(p2.id, COL_OTHERS_OWNED);
+    }
+    for (const p2 of plots) {
+      if (p2.isOwnedByMe && p2.id >= 0 && p2.id < count)
+        mesh.setColorAt(p2.id, COL_OWNED);
     }
     for (const pid of ownedPlots) {
       if (pid >= 0 && pid < count) mesh.setColorAt(pid, COL_OWNED);
@@ -99452,6 +99922,7 @@ function GlobeHexGrid() {
       mesh.setColorAt(selectedId, COL_SELECTED);
     }
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    mesh.instanceColor.needsUpdate = true;
   }, [plots, hoveredId, selectedId, ownedPlots, count]);
   useFrame(() => {
     const mesh = meshRef.current;
@@ -99492,9 +99963,8 @@ function SelectedTileHighlight() {
   const selMeshRef = reactExports.useRef(null);
   const hoverMeshRef = reactExports.useRef(null);
   function positionAt(mesh, plotId) {
-    const tile = GEODESIC_TILES[plotId];
+    const tile = GEODESIC_TILES[plotId] ?? GEODESIC_TILES.find((t) => t.id === plotId);
     if (!tile) {
-      mesh.visible = false;
       return;
     }
     _selPos.set(tile.nx, tile.ny, tile.nz);
@@ -99593,13 +100063,34 @@ const earthDayNightFrag = (
   }
 `
 );
+function useResilientTexture(url) {
+  const [texture, setTexture] = reactExports.useState(null);
+  reactExports.useEffect(() => {
+    const loader = new TextureLoader();
+    loader.load(
+      url,
+      (tex) => {
+        tex.colorSpace = SRGBColorSpace;
+        tex.needsUpdate = true;
+        setTexture(tex);
+      },
+      void 0,
+      () => {
+        setTexture(null);
+      }
+    );
+  }, [url]);
+  return texture;
+}
 function EarthSphere({
   onPlotSelect
 }) {
-  const [dayTex, cloudsTex] = useTexture([
-    "/assets/generated/earth-day.dim_4096x2048.jpg",
+  const dayTex = useResilientTexture(
+    "/assets/generated/earth-day.dim_4096x2048.jpg"
+  );
+  const cloudsTex = useResilientTexture(
     "/assets/generated/earth-clouds.dim_2048x1024.jpg"
-  ]);
+  );
   const globeRef = reactExports.useRef(null);
   const cloudsRef = reactExports.useRef(null);
   const selectPlot = useGameStore((s2) => s2.selectPlot);
@@ -99614,10 +100105,13 @@ function EarthSphere({
   );
   const earthUniforms = reactExports.useMemo(
     () => ({
-      dayMap: { value: dayTex }
+      dayMap: { value: null }
     }),
-    [dayTex]
+    []
   );
+  reactExports.useEffect(() => {
+    earthUniforms.dayMap.value = dayTex;
+  }, [dayTex, earthUniforms]);
   useFrame(() => {
     if (globeRef.current) globeRef.current.rotation.y += 1e-4;
     if (cloudsRef.current) cloudsRef.current.rotation.y += 3e-4;
@@ -99658,18 +100152,25 @@ function EarthSphere({
         onPointerLeave: handlePointerLeave,
         children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("sphereGeometry", { args: [1, 64, 64] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
+          dayTex ? /* @__PURE__ */ jsxRuntimeExports.jsx(
             "shaderMaterial",
             {
               vertexShader: earthDayNightVert,
               fragmentShader: earthDayNightFrag,
               uniforms: earthUniforms
             }
+          ) : /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "meshStandardMaterial",
+            {
+              color: new Color(1718876),
+              roughness: 0.8,
+              metalness: 0.1
+            }
           )
         ]
       }
     ),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("mesh", { ref: cloudsRef, children: [
+    cloudsTex && /* @__PURE__ */ jsxRuntimeExports.jsxs("mesh", { ref: cloudsRef, children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("sphereGeometry", { args: [1.008, 64, 64] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         "meshPhongMaterial",
@@ -99704,8 +100205,8 @@ function EarthSphere({
 function Starfield() {
   const meshRef = reactExports.useRef(null);
   const positions = reactExports.useMemo(() => {
-    const arr = new Float32Array(800 * 3);
-    for (let i2 = 0; i2 < 800; i2++) {
+    const arr = new Float32Array(2e3 * 3);
+    for (let i2 = 0; i2 < 2e3; i2++) {
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.acos(2 * Math.random() - 1);
       const r2 = 180 + Math.random() * 40;
@@ -99724,10 +100225,10 @@ function Starfield() {
       "pointsMaterial",
       {
         color: 16777215,
-        size: 0.3,
-        sizeAttenuation: true,
-        transparent: true,
-        opacity: 0.85,
+        size: 2.5,
+        sizeAttenuation: false,
+        transparent: false,
+        opacity: 1,
         depthWrite: false
       }
     )
@@ -100540,8 +101041,8 @@ function GlobeCanvas({
     }
   );
 }
-const CYAN$7 = "#00ffcc";
-const BORDER$7 = "rgba(0,255,204,0.22)";
+const CYAN$6 = "#00ffcc";
+const BORDER$6 = "rgba(0,255,204,0.22)";
 const SPEC_COLORS = {
   ARMORY: "rgba(200,50,50,0.7)",
   RESOURCES: "rgba(50,180,80,0.7)",
@@ -100616,7 +101117,7 @@ function useCountdown(unlockAt) {
 }
 function CooldownTimer({ unlockAt }) {
   const timer = useCountdown(unlockAt);
-  if (!timer) return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$7 }, children: "UNLOCKED" });
+  if (!timer) return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$6 }, children: "UNLOCKED" });
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "flex items-center gap-1", style: { color: "#ff8040" }, children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx(Clock2, { size: 9 }),
     timer
@@ -100626,7 +101127,7 @@ function SegmentDetailCard({ info }) {
   const isNexus = info.index === 0;
   const label = isNexus ? "NEXUS" : `SECTOR ${SECTOR_LABELS[info.index - 1]}`;
   const bonus = isNexus ? NEXUS_BONUS[info.index] ?? 0 : 0;
-  const specColor = info.spec ? SPEC_STROKE[info.spec] : CYAN$7;
+  const specColor = info.spec ? SPEC_STROKE[info.spec] : CYAN$6;
   const rates = BIOME_MINERAL_RATES[info.biome];
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "div",
@@ -100655,7 +101156,7 @@ function SegmentDetailCard({ info }) {
               className: "text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded",
               style: {
                 background: info.isLocked ? "rgba(255,80,40,0.12)" : "rgba(0,255,204,0.08)",
-                color: info.isLocked ? "#ff8040" : CYAN$7
+                color: info.isLocked ? "#ff8040" : CYAN$6
               },
               children: info.isLocked ? "LOCKED" : info.buildingType ? "ACTIVE" : "VACANT"
             }
@@ -100680,7 +101181,7 @@ function SegmentDetailCard({ info }) {
               "div",
               {
                 className: "font-mono text-xs font-bold",
-                style: { color: CYAN$7 },
+                style: { color: CYAN$6 },
                 children: [
                   info.nexusLevel,
                   " / 3"
@@ -100701,7 +101202,7 @@ function SegmentDetailCard({ info }) {
               "div",
               {
                 className: "font-mono text-xs font-bold",
-                style: { color: bonus > 0 ? CYAN$7 : "rgba(0,255,204,0.3)" },
+                style: { color: bonus > 0 ? CYAN$6 : "rgba(0,255,204,0.3)" },
                 children: [
                   "+",
                   NEXUS_BONUS[info.nexusLevel] ?? 0
@@ -100866,7 +101367,7 @@ function SubParcelIntelView() {
             className: "mx-3 rounded-lg px-3 py-2 flex items-center gap-2",
             style: {
               background: "rgba(0,255,204,0.04)",
-              border: `1px solid ${BORDER$7}`
+              border: `1px solid ${BORDER$6}`
             },
             children: [
               /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -100875,8 +101376,8 @@ function SubParcelIntelView() {
                   className: "w-6 h-6 rounded flex items-center justify-center text-[9px] font-bold font-mono flex-shrink-0",
                   style: {
                     background: "rgba(0,255,204,0.12)",
-                    border: `1px solid ${CYAN$7}`,
-                    color: CYAN$7
+                    border: `1px solid ${CYAN$6}`,
+                    color: CYAN$6
                   },
                   children: [
                     "#",
@@ -100889,7 +101390,7 @@ function SubParcelIntelView() {
                   "span",
                   {
                     className: "text-[10px] font-bold uppercase tracking-wider",
-                    style: { color: CYAN$7 },
+                    style: { color: CYAN$6 },
                     children: [
                       plot.biome,
                       " SECTOR"
@@ -101026,7 +101527,7 @@ function SubParcelIntelView() {
                       cx: lp.x,
                       cy: lp.y + 11,
                       r: "2.5",
-                      fill: CYAN$7,
+                      fill: CYAN$6,
                       style: {
                         pointerEvents: "none",
                         animation: "pulse-glow 2s ease-in-out infinite"
@@ -101040,7 +101541,7 @@ function SubParcelIntelView() {
                 const isSelected = selectedSegment === 0;
                 const nexusBonus = NEXUS_BONUS[nexusLevel] ?? 0;
                 const nexusFill = isSelected ? "rgba(0,255,204,0.22)" : nexusLevel > 0 ? "rgba(0,255,204,0.12)" : "rgba(15,25,40,0.75)";
-                const nexusStroke = isSelected ? CYAN$7 : nexusLevel > 0 ? "rgba(0,255,204,0.5)" : "rgba(0,255,204,0.2)";
+                const nexusStroke = isSelected ? CYAN$6 : nexusLevel > 0 ? "rgba(0,255,204,0.5)" : "rgba(0,255,204,0.2)";
                 return /* @__PURE__ */ jsxRuntimeExports.jsxs(
                   "g",
                   {
@@ -101090,7 +101591,7 @@ function SubParcelIntelView() {
                           dominantBaseline: "middle",
                           fontSize: "8",
                           fontFamily: "monospace",
-                          fill: isSelected ? CYAN$7 : "rgba(0,255,204,0.65)",
+                          fill: isSelected ? CYAN$6 : "rgba(0,255,204,0.65)",
                           style: { pointerEvents: "none" },
                           children: "NEXUS"
                         }
@@ -101104,7 +101605,7 @@ function SubParcelIntelView() {
                           dominantBaseline: "middle",
                           fontSize: "8",
                           fontFamily: "monospace",
-                          fill: nexusBonus > 0 ? isSelected ? CYAN$7 : "rgba(0,255,204,0.55)" : "rgba(0,255,204,0.2)",
+                          fill: nexusBonus > 0 ? isSelected ? CYAN$6 : "rgba(0,255,204,0.55)" : "rgba(0,255,204,0.2)",
                           style: { pointerEvents: "none" },
                           children: `LV${nexusLevel}`
                         }
@@ -101266,7 +101767,7 @@ function DailyFRNTRBreakdown({
               "span",
               {
                 className: "font-mono font-bold",
-                style: { color: value > 0 ? CYAN$7 : "rgba(0,255,204,0.25)" },
+                style: { color: value > 0 ? CYAN$6 : "rgba(0,255,204,0.25)" },
                 children: [
                   "+",
                   value,
@@ -101285,7 +101786,7 @@ function DailyFRNTRBreakdown({
                   "span",
                   {
                     className: "font-bold uppercase tracking-wider",
-                    style: { color: CYAN$7 },
+                    style: { color: CYAN$6 },
                     children: "TOTAL"
                   }
                 ),
@@ -101293,7 +101794,7 @@ function DailyFRNTRBreakdown({
                   "span",
                   {
                     className: "font-mono font-bold",
-                    style: { color: CYAN$7, textShadow: `0 0 8px ${CYAN$7}` },
+                    style: { color: CYAN$6, textShadow: `0 0 8px ${CYAN$6}` },
                     children: [
                       total,
                       " FRNTR/DAY"
@@ -101813,6 +102314,37 @@ function IntelTab() {
     }
   );
 }
+function formatPlotPrice(priceE8s, icpUsdPrice) {
+  const icp = Number(priceE8s) / 1e8;
+  const icpStr = icp.toFixed(4);
+  if (icpUsdPrice === null) return `${icpStr} ICP ($ unavailable)`;
+  const usd = (icp * icpUsdPrice).toFixed(2);
+  return `${icpStr} ICP (~${usd})`;
+}
+const ICP_LEDGER_CANISTER_ID$1 = "ryjl3-tyaaa-aaaaa-aaaba-cai";
+const icrc2IdlFactory = ({ IDL: IDL2 }) => {
+  const Principal3 = IDL2.Principal;
+  const ApproveArgs = IDL2.Record({
+    spender: IDL2.Record({
+      owner: Principal3,
+      subaccount: IDL2.Opt(IDL2.Vec(IDL2.Nat8))
+    }),
+    amount: IDL2.Nat,
+    expires_at: IDL2.Opt(IDL2.Nat64),
+    fee: IDL2.Opt(IDL2.Nat),
+    memo: IDL2.Opt(IDL2.Vec(IDL2.Nat8)),
+    from_subaccount: IDL2.Opt(IDL2.Vec(IDL2.Nat8)),
+    created_at_time: IDL2.Opt(IDL2.Nat64),
+    expected_allowance: IDL2.Opt(IDL2.Nat)
+  });
+  const ApproveResult = IDL2.Variant({
+    Ok: IDL2.Nat,
+    Err: IDL2.Record({ message: IDL2.Text })
+  });
+  return IDL2.Service({
+    icrc2_approve: IDL2.Func([ApproveArgs], [ApproveResult], [])
+  });
+};
 function usePurchasePlot() {
   const { actor } = useActor(createActor);
   const { identity: identity2 } = useInternetIdentity();
@@ -101822,6 +102354,7 @@ function usePurchasePlot() {
   async function purchasePlot(plotId) {
     setIsPurchasing(true);
     setLastResult(null);
+    const icpUsdPrice = useGameStore.getState().icpUsdPrice;
     purchasePlotLocal(plotId);
     if (!identity2 || !actor) {
       await new Promise((r2) => setTimeout(r2, 500));
@@ -101834,9 +102367,13 @@ function usePurchasePlot() {
       return result;
     }
     try {
+      const gamePrincipalText = void 0;
+      let priceDisplay = null;
+      if (gamePrincipalText) ;
       const res = await actor.purchasePlot(BigInt(plotId));
-      const success = res.__kind__ === "ok";
-      const message = success ? `PLOT #${plotId} ACQUIRED` : `PLOT #${plotId} PURCHASE FAILED`;
+      const success = "ok" in res;
+      const message = success ? res.ok ?? `PLOT #${plotId} ACQUIRED` : res.err ?? `PLOT #${plotId} PURCHASE FAILED`;
+      const displayMessage = success && priceDisplay ? `${message} · ${priceDisplay}` : message;
       if (success) {
         const unlockTs = Date.now() + 4 * 60 * 60 * 1e3;
         useGameStore.setState((s2) => ({
@@ -101857,7 +102394,7 @@ function usePurchasePlot() {
           )
         }));
       }
-      const result = { success, message };
+      const result = { success, message: displayMessage };
       setLastResult(result);
       return result;
     } catch (err) {
@@ -101881,9 +102418,9 @@ function usePurchasePlot() {
   }
   return { purchasePlot, isPurchasing, lastResult };
 }
-const CYAN$6 = "#00ffcc";
-const CYAN_DIM$6 = "rgba(0,255,204,0.5)";
-const BORDER$6 = "rgba(0,255,204,0.15)";
+const CYAN$5 = "#00ffcc";
+const CYAN_DIM$5 = "rgba(0,255,204,0.5)";
+const BORDER$5 = "rgba(0,255,204,0.15)";
 const BIOME_BADGE_COLORS = {
   Arctic: "#a8d8ea",
   Desert: "#e8c97a",
@@ -101967,7 +102504,7 @@ function SurveyReport({
       {
         style: {
           fontSize: 9,
-          color: CYAN_DIM$6,
+          color: CYAN_DIM$5,
           letterSpacing: 2,
           fontFamily: "monospace",
           marginBottom: 8
@@ -102066,7 +102603,7 @@ function SurveyReport({
         style: {
           marginBottom: 8,
           fontSize: 8,
-          color: CYAN$6,
+          color: CYAN$5,
           fontFamily: "monospace",
           letterSpacing: 1,
           padding: "3px 6px",
@@ -102099,7 +102636,7 @@ function SurveyReport({
             {
               style: {
                 fontSize: 7,
-                color: CYAN_DIM$6,
+                color: CYAN_DIM$5,
                 letterSpacing: 2,
                 fontFamily: "monospace",
                 marginBottom: 5
@@ -102310,6 +102847,7 @@ function MapBottomSheet({
   const setTargetPlotId = useGameStore((s2) => s2.setTargetPlotId);
   const setPlotHoverCard = useGameStore((s2) => s2.setPlotHoverCard);
   const commanderAssignments = useGameStore((s2) => s2.commanderAssignments);
+  const icpUsdPrice = useGameStore((s2) => s2.icpUsdPrice);
   const mineResources = useGameStore((s2) => s2.mineResources);
   const activateRegenBoost = useGameStore((s2) => s2.activateRegenBoost);
   const { purchasePlot, isPurchasing } = usePurchasePlot();
@@ -102319,9 +102857,11 @@ function MapBottomSheet({
   const isOwned = (plot == null ? void 0 : plot.owner) !== null && (plot == null ? void 0 : plot.owner) !== void 0;
   const isOwnPlot = isOwned && ((plot == null ? void 0 : plot.owner) === playerPrincipal || selectedPlotId !== null && player.plotsOwned.includes(selectedPlotId));
   const isEnemyPlot = isOwned && !isOwnPlot;
+  const icpPriceE8s = ((plot == null ? void 0 : plot.efficiency) ?? 0) >= 90 ? 3e9 : ((plot == null ? void 0 : plot.efficiency) ?? 0) >= 80 ? 9e8 : 25e7;
+  const icpFloat = icpPriceE8s / 1e8;
+  const icpPriceDisplay = icpUsdPrice ? `${icpFloat.toFixed(4)} ICP (~${(icpFloat * icpUsdPrice).toFixed(2)})` : `${icpFloat.toFixed(4)} ICP ($ unavailable)`;
   async function handlePurchase() {
     if (!plot || isPurchasing) return;
-    if (player.frntBalance < 100) return;
     setPurchaseError(null);
     const result = await purchasePlot(plot.id);
     if (result.success) {
@@ -102349,7 +102889,7 @@ function MapBottomSheet({
       nextStep: "Select weapon and FIRE."
     });
   }
-  const biomeBadgeColor = plot ? BIOME_BADGE_COLORS[plot.biome] ?? CYAN$6 : CYAN$6;
+  const biomeBadgeColor = plot ? BIOME_BADGE_COLORS[plot.biome] ?? CYAN$5 : CYAN$5;
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx("style", { children: `
         @keyframes mapGlobePulse {
@@ -102397,7 +102937,7 @@ function MapBottomSheet({
                       {
                         size: 48,
                         style: {
-                          color: CYAN$6,
+                          color: CYAN$5,
                           animation: "mapGlobePulse 2s ease-in-out infinite"
                         }
                       }
@@ -102407,7 +102947,7 @@ function MapBottomSheet({
                       {
                         style: {
                           fontSize: 10,
-                          color: CYAN_DIM$6,
+                          color: CYAN_DIM$5,
                           letterSpacing: 2,
                           textAlign: "center",
                           maxWidth: 200,
@@ -102437,7 +102977,7 @@ function MapBottomSheet({
                             style: {
                               fontSize: 14,
                               fontWeight: 700,
-                              color: CYAN$6,
+                              color: CYAN$5,
                               letterSpacing: 1,
                               fontFamily: "monospace"
                             },
@@ -102472,7 +103012,7 @@ function MapBottomSheet({
                     {
                       style: {
                         fontSize: 10,
-                        color: CYAN_DIM$6,
+                        color: CYAN_DIM$5,
                         letterSpacing: 1,
                         marginBottom: 3,
                         fontFamily: "monospace"
@@ -102558,13 +103098,13 @@ function MapBottomSheet({
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "div",
                   {
-                    style: { height: 1, background: BORDER$6, marginBottom: 12 }
+                    style: { height: 1, background: BORDER$5, marginBottom: 12 }
                   }
                 ),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "div",
                   {
-                    style: { height: 1, background: BORDER$6, marginBottom: 12 }
+                    style: { height: 1, background: BORDER$5, marginBottom: 12 }
                   }
                 ),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -102600,7 +103140,7 @@ function MapBottomSheet({
             {
               style: {
                 padding: "12px 16px",
-                borderTop: `1px solid ${BORDER$6}`,
+                borderTop: `1px solid ${BORDER$5}`,
                 flexShrink: 0
               },
               children: [
@@ -102611,19 +103151,19 @@ function MapBottomSheet({
                       type: "button",
                       "data-ocid": "map.primary_button",
                       onClick: handlePurchase,
-                      disabled: isPurchasing || player.frntBalance < 100,
+                      disabled: isPurchasing,
                       style: {
                         ...actionBtnStyle(
-                          player.frntBalance < 100 ? "rgba(0,255,204,0.3)" : "#00ffcc",
-                          player.frntBalance < 100 ? "rgba(0,255,204,0.04)" : isPurchasing ? "rgba(0,255,204,0.06)" : "rgba(0,255,204,0.12)"
+                          "#00ffcc",
+                          isPurchasing ? "rgba(0,255,204,0.06)" : "rgba(0,255,204,0.12)"
                         ),
-                        opacity: player.frntBalance < 100 || isPurchasing ? 0.6 : 1,
-                        cursor: player.frntBalance < 100 || isPurchasing ? "not-allowed" : "pointer"
+                        opacity: isPurchasing ? 0.6 : 1,
+                        cursor: isPurchasing ? "not-allowed" : "pointer"
                       },
-                      children: isPurchasing ? "PROCESSING…" : "PURCHASE PLOT — 100 FRNTR"
+                      children: isPurchasing ? "PROCESSING…" : `PURCHASE — ${icpPriceDisplay}`
                     }
                   ),
-                  (player.frntBalance < 100 || purchaseError) && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  purchaseError && /* @__PURE__ */ jsxRuntimeExports.jsx(
                     "div",
                     {
                       "data-ocid": "map.error_state",
@@ -102635,7 +103175,7 @@ function MapBottomSheet({
                         letterSpacing: 1,
                         fontFamily: "monospace"
                       },
-                      children: purchaseError ?? "INSUFFICIENT FRNTR"
+                      children: purchaseError
                     }
                   )
                 ] }),
@@ -102657,9 +103197,9 @@ function MapBottomSheet({
     )
   ] });
 }
-const CYAN$5 = "#00ffcc";
-const CYAN_DIM$5 = "rgba(0,255,204,0.35)";
-const BORDER$5 = "rgba(0,255,204,0.22)";
+const CYAN$4 = "#00ffcc";
+const CYAN_DIM$4 = "rgba(0,255,204,0.35)";
+const BORDER$4 = "rgba(0,255,204,0.22)";
 const TEXT$3 = "#e0f4ff";
 const TEXT_DIM$1 = "rgba(224,244,255,0.55)";
 const GOLD$1 = "#ffd700";
@@ -102795,13 +103335,13 @@ function PlayNowOverlay({ onClose, onLogin }) {
                     padding: "4px 12px",
                     borderRadius: 20,
                     marginBottom: 14,
-                    border: `1px solid ${CYAN$5}44`,
+                    border: `1px solid ${CYAN$4}44`,
                     fontSize: 8,
                     letterSpacing: 3,
-                    color: CYAN$5,
+                    color: CYAN$4,
                     background: "rgba(0,255,204,0.07)",
                     textTransform: "uppercase",
-                    textShadow: `0 0 8px ${CYAN$5}`
+                    textShadow: `0 0 8px ${CYAN$4}`
                   },
                   children: "v1.0 NOW LIVE ON ICP"
                 }
@@ -102812,10 +103352,10 @@ function PlayNowOverlay({ onClose, onLogin }) {
                   style: {
                     fontSize: 28,
                     fontWeight: 900,
-                    color: CYAN$5,
+                    color: CYAN$4,
                     letterSpacing: 4,
                     textTransform: "uppercase",
-                    textShadow: `0 0 30px ${CYAN$5}, 0 0 60px ${CYAN$5}44`,
+                    textShadow: `0 0 30px ${CYAN$4}, 0 0 60px ${CYAN$4}44`,
                     lineHeight: 1.1,
                     marginBottom: 8
                   },
@@ -102843,8 +103383,8 @@ function PlayNowOverlay({ onClose, onLogin }) {
                 {
                   style: {
                     background: "rgba(0,20,40,0.55)",
-                    border: `1px solid ${BORDER$5}`,
-                    borderLeft: `3px solid ${CYAN$5}`,
+                    border: `1px solid ${BORDER$4}`,
+                    borderLeft: `3px solid ${CYAN$4}`,
                     borderRadius: 8,
                     padding: "12px 14px",
                     marginBottom: 20
@@ -102855,7 +103395,7 @@ function PlayNowOverlay({ onClose, onLogin }) {
                       {
                         style: {
                           fontSize: 8,
-                          color: CYAN$5,
+                          color: CYAN$4,
                           letterSpacing: 3,
                           marginBottom: 8,
                           fontWeight: 700
@@ -102875,7 +103415,7 @@ function PlayNowOverlay({ onClose, onLogin }) {
                         children: [
                           "The Internet Computer has mapped Earth into",
                           " ",
-                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$5 }, children: "5,882 hex plots" }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$4 }, children: "5,882 hex plots" }),
                           ". Each plot is a sovereign NFT — yours to own, mine, upgrade, and defend. FRNTR is the lifeblood of Frontier:",
                           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: GOLD$1 }, children: " 10 billion tokens" }),
                           ", 5B pre-minted and 5B mineable only by landowners over 3–5 years. No central server. No middleman. Fully on-chain, forever."
@@ -102909,7 +103449,7 @@ function PlayNowOverlay({ onClose, onLogin }) {
                       padding: "8px 10px",
                       borderRadius: 6,
                       background: phase.active ? "rgba(0,255,204,0.07)" : "rgba(255,255,255,0.02)",
-                      border: `1px solid ${phase.active ? `${CYAN$5}44` : BORDER$5}`
+                      border: `1px solid ${phase.active ? `${CYAN$4}44` : BORDER$4}`
                     },
                     children: [
                       /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -102922,8 +103462,8 @@ function PlayNowOverlay({ onClose, onLogin }) {
                             fontWeight: 700,
                             letterSpacing: 1.5,
                             background: phase.active ? "rgba(0,255,204,0.2)" : "rgba(255,255,255,0.04)",
-                            border: `1px solid ${phase.active ? CYAN$5 : BORDER$5}`,
-                            color: phase.active ? CYAN$5 : TEXT_DIM$1,
+                            border: `1px solid ${phase.active ? CYAN$4 : BORDER$4}`,
+                            color: phase.active ? CYAN$4 : TEXT_DIM$1,
                             flexShrink: 0,
                             marginTop: 1
                           },
@@ -102942,7 +103482,7 @@ function PlayNowOverlay({ onClose, onLogin }) {
                             },
                             children: [
                               phase.label,
-                              phase.active && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { marginLeft: 6, fontSize: 7, color: CYAN$5 }, children: "● LIVE" })
+                              phase.active && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { marginLeft: 6, fontSize: 7, color: CYAN$4 }, children: "● LIVE" })
                             ]
                           }
                         ),
@@ -102970,16 +103510,16 @@ function PlayNowOverlay({ onClose, onLogin }) {
                     padding: "14px",
                     borderRadius: 10,
                     background: "linear-gradient(135deg, rgba(0,255,204,0.25), rgba(0,255,204,0.12))",
-                    border: `2px solid ${CYAN$5}`,
-                    color: CYAN$5,
+                    border: `2px solid ${CYAN$4}`,
+                    color: CYAN$4,
                     fontSize: 13,
                     fontWeight: 900,
                     letterSpacing: 3,
                     cursor: "pointer",
                     marginBottom: 12,
                     textTransform: "uppercase",
-                    boxShadow: `0 0 24px ${CYAN$5}44`,
-                    textShadow: `0 0 10px ${CYAN$5}`
+                    boxShadow: `0 0 24px ${CYAN$4}44`,
+                    textShadow: `0 0 10px ${CYAN$4}`
                   },
                   children: "ENTER THE FRONTIER →"
                 }
@@ -102994,16 +103534,16 @@ function PlayNowOverlay({ onClose, onLogin }) {
                     padding: "14px",
                     borderRadius: 10,
                     background: "linear-gradient(135deg, rgba(0,255,204,0.25), rgba(0,255,204,0.12))",
-                    border: `2px solid ${CYAN$5}`,
-                    color: CYAN$5,
+                    border: `2px solid ${CYAN$4}`,
+                    color: CYAN$4,
                     fontSize: 13,
                     fontWeight: 900,
                     letterSpacing: 3,
                     cursor: "pointer",
                     marginBottom: 12,
                     textTransform: "uppercase",
-                    boxShadow: `0 0 24px ${CYAN$5}44`,
-                    textShadow: `0 0 10px ${CYAN$5}`
+                    boxShadow: `0 0 24px ${CYAN$4}44`,
+                    textShadow: `0 0 10px ${CYAN$4}`
                   },
                   children: "CONNECT WITH INTERNET IDENTITY"
                 }
@@ -103018,7 +103558,7 @@ function PlayNowOverlay({ onClose, onLogin }) {
                     width: "100%",
                     padding: "10px",
                     background: "transparent",
-                    border: `1px solid ${BORDER$5}`,
+                    border: `1px solid ${BORDER$4}`,
                     borderRadius: 8,
                     color: TEXT_DIM$1,
                     fontSize: 10,
@@ -103033,7 +103573,7 @@ function PlayNowOverlay({ onClose, onLogin }) {
                 "div",
                 {
                   style: {
-                    border: `1px solid ${BORDER$5}`,
+                    border: `1px solid ${BORDER$4}`,
                     borderRadius: 8,
                     overflow: "hidden"
                   },
@@ -103061,13 +103601,13 @@ function PlayNowOverlay({ onClose, onLogin }) {
                               style: {
                                 fontSize: 9,
                                 fontWeight: 700,
-                                color: CYAN$5,
+                                color: CYAN$4,
                                 letterSpacing: 2
                               },
                               children: "WHAT IS ICP?"
                             }
                           ),
-                          icpExpanded ? /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronUp, { size: 14, color: CYAN$5 }) : /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronDown, { size: 14, color: CYAN_DIM$5 })
+                          icpExpanded ? /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronUp, { size: 14, color: CYAN$4 }) : /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronDown, { size: 14, color: CYAN_DIM$4 })
                         ]
                       }
                     ),
@@ -103077,7 +103617,7 @@ function PlayNowOverlay({ onClose, onLogin }) {
                         style: {
                           padding: "12px 14px",
                           background: "rgba(0,10,20,0.5)",
-                          borderTop: `1px solid ${BORDER$5}`
+                          borderTop: `1px solid ${BORDER$4}`
                         },
                         children: [
                           /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -103092,7 +103632,7 @@ function PlayNowOverlay({ onClose, onLogin }) {
                               children: [
                                 "The",
                                 " ",
-                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$5 }, children: "Internet Computer Protocol (ICP)" }),
+                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$4 }, children: "Internet Computer Protocol (ICP)" }),
                                 " ",
                                 "is a decentralized blockchain that runs at web speed. Unlike traditional blockchains, ICP hosts entire applications on-chain — no AWS, no Google Cloud. Every smart contract (called a canister) is permanently on the network. Frontier uses ICP so that your land, your tokens, and your game data are owned by you, stored on the blockchain, and cannot be taken down by any company or government."
                               ]
@@ -103110,7 +103650,7 @@ function PlayNowOverlay({ onClose, onLogin }) {
                                 gap: 4,
                                 marginTop: 10,
                                 fontSize: 9,
-                                color: CYAN$5,
+                                color: CYAN$4,
                                 textDecoration: "none"
                               },
                               children: [
@@ -103688,9 +104228,9 @@ function getCommander(instanceId) {
     image: rank.image
   };
 }
-const CYAN$4 = "#00ffcc";
-const CYAN_DIM$4 = "rgba(0,255,204,0.5)";
-const BORDER$4 = "rgba(0,255,204,0.2)";
+const CYAN$3 = "#00ffcc";
+const CYAN_DIM$3 = "rgba(0,255,204,0.5)";
+const BORDER$3 = "rgba(0,255,204,0.2)";
 function PlotHoverCard({
   plotId,
   owner,
@@ -103708,7 +104248,7 @@ function PlotHoverCard({
   }, []);
   const isTarget = action === "TARGET LOCKED";
   const isOwned = action === "TERRITORY ACQUIRED" || action === "YOU OWN THIS";
-  const actionColor = isTarget ? "#ef4444" : CYAN$4;
+  const actionColor = isTarget ? "#ef4444" : CYAN$3;
   const assignedInstanceId = commanderAssignments == null ? void 0 : commanderAssignments[plotId];
   const commander = assignedInstanceId ? getCommander(assignedInstanceId) : null;
   const ownedInstance = ownedCommanders == null ? void 0 : ownedCommanders.find(
@@ -103716,7 +104256,7 @@ function PlotHoverCard({
   );
   const hasWings = ownedInstance ? commanderHasWings(ownedInstance) : false;
   const rankImage = ownedInstance ? ((_b3 = (_a3 = getArchetype(ownedInstance.archetypeId)) == null ? void 0 : _a3.rankProgression[ownedInstance.currentRankIndex]) == null ? void 0 : _b3.image) ?? null : null;
-  const tierColor = commander ? TIER_COLORS[commander.tier] ?? CYAN$4 : CYAN$4;
+  const tierColor = commander ? TIER_COLORS[commander.tier] ?? CYAN$3 : CYAN$3;
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "div",
     {
@@ -103730,7 +104270,7 @@ function PlotHoverCard({
         background: "rgba(4,12,24,0.97)",
         backdropFilter: "blur(16px)",
         WebkitBackdropFilter: "blur(16px)",
-        border: `1px solid ${BORDER$4}`,
+        border: `1px solid ${BORDER$3}`,
         borderTop: `2px solid ${actionColor}`,
         borderRadius: 10,
         padding: "14px 16px",
@@ -103758,9 +104298,9 @@ function PlotHoverCard({
                     style: {
                       fontSize: 9,
                       fontWeight: 700,
-                      color: CYAN$4,
+                      color: CYAN$3,
                       background: "rgba(0,255,204,0.1)",
-                      border: `1px solid ${BORDER$4}`,
+                      border: `1px solid ${BORDER$3}`,
                       borderRadius: 4,
                       padding: "2px 8px",
                       letterSpacing: 1,
@@ -103797,7 +104337,7 @@ function PlotHoverCard({
                     background: "none",
                     border: "none",
                     cursor: "pointer",
-                    color: CYAN_DIM$4,
+                    color: CYAN_DIM$3,
                     padding: 4,
                     display: "flex",
                     alignItems: "center"
@@ -103834,7 +104374,7 @@ function PlotHoverCard({
                 {
                   style: {
                     fontSize: 8,
-                    color: CYAN_DIM$4,
+                    color: CYAN_DIM$3,
                     letterSpacing: 1,
                     fontFamily: "monospace"
                   },
@@ -103991,7 +104531,7 @@ function PlotHoverCard({
                 {
                   style: {
                     fontSize: 8,
-                    color: CYAN$4,
+                    color: CYAN$3,
                     fontFamily: "monospace",
                     letterSpacing: 0.5,
                     opacity: 0.85
@@ -104073,9 +104613,9 @@ function PlotHoverCard({
                     flex: 1,
                     padding: "8px 10px",
                     background: "rgba(0,255,204,0.12)",
-                    border: `1px solid ${CYAN$4}55`,
+                    border: `1px solid ${CYAN$3}55`,
                     borderRadius: 6,
-                    color: CYAN$4,
+                    color: CYAN$3,
                     fontSize: 9,
                     fontWeight: 700,
                     letterSpacing: 1.5,
@@ -104110,115 +104650,6 @@ function PlotHoverCard({
                 }
               )
             ]
-          }
-        )
-      ]
-    }
-  );
-}
-const CYAN$3 = "#00ffcc";
-const CYAN_DIM$3 = "rgba(0,255,204,0.35)";
-const BORDER$3 = "rgba(0,255,204,0.22)";
-function PrincipalBadge() {
-  const { isAuthenticated, clear: clear2 } = useInternetIdentity();
-  const { actor } = useActor(createActor);
-  const player = useGameStore((s2) => s2.player);
-  const setAuth = useGameStore((s2) => s2.setAuth);
-  const [displayText, setDisplayText] = reactExports.useState(null);
-  const [isAuthed, setIsAuthed] = reactExports.useState(false);
-  reactExports.useEffect(() => {
-    if (!actor) return;
-    const fetchPrincipal = async () => {
-      try {
-        const data = await actor.getPrincipal();
-        setDisplayText(data.short);
-        setIsAuthed(data.isAuthed);
-        if (data.isAuthed && data.full) {
-          setAuth(data.full);
-          useGameStore.setState((s2) => ({
-            player: { ...s2.player, principal: data.full }
-          }));
-        }
-      } catch {
-        if (player.principal) {
-          const p2 = player.principal;
-          setDisplayText(`${p2.slice(0, 8)}...${p2.slice(-4)}`);
-          setIsAuthed(true);
-        }
-      }
-    };
-    void fetchPrincipal();
-  }, [actor, player.principal, setAuth]);
-  const isConnected = isAuthed || !!player.principal;
-  const text = displayText ?? (player.principal ? `${player.principal.slice(0, 8)}...${player.principal.slice(-4)}` : null);
-  if (!isConnected || !text) return null;
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-    "div",
-    {
-      "data-ocid": "principal.badge",
-      style: {
-        display: "flex",
-        alignItems: "center",
-        gap: 6,
-        padding: "5px 10px",
-        borderRadius: 6,
-        background: "rgba(0,255,204,0.07)",
-        border: `1px solid ${BORDER$3}`,
-        backdropFilter: "blur(10px)",
-        WebkitBackdropFilter: "blur(10px)"
-      },
-      children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "div",
-          {
-            style: {
-              width: 7,
-              height: 7,
-              borderRadius: "50%",
-              background: isAuthenticated ? "#00ff88" : CYAN_DIM$3,
-              boxShadow: isAuthenticated ? "0 0 6px #00ff88" : "none",
-              flexShrink: 0
-            }
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "span",
-          {
-            className: "font-mono",
-            title: player.principal ?? void 0,
-            style: {
-              fontSize: 9,
-              color: CYAN$3,
-              fontWeight: 700,
-              letterSpacing: 0.5,
-              whiteSpace: "nowrap",
-              cursor: "help"
-            },
-            children: text
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "button",
-          {
-            type: "button",
-            "data-ocid": "principal.logout_button",
-            onClick: () => {
-              clear2();
-              setAuth(null);
-              setDisplayText(null);
-              setIsAuthed(false);
-            },
-            title: "Logout",
-            style: {
-              background: "transparent",
-              border: "none",
-              cursor: "pointer",
-              padding: 2,
-              color: CYAN_DIM$3,
-              display: "flex",
-              alignItems: "center"
-            },
-            children: /* @__PURE__ */ jsxRuntimeExports.jsx(LogOut, { size: 10 })
           }
         )
       ]
@@ -104261,13 +104692,13 @@ const INITIAL_CHECKS = [
     durationMs: 0
   },
   {
-    label: "6. Purchase plot — buy plot #1",
+    label: "6. Purchase plot — buy first available",
     status: "idle",
     detail: "",
     durationMs: 0
   },
   {
-    label: "7. FRNTR accrual — balance updated",
+    label: "7. FRNTR accrual — passive income > 0",
     status: "idle",
     detail: "",
     durationMs: 0
@@ -104297,6 +104728,7 @@ function StressTestPanel() {
   const [running2, setRunning] = reactExports.useState(false);
   const { actor } = useActor(createActor);
   const { isAuthenticated } = useInternetIdentity();
+  const purchasedPlotIdRef = reactExports.useRef(null);
   function updateCheck(index2, patch) {
     setChecks(
       (prev) => prev.map((c2, i2) => i2 === index2 ? { ...c2, ...patch } : c2)
@@ -104344,7 +104776,7 @@ function StressTestPanel() {
       () => actor.testFaucetV2(),
       (r2) => r2.__kind__ === "ok" ? `+${Number(r2.ok.frntGranted)} FRNTR +${Number(r2.ok.icpGranted)} ICP` : `err: ${r2.err}`
     );
-    const playerState = await runCheck(
+    await runCheck(
       2,
       () => actor.getPlayerState(),
       (r2) => `FRNTR=${Number(r2.frntBalance)} plots=${Number(r2.plotsOwned)}`
@@ -104361,30 +104793,46 @@ function StressTestPanel() {
     );
     const purchaseRes = await runCheck(
       5,
-      () => actor.purchasePlot(1n),
-      (r2) => r2.__kind__ === "ok" ? `ok: ${r2.ok}` : `err: ${r2.err}`
+      async () => {
+        const owners = await actor.getAllPlotOwners();
+        const ownedIds = new Set(
+          owners.map(([id2]) => Number(id2))
+        );
+        const plotCount = Number(await actor.getPlotCount());
+        let firstAvailable = null;
+        for (let i2 = 0; i2 < plotCount; i2++) {
+          if (!ownedIds.has(i2)) {
+            firstAvailable = BigInt(i2);
+            break;
+          }
+        }
+        if (firstAvailable === null)
+          throw new Error("No available plots found");
+        const result = await actor.purchasePlot(firstAvailable);
+        if (result.__kind__ === "err") throw new Error(result.err);
+        purchasedPlotIdRef.current = firstAvailable;
+        return result;
+      },
+      (r2) => `Purchased plot — ok: ${r2.ok}`
     );
-    if ((purchaseRes == null ? void 0 : purchaseRes.__kind__) !== "ok") {
-      updateCheck(6, {
-        status: "fail",
-        detail: "Purchase prerequisite failed",
-        durationMs: 0
-      });
-    } else {
-      await runCheck(
-        6,
-        async () => {
-          const before = playerState ? Number(playerState.frntBalance) : 0;
-          const after = await actor.getPlayerState();
-          return {
-            before,
-            after: Number(after.frntBalance),
-            diff: Number(after.frntBalance) - before
-          };
-        },
-        (r2) => `before=${r2.before} after=${r2.after} Δ=${r2.diff}`
-      );
-    }
+    await runCheck(
+      6,
+      async () => {
+        const state2 = await actor.getPlayerState();
+        const income = state2.passiveIncomePerDay;
+        const plots = Number(state2.plotsOwned);
+        if (plots === 0 && purchaseRes === null) {
+          throw new Error("Purchase prerequisite failed");
+        }
+        if (income < 7) {
+          throw new Error(
+            `passiveIncomePerDay=${income} — expected >= 7 (base rate for 1 plot)`
+          );
+        }
+        return { income, plots };
+      },
+      (r2) => `passiveIncomePerDay=${r2.income} plots=${r2.plots} ✓`
+    );
     await runCheck(
       7,
       () => actor.getCoreGeneratorTiers(),
@@ -104744,11 +105192,49 @@ function AnimatedCounter({ value }) {
   return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontFamily: "monospace" }, children: fmtBig(display) });
 }
 function UniversePanel({ onClose, inline = false }) {
+  const { actor } = useActor(createActor);
   const player = useGameStore((s2) => s2.player);
   const totalFRNTRBurned = useGameStore((s2) => s2.totalFRNTRBurned);
   const generatorTiers = useGameStore((s2) => s2.generatorTiers);
+  const icpUsdPrice = useGameStore((s2) => s2.icpUsdPrice);
+  const setTreasuryState = useGameStore((s2) => s2.setTreasuryState);
+  const [frntrIcpPrice, _setFrntrIcpPrice] = reactExports.useState(null);
+  const [potBalances, setPotBalances] = reactExports.useState({ dev: 0, leaderboard: 0, liquidity: 0 });
+  reactExports.useEffect(() => {
+    if (!actor) return;
+    const fetchPots = () => {
+      actor.getTreasuryBalances().then((res) => {
+        setPotBalances({
+          dev: Number(res.devPot) / 1e8,
+          leaderboard: Number(res.leaderboardPot) / 1e8,
+          liquidity: Number(res.liquidityPot) / 1e8
+        });
+      }).catch(() => {
+      });
+    };
+    fetchPots();
+    const id2 = setInterval(fetchPots, 1e4);
+    return () => clearInterval(id2);
+  }, [actor]);
+  reactExports.useEffect(() => {
+    if (!actor) return;
+    const fetchTreasury = () => {
+      actor.getTreasuryState().then(
+        (res) => setTreasuryState({
+          developer: res.developer,
+          leaderboard: res.leaderboard,
+          liquidity: res.liquidity
+        })
+      ).catch(() => {
+      });
+    };
+    fetchTreasury();
+    const id2 = setInterval(fetchTreasury, 1e4);
+    return () => clearInterval(id2);
+  }, [actor, setTreasuryState]);
   const allPlots = useGameStore((s2) => s2.plots);
   const globalStats = useGameStore((s2) => s2.globalStats);
+  useGameStore((s2) => s2.treasuryState);
   const globalOwnedPlots = allPlots.filter((p2) => p2.owner !== null);
   const localPlotsOwned = globalOwnedPlots.length;
   const totalPlotsOwned = (globalStats == null ? void 0 : globalStats.totalPlotsOwned) ?? localPlotsOwned;
@@ -104788,11 +105274,6 @@ function UniversePanel({ onClose, inline = false }) {
   );
   const circulating = (globalStats == null ? void 0 : globalStats.totalFRNTRInCirculation) ?? circulatingEstimate;
   const burnRate = 42e-5 + totalPlotsOwned * 15e-7;
-  const avgIcpPerPlot = 2.5;
-  const prizePoolIcp = (globalStats == null ? void 0 : globalStats.leaderboardPrizePool) ? (globalStats.leaderboardPrizePool / 1e8).toFixed(4) : (totalPlotsOwned * avgIcpPerPlot * 0.25).toFixed(3);
-  const devPot = (totalPlotsOwned * avgIcpPerPlot * 0.25).toFixed(3);
-  const leaderPot = prizePoolIcp;
-  const liquidPot = (totalPlotsOwned * avgIcpPerPlot * 0.5).toFixed(3);
   const content = /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "div",
     {
@@ -105406,101 +105887,146 @@ function UniversePanel({ onClose, inline = false }) {
             g2.tier
           )) })
         ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(SectionTitle, { children: "Treasury" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(GlowCard, { style: { marginBottom: 16 }, children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "flex", flexDirection: "column", gap: 10 }, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(SectionTitle, { children: "Treasury Status" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { marginBottom: 10 }, children: frntrIcpPrice !== null && frntrIcpPrice > 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "span",
           {
-            label: "Developer Treasury",
-            pct: "25%",
-            value: `${devPot} ICP`,
-            color: GOLD
-          },
-          {
-            label: "Leaderboard Pot",
-            pct: "25%",
-            value: `${leaderPot} ICP`,
-            color: "#22c55e"
-          },
-          {
-            label: "Liquidity Pot",
-            pct: "50%",
-            value: `${liquidPot} ICP`,
-            color: "#3b82f6"
+            style: {
+              display: "inline-block",
+              background: "rgba(0,255,204,0.08)",
+              border: `1px solid ${BORDER$1}`,
+              borderRadius: 6,
+              padding: "3px 10px",
+              fontSize: 9,
+              color: CYAN$1,
+              fontFamily: "monospace",
+              letterSpacing: 1
+            },
+            children: [
+              "FRNTR/ICP: ",
+              frntrIcpPrice.toFixed(6)
+            ]
           }
-        ].map((pot) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "div",
-            {
-              style: {
-                display: "flex",
-                justifyContent: "space-between",
-                marginBottom: 5
+        ) : /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "span",
+          {
+            style: {
+              display: "inline-block",
+              background: "rgba(100,100,100,0.12)",
+              border: "1px solid rgba(150,150,150,0.25)",
+              borderRadius: 6,
+              padding: "3px 10px",
+              fontSize: 9,
+              color: TEXT_DIM,
+              fontFamily: "monospace",
+              letterSpacing: 1
+            },
+            children: "Pool not yet seeded"
+          }
+        ) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "div",
+          {
+            "data-ocid": "universe.treasury_status",
+            style: {
+              display: "grid",
+              gridTemplateColumns: "1fr",
+              gap: 8,
+              marginBottom: 16
+            },
+            children: [
+              {
+                key: "dev",
+                name: "DEVELOPER",
+                pct: "25%",
+                balance: potBalances.dev,
+                accentClass: "treasury-pot-accent-border",
+                accentStyle: { borderTopColor: "rgba(255,200,100,0.8)" }
               },
-              children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 6 }, children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+              {
+                key: "leaderboard",
+                name: "LEADERBOARD",
+                pct: "25%",
+                balance: potBalances.leaderboard,
+                accentClass: "treasury-pot-accent-border",
+                accentStyle: { borderTopColor: "rgba(100,220,230,0.8)" }
+              },
+              {
+                key: "liquidity",
+                name: "LIQUIDITY",
+                pct: "50%",
+                balance: potBalances.liquidity,
+                accentClass: "treasury-pot-accent-border",
+                accentStyle: { borderTopColor: "rgba(0,255,204,0.8)" }
+              }
+            ].map((pot) => {
+              const icpDisplay = `${pot.balance.toFixed(4)} ICP`;
+              const usdDisplay = icpUsdPrice !== null ? `${(pot.balance * icpUsdPrice).toFixed(2)} USD` : "$ --";
+              return /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "div",
+                {
+                  className: `treasury-card-enhanced ${pot.accentClass}`,
+                  "data-ocid": `universe.treasury_${pot.key}`,
+                  style: pot.accentStyle,
+                  children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
                     "div",
                     {
                       style: {
-                        width: 8,
-                        height: 8,
-                        borderRadius: 2,
-                        background: pot.color
-                      }
-                    }
-                  ),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 9, color: TEXT$1, fontWeight: 600 }, children: pot.label })
-                ] }),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "span",
-                    {
-                      style: {
-                        fontSize: 8,
-                        color: pot.color,
-                        fontFamily: "monospace"
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start"
                       },
-                      children: pot.value
-                    }
-                  ),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "span",
-                    {
-                      style: {
-                        fontSize: 8,
-                        color: TEXT_DIM,
-                        fontFamily: "monospace"
-                      },
-                      children: pot.pct
+                      children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "div",
+                            {
+                              style: {
+                                fontSize: 8,
+                                fontWeight: 700,
+                                letterSpacing: 2,
+                                color: CYAN$1,
+                                textTransform: "uppercase",
+                                marginBottom: 2
+                              },
+                              children: pot.name
+                            }
+                          ),
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                            "div",
+                            {
+                              style: {
+                                fontSize: 8,
+                                color: TEXT_DIM,
+                                letterSpacing: 1
+                              },
+                              children: [
+                                pot.pct,
+                                " of purchases"
+                              ]
+                            }
+                          )
+                        ] }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { textAlign: "right" }, children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "monospace-number", style: { fontSize: 13 }, children: icpDisplay }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "div",
+                            {
+                              className: "monospace-number",
+                              style: { fontSize: 10, opacity: 0.7 },
+                              children: usdDisplay
+                            }
+                          )
+                        ] })
+                      ]
                     }
                   )
-                ] })
-              ]
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "div",
-            {
-              style: {
-                height: 4,
-                background: "rgba(255,255,255,0.06)",
-                borderRadius: 3,
-                overflow: "hidden"
-              },
-              children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "div",
-                {
-                  style: {
-                    height: "100%",
-                    width: pot.pct,
-                    background: pot.color,
-                    borderRadius: 3,
-                    boxShadow: `0 0 6px ${pot.color}66`
-                  }
-                }
-              )
-            }
-          )
-        ] }, pot.label)) }) }),
+                },
+                pot.key
+              );
+            })
+          }
+        ),
         /* @__PURE__ */ jsxRuntimeExports.jsx(SectionTitle, { children: "Leaderboard Milestone" }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs(GlowCard, { style: { marginBottom: 16 }, children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -105562,7 +106088,7 @@ function UniversePanel({ onClose, inline = false }) {
                         fontFamily: "monospace"
                       },
                       children: [
-                        leaderPot,
+                        potBalances.leaderboard.toFixed(4),
                         " ICP"
                       ]
                     }
@@ -105620,6 +106146,300 @@ function UniversePanel({ onClose, inline = false }) {
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM }, children: "Top FRNTR holders receive ICP payout from prize pool every 1,500 plot mints" })
         ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(SectionTitle, { children: "System Health" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(GlowCard, { style: { marginBottom: 16 }, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "flex", flexDirection: "column", gap: 10 }, children: [
+            {
+              label: "Backend Canister",
+              status: globalStats ? "ONLINE" : "CONNECTING",
+              ok: !!globalStats
+            },
+            {
+              label: "FRNTR Token",
+              status: globalStats ? "OPERATIONAL" : "CONNECTING",
+              ok: !!globalStats
+            },
+            {
+              label: "Plot Registry",
+              status: globalStats ? "OPERATIONAL" : "CONNECTING",
+              ok: !!globalStats
+            },
+            {
+              label: "Leaderboard",
+              status: globalStats ? "ACTIVE" : "CONNECTING",
+              ok: !!globalStats
+            }
+          ].map((row) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              style: {
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between"
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        width: 10,
+                        height: 10,
+                        borderRadius: "50%",
+                        background: row.ok ? "#00FF88" : "#FF4444",
+                        boxShadow: `0 0 6px ${row.ok ? "#00FF88" : "#FF4444"}`,
+                        flexShrink: 0
+                      }
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 9, color: TEXT$1, fontWeight: 600 }, children: row.label })
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "span",
+                  {
+                    style: {
+                      fontSize: 8,
+                      color: row.ok ? "#00FF88" : "#FF4444",
+                      fontFamily: "monospace",
+                      letterSpacing: 1
+                    },
+                    children: row.status
+                  }
+                )
+              ]
+            },
+            row.label
+          )) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
+            {
+              style: {
+                marginTop: 10,
+                paddingTop: 10,
+                borderTop: `1px solid ${BORDER$1}`,
+                fontSize: 7,
+                color: TEXT_DIM,
+                letterSpacing: 0.5
+              },
+              children: globalStats ? `All systems nominal · Last sync: ${(/* @__PURE__ */ new Date()).toLocaleTimeString()}` : "Connecting to ICP network…"
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(SectionTitle, { children: "Fund Your Wallet" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(GlowCard, { style: { marginBottom: 16 }, children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "flex", flexDirection: "column", gap: 12 }, children: [
+          {
+            step: "1",
+            title: "Buy ICP on any major exchange",
+            detail: "Coinbase, Kraken, Binance, or any ICP-listed exchange"
+          },
+          {
+            step: "2",
+            title: "Transfer ICP to your wallet address",
+            detail: player.principal ? player.principal : "Login with Internet Identity to see your address",
+            mono: !!player.principal
+          },
+          {
+            step: "3",
+            title: "Get free test tokens",
+            detail: "Use the TESTNET FAUCET button (upper right of globe) — no cost"
+          },
+          {
+            step: "4",
+            title: "Purchase a plot to start earning",
+            detail: "Common plots start at 2–3 ICP · FRNTR accrues immediately"
+          }
+        ].map((item) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", gap: 10 }, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
+            {
+              style: {
+                width: 20,
+                height: 20,
+                borderRadius: 4,
+                background: `${CYAN$1}18`,
+                border: `1px solid ${CYAN$1}44`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 9,
+                fontWeight: 900,
+                color: CYAN$1,
+                flexShrink: 0
+              },
+              children: item.step
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { flex: 1, minWidth: 0 }, children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "div",
+              {
+                style: {
+                  fontSize: 9,
+                  fontWeight: 700,
+                  color: TEXT$1,
+                  marginBottom: 2
+                },
+                children: item.title
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "div",
+              {
+                style: {
+                  fontSize: 8,
+                  color: TEXT_DIM,
+                  fontFamily: item.mono ? "monospace" : void 0,
+                  wordBreak: item.mono ? "break-all" : void 0,
+                  lineHeight: 1.5
+                },
+                children: item.detail
+              }
+            )
+          ] })
+        ] }, item.step)) }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(SectionTitle, { children: "Liquidity" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(GlowCard, { style: { marginBottom: 16 }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 12 }, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              style: {
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-end"
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        fontSize: 7,
+                        color: TEXT_DIM,
+                        letterSpacing: 1.5,
+                        marginBottom: 3
+                      },
+                      children: "ICP / USD"
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "div",
+                    {
+                      style: {
+                        fontSize: 16,
+                        fontWeight: 900,
+                        color: GOLD,
+                        fontFamily: "monospace"
+                      },
+                      children: [
+                        "$",
+                        icpUsdPrice != null ? icpUsdPrice.toFixed(2) : "--",
+                        " USD"
+                      ]
+                    }
+                  )
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "div",
+                  {
+                    style: {
+                      fontSize: 7,
+                      color: TEXT_DIM,
+                      fontStyle: "italic",
+                      textAlign: "right"
+                    },
+                    children: [
+                      "Live pricing",
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("br", {}),
+                      "coming soon"
+                    ]
+                  }
+                )
+              ]
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { height: 1, background: BORDER$1 } }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              style: {
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-end"
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        fontSize: 7,
+                        color: TEXT_DIM,
+                        letterSpacing: 1.5,
+                        marginBottom: 3
+                      },
+                      children: "FRNTR / ICP"
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        fontSize: 16,
+                        fontWeight: 900,
+                        color: CYAN$1,
+                        fontFamily: "monospace"
+                      },
+                      children: "TBD"
+                    }
+                  )
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { fontSize: 7, color: CYAN_DIM$1, textAlign: "right" }, children: [
+                  "Pool launch",
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("br", {}),
+                  "pending"
+                ] })
+              ]
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { height: 1, background: BORDER$1 } }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "div",
+              {
+                style: {
+                  fontSize: 7,
+                  color: TEXT_DIM,
+                  letterSpacing: 1.5,
+                  marginBottom: 3
+                },
+                children: "LIQUIDITY POT BALANCE"
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "div",
+              {
+                style: {
+                  fontSize: 16,
+                  fontWeight: 900,
+                  color: "#3b82f6",
+                  fontFamily: "monospace"
+                },
+                children: (globalStats == null ? void 0 : globalStats.liquidityPotICP) != null ? `${globalStats.liquidityPotICP.toFixed(6)} ICP` : `${potBalances.liquidity.toFixed(4)} ICP`
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "div",
+              {
+                style: {
+                  fontSize: 8,
+                  color: "rgba(59,130,246,0.6)",
+                  marginTop: 2
+                },
+                children: "Available for DEX seeding (ICPSwap FRNTR/ICP)"
+              }
+            )
+          ] })
+        ] }) }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(SectionTitle, { children: "Market Data" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(GlowCard, { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { textAlign: "center", padding: "16px 0" }, children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 24, marginBottom: 8 }, children: "📊" }),
@@ -105765,6 +106585,57 @@ function UniversePanel({ onClose, inline = false }) {
     }
   );
 }
+const ICP_LEDGER_CANISTER_ID = "ryjl3-tyaaa-aaaaa-aaaba-cai";
+const POLL_INTERVAL_MS = 3e4;
+const icpLedgerIdlFactory = ({ IDL: IDL2 }) => {
+  const AccountType = IDL2.Record({
+    owner: IDL2.Principal,
+    subaccount: IDL2.Opt(IDL2.Vec(IDL2.Nat8))
+  });
+  return IDL2.Service({
+    icrc1_balance_of: IDL2.Func([AccountType], [IDL2.Nat], ["query"])
+  });
+};
+function useIcpBalance() {
+  const { identity: identity2, isAuthenticated } = useInternetIdentity();
+  const [icpBalance, setIcpBalance] = reactExports.useState(0n);
+  const [_tick, setTick] = reactExports.useState(0);
+  const refetch = reactExports.useCallback(() => setTick((t) => t + 1), []);
+  reactExports.useEffect(() => {
+    if (!identity2 || !isAuthenticated) {
+      setIcpBalance(0n);
+      return;
+    }
+    let cancelled = false;
+    const fetchBalance = async () => {
+      try {
+        const agent = new HttpAgent({ identity: identity2 });
+        const actor = Actor.createActor(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          icpLedgerIdlFactory,
+          { agent, canisterId: ICP_LEDGER_CANISTER_ID }
+        );
+        const principal = identity2.getPrincipal();
+        const raw = await actor.icrc1_balance_of({
+          owner: principal,
+          subaccount: []
+        });
+        if (!cancelled) {
+          setIcpBalance(raw);
+        }
+      } catch {
+      }
+    };
+    void fetchBalance();
+    const interval = setInterval(() => void fetchBalance(), POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [identity2, isAuthenticated]);
+  const icpBalanceFormatted = Number(icpBalance) / 1e8;
+  return { icpBalance, icpBalanceFormatted, refetch };
+}
 function usePlayerSync() {
   const { actor, isFetching } = useActor(createActor);
   reactExports.useEffect(() => {
@@ -105796,19 +106667,36 @@ function usePlayerSync() {
       }
     };
     const syncPlotOwners = async () => {
+      var _a3;
       try {
-        const owners = await actor.getAllPlotOwners();
-        const state2 = useGameStore.getState();
-        const updatedPlots = state2.plots.map((plot) => {
-          const ownerEntry = owners.find(
-            ([id2]) => Number(id2) === plot.id
+        if (useGameStore.getState().plots.length === 0) {
+          useGameStore.getState().setPlots(
+            GEODESIC_TILES.map((tile, i2) => ({
+              id: i2,
+              lat: tile.lat,
+              lng: tile.lng,
+              biome: assignBiome(tile.lat, tile.lng),
+              efficiency: Math.floor(78 + (i2 * 2654435761 >>> 0) % 21),
+              mineCount: 0,
+              regenActiveUntil: 0,
+              owner: null,
+              isOwnedByMe: false,
+              iron: 0,
+              fuel: 0,
+              crystal: 0,
+              rareEarth: 0,
+              defenses: { turrets: 0, shields: 0, walls: 0 },
+              specialization: null,
+              generatorTier: 0
+            }))
           );
-          if (ownerEntry) {
-            return { ...plot, owner: ownerEntry[1] };
-          }
-          return plot;
-        });
-        useGameStore.setState({ plots: updatedPlots });
+        }
+        const owners = await actor.getAllPlotOwners();
+        const myPrincipal = useGameStore.getState().player.principal ?? "";
+        useGameStore.getState().setPlotOwnership(owners, myPrincipal);
+        const ownedIds = new Set(owners.map(([id2]) => Number(id2)));
+        const firstAvailable = ((_a3 = useGameStore.getState().plots.find((p2) => !ownedIds.has(p2.id))) == null ? void 0 : _a3.id) ?? null;
+        useGameStore.setState({ firstAvailablePlotId: firstAvailable });
       } catch (err) {
         console.warn("syncPlotOwners error:", err);
       }
@@ -105820,10 +106708,10 @@ function usePlayerSync() {
         useGameStore.setState((s2) => ({
           player: {
             ...s2.player,
-            frntBalance: Number(state2.frntBalance),
-            iron: Number(state2.iron),
-            fuel: Number(state2.fuel),
-            crystal: Number(state2.crystal)
+            frntBalance: Number(state2.frntBalance) / 1e8,
+            iron: Number(state2.iron) / 1e8,
+            fuel: Number(state2.fuel) / 1e8,
+            crystal: Number(state2.crystal) / 1e8
             // plotsOwned is local array; backend returns bigint count, not array
           },
           rankStats: {
@@ -105838,9 +106726,14 @@ function usePlayerSync() {
     };
     const syncGlobalStats = async () => {
       try {
-        const [g2, t] = await Promise.all([
+        const [g2, t, treasury] = await Promise.all([
           actor.getGlobalStats(),
-          actor.getTokenomics()
+          actor.getTokenomics(),
+          actor.getTreasuryBalances().catch(() => ({
+            devPot: 0n,
+            leaderboardPot: 0n,
+            liquidityPot: 0n
+          }))
         ]);
         const stats = {
           totalPlotsOwned: Number(g2.totalPlotsOwned),
@@ -105858,9 +106751,17 @@ function usePlayerSync() {
           remainingMineable: Number(t.remainingMineable),
           daysUntilMilestone: Number(t.daysUntilMilestone),
           burnRate: Number(t.burnRate),
-          emissionRate: Number(t.emissionRate)
+          emissionRate: Number(t.emissionRate),
+          devPotICP: Number(treasury.devPot) / 1e8,
+          leaderboardPotICP: Number(treasury.leaderboardPot) / 1e8,
+          liquidityPotICP: Number(treasury.liquidityPot) / 1e8
         };
         useGameStore.getState().setGlobalStats(stats);
+        useGameStore.getState().setTreasuryState({
+          developer: BigInt(Math.floor(Number(treasury.devPot))),
+          leaderboard: BigInt(Math.floor(Number(treasury.leaderboardPot))),
+          liquidity: BigInt(Math.floor(Number(treasury.liquidityPot)))
+        });
       } catch {
       }
     };
@@ -105884,34 +106785,69 @@ function usePlayerSync() {
     };
   }, [actor, isFetching]);
   reactExports.useEffect(() => {
+    if (!actor || isFetching) return;
+    const fetchIcpPrice = async () => {
+      try {
+        const price = await actor.getIcpUsdPrice();
+        useGameStore.getState().setIcpUsdPrice(price);
+      } catch {
+      }
+    };
+    void fetchIcpPrice();
+    const priceInterval = setInterval(() => {
+      void fetchIcpPrice();
+    }, 6e4);
+    return () => clearInterval(priceInterval);
+  }, [actor, isFetching]);
+  reactExports.useEffect(() => {
     if (actor) {
       const seed = async () => {
+        var _a3;
         try {
           const count = await actor.getPlotCount();
-          if (count === 0n) {
-            const tuples = GEODESIC_TILES.slice(0, 500).map(
-              (tile) => [
-                BigInt(tile.id),
-                randomBiome(tile.id),
-                tile.lat,
-                tile.lng,
-                BigInt(Math.floor(78 + (tile.id * 2654435761 >>> 0) % 21))
-              ]
-            );
-            await actor.initPlots(tuples);
+          if (count === 0n || count === 0) {
+            try {
+              await actor.resetAllData();
+            } catch {
+            }
+            const BATCH = 200;
+            for (let start = 0; start < GEODESIC_TILES.length; start += BATCH) {
+              const batch2 = GEODESIC_TILES.slice(start, start + BATCH);
+              const tuples = batch2.map(
+                (tile) => [
+                  BigInt(tile.id),
+                  assignBiome(tile.lat, tile.lng),
+                  tile.lat,
+                  tile.lng,
+                  BigInt(
+                    Math.floor(78 + (tile.id * 2654435761 >>> 0) % 21)
+                  )
+                ]
+              );
+              await actor.initPlots(tuples);
+            }
           }
           const owners = await actor.getAllPlotOwners();
+          const myPrincipal = useGameStore.getState().player.principal;
           const state2 = useGameStore.getState();
+          const ownedIds = new Set(
+            owners.map(([id2]) => Number(id2))
+          );
           const updatedPlots = state2.plots.map((plot) => {
             const ownerEntry = owners.find(
               ([id2]) => Number(id2) === plot.id
             );
             if (ownerEntry) {
-              return { ...plot, owner: ownerEntry[1] };
+              const isOwnedByMe = !!myPrincipal && ownerEntry[1] === myPrincipal;
+              return { ...plot, owner: ownerEntry[1], isOwnedByMe };
             }
-            return plot;
+            return { ...plot, isOwnedByMe: false };
           });
-          useGameStore.setState({ plots: updatedPlots });
+          const firstAvailable = ((_a3 = updatedPlots.find((p2) => !ownedIds.has(p2.id))) == null ? void 0 : _a3.id) ?? null;
+          useGameStore.setState({
+            plots: updatedPlots,
+            firstAvailablePlotId: firstAvailable
+          });
         } catch (err) {
           console.warn("seedPlotsIfEmpty error:", err);
         }
@@ -105937,152 +106873,344 @@ function fmt2(n) {
   });
 }
 function TopBar({
-  onUniverseClick,
-  onPlayNowClick
+  onPlayNowClick,
+  onNavClick
 }) {
+  const player = useGameStore((s2) => s2.player);
+  const icpUsdPrice = useGameStore((s2) => s2.icpUsdPrice);
+  const { icpBalanceFormatted } = useIcpBalance();
+  const { isAuthenticated, clear } = useInternetIdentity();
+  const shortPrincipal = player.principal ? `${player.principal.slice(0, 6)}…${player.principal.slice(-4)}` : null;
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "div",
     {
       "data-ocid": "topbar.panel",
-      className: "fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-3",
+      className: "fixed top-0 left-0 right-0 z-50 flex items-center justify-between",
       style: {
         height: 56,
-        background: "rgba(2,10,20,0.88)",
-        borderBottom: `1px solid ${BORDER}`,
-        backdropFilter: "blur(10px)"
+        paddingLeft: 16,
+        paddingRight: 12,
+        background: "rgba(2,8,18,0.92)",
+        borderBottom: "1px solid rgba(0,255,204,0.18)",
+        backdropFilter: "blur(12px)",
+        WebkitBackdropFilter: "blur(12px)"
       },
       children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            className: "flex items-center gap-2 flex-shrink-0",
+            style: { minWidth: 140 },
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "div",
+                {
+                  className: "flex items-center justify-center flex-shrink-0",
+                  style: {
+                    width: 30,
+                    height: 30,
+                    border: "1px solid rgba(0,255,204,0.4)",
+                    borderRadius: 4,
+                    background: "rgba(0,255,204,0.07)",
+                    position: "relative"
+                  },
+                  children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "div",
+                      {
+                        style: {
+                          position: "absolute",
+                          width: 18,
+                          height: 18,
+                          borderRadius: "50%",
+                          border: "1px solid rgba(0,255,204,0.5)"
+                        }
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "div",
+                      {
+                        style: {
+                          position: "absolute",
+                          width: 1,
+                          height: 14,
+                          background: "rgba(0,255,204,0.5)"
+                        }
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "div",
+                      {
+                        style: {
+                          position: "absolute",
+                          width: 14,
+                          height: 1,
+                          background: "rgba(0,255,204,0.5)"
+                        }
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "div",
+                      {
+                        style: {
+                          width: 4,
+                          height: 4,
+                          borderRadius: "50%",
+                          background: CYAN,
+                          boxShadow: `0 0 8px ${CYAN}`,
+                          position: "absolute"
+                        }
+                      }
+                    )
+                  ]
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "span",
+                {
+                  className: "font-bold tracking-widest select-none",
+                  style: {
+                    fontSize: 15,
+                    color: CYAN,
+                    letterSpacing: 4,
+                    textShadow: `0 0 18px ${CYAN}, 0 0 32px rgba(0,255,204,0.35)`,
+                    textTransform: "uppercase"
+                  },
+                  children: "FRONTIER"
+                }
+              )
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "nav",
+          {
+            className: "hidden sm:flex items-center gap-1",
+            style: {
+              position: "absolute",
+              left: "50%",
+              transform: "translateX(-50%)"
+            },
+            children: [
+              { label: "MAP", tab: "map" },
+              { label: "LEADERBOARD", tab: "leaderboard" },
+              { label: "INVENTORY", tab: "inventory" },
+              { label: "UNIVERSE", tab: "universe" }
+            ].map(({ label, tab }) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "button",
+              {
+                type: "button",
+                "data-ocid": `topbar.nav.${tab}`,
+                onClick: () => onNavClick(tab),
+                className: "px-3 py-1 rounded cursor-pointer transition-all duration-200",
+                style: {
+                  fontSize: 11,
+                  fontWeight: 700,
+                  letterSpacing: 2,
+                  textTransform: "uppercase",
+                  color: "rgba(224,244,255,0.65)",
+                  background: "transparent",
+                  border: "1px solid transparent"
+                },
+                onMouseEnter: (e) => {
+                  e.currentTarget.style.color = CYAN;
+                  e.currentTarget.style.borderColor = "rgba(0,255,204,0.3)";
+                  e.currentTarget.style.background = "rgba(0,255,204,0.05)";
+                },
+                onMouseLeave: (e) => {
+                  e.currentTarget.style.color = "rgba(224,244,255,0.65)";
+                  e.currentTarget.style.borderColor = "transparent";
+                  e.currentTarget.style.background = "transparent";
+                },
+                children: label
+              },
+              tab
+            ))
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            "data-ocid": "topbar.icp_usd_price",
+            className: "price-ticker-compact hidden sm:flex items-center gap-1 px-2 py-1 rounded",
+            style: {
+              background: "rgba(0,255,204,0.06)",
+              border: "1px solid rgba(0,255,204,0.15)",
+              marginRight: 8
+            },
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "span",
+                {
+                  style: {
+                    fontSize: 10,
+                    color: "rgba(224,244,255,0.45)",
+                    fontWeight: 600,
+                    letterSpacing: 1,
+                    textTransform: "uppercase"
+                  },
+                  children: "ICP"
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 10, color: "rgba(224,244,255,0.3)" }, children: "·" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "span",
+                {
+                  className: "monospace-number",
+                  style: {
+                    fontSize: 11,
+                    color: icpUsdPrice !== null ? CYAN : "rgba(224,244,255,0.35)",
+                    fontWeight: 700,
+                    letterSpacing: 0.5
+                  },
+                  children: icpUsdPrice !== null ? `${icpUsdPrice.toFixed(2)}` : "--"
+                }
+              )
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1.5 flex-shrink-0", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs(
             "div",
             {
+              "data-ocid": "topbar.frntr_balance",
+              className: "hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-md",
               style: {
-                width: 36,
-                height: 36,
-                background: "rgba(0,0,0,0.5)",
-                border: `1px solid ${BORDER}`,
-                borderRadius: 4,
-                position: "relative",
-                overflow: "hidden",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center"
+                background: "rgba(245,158,11,0.12)",
+                border: "1px solid rgba(245,158,11,0.35)",
+                minWidth: 0
               },
               children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "div",
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 12, color: "#F59E0B", lineHeight: 1 }, children: "⬡" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "span",
                   {
-                    style: {
-                      width: 26,
-                      height: 26,
-                      borderRadius: "50%",
-                      border: `1px solid ${CYAN_DIM}`,
-                      position: "absolute"
-                    }
+                    className: "font-mono font-bold whitespace-nowrap",
+                    style: { fontSize: 11, color: "#F59E0B", letterSpacing: 0.5 },
+                    children: [
+                      player.frntBalance.toLocaleString(void 0, {
+                        maximumFractionDigits: 2
+                      }),
+                      " ",
+                      "FRNTR"
+                    ]
                   }
-                ),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "div",
+                )
+              ]
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              "data-ocid": "topbar.icp_balance",
+              className: "hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-md",
+              style: {
+                background: "rgba(0,255,204,0.08)",
+                border: `1px solid ${BORDER}`,
+                minWidth: 0
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 12, color: CYAN, lineHeight: 1 }, children: "◎" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "span",
                   {
-                    style: {
-                      position: "absolute",
-                      width: 1,
-                      height: 18,
-                      background: CYAN_DIM
-                    }
-                  }
-                ),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "div",
-                  {
-                    style: {
-                      position: "absolute",
-                      width: 18,
-                      height: 1,
-                      background: CYAN_DIM
-                    }
-                  }
-                ),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "div",
-                  {
-                    style: {
-                      width: 4,
-                      height: 4,
-                      borderRadius: "50%",
-                      background: CYAN,
-                      boxShadow: `0 0 6px ${CYAN}`,
-                      position: "absolute"
-                    }
+                    className: "font-mono font-bold whitespace-nowrap",
+                    style: { fontSize: 11, color: CYAN, letterSpacing: 0.5 },
+                    children: [
+                      icpBalanceFormatted.toFixed(2),
+                      " ICP"
+                    ]
                   }
                 )
               ]
             }
           ),
           /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "span",
+            "div",
             {
+              className: "hidden sm:block",
               style: {
-                fontSize: 9,
-                color: CYAN_DIM,
-                letterSpacing: 2,
-                fontWeight: 700
-              },
-              children: "TACMAP"
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(PrincipalBadge, {})
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "div",
-          {
-            style: {
-              color: CYAN,
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: 3,
-              textTransform: "uppercase",
-              textShadow: `0 0 12px ${CYAN}`,
-              position: "absolute",
-              left: "50%",
-              transform: "translateX(-50%)"
-            },
-            children: "FRONTIER: MISSILE HORIZON"
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "button",
-            {
-              type: "button",
-              "data-ocid": "playnow.primary_button",
-              onClick: onPlayNowClick,
-              className: "hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-md cursor-pointer font-bold uppercase tracking-widest text-[8px] whitespace-nowrap",
-              style: {
+                width: 1,
+                height: 22,
                 background: "rgba(0,255,204,0.18)",
-                border: "1px solid rgba(0,255,204,0.6)",
-                color: "#00ffcc",
-                height: 32,
-                boxShadow: "0 0 10px rgba(0,255,204,0.25)"
-              },
-              children: "PLAY NOW"
+                margin: "0 4px"
+              }
             }
           ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
+          isAuthenticated && shortPrincipal ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1.5", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "div",
+              {
+                "data-ocid": "topbar.principal_badge",
+                className: "flex items-center gap-1.5 px-2 py-1 rounded-md",
+                style: {
+                  background: "rgba(0,255,204,0.07)",
+                  border: `1px solid ${BORDER}`
+                },
+                children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        width: 18,
+                        height: 18,
+                        borderRadius: "50%",
+                        background: "rgba(0,255,204,0.18)",
+                        border: `1px solid ${CYAN}`,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0
+                      },
+                      children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 8, color: CYAN, fontWeight: 700 }, children: "ID" })
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "span",
+                    {
+                      className: "font-mono hidden md:inline",
+                      style: { fontSize: 9, color: TEXT, letterSpacing: 0.5 },
+                      title: player.principal ?? "",
+                      children: shortPrincipal
+                    }
+                  )
+                ]
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "button",
+              {
+                type: "button",
+                "data-ocid": "topbar.logout_button",
+                onClick: () => clear(),
+                "aria-label": "Disconnect wallet",
+                className: "flex items-center justify-center rounded-md cursor-pointer transition-all duration-200",
+                style: {
+                  width: 28,
+                  height: 28,
+                  background: "rgba(255,68,68,0.08)",
+                  border: "1px solid rgba(255,68,68,0.3)",
+                  color: "rgba(255,100,100,0.8)",
+                  fontSize: 12
+                },
+                title: "Disconnect",
+                children: "✕"
+              }
+            )
+          ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx(
             "button",
             {
               type: "button",
-              "data-ocid": "universe.open_modal_button",
-              onClick: onUniverseClick,
-              "aria-label": "Open Universe panel",
-              className: "hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-md cursor-pointer font-bold uppercase tracking-widest text-[8px] whitespace-nowrap",
+              "data-ocid": "topbar.connect_button",
+              onClick: onPlayNowClick,
+              className: "flex items-center gap-1.5 px-3 py-1.5 rounded-md cursor-pointer font-bold uppercase tracking-widest text-[10px] whitespace-nowrap transition-all duration-200",
               style: {
-                background: "rgba(0,255,204,0.07)",
-                border: `1px solid ${BORDER}`,
+                background: "rgba(0,255,204,0.15)",
+                border: `1px solid ${CYAN}`,
                 color: CYAN,
-                height: 32
+                boxShadow: "0 0 12px rgba(0,255,204,0.2)"
               },
-              children: "UNIVERSE"
+              children: "CONNECT"
             }
           )
         ] })
@@ -106631,6 +107759,267 @@ function LeaderboardPanel() {
     )
   ] });
 }
+function PlotActionPanel({
+  plotId,
+  onClose,
+  onOpenTab
+}) {
+  const plots = useGameStore((s2) => s2.plots);
+  const player = useGameStore((s2) => s2.player);
+  const { actor } = useActor(createActor);
+  const { purchasePlot, isPurchasing } = usePurchasePlot();
+  const plot = plots.find((p2) => p2.id === plotId);
+  if (!plot) return null;
+  const isOwned = plot.owner !== null;
+  const isMine = plot.isOwnedByMe || player.plotsOwned.includes(plotId);
+  const eff = plot.efficiency;
+  const icpPrice = eff >= 90 ? 30 : eff >= 80 ? 9 : 2.5;
+  const shortOwner = plot.owner ? `${plot.owner.slice(0, 6)}...` : "Unowned";
+  const infoRows = [
+    { label: "TYPE", value: plot.biome },
+    { label: "EFFICIENCY", value: `${eff}%` },
+    { label: "OWNER", value: shortOwner },
+    {
+      label: "STATUS",
+      value: isOwned ? "Owned" : "Available",
+      highlight: true
+    },
+    { label: "IRON/DAY", value: String(plot.iron || 0) },
+    { label: "FUEL/DAY", value: String(plot.fuel || 0) }
+  ];
+  async function handleMine() {
+    if (!actor) return;
+    try {
+      await actor.mineResources(BigInt(plotId));
+    } catch {
+    }
+    ue("⛏ Mining started!", { duration: 2500 });
+  }
+  async function handlePurchase() {
+    const result = await purchasePlot(plotId);
+    if (result.success) {
+      ue.success(result.message, { duration: 4e3 });
+    } else {
+      ue.error(result.message, { duration: 5e3 });
+    }
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "div",
+    {
+      "data-ocid": "plot_action_panel.panel",
+      style: {
+        position: "fixed",
+        right: 0,
+        top: 56,
+        width: 280,
+        zIndex: 40,
+        background: "rgba(10,14,26,0.90)",
+        backdropFilter: "blur(14px)",
+        WebkitBackdropFilter: "blur(14px)",
+        borderLeft: "1px solid rgba(0,212,255,0.2)",
+        padding: 16,
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
+        maxHeight: "calc(100vh - 120px)",
+        overflowY: "auto"
+      },
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            type: "button",
+            "data-ocid": "plot_action_panel.close_button",
+            onClick: onClose,
+            "aria-label": "Close plot panel",
+            style: {
+              position: "absolute",
+              top: 10,
+              right: 10,
+              width: 24,
+              height: 24,
+              background: "rgba(255,255,255,0.06)",
+              border: "1px solid rgba(255,255,255,0.15)",
+              borderRadius: 6,
+              color: "rgba(224,244,255,0.7)",
+              fontSize: 11,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center"
+            },
+            children: "✕"
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "div",
+          {
+            style: {
+              height: 180,
+              overflow: "hidden",
+              borderRadius: 8,
+              border: "1px solid rgba(0,212,255,0.2)",
+              background: "rgba(0,10,20,0.6)"
+            },
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(SubParcelIntelView, {})
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              style: {
+                fontSize: 15,
+                fontWeight: 900,
+                color: "#00d4ff",
+                letterSpacing: 2,
+                textShadow: "0 0 14px rgba(0,212,255,0.6)",
+                lineHeight: 1.1
+              },
+              children: [
+                "PLOT #",
+                plotId
+              ]
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
+            {
+              style: {
+                fontSize: 10,
+                color: "rgba(224,244,255,0.45)",
+                letterSpacing: 1,
+                marginTop: 2,
+                textTransform: "uppercase"
+              },
+              children: plot.biome
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "div",
+          {
+            style: {
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "6px 8px",
+              padding: "10px 12px",
+              background: "rgba(0,212,255,0.03)",
+              borderRadius: 8,
+              border: "1px solid rgba(0,212,255,0.12)"
+            },
+            children: infoRows.map(({ label, value, highlight }) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "div",
+                {
+                  style: {
+                    fontSize: 8,
+                    color: "rgba(255,255,255,0.4)",
+                    letterSpacing: 1,
+                    textTransform: "uppercase",
+                    marginBottom: 1
+                  },
+                  children: label
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "div",
+                {
+                  style: {
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: highlight ? isOwned ? "#00d4ff" : "#22c55e" : "rgba(224,244,255,0.9)"
+                  },
+                  children: value
+                }
+              )
+            ] }, label))
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "flex", flexDirection: "column", gap: 6 }, children: isMine ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              type: "button",
+              "data-ocid": "plot_action_panel.upgrade_button",
+              onClick: () => onOpenTab("map"),
+              className: "w-full py-2 rounded tracking-wider uppercase text-xs border transition-colors duration-200",
+              style: {
+                background: "rgba(245,158,11,0.15)",
+                border: "1px solid rgba(245,158,11,0.35)",
+                color: "#fbbf24"
+              },
+              children: "UPGRADE"
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              type: "button",
+              "data-ocid": "plot_action_panel.mine_button",
+              onClick: handleMine,
+              className: "w-full py-2 rounded tracking-wider uppercase text-xs border transition-colors duration-200",
+              style: {
+                background: "rgba(34,197,94,0.15)",
+                border: "1px solid rgba(34,197,94,0.35)",
+                color: "#4ade80"
+              },
+              children: "MINE"
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              type: "button",
+              "data-ocid": "plot_action_panel.details_button",
+              onClick: () => onOpenTab("map"),
+              className: "w-full py-2 rounded tracking-wider uppercase text-xs border transition-colors duration-200",
+              style: {
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.15)",
+                color: "rgba(255,255,255,0.5)"
+              },
+              children: "DETAILS"
+            }
+          )
+        ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              type: "button",
+              "data-ocid": "plot_action_panel.purchase_button",
+              onClick: handlePurchase,
+              disabled: isPurchasing,
+              className: "w-full py-2 rounded tracking-wider uppercase text-xs border transition-colors duration-200",
+              style: {
+                background: isPurchasing ? "rgba(0,212,255,0.08)" : "rgba(0,212,255,0.15)",
+                border: "1px solid rgba(0,212,255,0.35)",
+                color: isPurchasing ? "rgba(0,212,255,0.5)" : "#67e8f9",
+                cursor: isPurchasing ? "not-allowed" : "pointer"
+              },
+              children: isPurchasing ? "PURCHASING..." : `PURCHASE ${icpPrice} ICP`
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              type: "button",
+              "data-ocid": "plot_action_panel.details_button",
+              onClick: () => onOpenTab("map"),
+              className: "w-full py-2 rounded tracking-wider uppercase text-xs border transition-colors duration-200",
+              style: {
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.15)",
+                color: "rgba(255,255,255,0.5)"
+              },
+              children: "DETAILS"
+            }
+          )
+        ] }) })
+      ]
+    }
+  );
+}
 function Play() {
   var _a3;
   const { loginStatus, isAuthenticated, login, identity: identity2 } = useInternetIdentity();
@@ -106640,6 +108029,7 @@ function Play() {
   const [showUniverse, setShowUniverse] = reactExports.useState(false);
   const [showPlayNow, setShowPlayNow] = reactExports.useState(false);
   const [showAuthOverlay, setShowAuthOverlay] = reactExports.useState(true);
+  const selectedPlotId = useGameStore((s2) => s2.selectedPlotId);
   const [purchaseToast, setPurchaseToast] = reactExports.useState(null);
   const [windowWidth, setWindowWidth] = reactExports.useState(
     typeof window !== "undefined" ? window.innerWidth : 0
@@ -106682,7 +108072,6 @@ function Play() {
   const handlePlotSelect = reactExports.useCallback(
     (plotId) => {
       selectPlot(plotId);
-      setActiveTab("map");
     },
     [selectPlot]
   );
@@ -106747,8 +108136,8 @@ function Play() {
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           TopBar,
           {
-            onUniverseClick: () => setShowUniverse(true),
-            onPlayNowClick: () => setShowPlayNow(true)
+            onPlayNowClick: () => setShowPlayNow(true),
+            onNavClick: (tab) => handleTabClick(tab)
           }
         ),
         /* @__PURE__ */ jsxRuntimeExports.jsx(LeftSidebar, { activeTab, onTabClick: handleTabClick }),
@@ -106774,6 +108163,16 @@ function Play() {
               activeTab === "universe" && /* @__PURE__ */ jsxRuntimeExports.jsx(UniversePanel, { inline: true }),
               activeTab === "intel" && /* @__PURE__ */ jsxRuntimeExports.jsx(IntelTab, {})
             ]
+          }
+        ),
+        selectedPlotId !== null && /* @__PURE__ */ jsxRuntimeExports.jsx(
+          PlotActionPanel,
+          {
+            plotId: selectedPlotId,
+            onClose: () => selectPlot(null),
+            onOpenTab: (tab) => {
+              setActiveTab(tab);
+            }
           }
         ),
         plotHoverCard && /* @__PURE__ */ jsxRuntimeExports.jsx(

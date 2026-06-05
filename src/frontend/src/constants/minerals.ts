@@ -49,7 +49,13 @@ export const BIOME_MINERAL_RATES: Record<
   Coastal: { iron: 5, fuel: 7, crystal: 4, rareEarth: 3 },
   Volcanic: { iron: 8, fuel: 6, crystal: 3, rareEarth: 6 },
   Equatorial: { iron: 6, fuel: 8, crystal: 5, rareEarth: 2 },
-  Ocean: { iron: 2, fuel: 5, crystal: 7, rareEarth: 5 },
+  Ocean: { iron: 0.6, fuel: 0.9, crystal: 0.7, rareEarth: 1.0 },
+  "Coastal Shipping Lane": {
+    iron: 0.4,
+    fuel: 1.0,
+    crystal: 0.5,
+    rareEarth: 0.8,
+  },
   Mountain: { iron: 9, fuel: 3, crystal: 6, rareEarth: 4 },
   Toxic: { iron: 4, fuel: 2, crystal: 9, rareEarth: 7 },
 };

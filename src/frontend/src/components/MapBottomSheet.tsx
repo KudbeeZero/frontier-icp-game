@@ -438,6 +438,7 @@ export default function MapBottomSheet({
   const setTargetPlotId = useGameStore((s) => s.setTargetPlotId);
   const setPlotHoverCard = useGameStore((s) => s.setPlotHoverCard);
   const commanderAssignments = useGameStore((s) => s.commanderAssignments);
+  const icpUsdPrice = useGameStore((s) => s.icpUsdPrice);
 
   const mineResources = useGameStore((s) => s.mineResources);
   const activateRegenBoost = useGameStore((s) => s.activateRegenBoost);
@@ -459,9 +460,20 @@ export default function MapBottomSheet({
       (selectedPlotId !== null && player.plotsOwned.includes(selectedPlotId)));
   const isEnemyPlot = isOwned && !isOwnPlot;
 
+  // Raw ICP price in e8s for display; formatted with USD when available
+  const icpPriceE8s =
+    (plot?.efficiency ?? 0) >= 90
+      ? 30_0000_0000
+      : (plot?.efficiency ?? 0) >= 80
+        ? 9_0000_0000
+        : 2_5000_0000;
+  const icpFloat = icpPriceE8s / 1e8;
+  const icpPriceDisplay = icpUsdPrice
+    ? `${icpFloat.toFixed(4)} ICP (~${(icpFloat * icpUsdPrice).toFixed(2)})`
+    : `${icpFloat.toFixed(4)} ICP ($ unavailable)`;
+
   async function handlePurchase() {
     if (!plot || isPurchasing) return;
-    if (player.frntBalance < 100) return;
     setPurchaseError(null);
     const result = await purchasePlot(plot.id);
     if (result.success) {
@@ -721,28 +733,23 @@ export default function MapBottomSheet({
                   type="button"
                   data-ocid="map.primary_button"
                   onClick={handlePurchase}
-                  disabled={isPurchasing || player.frntBalance < 100}
+                  disabled={isPurchasing}
                   style={{
                     ...actionBtnStyle(
-                      player.frntBalance < 100
-                        ? "rgba(0,255,204,0.3)"
-                        : "#00ffcc",
-                      player.frntBalance < 100
-                        ? "rgba(0,255,204,0.04)"
-                        : isPurchasing
-                          ? "rgba(0,255,204,0.06)"
-                          : "rgba(0,255,204,0.12)",
+                      "#00ffcc",
+                      isPurchasing
+                        ? "rgba(0,255,204,0.06)"
+                        : "rgba(0,255,204,0.12)",
                     ),
-                    opacity: player.frntBalance < 100 || isPurchasing ? 0.6 : 1,
-                    cursor:
-                      player.frntBalance < 100 || isPurchasing
-                        ? "not-allowed"
-                        : "pointer",
+                    opacity: isPurchasing ? 0.6 : 1,
+                    cursor: isPurchasing ? "not-allowed" : "pointer",
                   }}
                 >
-                  {isPurchasing ? "PROCESSING…" : "PURCHASE PLOT — 100 FRNTR"}
+                  {isPurchasing
+                    ? "PROCESSING…"
+                    : `PURCHASE — ${icpPriceDisplay}`}
                 </button>
-                {(player.frntBalance < 100 || purchaseError) && (
+                {purchaseError && (
                   <div
                     data-ocid="map.error_state"
                     style={{
@@ -754,7 +761,7 @@ export default function MapBottomSheet({
                       fontFamily: "monospace",
                     }}
                   >
-                    {purchaseError ?? "INSUFFICIENT FRNTR"}
+                    {purchaseError}
                   </div>
                 )}
               </div>

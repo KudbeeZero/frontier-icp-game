@@ -1,4 +1,4 @@
-import { useInternetIdentity } from "@caffeineai/core-infrastructure";
+import { useActor, useInternetIdentity } from "@caffeineai/core-infrastructure";
 import {
   Globe,
   LayoutDashboard,
@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { createActor } from "../backend";
 import BottomNav from "../components/BottomNav";
 import { NAV_ITEMS } from "../components/BottomNav";
 import type { BottomNavTab } from "../components/BottomNav";
@@ -19,11 +20,13 @@ import IntelTab from "../components/IntelTab";
 import MapBottomSheet from "../components/MapBottomSheet";
 import PlayNowOverlay from "../components/PlayNowOverlay";
 import PlotHoverCard from "../components/PlotHoverCard";
-import PrincipalBadge from "../components/PrincipalBadge";
 import StressTestPanel from "../components/StressTestPanel";
+import SubParcelIntelView from "../components/SubParcelIntelView";
 import UniversePanel from "../components/UniversePanel";
 import { BIOME_MINERAL_RATES } from "../constants/minerals";
+import { useIcpBalance } from "../hooks/useIcpBalance";
 import { usePlayerSync } from "../hooks/usePlayerSync";
+import { usePurchasePlot } from "../hooks/usePurchasePlot";
 import { useGameStore } from "../store/gameStore";
 
 const CYAN = "#00ffcc";
@@ -47,62 +50,75 @@ function fmt2(n: number) {
 
 /* ─── Top Bar ─── */
 function TopBar({
-  onUniverseClick,
   onPlayNowClick,
+  onNavClick,
 }: {
-  onUniverseClick: () => void;
   onPlayNowClick: () => void;
+  onNavClick: (tab: BottomNavTab) => void;
 }) {
+  const player = useGameStore((s) => s.player);
+  const icpUsdPrice = useGameStore((s) => s.icpUsdPrice);
+  const { icpBalanceFormatted } = useIcpBalance();
+  const { isAuthenticated, clear } = useInternetIdentity();
+
+  const shortPrincipal = player.principal
+    ? `${player.principal.slice(0, 6)}…${player.principal.slice(-4)}`
+    : null;
+
   return (
     <div
       data-ocid="topbar.panel"
-      className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-3"
+      className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between"
       style={{
         height: 56,
-        background: "rgba(2,10,20,0.88)",
-        borderBottom: `1px solid ${BORDER}`,
-        backdropFilter: "blur(10px)",
+        paddingLeft: 16,
+        paddingRight: 12,
+        background: "rgba(2,8,18,0.92)",
+        borderBottom: "1px solid rgba(0,255,204,0.18)",
+        backdropFilter: "blur(12px)",
+        WebkitBackdropFilter: "blur(12px)",
       }}
     >
-      {/* Left: logo + principal badge */}
-      <div className="flex items-center gap-2">
+      {/* LEFT: Logo */}
+      <div
+        className="flex items-center gap-2 flex-shrink-0"
+        style={{ minWidth: 140 }}
+      >
+        {/* Icon mark */}
         <div
+          className="flex items-center justify-center flex-shrink-0"
           style={{
-            width: 36,
-            height: 36,
-            background: "rgba(0,0,0,0.5)",
-            border: `1px solid ${BORDER}`,
+            width: 30,
+            height: 30,
+            border: "1px solid rgba(0,255,204,0.4)",
             borderRadius: 4,
+            background: "rgba(0,255,204,0.07)",
             position: "relative",
-            overflow: "hidden",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
           }}
         >
           <div
             style={{
-              width: 26,
-              height: 26,
-              borderRadius: "50%",
-              border: `1px solid ${CYAN_DIM}`,
               position: "absolute",
+              width: 18,
+              height: 18,
+              borderRadius: "50%",
+              border: "1px solid rgba(0,255,204,0.5)",
             }}
           />
           <div
             style={{
               position: "absolute",
               width: 1,
-              height: 18,
-              background: CYAN_DIM,
+              height: 14,
+              background: "rgba(0,255,204,0.5)",
             }}
           />
           <div
             style={{
               position: "absolute",
-              width: 18,
+              width: 14,
               height: 1,
-              background: CYAN_DIM,
+              background: "rgba(0,255,204,0.5)",
             }}
           />
           <div
@@ -111,74 +127,240 @@ function TopBar({
               height: 4,
               borderRadius: "50%",
               background: CYAN,
-              boxShadow: `0 0 6px ${CYAN}`,
+              boxShadow: `0 0 8px ${CYAN}`,
               position: "absolute",
             }}
           />
         </div>
         <span
+          className="font-bold tracking-widest select-none"
           style={{
-            fontSize: 9,
-            color: CYAN_DIM,
-            letterSpacing: 2,
-            fontWeight: 700,
+            fontSize: 15,
+            color: CYAN,
+            letterSpacing: 4,
+            textShadow: `0 0 18px ${CYAN}, 0 0 32px rgba(0,255,204,0.35)`,
+            textTransform: "uppercase",
           }}
         >
-          TACMAP
+          FRONTIER
         </span>
-        {/* Principal badge in top-left */}
-        <PrincipalBadge />
       </div>
 
-      {/* Center title */}
-      <div
+      {/* CENTER: Nav links */}
+      <nav
+        className="hidden sm:flex items-center gap-1"
         style={{
-          color: CYAN,
-          fontSize: 10,
-          fontWeight: 700,
-          letterSpacing: 3,
-          textTransform: "uppercase",
-          textShadow: `0 0 12px ${CYAN}`,
           position: "absolute",
           left: "50%",
           transform: "translateX(-50%)",
         }}
       >
-        FRONTIER: MISSILE HORIZON
+        {(
+          [
+            { label: "MAP", tab: "map" as BottomNavTab },
+            { label: "LEADERBOARD", tab: "leaderboard" as BottomNavTab },
+            { label: "INVENTORY", tab: "inventory" as BottomNavTab },
+            { label: "UNIVERSE", tab: "universe" as BottomNavTab },
+          ] as { label: string; tab: BottomNavTab }[]
+        ).map(({ label, tab }) => (
+          <button
+            key={tab}
+            type="button"
+            data-ocid={`topbar.nav.${tab}`}
+            onClick={() => onNavClick(tab)}
+            className="px-3 py-1 rounded cursor-pointer transition-all duration-200"
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: 2,
+              textTransform: "uppercase",
+              color: "rgba(224,244,255,0.65)",
+              background: "transparent",
+              border: "1px solid transparent",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.color = CYAN;
+              (e.currentTarget as HTMLButtonElement).style.borderColor =
+                "rgba(0,255,204,0.3)";
+              (e.currentTarget as HTMLButtonElement).style.background =
+                "rgba(0,255,204,0.05)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.color =
+                "rgba(224,244,255,0.65)";
+              (e.currentTarget as HTMLButtonElement).style.borderColor =
+                "transparent";
+              (e.currentTarget as HTMLButtonElement).style.background =
+                "transparent";
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+
+      {/* CENTER-RIGHT: ICP/USD price ticker */}
+      <div
+        data-ocid="topbar.icp_usd_price"
+        className="price-ticker-compact hidden sm:flex items-center gap-1 px-2 py-1 rounded"
+        style={{
+          background: "rgba(0,255,204,0.06)",
+          border: "1px solid rgba(0,255,204,0.15)",
+          marginRight: 8,
+        }}
+      >
+        <span
+          style={{
+            fontSize: 10,
+            color: "rgba(224,244,255,0.45)",
+            fontWeight: 600,
+            letterSpacing: 1,
+            textTransform: "uppercase",
+          }}
+        >
+          ICP
+        </span>
+        <span style={{ fontSize: 10, color: "rgba(224,244,255,0.3)" }}>·</span>
+        <span
+          className="monospace-number"
+          style={{
+            fontSize: 11,
+            color: icpUsdPrice !== null ? CYAN : "rgba(224,244,255,0.35)",
+            fontWeight: 700,
+            letterSpacing: 0.5,
+          }}
+        >
+          {icpUsdPrice !== null ? `${icpUsdPrice.toFixed(2)}` : "--"}
+        </span>
       </div>
 
-      {/* Right: Faucet + controls */}
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          data-ocid="playnow.primary_button"
-          onClick={onPlayNowClick}
-          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-md cursor-pointer font-bold uppercase tracking-widest text-[8px] whitespace-nowrap"
+      {/* RIGHT: Wallet badges + principal */}
+      <div className="flex items-center gap-1.5 flex-shrink-0">
+        {/* FRNTR balance badge */}
+        <div
+          data-ocid="topbar.frntr_balance"
+          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-md"
           style={{
-            background: "rgba(0,255,204,0.18)",
-            border: "1px solid rgba(0,255,204,0.6)",
-            color: "#00ffcc",
-            height: 32,
-            boxShadow: "0 0 10px rgba(0,255,204,0.25)",
+            background: "rgba(245,158,11,0.12)",
+            border: "1px solid rgba(245,158,11,0.35)",
+            minWidth: 0,
           }}
         >
-          PLAY NOW
-        </button>
-        <button
-          type="button"
-          data-ocid="universe.open_modal_button"
-          onClick={onUniverseClick}
-          aria-label="Open Universe panel"
-          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-md cursor-pointer font-bold uppercase tracking-widest text-[8px] whitespace-nowrap"
+          <span style={{ fontSize: 12, color: "#F59E0B", lineHeight: 1 }}>
+            ⬡
+          </span>
+          <span
+            className="font-mono font-bold whitespace-nowrap"
+            style={{ fontSize: 11, color: "#F59E0B", letterSpacing: 0.5 }}
+          >
+            {player.frntBalance.toLocaleString(undefined, {
+              maximumFractionDigits: 2,
+            })}{" "}
+            FRNTR
+          </span>
+        </div>
+
+        {/* ICP balance badge */}
+        <div
+          data-ocid="topbar.icp_balance"
+          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-md"
           style={{
-            background: "rgba(0,255,204,0.07)",
+            background: "rgba(0,255,204,0.08)",
             border: `1px solid ${BORDER}`,
-            color: CYAN,
-            height: 32,
+            minWidth: 0,
           }}
         >
-          UNIVERSE
-        </button>
+          <span style={{ fontSize: 12, color: CYAN, lineHeight: 1 }}>◎</span>
+          <span
+            className="font-mono font-bold whitespace-nowrap"
+            style={{ fontSize: 11, color: CYAN, letterSpacing: 0.5 }}
+          >
+            {icpBalanceFormatted.toFixed(2)} ICP
+          </span>
+        </div>
+
+        {/* Divider */}
+        <div
+          className="hidden sm:block"
+          style={{
+            width: 1,
+            height: 22,
+            background: "rgba(0,255,204,0.18)",
+            margin: "0 4px",
+          }}
+        />
+
+        {/* Principal badge + logout */}
+        {isAuthenticated && shortPrincipal ? (
+          <div className="flex items-center gap-1.5">
+            <div
+              data-ocid="topbar.principal_badge"
+              className="flex items-center gap-1.5 px-2 py-1 rounded-md"
+              style={{
+                background: "rgba(0,255,204,0.07)",
+                border: `1px solid ${BORDER}`,
+              }}
+            >
+              <div
+                style={{
+                  width: 18,
+                  height: 18,
+                  borderRadius: "50%",
+                  background: "rgba(0,255,204,0.18)",
+                  border: `1px solid ${CYAN}`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <span style={{ fontSize: 8, color: CYAN, fontWeight: 700 }}>
+                  ID
+                </span>
+              </div>
+              <span
+                className="font-mono hidden md:inline"
+                style={{ fontSize: 9, color: TEXT, letterSpacing: 0.5 }}
+                title={player.principal ?? ""}
+              >
+                {shortPrincipal}
+              </span>
+            </div>
+            <button
+              type="button"
+              data-ocid="topbar.logout_button"
+              onClick={() => clear()}
+              aria-label="Disconnect wallet"
+              className="flex items-center justify-center rounded-md cursor-pointer transition-all duration-200"
+              style={{
+                width: 28,
+                height: 28,
+                background: "rgba(255,68,68,0.08)",
+                border: "1px solid rgba(255,68,68,0.3)",
+                color: "rgba(255,100,100,0.8)",
+                fontSize: 12,
+              }}
+              title="Disconnect"
+            >
+              ✕
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            data-ocid="topbar.connect_button"
+            onClick={onPlayNowClick}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md cursor-pointer font-bold uppercase tracking-widest text-[10px] whitespace-nowrap transition-all duration-200"
+            style={{
+              background: "rgba(0,255,204,0.15)",
+              border: `1px solid ${CYAN}`,
+              color: CYAN,
+              boxShadow: "0 0 12px rgba(0,255,204,0.2)",
+            }}
+          >
+            CONNECT
+          </button>
+        )}
       </div>
     </div>
   );
@@ -696,6 +878,277 @@ function LeaderboardPanel() {
 /* ─── Mobile Drawer ─── */
 /* MobileDrawer replaced by BottomSheet */
 
+/* ─── Plot Action Panel ─── */
+function PlotActionPanel({
+  plotId,
+  onClose,
+  onOpenTab,
+}: {
+  plotId: number;
+  onClose: () => void;
+  onOpenTab: (tab: BottomNavTab) => void;
+}) {
+  const plots = useGameStore((s) => s.plots);
+  const player = useGameStore((s) => s.player);
+  const { actor } = useActor(createActor);
+  const { purchasePlot, isPurchasing } = usePurchasePlot();
+
+  const plot = plots.find((p) => p.id === plotId);
+  if (!plot) return null;
+
+  const isOwned = plot.owner !== null;
+  const isMine = plot.isOwnedByMe || player.plotsOwned.includes(plotId);
+  const eff = plot.efficiency;
+  const icpPrice = eff >= 90 ? 30 : eff >= 80 ? 9 : 2.5;
+
+  const shortOwner = plot.owner ? `${plot.owner.slice(0, 6)}...` : "Unowned";
+
+  const infoRows: { label: string; value: string; highlight?: boolean }[] = [
+    { label: "TYPE", value: plot.biome },
+    { label: "EFFICIENCY", value: `${eff}%` },
+    { label: "OWNER", value: shortOwner },
+    {
+      label: "STATUS",
+      value: isOwned ? "Owned" : "Available",
+      highlight: true,
+    },
+    { label: "IRON/DAY", value: String(plot.iron || 0) },
+    { label: "FUEL/DAY", value: String(plot.fuel || 0) },
+  ];
+
+  async function handleMine() {
+    if (!actor) return;
+    try {
+      await (
+        actor as unknown as { mineResources: (id: bigint) => Promise<unknown> }
+      ).mineResources(BigInt(plotId));
+    } catch {
+      // fire-and-forget
+    }
+    toast("⛏ Mining started!", { duration: 2500 });
+  }
+
+  async function handlePurchase() {
+    const result = await purchasePlot(plotId);
+    if (result.success) {
+      toast.success(result.message, { duration: 4000 });
+    } else {
+      toast.error(result.message, { duration: 5000 });
+    }
+  }
+
+  return (
+    <div
+      data-ocid="plot_action_panel.panel"
+      style={{
+        position: "fixed",
+        right: 0,
+        top: 56,
+        width: 280,
+        zIndex: 40,
+        background: "rgba(10,14,26,0.90)",
+        backdropFilter: "blur(14px)",
+        WebkitBackdropFilter: "blur(14px)",
+        borderLeft: "1px solid rgba(0,212,255,0.2)",
+        padding: 16,
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
+        maxHeight: "calc(100vh - 120px)",
+        overflowY: "auto",
+      }}
+    >
+      {/* Close button */}
+      <button
+        type="button"
+        data-ocid="plot_action_panel.close_button"
+        onClick={onClose}
+        aria-label="Close plot panel"
+        style={{
+          position: "absolute",
+          top: 10,
+          right: 10,
+          width: 24,
+          height: 24,
+          background: "rgba(255,255,255,0.06)",
+          border: "1px solid rgba(255,255,255,0.15)",
+          borderRadius: 6,
+          color: "rgba(224,244,255,0.7)",
+          fontSize: 11,
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        ✕
+      </button>
+
+      {/* 2D Sub-parcel tactical view */}
+      <div
+        style={{
+          height: 180,
+          overflow: "hidden",
+          borderRadius: 8,
+          border: "1px solid rgba(0,212,255,0.2)",
+          background: "rgba(0,10,20,0.6)",
+        }}
+      >
+        <SubParcelIntelView />
+      </div>
+
+      {/* Plot title */}
+      <div>
+        <div
+          style={{
+            fontSize: 15,
+            fontWeight: 900,
+            color: "#00d4ff",
+            letterSpacing: 2,
+            textShadow: "0 0 14px rgba(0,212,255,0.6)",
+            lineHeight: 1.1,
+          }}
+        >
+          PLOT #{plotId}
+        </div>
+        <div
+          style={{
+            fontSize: 10,
+            color: "rgba(224,244,255,0.45)",
+            letterSpacing: 1,
+            marginTop: 2,
+            textTransform: "uppercase",
+          }}
+        >
+          {plot.biome}
+        </div>
+      </div>
+
+      {/* Info grid */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: "6px 8px",
+          padding: "10px 12px",
+          background: "rgba(0,212,255,0.03)",
+          borderRadius: 8,
+          border: "1px solid rgba(0,212,255,0.12)",
+        }}
+      >
+        {infoRows.map(({ label, value, highlight }) => (
+          <div key={label}>
+            <div
+              style={{
+                fontSize: 8,
+                color: "rgba(255,255,255,0.4)",
+                letterSpacing: 1,
+                textTransform: "uppercase",
+                marginBottom: 1,
+              }}
+            >
+              {label}
+            </div>
+            <div
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                color: highlight
+                  ? isOwned
+                    ? "#00d4ff"
+                    : "#22c55e"
+                  : "rgba(224,244,255,0.9)",
+              }}
+            >
+              {value}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Action buttons */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {isMine ? (
+          <>
+            <button
+              type="button"
+              data-ocid="plot_action_panel.upgrade_button"
+              onClick={() => onOpenTab("map" as BottomNavTab)}
+              className="w-full py-2 rounded tracking-wider uppercase text-xs border transition-colors duration-200"
+              style={{
+                background: "rgba(245,158,11,0.15)",
+                border: "1px solid rgba(245,158,11,0.35)",
+                color: "#fbbf24",
+              }}
+            >
+              UPGRADE
+            </button>
+            <button
+              type="button"
+              data-ocid="plot_action_panel.mine_button"
+              onClick={handleMine}
+              className="w-full py-2 rounded tracking-wider uppercase text-xs border transition-colors duration-200"
+              style={{
+                background: "rgba(34,197,94,0.15)",
+                border: "1px solid rgba(34,197,94,0.35)",
+                color: "#4ade80",
+              }}
+            >
+              MINE
+            </button>
+            <button
+              type="button"
+              data-ocid="plot_action_panel.details_button"
+              onClick={() => onOpenTab("map" as BottomNavTab)}
+              className="w-full py-2 rounded tracking-wider uppercase text-xs border transition-colors duration-200"
+              style={{
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.15)",
+                color: "rgba(255,255,255,0.5)",
+              }}
+            >
+              DETAILS
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              data-ocid="plot_action_panel.purchase_button"
+              onClick={handlePurchase}
+              disabled={isPurchasing}
+              className="w-full py-2 rounded tracking-wider uppercase text-xs border transition-colors duration-200"
+              style={{
+                background: isPurchasing
+                  ? "rgba(0,212,255,0.08)"
+                  : "rgba(0,212,255,0.15)",
+                border: "1px solid rgba(0,212,255,0.35)",
+                color: isPurchasing ? "rgba(0,212,255,0.5)" : "#67e8f9",
+                cursor: isPurchasing ? "not-allowed" : "pointer",
+              }}
+            >
+              {isPurchasing ? "PURCHASING..." : `PURCHASE ${icpPrice} ICP`}
+            </button>
+            <button
+              type="button"
+              data-ocid="plot_action_panel.details_button"
+              onClick={() => onOpenTab("map" as BottomNavTab)}
+              className="w-full py-2 rounded tracking-wider uppercase text-xs border transition-colors duration-200"
+              style={{
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.15)",
+                color: "rgba(255,255,255,0.5)",
+              }}
+            >
+              DETAILS
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ─── Main Play Component ─── */
 export default function Play() {
   const { loginStatus, isAuthenticated, login, identity } =
@@ -706,6 +1159,8 @@ export default function Play() {
   const [showUniverse, setShowUniverse] = useState(false);
   const [showPlayNow, setShowPlayNow] = useState(false);
   const [showAuthOverlay, setShowAuthOverlay] = useState(true);
+
+  const selectedPlotId = useGameStore((s) => s.selectedPlotId);
 
   const [purchaseToast, setPurchaseToast] = useState<{
     plotId: number;
@@ -760,7 +1215,7 @@ export default function Play() {
   const handlePlotSelect = useCallback(
     (plotId: number) => {
       selectPlot(plotId);
-      setActiveTab("map" as BottomNavTab);
+      // PlotActionPanel slides in from the right — no need to open bottom sheet
     },
     [selectPlot],
   );
@@ -821,8 +1276,8 @@ export default function Play() {
 
       {/* Top bar — always on top */}
       <TopBar
-        onUniverseClick={() => setShowUniverse(true)}
         onPlayNowClick={() => setShowPlayNow(true)}
+        onNavClick={(tab) => handleTabClick(tab)}
       />
 
       {/* Left sidebar — desktop only, fixed */}
@@ -850,6 +1305,17 @@ export default function Play() {
         {activeTab === "universe" && <UniversePanel inline={true} />}
         {activeTab === "intel" && <IntelTab />}
       </BottomSheet>
+
+      {/* Plot Action Panel — slides in from right when a plot is selected */}
+      {selectedPlotId !== null && (
+        <PlotActionPanel
+          plotId={selectedPlotId}
+          onClose={() => selectPlot(null)}
+          onOpenTab={(tab) => {
+            setActiveTab(tab);
+          }}
+        />
+      )}
 
       {/* Overlays */}
       {plotHoverCard && (

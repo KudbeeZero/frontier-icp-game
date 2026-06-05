@@ -30,6 +30,13 @@ export interface FaucetClaimSummary {
 export interface FaucetGrant { 'icpGranted' : bigint, 'frntGranted' : bigint }
 export type FaucetResult = { 'ok' : FaucetGrant } |
   { 'err' : string };
+export type GeneratorTier = { 'TierIII' : null } |
+  { 'None' : null } |
+  { 'TierII' : null } |
+  { 'TierIV' : null } |
+  { 'TierVI' : null } |
+  { 'TierI' : null } |
+  { 'TierV' : null };
 export interface GeneratorTierInfo {
   'name' : string,
   'tierIndex' : bigint,
@@ -58,6 +65,14 @@ export interface PlotProductionRate {
   'generatorTier' : bigint,
   'nexusBonus' : number,
 }
+export interface PlotUpgradesView {
+  'tierName' : string,
+  'plotId' : PlotId,
+  'installedAt' : [] | [Timestamp],
+  'bonusPerDay' : number,
+  'nextTierCost' : [] | [bigint],
+  'generatorTier' : GeneratorTier,
+}
 export interface PrincipalDisplay {
   'full' : string,
   'short' : string,
@@ -78,6 +93,15 @@ export interface StressActionResult {
 }
 export type StressTestResult = { 'ok' : Array<StressActionResult> } |
   { 'err' : string };
+export interface SubParcel {
+  'subParcelId' : bigint,
+  'cooldownEnds' : bigint,
+  'plotId' : bigint,
+  'building' : [] | [string],
+  'slotIndex' : bigint,
+  'specialization' : string,
+}
+export type Timestamp = bigint;
 export interface Tokenomics {
   'burnRate' : bigint,
   'emissionRate' : bigint,
@@ -87,6 +111,12 @@ export interface Tokenomics {
   'maxSupply' : bigint,
   'remainingMineable' : bigint,
 }
+export type UpgradeError = { 'SubParcelLocked' : null } |
+  { 'PlotNotFound' : null } |
+  { 'InvalidTier' : null } |
+  { 'NotOwner' : null } |
+  { 'AlreadyMaxTier' : null } |
+  { 'InsufficientFRNTR' : null };
 export interface _SERVICE {
   'assignInterceptor' : ActorMethod<[bigint, string], undefined>,
   'getAdjacentPlots' : ActorMethod<[bigint], Array<bigint>>,
@@ -102,7 +132,41 @@ export interface _SERVICE {
    * / Returns total faucet claims for a principal (debug/analytics).
    */
   'getFaucetClaims' : ActorMethod<[Principal], FaucetClaimSummary>,
+  /**
+   * / Returns the first plot ID with no owner, or null if all plots are owned.
+   * / Used by the stress-test to find a purchasable plot without hardcoding an ID.
+   */
+  'getFirstAvailablePlot' : ActorMethod<[], [] | [bigint]>,
+  'getFrntrLedger' : ActorMethod<[], string>,
+  'getGameCanisterPrincipal' : ActorMethod<[], string>,
+  /**
+   * / Live global game stats for the UNIVERSE panel (v2 — detailed fields).
+   * / totalSupply = 10B hard cap; remainingMineable = 5B mineable cap minus total burned.
+   */
+  'getGameStats' : ActorMethod<
+    [],
+    {
+      'totalPlayers' : bigint,
+      'totalFrntrBurned' : bigint,
+      'totalSupply' : bigint,
+      'totalBurned' : bigint,
+      'totalPlots' : bigint,
+      'emissionRatePerDay' : bigint,
+      'remainingMineable' : bigint,
+    }
+  >,
   'getGlobalStats' : ActorMethod<[], GlobalStats>,
+  /**
+   * / ICP/USD price oracle — performs HTTP outcall to CoinGecko API with 60s cache.
+   * / URL: https://api.coingecko.com/api/v3/simple/price?ids=internet-computer&vs_currencies=usd
+   * / Returns the current ICP/USD price as a Float.
+   */
+  'getIcpUsdPrice' : ActorMethod<[], number>,
+  /**
+   * / Returns the cached ICP/USD price without an HTTP outcall.
+   * / Returns 0.0 if the price has never been fetched.
+   */
+  'getIcpUsdPriceCached' : ActorMethod<[], number>,
   /**
    * / Public leaderboard query: top players by FRNTR balance.
    */
@@ -181,18 +245,46 @@ export interface _SERVICE {
    * / Returns the canonical ICP price (e8s) for a plot identified by its H3 index.
    */
   'getPlotPrice' : ActorMethod<[string], bigint>,
+  /**
+   * / Returns the ICP price in e8s for a plot identified by its numeric plot ID.
+   * / Price tier is derived from biome richness stored in the plots map.
+   */
+  'getPlotPriceById' : ActorMethod<[bigint], bigint>,
   'getPlotProductionRate' : ActorMethod<[bigint], PlotProductionRate>,
+  /**
+   * / Returns all plot IDs owned by a given principal.
+   */
+  'getPlotsByOwner' : ActorMethod<[Principal], Array<bigint>>,
   /**
    * / Returns the caller's principal display info for wallet/identity UI.
    */
   'getPrincipal' : ActorMethod<[], PrincipalDisplay>,
+  /**
+   * / Returns all 7 sub-parcels for a given plot ID.
+   */
+  'getSubParcels' : ActorMethod<[bigint], Array<SubParcel>>,
   'getTokenomics' : ActorMethod<[], Tokenomics>,
+  'getTreasuryBalances' : ActorMethod<
+    [],
+    { 'leaderboardPot' : bigint, 'devPot' : bigint, 'liquidityPot' : bigint }
+  >,
   /**
    * / Query the current treasury canister principal.
    */
   'getTreasuryPrincipal' : ActorMethod<[], string>,
   /**
+   * / Returns current balances of the three treasury pots in e8s.
+   * / devPot: 25% of plot ICP; leaderboardPot: 25%; liquidityPot: 50%.
+   * / getTreasuryState: alias for getTreasuryBalances, returns the 25/25/50 split balances.
+   * / Shape: { developer: Nat; leaderboard: Nat; liquidity: Nat } (all in e8s).
+   */
+  'getTreasuryState' : ActorMethod<
+    [],
+    { 'leaderboard' : bigint, 'liquidity' : bigint, 'developer' : bigint }
+  >,
+  /**
    * / Seed plots from the frontend (admin only). Skips plots that already exist.
+   * / Also creates 7 sub-parcels per plot (slot 0 = center Nexus, slots 1-6 = surrounding).
    */
   'initPlots' : ActorMethod<
     [Array<[bigint, string, number, number, bigint]>],
@@ -218,6 +310,12 @@ export interface _SERVICE {
       { 'err' : string }
   >,
   /**
+   * / Admin: wipe all game state (plots, players, usernames, faucetClaims,
+   * / generatorTiers, subParcels, statsState, plotSoldCount) back to empty.
+   * / Used before migrating to mainnet for a clean slate.
+   */
+  'resetAllData' : ActorMethod<[], undefined>,
+  /**
    * / Admin: clear all player state for a clean test run (TESTNET_MODE only).
    */
   'resetTestState' : ActorMethod<[], ResetResult>,
@@ -225,6 +323,14 @@ export interface _SERVICE {
    * / Set a new admin principal. Guarded by current admin.
    */
   'setAdminPrincipal' : ActorMethod<[Principal], undefined>,
+  'setApprovedLiquidityCanister' : ActorMethod<
+    [Principal],
+    { 'ok' : null } |
+      { 'err' : string }
+  >,
+  'setFrntrLedger' : ActorMethod<[Principal], undefined>,
+  'setGameCanisterPrincipal' : ActorMethod<[string], undefined>,
+  'setSelfPrincipal' : ActorMethod<[], undefined>,
   /**
    * / Update the treasury canister principal (admin only).
    */
@@ -246,16 +352,33 @@ export interface _SERVICE {
    */
   'stressUpgradePlots' : ActorMethod<[bigint], StressTestResult>,
   /**
-   * / Testnet faucet: grants exactly 500 FRNTR + 2 ICP (200_000_000 e8s simulated) per click.
-   * / No cooldown, no rate limit.
+   * / Testnet faucet: grants exactly 500 FRNTR per click.
+   * / No cooldown, no rate limit. ICP is real and not simulated.
    */
   'testFaucet' : ActorMethod<[], { 'ok' : string } | { 'err' : string }>,
   /**
    * / Testnet faucet: grants 500 FRNTR + 2 ICP (simulated) per click.
    * / No cooldown, no auth check beyond TESTNET_MODE=true.
+   * / Testnet faucet: grants 500 FRNTR + 2 ICP (simulated) per click.
+   * / Auto-creates a player record (600 FRNTR seed) if one doesn't exist.
+   * / No cooldown, no auth check beyond TESTNET_MODE=true.
    */
   'testFaucetV2' : ActorMethod<[], FaucetResult>,
   'updateAdminPrincipalAuth' : ActorMethod<[string], undefined>,
+  /**
+   * / Upgrade the generator tier for an owned plot.
+   * / Deducts FRNTR cost from player balance, tracks burn, sends 0.075% liquidity tax to treasury.
+   */
+  'upgradeGenerator' : ActorMethod<
+    [bigint],
+    { 'ok' : PlotUpgradesView } |
+      { 'err' : UpgradeError }
+  >,
+  'withdrawLiquidityPot' : ActorMethod<
+    [bigint, Principal],
+    { 'ok' : null } |
+      { 'err' : string }
+  >,
 }
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];

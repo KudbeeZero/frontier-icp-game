@@ -8,6 +8,10 @@
     "treasury": {
       "type": "motoko",
       "main": "src/backend/treasury.mo"
+    },
+    "token": {
+      "type": "motoko",
+      "main": "src/backend/token/main.mo"
     }
   }
 }
