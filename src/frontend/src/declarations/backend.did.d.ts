@@ -22,6 +22,27 @@ export interface CombatEvent {
   'missileType' : [] | [string],
   'defPower' : bigint,
 }
+export interface FaucetClaimSummary {
+  'principal' : string,
+  'lastClaim' : [] | [bigint],
+  'totalClaims' : bigint,
+}
+export interface FaucetGrant { 'icpGranted' : bigint, 'frntGranted' : bigint }
+export type FaucetResult = { 'ok' : FaucetGrant } |
+  { 'err' : string };
+export interface GeneratorTierInfo {
+  'name' : string,
+  'tierIndex' : bigint,
+  'bonusPerDay' : number,
+  'costFRNTR' : bigint,
+}
+export interface GlobalStats {
+  'circulatingSupply' : bigint,
+  'activePlayers' : bigint,
+  'totalPlotsOwned' : bigint,
+  'dailyEmission' : bigint,
+  'totalBurned' : bigint,
+}
 export interface MineResult {
   'efficiency' : number,
   'plotId' : PlotId,
@@ -29,16 +50,59 @@ export interface MineResult {
   'frntRate' : number,
 }
 export type PlotId = bigint;
+export interface PlotProductionRate {
+  'totalPerDay' : number,
+  'plotId' : bigint,
+  'tierBonus' : number,
+  'baseFRNTRPerDay' : number,
+  'generatorTier' : bigint,
+  'nexusBonus' : number,
+}
+export interface PrincipalDisplay {
+  'full' : string,
+  'short' : string,
+  'isAuthed' : boolean,
+}
+export type ResetResult = { 'ok' : string } |
+  { 'err' : string };
 export type ResourceType = { 'RareEarth' : null } |
   { 'Fuel' : null } |
   { 'Iron' : null } |
   { 'Crystal' : null };
+export interface StressActionResult {
+  'ok' : boolean,
+  'action' : string,
+  'index' : bigint,
+  'errorMsg' : [] | [string],
+  'durationMs' : bigint,
+}
+export type StressTestResult = { 'ok' : Array<StressActionResult> } |
+  { 'err' : string };
+export interface Tokenomics {
+  'burnRate' : bigint,
+  'emissionRate' : bigint,
+  'circulatingSupply' : bigint,
+  'daysUntilMilestone' : bigint,
+  'totalBurned' : bigint,
+  'maxSupply' : bigint,
+  'remainingMineable' : bigint,
+}
 export interface _SERVICE {
   'assignInterceptor' : ActorMethod<[bigint, string], undefined>,
   'getAdjacentPlots' : ActorMethod<[bigint], Array<bigint>>,
   'getAdminPrincipal' : ActorMethod<[], string>,
+  /**
+   * / Returns all plots that have an owner as (plotId, ownerPrincipalText) pairs.
+   */
+  'getAllPlotOwners' : ActorMethod<[], Array<[bigint, string]>>,
   'getAssignedInterceptor' : ActorMethod<[bigint], [] | [string]>,
   'getCombatLog' : ActorMethod<[bigint], Array<CombatEvent>>,
+  'getCoreGeneratorTiers' : ActorMethod<[], Array<GeneratorTierInfo>>,
+  /**
+   * / Returns total faucet claims for a principal (debug/analytics).
+   */
+  'getFaucetClaims' : ActorMethod<[Principal], FaucetClaimSummary>,
+  'getGlobalStats' : ActorMethod<[], GlobalStats>,
   /**
    * / Public leaderboard query: top players by FRNTR balance.
    */
@@ -88,30 +152,52 @@ export interface _SERVICE {
     }
   >,
   /**
+   * / Query the full player state for a given principal.
+   * / Returns a zeroed state if the principal has not played yet.
+   */
+  'getPlayerStateByPrincipal' : ActorMethod<
+    [Principal],
+    {
+      'resourceBalances' : Array<[ResourceType, number]>,
+      'username' : [] | [string],
+      'fuel' : bigint,
+      'iron' : bigint,
+      'frntBalance' : bigint,
+      'totalFRNTRBurned' : number,
+      'plotsOwned' : bigint,
+      'lastFaucetTime' : [] | [bigint],
+      'crystal' : bigint,
+      'ownedPlots' : Array<string>,
+      'combatVictories' : bigint,
+      'generatorTiersMap' : Array<[string, bigint]>,
+      'passiveIncomePerDay' : number,
+    }
+  >,
+  /**
+   * / Returns the total number of plots currently stored.
+   */
+  'getPlotCount' : ActorMethod<[], bigint>,
+  /**
    * / Returns the canonical ICP price (e8s) for a plot identified by its H3 index.
    */
   'getPlotPrice' : ActorMethod<[string], bigint>,
+  'getPlotProductionRate' : ActorMethod<[bigint], PlotProductionRate>,
   /**
-   * / Returns the tokenomics snapshot for display in the UNIVERSE menu.
+   * / Returns the caller's principal display info for wallet/identity UI.
    */
-  'getTokenomics' : ActorMethod<
-    [],
-    {
-      'totalSupply' : bigint,
-      'maxPlots' : bigint,
-      'dailyEmission' : bigint,
-      'emissionScheduleYears' : bigint,
-      'currentCirculating' : bigint,
-      'mineableSupply' : bigint,
-      'preMinted' : bigint,
-      'plotCount' : bigint,
-      'burnedTotal' : bigint,
-    }
-  >,
+  'getPrincipal' : ActorMethod<[], PrincipalDisplay>,
+  'getTokenomics' : ActorMethod<[], Tokenomics>,
   /**
    * / Query the current treasury canister principal.
    */
   'getTreasuryPrincipal' : ActorMethod<[], string>,
+  /**
+   * / Seed plots from the frontend (admin only). Skips plots that already exist.
+   */
+  'initPlots' : ActorMethod<
+    [Array<[bigint, string, number, number, bigint]>],
+    undefined
+  >,
   'isSubParcelLocked' : ActorMethod<[bigint], boolean>,
   'launchMissile' : ActorMethod<
     [bigint, bigint, string],
@@ -132,6 +218,10 @@ export interface _SERVICE {
       { 'err' : string }
   >,
   /**
+   * / Admin: clear all player state for a clean test run (TESTNET_MODE only).
+   */
+  'resetTestState' : ActorMethod<[], ResetResult>,
+  /**
    * / Set a new admin principal. Guarded by current admin.
    */
   'setAdminPrincipal' : ActorMethod<[Principal], undefined>,
@@ -144,9 +234,27 @@ export interface _SERVICE {
    */
   'setUsername' : ActorMethod<[string], { 'ok' : null } | { 'err' : string }>,
   /**
-   * / Testnet faucet: grants 1000 FRNTR, once per principal per 24 hours.
+   * / Buy `count` plots in sequence (TESTNET_MODE only).
+   */
+  'stressBuyPlots' : ActorMethod<[bigint], StressTestResult>,
+  /**
+   * / Rapidly mint `count` unowned plots (TESTNET_MODE only).
+   */
+  'stressMintPlots' : ActorMethod<[bigint], StressTestResult>,
+  /**
+   * / Run `count` upgrade cycles across owned plots (TESTNET_MODE only).
+   */
+  'stressUpgradePlots' : ActorMethod<[bigint], StressTestResult>,
+  /**
+   * / Testnet faucet: grants exactly 500 FRNTR + 2 ICP (200_000_000 e8s simulated) per click.
+   * / No cooldown, no rate limit.
    */
   'testFaucet' : ActorMethod<[], { 'ok' : string } | { 'err' : string }>,
+  /**
+   * / Testnet faucet: grants 500 FRNTR + 2 ICP (simulated) per click.
+   * / No cooldown, no auth check beyond TESTNET_MODE=true.
+   */
+  'testFaucetV2' : ActorMethod<[], FaucetResult>,
   'updateAdminPrincipalAuth' : ActorMethod<[string], undefined>,
 }
 export declare const idlService: IDL.ServiceClass;

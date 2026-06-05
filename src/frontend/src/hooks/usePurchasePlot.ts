@@ -2,7 +2,6 @@ import { useActor, useInternetIdentity } from "@caffeineai/core-infrastructure";
 import { useState } from "react";
 import { createActor } from "../backend";
 import { useGameStore } from "../store/gameStore";
-import { purchasePlotWithDebug } from "./usePlayerSync";
 
 export interface PurchaseResult {
   success: boolean;
@@ -37,7 +36,8 @@ export function usePurchasePlot() {
     }
 
     try {
-      const success = await purchasePlotWithDebug(actor, String(plotId));
+      const res = await actor.purchasePlot(BigInt(plotId));
+      const success = res.__kind__ === "ok";
       const message = success
         ? `PLOT #${plotId} ACQUIRED`
         : `PLOT #${plotId} PURCHASE FAILED`;

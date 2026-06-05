@@ -1,0 +1,114 @@
+// Core domain logic: global stats aggregation, emission calculations, production rates.
+import Debug "mo:core/Debug";
+import Map   "mo:core/Map";
+import Float "mo:core/Float";
+import Nat   "mo:core/Nat";
+import CoreTypes "../types/core";
+import GameTypes "../types/game";
+
+module {
+
+  // ---------------------------------------------------------------------------
+  // Daily emission
+  // ---------------------------------------------------------------------------
+
+  /// Base FRNTR per day per plot (no upgrades, no nexus).
+  public let BASE_FRNTR_PER_DAY : Float = 7.0;
+
+  /// Mineable supply cap (5 billion FRNTR can only be produced by landowners).
+  public let MINEABLE_CAP : Nat = 5_000_000_000;
+
+  /// Pre-minted supply (backed with initial liquidity at launch).
+  public let PRE_MINTED : Nat = 5_000_000_000;
+
+  /// Hard supply cap.
+  public let MAX_SUPPLY : Nat = 10_000_000_000;
+
+  /// Milestone size for daysUntilMilestone calculation (500M FRNTR).
+  public let MILESTONE_SIZE : Nat = 500_000_000;
+
+  // ---------------------------------------------------------------------------
+  // Production rate helpers
+  // ---------------------------------------------------------------------------
+
+  /// Compute FRNTR per day for a given generator tier index (0–6).
+  /// Formula: base 7 + (tier * 3).
+  /// This is the canonical formula — use this everywhere, not hard-coded local tables.
+  public func dailyRateFromTierIndex(tierIndex : Nat) : Float {
+    7.0 + (tierIndex * 3).toFloat();
+  };
+
+  /// Map a GeneratorTier variant to its index (0 = None … 6 = TierVI).
+  public func tierToIndex(tier : GameTypes.GeneratorTier) : Nat {
+    switch (tier) {
+      case (#None)    { 0 };
+      case (#TierI)   { 1 };
+      case (#TierII)  { 2 };
+      case (#TierIII) { 3 };
+      case (#TierIV)  { 4 };
+      case (#TierV)   { 5 };
+      case (#TierVI)  { 6 };
+    };
+  };
+
+  /// Nexus electricity bonus in FRNTR/day for a given level (0–3).
+  /// Level 1 = +8, Level 2 = +24, Level 3 = +48.
+  public func nexusBonus(level : Nat) : Float {
+    switch (level) {
+      case (1) { 8.0 };
+      case (2) { 24.0 };
+      case (3) { 48.0 };
+      case (_) { 0.0 };
+    };
+  };
+
+  // ---------------------------------------------------------------------------
+  // GlobalStats / Tokenomics builders
+  // ---------------------------------------------------------------------------
+
+  /// Build a GlobalStats snapshot from raw counters.
+  public func buildGlobalStats(
+    plotsSold        : Nat,
+    totalFRNTRBurned : Nat,
+    totalFRNTRMined  : Nat,
+    activePlayers    : Nat,
+  ) : CoreTypes.GlobalStats {
+    let circulating : Nat =
+      PRE_MINTED + totalFRNTRMined -
+      (if (totalFRNTRBurned > PRE_MINTED + totalFRNTRMined) { PRE_MINTED + totalFRNTRMined } else { totalFRNTRBurned });
+    {
+      circulatingSupply = circulating;
+      totalBurned       = totalFRNTRBurned;
+      totalPlotsOwned   = plotsSold;
+      activePlayers     = activePlayers;
+      dailyEmission     = plotsSold * 7;
+    };
+  };
+
+  /// Build a Tokenomics snapshot from raw counters.
+  public func buildTokenomics(
+    totalFRNTRBurned  : Nat,
+    totalFRNTRMined   : Nat,
+    currentDailyRate  : Nat,
+    plotsSold         : Nat,
+  ) : CoreTypes.Tokenomics {
+    let circulating : Nat =
+      PRE_MINTED + totalFRNTRMined -
+      (if (totalFRNTRBurned > PRE_MINTED + totalFRNTRMined) { PRE_MINTED + totalFRNTRMined } else { totalFRNTRBurned });
+    let remaining   : Nat = if (MINEABLE_CAP > totalFRNTRMined) { MINEABLE_CAP - totalFRNTRMined } else { 0 };
+    let dailyRate   : Nat = if (currentDailyRate > 0) { currentDailyRate } else { plotsSold * 7 };
+    let burnRateEst : Nat = if (plotsSold > 0) { plotsSold * 100 / 10 } else { 0 };
+    let toNext      : Nat = if (circulating % MILESTONE_SIZE == 0) { MILESTONE_SIZE }
+                            else { MILESTONE_SIZE - (circulating % MILESTONE_SIZE) };
+    let daysUntil   : Nat = if (dailyRate > 0) { toNext / dailyRate } else { 0 };
+    {
+      maxSupply          = MAX_SUPPLY;
+      circulatingSupply  = circulating;
+      totalBurned        = totalFRNTRBurned;
+      emissionRate       = dailyRate;
+      burnRate           = burnRateEst;
+      remainingMineable  = remaining;
+      daysUntilMilestone = daysUntil;
+    };
+  };
+};

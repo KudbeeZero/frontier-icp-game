@@ -12,7 +12,6 @@ import {
 import { motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createActor } from "../backend";
-import Navbar from "../components/Navbar";
 import { useGameStore } from "../store/gameStore";
 
 const CYAN = "#00ffcc";
@@ -245,9 +244,7 @@ export default function Leaderboard() {
         fontFamily: "'General Sans', 'Plus Jakarta Sans', sans-serif",
       }}
     >
-      <Navbar />
-
-      <div className="pt-20 pb-12 px-4 max-w-4xl mx-auto">
+      <div className="pt-6 pb-12 px-4 max-w-4xl mx-auto">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}

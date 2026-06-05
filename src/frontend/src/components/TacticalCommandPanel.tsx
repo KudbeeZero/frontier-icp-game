@@ -1,5 +1,8 @@
+import { useActor } from "@caffeineai/core-infrastructure";
 import { Shield, Zap } from "lucide-react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { createActor } from "../backend";
+import type { GeneratorTierInfo } from "../backend";
 import { useGameStore } from "../store/gameStore";
 
 const CYAN = "#00ffcc";
@@ -45,7 +48,8 @@ const GENERATOR_TIERS_LABEL: Record<number, string> = {
   6: "GEN-VI",
 };
 
-const TIER_PRODUCTION: Record<number, number> = {
+// Fallback values used until backend tiers load
+const FALLBACK_TIER_PRODUCTION: Record<number, number> = {
   0: 7,
   1: 15,
   2: 31,
@@ -54,8 +58,7 @@ const TIER_PRODUCTION: Record<number, number> = {
   5: 255,
   6: 511,
 };
-
-const UPGRADE_COSTS: Record<number, number> = {
+const FALLBACK_UPGRADE_COSTS: Record<number, number> = {
   1: 500,
   2: 1500,
   3: 4000,
@@ -73,6 +76,36 @@ export default function TacticalCommandPanel() {
   const purchasePlot = useGameStore((s) => s.purchasePlot);
   const upgradeGenerator = useGameStore((s) => s.upgradeGenerator);
   const mineResources = useGameStore((s) => s.mineResources);
+  const { actor } = useActor(createActor);
+  const [backendTiers, setBackendTiers] = useState<GeneratorTierInfo[] | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (!actor) return;
+    actor
+      .getCoreGeneratorTiers()
+      .then(setBackendTiers)
+      .catch(() => {});
+  }, [actor]);
+
+  const tierProduction = useMemo(() => {
+    if (!backendTiers) return FALLBACK_TIER_PRODUCTION;
+    const map: Record<number, number> = { 0: 7 };
+    for (const t of backendTiers) {
+      map[Number(t.tierIndex)] = t.bonusPerDay;
+    }
+    return map;
+  }, [backendTiers]);
+
+  const upgradeCosts = useMemo(() => {
+    if (!backendTiers) return FALLBACK_UPGRADE_COSTS;
+    const map: Record<number, number> = {};
+    for (const t of backendTiers) {
+      map[Number(t.tierIndex)] = Number(t.costFRNTR);
+    }
+    return map;
+  }, [backendTiers]);
 
   const plot = useMemo(
     () =>
@@ -90,8 +123,8 @@ export default function TacticalCommandPanel() {
   const rarity = getPlotRarity(plot.id);
   const rarityCfg = RARITY_CONFIG[rarity];
   const genTier = generatorTiers[plot.id] ?? 0;
-  const production = TIER_PRODUCTION[genTier] ?? 7;
-  const nextTierCost = genTier < 6 ? UPGRADE_COSTS[genTier + 1] : null;
+  const production = tierProduction[genTier] ?? 7;
+  const nextTierCost = genTier < 6 ? (upgradeCosts[genTier + 1] ?? null) : null;
   const canUpgrade =
     nextTierCost !== null && player.frntBalance >= nextTierCost;
   const effPct = Math.max(0, Math.min(100, plot.efficiency));

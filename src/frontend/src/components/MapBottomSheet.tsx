@@ -36,24 +36,6 @@ const BIOME_BADGE_COLORS: Record<string, string> = {
   Toxic: "#7dba3a",
 };
 
-const _BUILDING_ICONS: Record<string, LucideIcon> = {
-  MISSILE_SILO: Zap,
-  DEFENSE_TOWER: Shield,
-  RESOURCE_EXTRACTOR: Pickaxe,
-  RADAR_STATION: Radio,
-  SHIELD_GENERATOR: ShieldCheck,
-  CYCLES_REACTOR: Cpu,
-};
-
-const _BUILDING_NAMES: Record<string, string> = {
-  MISSILE_SILO: "Missile Silo",
-  DEFENSE_TOWER: "Defense Tower",
-  RESOURCE_EXTRACTOR: "Resource Extractor",
-  RADAR_STATION: "Radar Station",
-  SHIELD_GENERATOR: "Shield Generator",
-  CYCLES_REACTOR: "Cycles Reactor",
-};
-
 const COMMANDER_IMAGES: Record<string, string> = {
   "NOVA PRIME":
     "/assets/generated/commander-nova-prime-transparent.dim_300x300.png",
@@ -63,32 +45,6 @@ const COMMANDER_IMAGES: Record<string, string> = {
     "/assets/generated/commander-phantom-ops-transparent.dim_300x300.png",
   "VOID HUNTER":
     "/assets/generated/commander-void-hunter-transparent.dim_300x300.png",
-};
-
-const _SPEC_CONFIG: Record<
-  PlotSpecialization,
-  { color: string; label: string; buff: string }
-> = {
-  TRADING_DEPOT: {
-    color: "#f59e0b",
-    label: "TRADING DEPOT",
-    buff: "+10% FRNTR from combat wins",
-  },
-  ENERGY_TECH: {
-    color: "#3b82f6",
-    label: "ENERGY & TECH",
-    buff: "Dome Shield -10% damage taken",
-  },
-  ARMORY: {
-    color: "#ef4444",
-    label: "ARMORY",
-    buff: "+5% hit target accuracy",
-  },
-  RESOURCES: {
-    color: "#22c55e",
-    label: "RESOURCES",
-    buff: "+15% mineral yield",
-  },
 };
 
 function _getCountdown(purchaseTime: number): string {

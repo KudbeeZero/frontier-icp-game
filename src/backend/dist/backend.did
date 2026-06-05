@@ -1,9 +1,52 @@
+type Tokenomics = 
+ record {
+   burnRate: nat;
+   circulatingSupply: nat;
+   daysUntilMilestone: nat;
+   emissionRate: nat;
+   maxSupply: nat;
+   remainingMineable: nat;
+   totalBurned: nat;
+ };
+type StressTestResult = 
+ variant {
+   err: text;
+   ok: vec StressActionResult;
+ };
+type StressActionResult = 
+ record {
+   action: text;
+   durationMs: int;
+   errorMsg: opt text;
+   index: nat;
+   ok: bool;
+ };
 type ResourceType = 
  variant {
    Crystal;
    Fuel;
    Iron;
    RareEarth;
+ };
+type ResetResult = 
+ variant {
+   err: text;
+   ok: text;
+ };
+type PrincipalDisplay = 
+ record {
+   full: text;
+   isAuthed: bool;
+   short: text;
+ };
+type PlotProductionRate = 
+ record {
+   baseFRNTRPerDay: float64;
+   generatorTier: nat;
+   nexusBonus: float64;
+   plotId: nat;
+   tierBonus: float64;
+   totalPerDay: float64;
  };
 type PlotId = nat;
 type MineResult = 
@@ -15,6 +58,37 @@ type MineResult =
                          ResourceType;
                          float64;
                        };
+ };
+type GlobalStats = 
+ record {
+   activePlayers: nat;
+   circulatingSupply: nat;
+   dailyEmission: nat;
+   totalBurned: nat;
+   totalPlotsOwned: nat;
+ };
+type GeneratorTierInfo = 
+ record {
+   bonusPerDay: float64;
+   costFRNTR: nat;
+   name: text;
+   tierIndex: nat;
+ };
+type FaucetResult = 
+ variant {
+   err: text;
+   ok: FaucetGrant;
+ };
+type FaucetGrant = 
+ record {
+   frntGranted: nat;
+   icpGranted: nat;
+ };
+type FaucetClaimSummary = 
+ record {
+   lastClaim: opt int;
+   "principal": text;
+   totalClaims: nat;
  };
 type CombatEvent = 
  record {
@@ -33,8 +107,17 @@ service : {
   assignInterceptor: (plotId: nat, interceptorType: text) -> ();
   getAdjacentPlots: (plotId: nat) -> (vec nat) query;
   getAdminPrincipal: () -> (text) query;
+  /// Returns all plots that have an owner as (plotId, ownerPrincipalText) pairs.
+  getAllPlotOwners: () -> (vec record {
+                                 nat;
+                                 text;
+                               }) query;
   getAssignedInterceptor: (plotId: nat) -> (opt text) query;
   getCombatLog: (limit: nat) -> (vec CombatEvent) query;
+  getCoreGeneratorTiers: () -> (vec GeneratorTierInfo) query;
+  /// Returns total faucet claims for a principal (debug/analytics).
+  getFaucetClaims: ("principal": principal) -> (FaucetClaimSummary) query;
+  getGlobalStats: () -> (GlobalStats) query;
   /// Public leaderboard query: top players by FRNTR balance.
   getLeaderboard: (limit: nat) ->
    (vec
@@ -78,23 +161,48 @@ service : {
       totalFRNTRBurned: float64;
       username: opt text;
     }) query;
+  /// Query the full player state for a given principal.
+  /// Returns a zeroed state if the principal has not played yet.
+  getPlayerStateByPrincipal: ("principal": principal) ->
+   (record {
+      combatVictories: nat;
+      crystal: nat;
+      frntBalance: nat;
+      fuel: nat;
+      generatorTiersMap: vec record {
+                               text;
+                               nat;
+                             };
+      iron: nat;
+      lastFaucetTime: opt int;
+      ownedPlots: vec text;
+      passiveIncomePerDay: float64;
+      plotsOwned: nat;
+      resourceBalances: vec record {
+                              ResourceType;
+                              float64;
+                            };
+      totalFRNTRBurned: float64;
+      username: opt text;
+    }) query;
+  /// Returns the total number of plots currently stored.
+  getPlotCount: () -> (nat) query;
   /// Returns the canonical ICP price (e8s) for a plot identified by its H3 index.
   getPlotPrice: (h3Index: text) -> (nat) query;
-  /// Returns the tokenomics snapshot for display in the UNIVERSE menu.
-  getTokenomics: () ->
-   (record {
-      burnedTotal: nat;
-      currentCirculating: nat;
-      dailyEmission: nat;
-      emissionScheduleYears: nat;
-      maxPlots: nat;
-      mineableSupply: nat;
-      plotCount: nat;
-      preMinted: nat;
-      totalSupply: nat;
-    }) query;
+  getPlotProductionRate: (plotId: nat) -> (PlotProductionRate) query;
+  /// Returns the caller's principal display info for wallet/identity UI.
+  getPrincipal: () -> (PrincipalDisplay) query;
+  getTokenomics: () -> (Tokenomics) query;
   /// Query the current treasury canister principal.
   getTreasuryPrincipal: () -> (text) query;
+  /// Seed plots from the frontend (admin only). Skips plots that already exist.
+  initPlots: (plotData: vec record {
+                              nat;
+                              text;
+                              float64;
+                              float64;
+                              nat;
+                            }) -> ();
   isSubParcelLocked: (plotId: nat) -> (bool) query;
   launchMissile: (fromPlotId: nat, toPlotId: nat, missileType: text) ->
    (variant {
@@ -110,6 +218,8 @@ service : {
                                     err: text;
                                     ok: text;
                                   });
+  /// Admin: clear all player state for a clean test run (TESTNET_MODE only).
+  resetTestState: () -> (ResetResult);
   /// Set a new admin principal. Guarded by current admin.
   setAdminPrincipal: (p: principal) -> ();
   /// Update the treasury canister principal (admin only).
@@ -119,10 +229,20 @@ service : {
                                       err: text;
                                       ok;
                                     });
-  /// Testnet faucet: grants 1000 FRNTR, once per principal per 24 hours.
+  /// Buy `count` plots in sequence (TESTNET_MODE only).
+  stressBuyPlots: (count: nat) -> (StressTestResult);
+  /// Rapidly mint `count` unowned plots (TESTNET_MODE only).
+  stressMintPlots: (count: nat) -> (StressTestResult);
+  /// Run `count` upgrade cycles across owned plots (TESTNET_MODE only).
+  stressUpgradePlots: (count: nat) -> (StressTestResult);
+  /// Testnet faucet: grants exactly 500 FRNTR + 2 ICP (200_000_000 e8s simulated) per click.
+  /// No cooldown, no rate limit.
   testFaucet: () -> (variant {
                        err: text;
                        ok: text;
                      });
+  /// Testnet faucet: grants 500 FRNTR + 2 ICP (simulated) per click.
+  /// No cooldown, no auth check beyond TESTNET_MODE=true.
+  testFaucetV2: () -> (FaucetResult);
   updateAdminPrincipalAuth: (newPrincipal: text) -> ();
 }

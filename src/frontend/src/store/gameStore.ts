@@ -1,4 +1,52 @@
 import { create } from "zustand";
+const LS_KEY = "frontier_player_state_v1";
+
+function loadFromStorage() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as {
+      frntBalance: number;
+      iron: number;
+      fuel: number;
+      crystal: number;
+      rareEarth: number;
+      plotsOwned: number[];
+      mockIcpBalance: number;
+      resourceStorageCap: number;
+      generatorTiers: Record<number, GeneratorTier>;
+      plotPurchaseTimes: Record<number, number>;
+      totalFRNTRBurned: number;
+    };
+  } catch {
+    return null;
+  }
+}
+
+function saveToStorage(state: GameState) {
+  try {
+    const { player, generatorTiers, plotPurchaseTimes, totalFRNTRBurned } =
+      state;
+    localStorage.setItem(
+      LS_KEY,
+      JSON.stringify({
+        frntBalance: player.frntBalance,
+        iron: player.iron,
+        fuel: player.fuel,
+        crystal: player.crystal,
+        rareEarth: player.rareEarth,
+        plotsOwned: player.plotsOwned,
+        mockIcpBalance: player.mockIcpBalance,
+        resourceStorageCap: player.resourceStorageCap,
+        generatorTiers,
+        plotPurchaseTimes,
+        totalFRNTRBurned,
+      }),
+    );
+  } catch {
+    // storage full or unavailable — ignore
+  }
+}
 import { getMineralYield } from "../constants/minerals";
 import { GEODESIC_TILES } from "../utils/geodesicGrid";
 
@@ -102,6 +150,7 @@ export interface CombatEntry {
 export interface LeaderEntry {
   rank: number;
   name: string;
+  principal?: string;
   plotsOwned: number;
   frntEarned: number;
   victories?: number;
@@ -198,7 +247,7 @@ function generateSubParcels(plotId: number): SubParcel[] {
   ];
 }
 
-function randomBiome(seed: number): Biome {
+export function randomBiome(seed: number): Biome {
   return BIOME_MAP[seed % BIOME_MAP.length];
 }
 
@@ -231,6 +280,7 @@ function generateLeaderboard(): LeaderEntry[] {
 }
 
 const ALL_PLOTS = generatePlots();
+const _cached = loadFromStorage();
 
 // Biome drip rates per second: [iron, fuel, crystal, rareEarth]
 // ~1/3600 of per-mine yield so 1 hour of drip ≈ one MINE click
@@ -245,6 +295,25 @@ const BIOME_DRIP: Record<string, [number, number, number, number]> = {
   Grassland: [0.0018, 0.0015, 0.0005, 0.0003],
   Toxic: [0.0005, 0.0008, 0.0008, 0.002],
 };
+
+export interface GlobalStats {
+  totalPlotsOwned: number;
+  totalFRNTRInCirculation: number;
+  totalFRNTRBurned: number;
+  totalFRNTRMined: number;
+  activePlayerCount: number;
+  currentDailyEmissionRate: number;
+  leaderboardPrizePool: number;
+  nextPayoutAt: number;
+  totalSupply: number;
+  preMinted: number;
+  mineableSupply: number;
+  maxSupply?: number;
+  remainingMineable?: number;
+  daysUntilMilestone?: number;
+  burnRate?: number;
+  emissionRate?: number;
+}
 
 interface GameState {
   plots: PlotData[];
@@ -263,9 +332,12 @@ interface GameState {
   totalFRNTRBurned: number;
   purchaseDebugLogs: PurchaseDebugLog[];
 
+  globalStats: GlobalStats | null;
+
   activeBattleEntry?: any;
   assignedInterceptors?: Record<number, string>;
 
+  setGlobalStats: (stats: GlobalStats) => void;
   selectPlot: (id: number | null) => void;
   setSelectedWorldPoint: (p: [number, number, number] | null) => void;
   purchasePlot: (id: number) => void;
@@ -279,6 +351,7 @@ interface GameState {
   } | null;
   activateRegenBoost: (id: number) => void;
   claimAllFrntr: (amount: number) => void;
+  addFrntr: (amount: number) => void;
   mintTestTokens: () => void;
   setAuth: (principal: string | null) => void;
   getSubParcels: (plotId: number) => SubParcel[];
@@ -328,14 +401,14 @@ export const useGameStore = create<GameState>((set, get) => ({
   plots: ALL_PLOTS,
   player: {
     principal: null,
-    iron: 0,
-    fuel: 0,
-    crystal: 0,
-    rareEarth: 0,
-    frntBalance: 0,
-    plotsOwned: [],
-    mockIcpBalance: 5.0,
-    resourceStorageCap: 200,
+    iron: _cached?.iron ?? 0,
+    fuel: _cached?.fuel ?? 0,
+    crystal: _cached?.crystal ?? 0,
+    rareEarth: _cached?.rareEarth ?? 0,
+    frntBalance: _cached?.frntBalance ?? 0,
+    plotsOwned: _cached?.plotsOwned ?? [],
+    mockIcpBalance: _cached?.mockIcpBalance ?? 5.0,
+    resourceStorageCap: _cached?.resourceStorageCap ?? 200,
   },
   selectedPlotId: null,
   selectedWorldPoint: null,
@@ -345,11 +418,14 @@ export const useGameStore = create<GameState>((set, get) => ({
   subParcels: {},
   hoveredPlotId: null,
   plotHoverCard: null,
-  plotPurchaseTimes: {},
-  generatorTiers: {},
+  plotPurchaseTimes: _cached?.plotPurchaseTimes ?? {},
+  generatorTiers: _cached?.generatorTiers ?? {},
   serverPassiveIncomePerDay: 0,
-  totalFRNTRBurned: 0,
+  totalFRNTRBurned: _cached?.totalFRNTRBurned ?? 0,
   purchaseDebugLogs: [],
+  globalStats: null,
+
+  setGlobalStats: (stats) => set({ globalStats: stats }),
 
   selectPlot: (id) => set({ selectedPlotId: id }),
   setSelectedWorldPoint: (p) => set({ selectedWorldPoint: p }),
@@ -366,18 +442,28 @@ export const useGameStore = create<GameState>((set, get) => ({
     const cost = 100;
     if (state.player.frntBalance < cost) return;
     const subParcels = generateSubParcels(id);
-    set((s) => ({
-      player: {
-        ...s.player,
-        frntBalance: s.player.frntBalance - cost,
-        plotsOwned: [...s.player.plotsOwned, id],
-      },
-      plots: s.plots.map((p) =>
-        p.id === id ? { ...p, owner: s.player.principal ?? "You" } : p,
-      ),
-      subParcels: { ...s.subParcels, [id]: subParcels },
-      plotPurchaseTimes: { ...s.plotPurchaseTimes, [id]: Date.now() },
-    }));
+    set((s) => {
+      const next = {
+        ...s,
+        player: {
+          ...s.player,
+          frntBalance: s.player.frntBalance - cost,
+          plotsOwned: [...s.player.plotsOwned, id],
+        },
+        plots: s.plots.map((p) =>
+          p.id === id ? { ...p, owner: s.player.principal ?? "You" } : p,
+        ),
+        subParcels: { ...s.subParcels, [id]: subParcels },
+        plotPurchaseTimes: { ...s.plotPurchaseTimes, [id]: Date.now() },
+      };
+      saveToStorage(next as GameState);
+      return {
+        player: next.player,
+        plots: next.plots,
+        subParcels: next.subParcels,
+        plotPurchaseTimes: next.plotPurchaseTimes,
+      };
+    });
   },
 
   transferPlot: (plotId, recipient) => {
@@ -462,18 +548,38 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   claimAllFrntr: (amount) =>
-    set((s) => ({
-      player: { ...s.player, frntBalance: s.player.frntBalance + amount },
-    })),
+    set((s) => {
+      const next = {
+        ...s,
+        player: { ...s.player, frntBalance: s.player.frntBalance + amount },
+      };
+      saveToStorage(next as GameState);
+      return { player: next.player };
+    }),
+
+  addFrntr: (amount) =>
+    set((s) => {
+      const next = {
+        ...s,
+        player: { ...s.player, frntBalance: s.player.frntBalance + amount },
+      };
+      saveToStorage(next as GameState);
+      return { player: next.player };
+    }),
 
   mintTestTokens: () =>
-    set((s) => ({
-      player: {
-        ...s.player,
-        frntBalance: s.player.frntBalance + 500,
-        mockIcpBalance: s.player.mockIcpBalance + 2,
-      },
-    })),
+    set((s) => {
+      const next = {
+        ...s,
+        player: {
+          ...s.player,
+          frntBalance: s.player.frntBalance + 500,
+          mockIcpBalance: s.player.mockIcpBalance + 2,
+        },
+      };
+      saveToStorage(next as GameState);
+      return { player: next.player };
+    }),
 
   upgradeGenerator: (plotId) => {
     const state = get();

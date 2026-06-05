@@ -1,6 +1,6 @@
+import { useInternetIdentity } from "@caffeineai/core-infrastructure";
 import { useNavigate } from "@tanstack/react-router";
 import { Cpu, Globe, Shield, Users } from "lucide-react";
-import { useAuth } from "../hooks/useAuth";
 
 const STATS = [
   { icon: <Globe size={20} />, value: "10,000", label: "Hex Plots" },
@@ -10,7 +10,8 @@ const STATS = [
 ];
 
 export default function Landing() {
-  const { login, isAuthenticated } = useAuth();
+  const { login, loginStatus } = useInternetIdentity();
+  const isAuthenticated = loginStatus === "success";
   const navigate = useNavigate();
 
   return (

@@ -306,7 +306,9 @@ const earthDayNightFrag = /* glsl */ `
 // ---------------------------------------------------------------------------
 // EarthSphere — globe mesh + hex grid + click handling
 // ---------------------------------------------------------------------------
-function EarthSphere() {
+function EarthSphere({
+  onPlotSelect,
+}: { onPlotSelect?: (plotId: number) => void }) {
   const [dayTex, cloudsTex] = useTexture([
     "/assets/generated/earth-day.dim_4096x2048.jpg",
     "/assets/generated/earth-clouds.dim_2048x1024.jpg",
@@ -365,6 +367,7 @@ function EarthSphere() {
       return;
     }
     selectPlot?.(nearest);
+    if (onPlotSelect) onPlotSelect(nearest);
     // Store the actual world-space click direction × orbit distance.
     // CameraAnimator uses this directly — no lat/lng recomputation needed,
     // so the globe rotation is already baked in.
@@ -1269,6 +1272,7 @@ interface SceneProps {
   missileActive: boolean;
   onMissileComplete: () => void;
   missileConfig?: MissileConfig;
+  onPlotSelect?: (plotId: number) => void;
 }
 
 function GlobeScene({
@@ -1276,13 +1280,14 @@ function GlobeScene({
   missileActive,
   onMissileComplete,
   missileConfig,
+  onPlotSelect,
 }: SceneProps) {
   return (
     <>
       <ambientLight color={0xffffff} intensity={2.5} />
       <Suspense fallback={null}>
         <Starfield />
-        <EarthSphere />
+        <EarthSphere onPlotSelect={onPlotSelect} />
       </Suspense>
       <OrbitControls
         ref={controlsRef}
@@ -1308,6 +1313,7 @@ interface GlobeCanvasProps {
   missileActive?: boolean;
   onMissileComplete?: () => void;
   missileConfig?: MissileConfig;
+  onPlotSelect?: (plotId: number) => void;
 }
 
 export default function GlobeCanvas({
@@ -1315,6 +1321,7 @@ export default function GlobeCanvas({
   missileActive = false,
   onMissileComplete = () => {},
   missileConfig,
+  onPlotSelect,
 }: GlobeCanvasProps) {
   return (
     <Canvas
@@ -1327,6 +1334,7 @@ export default function GlobeCanvas({
         missileActive={missileActive}
         onMissileComplete={onMissileComplete}
         missileConfig={missileConfig}
+        onPlotSelect={onPlotSelect}
       />
     </Canvas>
   );

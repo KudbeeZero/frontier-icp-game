@@ -1,6 +1,5 @@
 import * as Accordion from "@radix-ui/react-accordion";
 import { ChevronDown } from "lucide-react";
-import Navbar from "../components/Navbar";
 
 const SECTIONS = [
   {
@@ -262,9 +261,8 @@ export default function Manual() {
           "radial-gradient(ellipse at 50% 0%, #0a1628 0%, #04070d 70%)",
       }}
     >
-      <Navbar />
       <div
-        className="pt-20 pb-8 px-6 max-w-3xl mx-auto overflow-y-auto"
+        className="pt-6 pb-8 px-6 max-w-3xl mx-auto overflow-y-auto"
         style={{ maxHeight: "100vh" }}
       >
         <h2 className="font-display font-bold text-3xl tracking-widest text-primary uppercase mb-6">

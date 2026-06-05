@@ -755,17 +755,17 @@ const SHA512_IV = /* @__PURE__ */ Uint32Array.from([
 ]);
 const U32_MASK64 = /* @__PURE__ */ BigInt(2 ** 32 - 1);
 const _32n = /* @__PURE__ */ BigInt(32);
-function fromBig(n, le = false) {
-  if (le)
+function fromBig(n, le2 = false) {
+  if (le2)
     return { h: Number(n & U32_MASK64), l: Number(n >> _32n & U32_MASK64) };
   return { h: Number(n >> _32n & U32_MASK64) | 0, l: Number(n & U32_MASK64) | 0 };
 }
-function split(lst, le = false) {
+function split(lst, le2 = false) {
   const len = lst.length;
   let Ah = new Uint32Array(len);
   let Al = new Uint32Array(len);
   for (let i2 = 0; i2 < len; i2++) {
-    const { h: h2, l: l2 } = fromBig(lst[i2], le);
+    const { h: h2, l: l2 } = fromBig(lst[i2], le2);
     [Ah[i2], Al[i2]] = [h2, l2];
   }
   return [Ah, Al];
@@ -2292,7 +2292,7 @@ class TypeTable {
   }
 }
 class Visitor {
-  visitType(_t, _data) {
+  visitType(_t2, _data) {
     throw new Error("Not implemented");
   }
   visitPrimitive(t, data) {
@@ -2353,7 +2353,7 @@ class Visitor {
   visitVariant(t, _fields, data) {
     return this.visitConstruct(t, data);
   }
-  visitRec(_t, ty, data) {
+  visitRec(_t2, ty, data) {
     return this.visitConstruct(ty, data);
   }
   visitFunc(t, data) {
@@ -2463,7 +2463,7 @@ class UnknownClass extends Type {
   static [Symbol.hasInstance](instance) {
     return instance.typeName === IdlTypeName.UnknownClass;
   }
-  checkType(_t) {
+  checkType(_t2) {
     throw new Error("Method not implemented for unknown.");
   }
   accept(v2, d2) {
@@ -4342,7 +4342,7 @@ function B(t) {
     case c$1.Map:
       return b$1(e);
     case c$1.Tag:
-      return M(e);
+      return M$1(e);
     case c$1.Simple:
       return Q(e);
   }
@@ -4438,7 +4438,7 @@ function F(t) {
   const n = $(t);
   return K.decode(n);
 }
-function M(t, n) {
+function M$1(t, n) {
   const e = E$1(t);
   if (e === m$1)
     return B();
@@ -4449,7 +4449,7 @@ let x$1 = class x extends Error {
     super(n), this.name = "SerializationError";
   }
 };
-const p$1 = 2 * 1024, C = 100, v = new TextEncoder();
+const p$1 = 2 * 1024, C = 100, v$1 = new TextEncoder();
 function S(t) {
   return t << 5;
 }
@@ -4481,7 +4481,7 @@ function _(t, n) {
     return;
   }
   if (Array.isArray(t)) {
-    tt(t, n);
+    tt$1(t, n);
     return;
   }
   if (typeof t == "object") {
@@ -4490,7 +4490,7 @@ function _(t, n) {
   }
   throw new x$1(`Unsupported type: ${typeof t}`);
 }
-function tt(t, n) {
+function tt$1(t, n) {
   I(c$1.Array, t.length), t.forEach((e, i2) => {
     _((n == null ? void 0 : n(e, i2.toString())) ?? e, n);
   });
@@ -4571,7 +4571,7 @@ function ft(t) {
   t >= 0 ? ct(t) : ot(t);
 }
 function X$2(t) {
-  k$1(c$1.TextString, v.encode(t));
+  k$1(c$1.TextString, v$1.encode(t));
 }
 function V(t) {
   k$1(c$1.ByteString, t);
@@ -16183,6 +16183,7 @@ function checkDCE$1() {
   reactDom.exports = reactDom_production;
 }
 var reactDomExports = reactDom.exports;
+const vt = /* @__PURE__ */ getDefaultExportFromCjs(reactDomExports);
 /**
  * @license React
  * react-dom-client.production.js
@@ -33897,16 +33898,16 @@ class Matrix3 {
    * @return {Matrix3} A reference to this matrix.
    */
   set(n11, n12, n13, n21, n22, n23, n31, n32, n33) {
-    const te = this.elements;
-    te[0] = n11;
-    te[1] = n21;
-    te[2] = n31;
-    te[3] = n12;
-    te[4] = n22;
-    te[5] = n32;
-    te[6] = n13;
-    te[7] = n23;
-    te[8] = n33;
+    const te2 = this.elements;
+    te2[0] = n11;
+    te2[1] = n21;
+    te2[2] = n31;
+    te2[3] = n12;
+    te2[4] = n22;
+    te2[5] = n32;
+    te2[6] = n13;
+    te2[7] = n23;
+    te2[8] = n33;
     return this;
   }
   /**
@@ -33935,17 +33936,17 @@ class Matrix3 {
    * @return {Matrix3} A reference to this matrix.
    */
   copy(m2) {
-    const te = this.elements;
-    const me = m2.elements;
-    te[0] = me[0];
-    te[1] = me[1];
-    te[2] = me[2];
-    te[3] = me[3];
-    te[4] = me[4];
-    te[5] = me[5];
-    te[6] = me[6];
-    te[7] = me[7];
-    te[8] = me[8];
+    const te2 = this.elements;
+    const me2 = m2.elements;
+    te2[0] = me2[0];
+    te2[1] = me2[1];
+    te2[2] = me2[2];
+    te2[3] = me2[3];
+    te2[4] = me2[4];
+    te2[5] = me2[5];
+    te2[6] = me2[6];
+    te2[7] = me2[7];
+    te2[8] = me2[8];
     return this;
   }
   /**
@@ -33969,17 +33970,17 @@ class Matrix3 {
    * @return {Matrix3} A reference to this matrix.
    */
   setFromMatrix4(m2) {
-    const me = m2.elements;
+    const me2 = m2.elements;
     this.set(
-      me[0],
-      me[4],
-      me[8],
-      me[1],
-      me[5],
-      me[9],
-      me[2],
-      me[6],
-      me[10]
+      me2[0],
+      me2[4],
+      me2[8],
+      me2[1],
+      me2[5],
+      me2[9],
+      me2[2],
+      me2[6],
+      me2[10]
     );
     return this;
   }
@@ -34010,24 +34011,24 @@ class Matrix3 {
    * @return {Matrix3} A reference to this matrix.
    */
   multiplyMatrices(a2, b2) {
-    const ae = a2.elements;
-    const be = b2.elements;
-    const te = this.elements;
-    const a11 = ae[0], a12 = ae[3], a13 = ae[6];
-    const a21 = ae[1], a22 = ae[4], a23 = ae[7];
-    const a31 = ae[2], a32 = ae[5], a33 = ae[8];
-    const b11 = be[0], b12 = be[3], b13 = be[6];
-    const b21 = be[1], b22 = be[4], b23 = be[7];
-    const b31 = be[2], b32 = be[5], b33 = be[8];
-    te[0] = a11 * b11 + a12 * b21 + a13 * b31;
-    te[3] = a11 * b12 + a12 * b22 + a13 * b32;
-    te[6] = a11 * b13 + a12 * b23 + a13 * b33;
-    te[1] = a21 * b11 + a22 * b21 + a23 * b31;
-    te[4] = a21 * b12 + a22 * b22 + a23 * b32;
-    te[7] = a21 * b13 + a22 * b23 + a23 * b33;
-    te[2] = a31 * b11 + a32 * b21 + a33 * b31;
-    te[5] = a31 * b12 + a32 * b22 + a33 * b32;
-    te[8] = a31 * b13 + a32 * b23 + a33 * b33;
+    const ae2 = a2.elements;
+    const be2 = b2.elements;
+    const te2 = this.elements;
+    const a11 = ae2[0], a12 = ae2[3], a13 = ae2[6];
+    const a21 = ae2[1], a22 = ae2[4], a23 = ae2[7];
+    const a31 = ae2[2], a32 = ae2[5], a33 = ae2[8];
+    const b11 = be2[0], b12 = be2[3], b13 = be2[6];
+    const b21 = be2[1], b22 = be2[4], b23 = be2[7];
+    const b31 = be2[2], b32 = be2[5], b33 = be2[8];
+    te2[0] = a11 * b11 + a12 * b21 + a13 * b31;
+    te2[3] = a11 * b12 + a12 * b22 + a13 * b32;
+    te2[6] = a11 * b13 + a12 * b23 + a13 * b33;
+    te2[1] = a21 * b11 + a22 * b21 + a23 * b31;
+    te2[4] = a21 * b12 + a22 * b22 + a23 * b32;
+    te2[7] = a21 * b13 + a22 * b23 + a23 * b33;
+    te2[2] = a31 * b11 + a32 * b21 + a33 * b31;
+    te2[5] = a31 * b12 + a32 * b22 + a33 * b32;
+    te2[8] = a31 * b13 + a32 * b23 + a33 * b33;
     return this;
   }
   /**
@@ -34037,16 +34038,16 @@ class Matrix3 {
    * @return {Matrix3} A reference to this matrix.
    */
   multiplyScalar(s2) {
-    const te = this.elements;
-    te[0] *= s2;
-    te[3] *= s2;
-    te[6] *= s2;
-    te[1] *= s2;
-    te[4] *= s2;
-    te[7] *= s2;
-    te[2] *= s2;
-    te[5] *= s2;
-    te[8] *= s2;
+    const te2 = this.elements;
+    te2[0] *= s2;
+    te2[3] *= s2;
+    te2[6] *= s2;
+    te2[1] *= s2;
+    te2[4] *= s2;
+    te2[7] *= s2;
+    te2[2] *= s2;
+    te2[5] *= s2;
+    te2[8] *= s2;
     return this;
   }
   /**
@@ -34055,8 +34056,8 @@ class Matrix3 {
    * @return {number} The determinant.
    */
   determinant() {
-    const te = this.elements;
-    const a2 = te[0], b2 = te[1], c2 = te[2], d2 = te[3], e = te[4], f = te[5], g2 = te[6], h2 = te[7], i2 = te[8];
+    const te2 = this.elements;
+    const a2 = te2[0], b2 = te2[1], c2 = te2[2], d2 = te2[3], e = te2[4], f = te2[5], g2 = te2[6], h2 = te2[7], i2 = te2[8];
     return a2 * e * i2 - a2 * f * h2 - b2 * d2 * i2 + b2 * f * g2 + c2 * d2 * h2 - c2 * e * g2;
   }
   /**
@@ -34067,18 +34068,18 @@ class Matrix3 {
    * @return {Matrix3} A reference to this matrix.
    */
   invert() {
-    const te = this.elements, n11 = te[0], n21 = te[1], n31 = te[2], n12 = te[3], n22 = te[4], n32 = te[5], n13 = te[6], n23 = te[7], n33 = te[8], t11 = n33 * n22 - n32 * n23, t12 = n32 * n13 - n33 * n12, t13 = n23 * n12 - n22 * n13, det = n11 * t11 + n21 * t12 + n31 * t13;
+    const te2 = this.elements, n11 = te2[0], n21 = te2[1], n31 = te2[2], n12 = te2[3], n22 = te2[4], n32 = te2[5], n13 = te2[6], n23 = te2[7], n33 = te2[8], t11 = n33 * n22 - n32 * n23, t12 = n32 * n13 - n33 * n12, t13 = n23 * n12 - n22 * n13, det = n11 * t11 + n21 * t12 + n31 * t13;
     if (det === 0) return this.set(0, 0, 0, 0, 0, 0, 0, 0, 0);
     const detInv = 1 / det;
-    te[0] = t11 * detInv;
-    te[1] = (n31 * n23 - n33 * n21) * detInv;
-    te[2] = (n32 * n21 - n31 * n22) * detInv;
-    te[3] = t12 * detInv;
-    te[4] = (n33 * n11 - n31 * n13) * detInv;
-    te[5] = (n31 * n12 - n32 * n11) * detInv;
-    te[6] = t13 * detInv;
-    te[7] = (n21 * n13 - n23 * n11) * detInv;
-    te[8] = (n22 * n11 - n21 * n12) * detInv;
+    te2[0] = t11 * detInv;
+    te2[1] = (n31 * n23 - n33 * n21) * detInv;
+    te2[2] = (n32 * n21 - n31 * n22) * detInv;
+    te2[3] = t12 * detInv;
+    te2[4] = (n33 * n11 - n31 * n13) * detInv;
+    te2[5] = (n31 * n12 - n32 * n11) * detInv;
+    te2[6] = t13 * detInv;
+    te2[7] = (n21 * n13 - n23 * n11) * detInv;
+    te2[8] = (n22 * n11 - n21 * n12) * detInv;
     return this;
   }
   /**
@@ -34275,10 +34276,10 @@ class Matrix3 {
    * @return {boolean} Whether this matrix is equal with the given one.
    */
   equals(matrix) {
-    const te = this.elements;
-    const me = matrix.elements;
+    const te2 = this.elements;
+    const me2 = matrix.elements;
     for (let i2 = 0; i2 < 9; i2++) {
-      if (te[i2] !== me[i2]) return false;
+      if (te2[i2] !== me2[i2]) return false;
     }
     return true;
   }
@@ -34304,16 +34305,16 @@ class Matrix3 {
    * @return {Array<number>} The matrix elements in column-major order.
    */
   toArray(array = [], offset = 0) {
-    const te = this.elements;
-    array[offset] = te[0];
-    array[offset + 1] = te[1];
-    array[offset + 2] = te[2];
-    array[offset + 3] = te[3];
-    array[offset + 4] = te[4];
-    array[offset + 5] = te[5];
-    array[offset + 6] = te[6];
-    array[offset + 7] = te[7];
-    array[offset + 8] = te[8];
+    const te2 = this.elements;
+    array[offset] = te2[0];
+    array[offset + 1] = te2[1];
+    array[offset + 2] = te2[2];
+    array[offset + 3] = te2[3];
+    array[offset + 4] = te2[4];
+    array[offset + 5] = te2[5];
+    array[offset + 6] = te2[6];
+    array[offset + 7] = te2[7];
+    array[offset + 8] = te2[8];
     return array;
   }
   /**
@@ -35294,7 +35295,7 @@ class Vector4 {
    */
   setAxisAngleFromRotationMatrix(m2) {
     let angle, x3, y2, z2;
-    const epsilon = 0.01, epsilon2 = 0.1, te = m2.elements, m11 = te[0], m12 = te[4], m13 = te[8], m21 = te[1], m22 = te[5], m23 = te[9], m31 = te[2], m32 = te[6], m33 = te[10];
+    const epsilon = 0.01, epsilon2 = 0.1, te2 = m2.elements, m11 = te2[0], m12 = te2[4], m13 = te2[8], m21 = te2[1], m22 = te2[5], m23 = te2[9], m31 = te2[2], m32 = te2[6], m33 = te2[10];
     if (Math.abs(m12 - m21) < epsilon && Math.abs(m13 - m31) < epsilon && Math.abs(m23 - m32) < epsilon) {
       if (Math.abs(m12 + m21) < epsilon2 && Math.abs(m13 + m31) < epsilon2 && Math.abs(m23 + m32) < epsilon2 && Math.abs(m11 + m22 + m33 - 3) < epsilon2) {
         this.set(1, 0, 0, 0);
@@ -36216,7 +36217,7 @@ class Quaternion {
    * @return {Quaternion} A reference to this quaternion.
    */
   setFromRotationMatrix(m2) {
-    const te = m2.elements, m11 = te[0], m12 = te[4], m13 = te[8], m21 = te[1], m22 = te[5], m23 = te[9], m31 = te[2], m32 = te[6], m33 = te[10], trace = m11 + m22 + m33;
+    const te2 = m2.elements, m11 = te2[0], m12 = te2[4], m13 = te2[8], m21 = te2[1], m22 = te2[5], m23 = te2[9], m31 = te2[2], m32 = te2[6], m33 = te2[10], trace = m11 + m22 + m33;
     if (trace > 0) {
       const s2 = 0.5 / Math.sqrt(trace + 1);
       this._w = 0.25 / s2;
@@ -38699,23 +38700,23 @@ class Matrix4 {
    * @return {Matrix4} A reference to this matrix.
    */
   set(n11, n12, n13, n14, n21, n22, n23, n24, n31, n32, n33, n34, n41, n42, n43, n44) {
-    const te = this.elements;
-    te[0] = n11;
-    te[4] = n12;
-    te[8] = n13;
-    te[12] = n14;
-    te[1] = n21;
-    te[5] = n22;
-    te[9] = n23;
-    te[13] = n24;
-    te[2] = n31;
-    te[6] = n32;
-    te[10] = n33;
-    te[14] = n34;
-    te[3] = n41;
-    te[7] = n42;
-    te[11] = n43;
-    te[15] = n44;
+    const te2 = this.elements;
+    te2[0] = n11;
+    te2[4] = n12;
+    te2[8] = n13;
+    te2[12] = n14;
+    te2[1] = n21;
+    te2[5] = n22;
+    te2[9] = n23;
+    te2[13] = n24;
+    te2[2] = n31;
+    te2[6] = n32;
+    te2[10] = n33;
+    te2[14] = n34;
+    te2[3] = n41;
+    te2[7] = n42;
+    te2[11] = n43;
+    te2[15] = n44;
     return this;
   }
   /**
@@ -38759,24 +38760,24 @@ class Matrix4 {
    * @return {Matrix4} A reference to this matrix.
    */
   copy(m2) {
-    const te = this.elements;
-    const me = m2.elements;
-    te[0] = me[0];
-    te[1] = me[1];
-    te[2] = me[2];
-    te[3] = me[3];
-    te[4] = me[4];
-    te[5] = me[5];
-    te[6] = me[6];
-    te[7] = me[7];
-    te[8] = me[8];
-    te[9] = me[9];
-    te[10] = me[10];
-    te[11] = me[11];
-    te[12] = me[12];
-    te[13] = me[13];
-    te[14] = me[14];
-    te[15] = me[15];
+    const te2 = this.elements;
+    const me2 = m2.elements;
+    te2[0] = me2[0];
+    te2[1] = me2[1];
+    te2[2] = me2[2];
+    te2[3] = me2[3];
+    te2[4] = me2[4];
+    te2[5] = me2[5];
+    te2[6] = me2[6];
+    te2[7] = me2[7];
+    te2[8] = me2[8];
+    te2[9] = me2[9];
+    te2[10] = me2[10];
+    te2[11] = me2[11];
+    te2[12] = me2[12];
+    te2[13] = me2[13];
+    te2[14] = me2[14];
+    te2[15] = me2[15];
     return this;
   }
   /**
@@ -38787,10 +38788,10 @@ class Matrix4 {
    * @return {Matrix4} A reference to this matrix.
    */
   copyPosition(m2) {
-    const te = this.elements, me = m2.elements;
-    te[12] = me[12];
-    te[13] = me[13];
-    te[14] = me[14];
+    const te2 = this.elements, me2 = m2.elements;
+    te2[12] = me2[12];
+    te2[13] = me2[13];
+    te2[14] = me2[14];
     return this;
   }
   /**
@@ -38800,19 +38801,19 @@ class Matrix4 {
    * @return {Matrix4} A reference to this matrix.
    */
   setFromMatrix3(m2) {
-    const me = m2.elements;
+    const me2 = m2.elements;
     this.set(
-      me[0],
-      me[3],
-      me[6],
+      me2[0],
+      me2[3],
+      me2[6],
       0,
-      me[1],
-      me[4],
-      me[7],
+      me2[1],
+      me2[4],
+      me2[7],
       0,
-      me[2],
-      me[5],
-      me[8],
+      me2[2],
+      me2[5],
+      me2[8],
       0,
       0,
       0,
@@ -38874,27 +38875,27 @@ class Matrix4 {
    * @return {Matrix4} A reference to this matrix.
    */
   extractRotation(m2) {
-    const te = this.elements;
-    const me = m2.elements;
+    const te2 = this.elements;
+    const me2 = m2.elements;
     const scaleX2 = 1 / _v1$5.setFromMatrixColumn(m2, 0).length();
     const scaleY2 = 1 / _v1$5.setFromMatrixColumn(m2, 1).length();
     const scaleZ = 1 / _v1$5.setFromMatrixColumn(m2, 2).length();
-    te[0] = me[0] * scaleX2;
-    te[1] = me[1] * scaleX2;
-    te[2] = me[2] * scaleX2;
-    te[3] = 0;
-    te[4] = me[4] * scaleY2;
-    te[5] = me[5] * scaleY2;
-    te[6] = me[6] * scaleY2;
-    te[7] = 0;
-    te[8] = me[8] * scaleZ;
-    te[9] = me[9] * scaleZ;
-    te[10] = me[10] * scaleZ;
-    te[11] = 0;
-    te[12] = 0;
-    te[13] = 0;
-    te[14] = 0;
-    te[15] = 1;
+    te2[0] = me2[0] * scaleX2;
+    te2[1] = me2[1] * scaleX2;
+    te2[2] = me2[2] * scaleX2;
+    te2[3] = 0;
+    te2[4] = me2[4] * scaleY2;
+    te2[5] = me2[5] * scaleY2;
+    te2[6] = me2[6] * scaleY2;
+    te2[7] = 0;
+    te2[8] = me2[8] * scaleZ;
+    te2[9] = me2[9] * scaleZ;
+    te2[10] = me2[10] * scaleZ;
+    te2[11] = 0;
+    te2[12] = 0;
+    te2[13] = 0;
+    te2[14] = 0;
+    te2[15] = 1;
     return this;
   }
   /**
@@ -38908,85 +38909,85 @@ class Matrix4 {
    * @return {Matrix4} A reference to this matrix.
    */
   makeRotationFromEuler(euler) {
-    const te = this.elements;
+    const te2 = this.elements;
     const x3 = euler.x, y2 = euler.y, z2 = euler.z;
     const a2 = Math.cos(x3), b2 = Math.sin(x3);
     const c2 = Math.cos(y2), d2 = Math.sin(y2);
     const e = Math.cos(z2), f = Math.sin(z2);
     if (euler.order === "XYZ") {
-      const ae = a2 * e, af = a2 * f, be = b2 * e, bf = b2 * f;
-      te[0] = c2 * e;
-      te[4] = -c2 * f;
-      te[8] = d2;
-      te[1] = af + be * d2;
-      te[5] = ae - bf * d2;
-      te[9] = -b2 * c2;
-      te[2] = bf - ae * d2;
-      te[6] = be + af * d2;
-      te[10] = a2 * c2;
+      const ae2 = a2 * e, af = a2 * f, be2 = b2 * e, bf = b2 * f;
+      te2[0] = c2 * e;
+      te2[4] = -c2 * f;
+      te2[8] = d2;
+      te2[1] = af + be2 * d2;
+      te2[5] = ae2 - bf * d2;
+      te2[9] = -b2 * c2;
+      te2[2] = bf - ae2 * d2;
+      te2[6] = be2 + af * d2;
+      te2[10] = a2 * c2;
     } else if (euler.order === "YXZ") {
-      const ce = c2 * e, cf = c2 * f, de = d2 * e, df = d2 * f;
-      te[0] = ce + df * b2;
-      te[4] = de * b2 - cf;
-      te[8] = a2 * d2;
-      te[1] = a2 * f;
-      te[5] = a2 * e;
-      te[9] = -b2;
-      te[2] = cf * b2 - de;
-      te[6] = df + ce * b2;
-      te[10] = a2 * c2;
+      const ce2 = c2 * e, cf = c2 * f, de2 = d2 * e, df = d2 * f;
+      te2[0] = ce2 + df * b2;
+      te2[4] = de2 * b2 - cf;
+      te2[8] = a2 * d2;
+      te2[1] = a2 * f;
+      te2[5] = a2 * e;
+      te2[9] = -b2;
+      te2[2] = cf * b2 - de2;
+      te2[6] = df + ce2 * b2;
+      te2[10] = a2 * c2;
     } else if (euler.order === "ZXY") {
-      const ce = c2 * e, cf = c2 * f, de = d2 * e, df = d2 * f;
-      te[0] = ce - df * b2;
-      te[4] = -a2 * f;
-      te[8] = de + cf * b2;
-      te[1] = cf + de * b2;
-      te[5] = a2 * e;
-      te[9] = df - ce * b2;
-      te[2] = -a2 * d2;
-      te[6] = b2;
-      te[10] = a2 * c2;
+      const ce2 = c2 * e, cf = c2 * f, de2 = d2 * e, df = d2 * f;
+      te2[0] = ce2 - df * b2;
+      te2[4] = -a2 * f;
+      te2[8] = de2 + cf * b2;
+      te2[1] = cf + de2 * b2;
+      te2[5] = a2 * e;
+      te2[9] = df - ce2 * b2;
+      te2[2] = -a2 * d2;
+      te2[6] = b2;
+      te2[10] = a2 * c2;
     } else if (euler.order === "ZYX") {
-      const ae = a2 * e, af = a2 * f, be = b2 * e, bf = b2 * f;
-      te[0] = c2 * e;
-      te[4] = be * d2 - af;
-      te[8] = ae * d2 + bf;
-      te[1] = c2 * f;
-      te[5] = bf * d2 + ae;
-      te[9] = af * d2 - be;
-      te[2] = -d2;
-      te[6] = b2 * c2;
-      te[10] = a2 * c2;
+      const ae2 = a2 * e, af = a2 * f, be2 = b2 * e, bf = b2 * f;
+      te2[0] = c2 * e;
+      te2[4] = be2 * d2 - af;
+      te2[8] = ae2 * d2 + bf;
+      te2[1] = c2 * f;
+      te2[5] = bf * d2 + ae2;
+      te2[9] = af * d2 - be2;
+      te2[2] = -d2;
+      te2[6] = b2 * c2;
+      te2[10] = a2 * c2;
     } else if (euler.order === "YZX") {
       const ac = a2 * c2, ad = a2 * d2, bc = b2 * c2, bd = b2 * d2;
-      te[0] = c2 * e;
-      te[4] = bd - ac * f;
-      te[8] = bc * f + ad;
-      te[1] = f;
-      te[5] = a2 * e;
-      te[9] = -b2 * e;
-      te[2] = -d2 * e;
-      te[6] = ad * f + bc;
-      te[10] = ac - bd * f;
+      te2[0] = c2 * e;
+      te2[4] = bd - ac * f;
+      te2[8] = bc * f + ad;
+      te2[1] = f;
+      te2[5] = a2 * e;
+      te2[9] = -b2 * e;
+      te2[2] = -d2 * e;
+      te2[6] = ad * f + bc;
+      te2[10] = ac - bd * f;
     } else if (euler.order === "XZY") {
       const ac = a2 * c2, ad = a2 * d2, bc = b2 * c2, bd = b2 * d2;
-      te[0] = c2 * e;
-      te[4] = -f;
-      te[8] = d2 * e;
-      te[1] = ac * f + bd;
-      te[5] = a2 * e;
-      te[9] = ad * f - bc;
-      te[2] = bc * f - ad;
-      te[6] = b2 * e;
-      te[10] = bd * f + ac;
+      te2[0] = c2 * e;
+      te2[4] = -f;
+      te2[8] = d2 * e;
+      te2[1] = ac * f + bd;
+      te2[5] = a2 * e;
+      te2[9] = ad * f - bc;
+      te2[2] = bc * f - ad;
+      te2[6] = b2 * e;
+      te2[10] = bd * f + ac;
     }
-    te[3] = 0;
-    te[7] = 0;
-    te[11] = 0;
-    te[12] = 0;
-    te[13] = 0;
-    te[14] = 0;
-    te[15] = 1;
+    te2[3] = 0;
+    te2[7] = 0;
+    te2[11] = 0;
+    te2[12] = 0;
+    te2[13] = 0;
+    te2[14] = 0;
+    te2[15] = 1;
     return this;
   }
   /**
@@ -39010,7 +39011,7 @@ class Matrix4 {
    * @return {Matrix4} A reference to this matrix.
    */
   lookAt(eye, target, up) {
-    const te = this.elements;
+    const te2 = this.elements;
     _z.subVectors(eye, target);
     if (_z.lengthSq() === 0) {
       _z.z = 1;
@@ -39028,15 +39029,15 @@ class Matrix4 {
     }
     _x.normalize();
     _y.crossVectors(_z, _x);
-    te[0] = _x.x;
-    te[4] = _y.x;
-    te[8] = _z.x;
-    te[1] = _x.y;
-    te[5] = _y.y;
-    te[9] = _z.y;
-    te[2] = _x.z;
-    te[6] = _y.z;
-    te[10] = _z.z;
+    te2[0] = _x.x;
+    te2[4] = _y.x;
+    te2[8] = _z.x;
+    te2[1] = _x.y;
+    te2[5] = _y.y;
+    te2[9] = _z.y;
+    te2[2] = _x.z;
+    te2[6] = _y.z;
+    te2[10] = _z.z;
     return this;
   }
   /**
@@ -39066,33 +39067,33 @@ class Matrix4 {
    * @return {Matrix4} A reference to this matrix.
    */
   multiplyMatrices(a2, b2) {
-    const ae = a2.elements;
-    const be = b2.elements;
-    const te = this.elements;
-    const a11 = ae[0], a12 = ae[4], a13 = ae[8], a14 = ae[12];
-    const a21 = ae[1], a22 = ae[5], a23 = ae[9], a24 = ae[13];
-    const a31 = ae[2], a32 = ae[6], a33 = ae[10], a34 = ae[14];
-    const a41 = ae[3], a42 = ae[7], a43 = ae[11], a44 = ae[15];
-    const b11 = be[0], b12 = be[4], b13 = be[8], b14 = be[12];
-    const b21 = be[1], b22 = be[5], b23 = be[9], b24 = be[13];
-    const b31 = be[2], b32 = be[6], b33 = be[10], b34 = be[14];
-    const b41 = be[3], b42 = be[7], b43 = be[11], b44 = be[15];
-    te[0] = a11 * b11 + a12 * b21 + a13 * b31 + a14 * b41;
-    te[4] = a11 * b12 + a12 * b22 + a13 * b32 + a14 * b42;
-    te[8] = a11 * b13 + a12 * b23 + a13 * b33 + a14 * b43;
-    te[12] = a11 * b14 + a12 * b24 + a13 * b34 + a14 * b44;
-    te[1] = a21 * b11 + a22 * b21 + a23 * b31 + a24 * b41;
-    te[5] = a21 * b12 + a22 * b22 + a23 * b32 + a24 * b42;
-    te[9] = a21 * b13 + a22 * b23 + a23 * b33 + a24 * b43;
-    te[13] = a21 * b14 + a22 * b24 + a23 * b34 + a24 * b44;
-    te[2] = a31 * b11 + a32 * b21 + a33 * b31 + a34 * b41;
-    te[6] = a31 * b12 + a32 * b22 + a33 * b32 + a34 * b42;
-    te[10] = a31 * b13 + a32 * b23 + a33 * b33 + a34 * b43;
-    te[14] = a31 * b14 + a32 * b24 + a33 * b34 + a34 * b44;
-    te[3] = a41 * b11 + a42 * b21 + a43 * b31 + a44 * b41;
-    te[7] = a41 * b12 + a42 * b22 + a43 * b32 + a44 * b42;
-    te[11] = a41 * b13 + a42 * b23 + a43 * b33 + a44 * b43;
-    te[15] = a41 * b14 + a42 * b24 + a43 * b34 + a44 * b44;
+    const ae2 = a2.elements;
+    const be2 = b2.elements;
+    const te2 = this.elements;
+    const a11 = ae2[0], a12 = ae2[4], a13 = ae2[8], a14 = ae2[12];
+    const a21 = ae2[1], a22 = ae2[5], a23 = ae2[9], a24 = ae2[13];
+    const a31 = ae2[2], a32 = ae2[6], a33 = ae2[10], a34 = ae2[14];
+    const a41 = ae2[3], a42 = ae2[7], a43 = ae2[11], a44 = ae2[15];
+    const b11 = be2[0], b12 = be2[4], b13 = be2[8], b14 = be2[12];
+    const b21 = be2[1], b22 = be2[5], b23 = be2[9], b24 = be2[13];
+    const b31 = be2[2], b32 = be2[6], b33 = be2[10], b34 = be2[14];
+    const b41 = be2[3], b42 = be2[7], b43 = be2[11], b44 = be2[15];
+    te2[0] = a11 * b11 + a12 * b21 + a13 * b31 + a14 * b41;
+    te2[4] = a11 * b12 + a12 * b22 + a13 * b32 + a14 * b42;
+    te2[8] = a11 * b13 + a12 * b23 + a13 * b33 + a14 * b43;
+    te2[12] = a11 * b14 + a12 * b24 + a13 * b34 + a14 * b44;
+    te2[1] = a21 * b11 + a22 * b21 + a23 * b31 + a24 * b41;
+    te2[5] = a21 * b12 + a22 * b22 + a23 * b32 + a24 * b42;
+    te2[9] = a21 * b13 + a22 * b23 + a23 * b33 + a24 * b43;
+    te2[13] = a21 * b14 + a22 * b24 + a23 * b34 + a24 * b44;
+    te2[2] = a31 * b11 + a32 * b21 + a33 * b31 + a34 * b41;
+    te2[6] = a31 * b12 + a32 * b22 + a33 * b32 + a34 * b42;
+    te2[10] = a31 * b13 + a32 * b23 + a33 * b33 + a34 * b43;
+    te2[14] = a31 * b14 + a32 * b24 + a33 * b34 + a34 * b44;
+    te2[3] = a41 * b11 + a42 * b21 + a43 * b31 + a44 * b41;
+    te2[7] = a41 * b12 + a42 * b22 + a43 * b32 + a44 * b42;
+    te2[11] = a41 * b13 + a42 * b23 + a43 * b33 + a44 * b43;
+    te2[15] = a41 * b14 + a42 * b24 + a43 * b34 + a44 * b44;
     return this;
   }
   /**
@@ -39102,23 +39103,23 @@ class Matrix4 {
    * @return {Matrix4} A reference to this matrix.
    */
   multiplyScalar(s2) {
-    const te = this.elements;
-    te[0] *= s2;
-    te[4] *= s2;
-    te[8] *= s2;
-    te[12] *= s2;
-    te[1] *= s2;
-    te[5] *= s2;
-    te[9] *= s2;
-    te[13] *= s2;
-    te[2] *= s2;
-    te[6] *= s2;
-    te[10] *= s2;
-    te[14] *= s2;
-    te[3] *= s2;
-    te[7] *= s2;
-    te[11] *= s2;
-    te[15] *= s2;
+    const te2 = this.elements;
+    te2[0] *= s2;
+    te2[4] *= s2;
+    te2[8] *= s2;
+    te2[12] *= s2;
+    te2[1] *= s2;
+    te2[5] *= s2;
+    te2[9] *= s2;
+    te2[13] *= s2;
+    te2[2] *= s2;
+    te2[6] *= s2;
+    te2[10] *= s2;
+    te2[14] *= s2;
+    te2[3] *= s2;
+    te2[7] *= s2;
+    te2[11] *= s2;
+    te2[15] *= s2;
     return this;
   }
   /**
@@ -39129,11 +39130,11 @@ class Matrix4 {
    * @return {number} The determinant.
    */
   determinant() {
-    const te = this.elements;
-    const n11 = te[0], n12 = te[4], n13 = te[8], n14 = te[12];
-    const n21 = te[1], n22 = te[5], n23 = te[9], n24 = te[13];
-    const n31 = te[2], n32 = te[6], n33 = te[10], n34 = te[14];
-    const n41 = te[3], n42 = te[7], n43 = te[11], n44 = te[15];
+    const te2 = this.elements;
+    const n11 = te2[0], n12 = te2[4], n13 = te2[8], n14 = te2[12];
+    const n21 = te2[1], n22 = te2[5], n23 = te2[9], n24 = te2[13];
+    const n31 = te2[2], n32 = te2[6], n33 = te2[10], n34 = te2[14];
+    const n41 = te2[3], n42 = te2[7], n43 = te2[11], n44 = te2[15];
     return n41 * (+n14 * n23 * n32 - n13 * n24 * n32 - n14 * n22 * n33 + n12 * n24 * n33 + n13 * n22 * n34 - n12 * n23 * n34) + n42 * (+n11 * n23 * n34 - n11 * n24 * n33 + n14 * n21 * n33 - n13 * n21 * n34 + n13 * n24 * n31 - n14 * n23 * n31) + n43 * (+n11 * n24 * n32 - n11 * n22 * n34 - n14 * n21 * n32 + n12 * n21 * n34 + n14 * n22 * n31 - n12 * n24 * n31) + n44 * (-n13 * n22 * n31 - n11 * n23 * n32 + n11 * n22 * n33 + n13 * n21 * n32 - n12 * n21 * n33 + n12 * n23 * n31);
   }
   /**
@@ -39142,26 +39143,26 @@ class Matrix4 {
    * @return {Matrix4} A reference to this matrix.
    */
   transpose() {
-    const te = this.elements;
+    const te2 = this.elements;
     let tmp2;
-    tmp2 = te[1];
-    te[1] = te[4];
-    te[4] = tmp2;
-    tmp2 = te[2];
-    te[2] = te[8];
-    te[8] = tmp2;
-    tmp2 = te[6];
-    te[6] = te[9];
-    te[9] = tmp2;
-    tmp2 = te[3];
-    te[3] = te[12];
-    te[12] = tmp2;
-    tmp2 = te[7];
-    te[7] = te[13];
-    te[13] = tmp2;
-    tmp2 = te[11];
-    te[11] = te[14];
-    te[14] = tmp2;
+    tmp2 = te2[1];
+    te2[1] = te2[4];
+    te2[4] = tmp2;
+    tmp2 = te2[2];
+    te2[2] = te2[8];
+    te2[8] = tmp2;
+    tmp2 = te2[6];
+    te2[6] = te2[9];
+    te2[9] = tmp2;
+    tmp2 = te2[3];
+    te2[3] = te2[12];
+    te2[12] = tmp2;
+    tmp2 = te2[7];
+    te2[7] = te2[13];
+    te2[13] = tmp2;
+    tmp2 = te2[11];
+    te2[11] = te2[14];
+    te2[14] = tmp2;
     return this;
   }
   /**
@@ -39174,15 +39175,15 @@ class Matrix4 {
    * @return {Matrix4} A reference to this matrix.
    */
   setPosition(x3, y2, z2) {
-    const te = this.elements;
+    const te2 = this.elements;
     if (x3.isVector3) {
-      te[12] = x3.x;
-      te[13] = x3.y;
-      te[14] = x3.z;
+      te2[12] = x3.x;
+      te2[13] = x3.y;
+      te2[14] = x3.z;
     } else {
-      te[12] = x3;
-      te[13] = y2;
-      te[14] = z2;
+      te2[12] = x3;
+      te2[13] = y2;
+      te2[14] = z2;
     }
     return this;
   }
@@ -39194,26 +39195,26 @@ class Matrix4 {
    * @return {Matrix4} A reference to this matrix.
    */
   invert() {
-    const te = this.elements, n11 = te[0], n21 = te[1], n31 = te[2], n41 = te[3], n12 = te[4], n22 = te[5], n32 = te[6], n42 = te[7], n13 = te[8], n23 = te[9], n33 = te[10], n43 = te[11], n14 = te[12], n24 = te[13], n34 = te[14], n44 = te[15], t11 = n23 * n34 * n42 - n24 * n33 * n42 + n24 * n32 * n43 - n22 * n34 * n43 - n23 * n32 * n44 + n22 * n33 * n44, t12 = n14 * n33 * n42 - n13 * n34 * n42 - n14 * n32 * n43 + n12 * n34 * n43 + n13 * n32 * n44 - n12 * n33 * n44, t13 = n13 * n24 * n42 - n14 * n23 * n42 + n14 * n22 * n43 - n12 * n24 * n43 - n13 * n22 * n44 + n12 * n23 * n44, t14 = n14 * n23 * n32 - n13 * n24 * n32 - n14 * n22 * n33 + n12 * n24 * n33 + n13 * n22 * n34 - n12 * n23 * n34;
+    const te2 = this.elements, n11 = te2[0], n21 = te2[1], n31 = te2[2], n41 = te2[3], n12 = te2[4], n22 = te2[5], n32 = te2[6], n42 = te2[7], n13 = te2[8], n23 = te2[9], n33 = te2[10], n43 = te2[11], n14 = te2[12], n24 = te2[13], n34 = te2[14], n44 = te2[15], t11 = n23 * n34 * n42 - n24 * n33 * n42 + n24 * n32 * n43 - n22 * n34 * n43 - n23 * n32 * n44 + n22 * n33 * n44, t12 = n14 * n33 * n42 - n13 * n34 * n42 - n14 * n32 * n43 + n12 * n34 * n43 + n13 * n32 * n44 - n12 * n33 * n44, t13 = n13 * n24 * n42 - n14 * n23 * n42 + n14 * n22 * n43 - n12 * n24 * n43 - n13 * n22 * n44 + n12 * n23 * n44, t14 = n14 * n23 * n32 - n13 * n24 * n32 - n14 * n22 * n33 + n12 * n24 * n33 + n13 * n22 * n34 - n12 * n23 * n34;
     const det = n11 * t11 + n21 * t12 + n31 * t13 + n41 * t14;
     if (det === 0) return this.set(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     const detInv = 1 / det;
-    te[0] = t11 * detInv;
-    te[1] = (n24 * n33 * n41 - n23 * n34 * n41 - n24 * n31 * n43 + n21 * n34 * n43 + n23 * n31 * n44 - n21 * n33 * n44) * detInv;
-    te[2] = (n22 * n34 * n41 - n24 * n32 * n41 + n24 * n31 * n42 - n21 * n34 * n42 - n22 * n31 * n44 + n21 * n32 * n44) * detInv;
-    te[3] = (n23 * n32 * n41 - n22 * n33 * n41 - n23 * n31 * n42 + n21 * n33 * n42 + n22 * n31 * n43 - n21 * n32 * n43) * detInv;
-    te[4] = t12 * detInv;
-    te[5] = (n13 * n34 * n41 - n14 * n33 * n41 + n14 * n31 * n43 - n11 * n34 * n43 - n13 * n31 * n44 + n11 * n33 * n44) * detInv;
-    te[6] = (n14 * n32 * n41 - n12 * n34 * n41 - n14 * n31 * n42 + n11 * n34 * n42 + n12 * n31 * n44 - n11 * n32 * n44) * detInv;
-    te[7] = (n12 * n33 * n41 - n13 * n32 * n41 + n13 * n31 * n42 - n11 * n33 * n42 - n12 * n31 * n43 + n11 * n32 * n43) * detInv;
-    te[8] = t13 * detInv;
-    te[9] = (n14 * n23 * n41 - n13 * n24 * n41 - n14 * n21 * n43 + n11 * n24 * n43 + n13 * n21 * n44 - n11 * n23 * n44) * detInv;
-    te[10] = (n12 * n24 * n41 - n14 * n22 * n41 + n14 * n21 * n42 - n11 * n24 * n42 - n12 * n21 * n44 + n11 * n22 * n44) * detInv;
-    te[11] = (n13 * n22 * n41 - n12 * n23 * n41 - n13 * n21 * n42 + n11 * n23 * n42 + n12 * n21 * n43 - n11 * n22 * n43) * detInv;
-    te[12] = t14 * detInv;
-    te[13] = (n13 * n24 * n31 - n14 * n23 * n31 + n14 * n21 * n33 - n11 * n24 * n33 - n13 * n21 * n34 + n11 * n23 * n34) * detInv;
-    te[14] = (n14 * n22 * n31 - n12 * n24 * n31 - n14 * n21 * n32 + n11 * n24 * n32 + n12 * n21 * n34 - n11 * n22 * n34) * detInv;
-    te[15] = (n12 * n23 * n31 - n13 * n22 * n31 + n13 * n21 * n32 - n11 * n23 * n32 - n12 * n21 * n33 + n11 * n22 * n33) * detInv;
+    te2[0] = t11 * detInv;
+    te2[1] = (n24 * n33 * n41 - n23 * n34 * n41 - n24 * n31 * n43 + n21 * n34 * n43 + n23 * n31 * n44 - n21 * n33 * n44) * detInv;
+    te2[2] = (n22 * n34 * n41 - n24 * n32 * n41 + n24 * n31 * n42 - n21 * n34 * n42 - n22 * n31 * n44 + n21 * n32 * n44) * detInv;
+    te2[3] = (n23 * n32 * n41 - n22 * n33 * n41 - n23 * n31 * n42 + n21 * n33 * n42 + n22 * n31 * n43 - n21 * n32 * n43) * detInv;
+    te2[4] = t12 * detInv;
+    te2[5] = (n13 * n34 * n41 - n14 * n33 * n41 + n14 * n31 * n43 - n11 * n34 * n43 - n13 * n31 * n44 + n11 * n33 * n44) * detInv;
+    te2[6] = (n14 * n32 * n41 - n12 * n34 * n41 - n14 * n31 * n42 + n11 * n34 * n42 + n12 * n31 * n44 - n11 * n32 * n44) * detInv;
+    te2[7] = (n12 * n33 * n41 - n13 * n32 * n41 + n13 * n31 * n42 - n11 * n33 * n42 - n12 * n31 * n43 + n11 * n32 * n43) * detInv;
+    te2[8] = t13 * detInv;
+    te2[9] = (n14 * n23 * n41 - n13 * n24 * n41 - n14 * n21 * n43 + n11 * n24 * n43 + n13 * n21 * n44 - n11 * n23 * n44) * detInv;
+    te2[10] = (n12 * n24 * n41 - n14 * n22 * n41 + n14 * n21 * n42 - n11 * n24 * n42 - n12 * n21 * n44 + n11 * n22 * n44) * detInv;
+    te2[11] = (n13 * n22 * n41 - n12 * n23 * n41 - n13 * n21 * n42 + n11 * n23 * n42 + n12 * n21 * n43 - n11 * n22 * n43) * detInv;
+    te2[12] = t14 * detInv;
+    te2[13] = (n13 * n24 * n31 - n14 * n23 * n31 + n14 * n21 * n33 - n11 * n24 * n33 - n13 * n21 * n34 + n11 * n23 * n34) * detInv;
+    te2[14] = (n14 * n22 * n31 - n12 * n24 * n31 - n14 * n21 * n32 + n11 * n24 * n32 + n12 * n21 * n34 - n11 * n22 * n34) * detInv;
+    te2[15] = (n12 * n23 * n31 - n13 * n22 * n31 + n13 * n21 * n32 - n11 * n23 * n32 - n12 * n21 * n33 + n11 * n22 * n33) * detInv;
     return this;
   }
   /**
@@ -39223,20 +39224,20 @@ class Matrix4 {
    * @return {Matrix4} A reference to this matrix.
    */
   scale(v2) {
-    const te = this.elements;
+    const te2 = this.elements;
     const x3 = v2.x, y2 = v2.y, z2 = v2.z;
-    te[0] *= x3;
-    te[4] *= y2;
-    te[8] *= z2;
-    te[1] *= x3;
-    te[5] *= y2;
-    te[9] *= z2;
-    te[2] *= x3;
-    te[6] *= y2;
-    te[10] *= z2;
-    te[3] *= x3;
-    te[7] *= y2;
-    te[11] *= z2;
+    te2[0] *= x3;
+    te2[4] *= y2;
+    te2[8] *= z2;
+    te2[1] *= x3;
+    te2[5] *= y2;
+    te2[9] *= z2;
+    te2[2] *= x3;
+    te2[6] *= y2;
+    te2[10] *= z2;
+    te2[3] *= x3;
+    te2[7] *= y2;
+    te2[11] *= z2;
     return this;
   }
   /**
@@ -39245,10 +39246,10 @@ class Matrix4 {
    * @return {number} The maximum scale.
    */
   getMaxScaleOnAxis() {
-    const te = this.elements;
-    const scaleXSq = te[0] * te[0] + te[1] * te[1] + te[2] * te[2];
-    const scaleYSq = te[4] * te[4] + te[5] * te[5] + te[6] * te[6];
-    const scaleZSq = te[8] * te[8] + te[9] * te[9] + te[10] * te[10];
+    const te2 = this.elements;
+    const scaleXSq = te2[0] * te2[0] + te2[1] * te2[1] + te2[2] * te2[2];
+    const scaleYSq = te2[4] * te2[4] + te2[5] * te2[5] + te2[6] * te2[6];
+    const scaleZSq = te2[8] * te2[8] + te2[9] * te2[9] + te2[10] * te2[10];
     return Math.sqrt(Math.max(scaleXSq, scaleYSq, scaleZSq));
   }
   /**
@@ -39496,29 +39497,29 @@ class Matrix4 {
    * @return {Matrix4} A reference to this matrix.
    */
   compose(position, quaternion, scale2) {
-    const te = this.elements;
+    const te2 = this.elements;
     const x3 = quaternion._x, y2 = quaternion._y, z2 = quaternion._z, w2 = quaternion._w;
     const x22 = x3 + x3, y22 = y2 + y2, z22 = z2 + z2;
     const xx = x3 * x22, xy = x3 * y22, xz = x3 * z22;
     const yy = y2 * y22, yz = y2 * z22, zz = z2 * z22;
     const wx = w2 * x22, wy = w2 * y22, wz = w2 * z22;
     const sx = scale2.x, sy = scale2.y, sz = scale2.z;
-    te[0] = (1 - (yy + zz)) * sx;
-    te[1] = (xy + wz) * sx;
-    te[2] = (xz - wy) * sx;
-    te[3] = 0;
-    te[4] = (xy - wz) * sy;
-    te[5] = (1 - (xx + zz)) * sy;
-    te[6] = (yz + wx) * sy;
-    te[7] = 0;
-    te[8] = (xz + wy) * sz;
-    te[9] = (yz - wx) * sz;
-    te[10] = (1 - (xx + yy)) * sz;
-    te[11] = 0;
-    te[12] = position.x;
-    te[13] = position.y;
-    te[14] = position.z;
-    te[15] = 1;
+    te2[0] = (1 - (yy + zz)) * sx;
+    te2[1] = (xy + wz) * sx;
+    te2[2] = (xz - wy) * sx;
+    te2[3] = 0;
+    te2[4] = (xy - wz) * sy;
+    te2[5] = (1 - (xx + zz)) * sy;
+    te2[6] = (yz + wx) * sy;
+    te2[7] = 0;
+    te2[8] = (xz + wy) * sz;
+    te2[9] = (yz - wx) * sz;
+    te2[10] = (1 - (xx + yy)) * sz;
+    te2[11] = 0;
+    te2[12] = position.x;
+    te2[13] = position.y;
+    te2[14] = position.z;
+    te2[15] = 1;
     return this;
   }
   /**
@@ -39535,15 +39536,15 @@ class Matrix4 {
    * @return {Matrix4} A reference to this matrix.
    */
   decompose(position, quaternion, scale2) {
-    const te = this.elements;
-    let sx = _v1$5.set(te[0], te[1], te[2]).length();
-    const sy = _v1$5.set(te[4], te[5], te[6]).length();
-    const sz = _v1$5.set(te[8], te[9], te[10]).length();
+    const te2 = this.elements;
+    let sx = _v1$5.set(te2[0], te2[1], te2[2]).length();
+    const sy = _v1$5.set(te2[4], te2[5], te2[6]).length();
+    const sz = _v1$5.set(te2[8], te2[9], te2[10]).length();
     const det = this.determinant();
     if (det < 0) sx = -sx;
-    position.x = te[12];
-    position.y = te[13];
-    position.z = te[14];
+    position.x = te2[12];
+    position.y = te2[13];
+    position.z = te2[14];
     _m1$2.copy(this);
     const invSX = 1 / sx;
     const invSY = 1 / sy;
@@ -39577,7 +39578,7 @@ class Matrix4 {
   	 * @return {Matrix4} A reference to this matrix.
   	 */
   makePerspective(left, right, top, bottom, near, far, coordinateSystem = WebGLCoordinateSystem) {
-    const te = this.elements;
+    const te2 = this.elements;
     const x3 = 2 * near / (right - left);
     const y2 = 2 * near / (top - bottom);
     const a2 = (right + left) / (right - left);
@@ -39592,22 +39593,22 @@ class Matrix4 {
     } else {
       throw new Error("THREE.Matrix4.makePerspective(): Invalid coordinate system: " + coordinateSystem);
     }
-    te[0] = x3;
-    te[4] = 0;
-    te[8] = a2;
-    te[12] = 0;
-    te[1] = 0;
-    te[5] = y2;
-    te[9] = b2;
-    te[13] = 0;
-    te[2] = 0;
-    te[6] = 0;
-    te[10] = c2;
-    te[14] = d2;
-    te[3] = 0;
-    te[7] = 0;
-    te[11] = -1;
-    te[15] = 0;
+    te2[0] = x3;
+    te2[4] = 0;
+    te2[8] = a2;
+    te2[12] = 0;
+    te2[1] = 0;
+    te2[5] = y2;
+    te2[9] = b2;
+    te2[13] = 0;
+    te2[2] = 0;
+    te2[6] = 0;
+    te2[10] = c2;
+    te2[14] = d2;
+    te2[3] = 0;
+    te2[7] = 0;
+    te2[11] = -1;
+    te2[15] = 0;
     return this;
   }
   /**
@@ -39624,7 +39625,7 @@ class Matrix4 {
   	 * @return {Matrix4} A reference to this matrix.
   	 */
   makeOrthographic(left, right, top, bottom, near, far, coordinateSystem = WebGLCoordinateSystem) {
-    const te = this.elements;
+    const te2 = this.elements;
     const w2 = 1 / (right - left);
     const h2 = 1 / (top - bottom);
     const p2 = 1 / (far - near);
@@ -39640,22 +39641,22 @@ class Matrix4 {
     } else {
       throw new Error("THREE.Matrix4.makeOrthographic(): Invalid coordinate system: " + coordinateSystem);
     }
-    te[0] = 2 * w2;
-    te[4] = 0;
-    te[8] = 0;
-    te[12] = -x3;
-    te[1] = 0;
-    te[5] = 2 * h2;
-    te[9] = 0;
-    te[13] = -y2;
-    te[2] = 0;
-    te[6] = 0;
-    te[10] = zInv;
-    te[14] = -z2;
-    te[3] = 0;
-    te[7] = 0;
-    te[11] = 0;
-    te[15] = 1;
+    te2[0] = 2 * w2;
+    te2[4] = 0;
+    te2[8] = 0;
+    te2[12] = -x3;
+    te2[1] = 0;
+    te2[5] = 2 * h2;
+    te2[9] = 0;
+    te2[13] = -y2;
+    te2[2] = 0;
+    te2[6] = 0;
+    te2[10] = zInv;
+    te2[14] = -z2;
+    te2[3] = 0;
+    te2[7] = 0;
+    te2[11] = 0;
+    te2[15] = 1;
     return this;
   }
   /**
@@ -39665,10 +39666,10 @@ class Matrix4 {
    * @return {boolean} Whether this matrix is equal with the given one.
    */
   equals(matrix) {
-    const te = this.elements;
-    const me = matrix.elements;
+    const te2 = this.elements;
+    const me2 = matrix.elements;
     for (let i2 = 0; i2 < 16; i2++) {
-      if (te[i2] !== me[i2]) return false;
+      if (te2[i2] !== me2[i2]) return false;
     }
     return true;
   }
@@ -39694,23 +39695,23 @@ class Matrix4 {
    * @return {Array<number>} The matrix elements in column-major order.
    */
   toArray(array = [], offset = 0) {
-    const te = this.elements;
-    array[offset] = te[0];
-    array[offset + 1] = te[1];
-    array[offset + 2] = te[2];
-    array[offset + 3] = te[3];
-    array[offset + 4] = te[4];
-    array[offset + 5] = te[5];
-    array[offset + 6] = te[6];
-    array[offset + 7] = te[7];
-    array[offset + 8] = te[8];
-    array[offset + 9] = te[9];
-    array[offset + 10] = te[10];
-    array[offset + 11] = te[11];
-    array[offset + 12] = te[12];
-    array[offset + 13] = te[13];
-    array[offset + 14] = te[14];
-    array[offset + 15] = te[15];
+    const te2 = this.elements;
+    array[offset] = te2[0];
+    array[offset + 1] = te2[1];
+    array[offset + 2] = te2[2];
+    array[offset + 3] = te2[3];
+    array[offset + 4] = te2[4];
+    array[offset + 5] = te2[5];
+    array[offset + 6] = te2[6];
+    array[offset + 7] = te2[7];
+    array[offset + 8] = te2[8];
+    array[offset + 9] = te2[9];
+    array[offset + 10] = te2[10];
+    array[offset + 11] = te2[11];
+    array[offset + 12] = te2[12];
+    array[offset + 13] = te2[13];
+    array[offset + 14] = te2[14];
+    array[offset + 15] = te2[15];
     return array;
   }
 }
@@ -39839,10 +39840,10 @@ class Euler {
    * @return {Euler} A reference to this Euler instance.
    */
   setFromRotationMatrix(m2, order = this._order, update2 = true) {
-    const te = m2.elements;
-    const m11 = te[0], m12 = te[4], m13 = te[8];
-    const m21 = te[1], m22 = te[5], m23 = te[9];
-    const m31 = te[2], m32 = te[6], m33 = te[10];
+    const te2 = m2.elements;
+    const m11 = te2[0], m12 = te2[4], m13 = te2[8];
+    const m21 = te2[1], m22 = te2[5], m23 = te2[9];
+    const m31 = te2[2], m32 = te2[6], m33 = te2[10];
     switch (order) {
       case "XYZ":
         this._y = Math.asin(clamp$1(m13, -1, 1));
@@ -47264,20 +47265,20 @@ class Frustum {
    */
   setFromProjectionMatrix(m2, coordinateSystem = WebGLCoordinateSystem) {
     const planes = this.planes;
-    const me = m2.elements;
-    const me0 = me[0], me1 = me[1], me2 = me[2], me3 = me[3];
-    const me4 = me[4], me5 = me[5], me6 = me[6], me7 = me[7];
-    const me8 = me[8], me9 = me[9], me10 = me[10], me11 = me[11];
-    const me12 = me[12], me13 = me[13], me14 = me[14], me15 = me[15];
+    const me2 = m2.elements;
+    const me0 = me2[0], me1 = me2[1], me22 = me2[2], me3 = me2[3];
+    const me4 = me2[4], me5 = me2[5], me6 = me2[6], me7 = me2[7];
+    const me8 = me2[8], me9 = me2[9], me10 = me2[10], me11 = me2[11];
+    const me12 = me2[12], me13 = me2[13], me14 = me2[14], me15 = me2[15];
     planes[0].setComponents(me3 - me0, me7 - me4, me11 - me8, me15 - me12).normalize();
     planes[1].setComponents(me3 + me0, me7 + me4, me11 + me8, me15 + me12).normalize();
     planes[2].setComponents(me3 + me1, me7 + me5, me11 + me9, me15 + me13).normalize();
     planes[3].setComponents(me3 - me1, me7 - me5, me11 - me9, me15 - me13).normalize();
-    planes[4].setComponents(me3 - me2, me7 - me6, me11 - me10, me15 - me14).normalize();
+    planes[4].setComponents(me3 - me22, me7 - me6, me11 - me10, me15 - me14).normalize();
     if (coordinateSystem === WebGLCoordinateSystem) {
-      planes[5].setComponents(me3 + me2, me7 + me6, me11 + me10, me15 + me14).normalize();
+      planes[5].setComponents(me3 + me22, me7 + me6, me11 + me10, me15 + me14).normalize();
     } else if (coordinateSystem === WebGPUCoordinateSystem) {
-      planes[5].setComponents(me2, me6, me10, me14).normalize();
+      planes[5].setComponents(me22, me6, me10, me14).normalize();
     } else {
       throw new Error("THREE.Frustum.setFromProjectionMatrix(): Invalid coordinate system: " + coordinateSystem);
     }
@@ -58535,7 +58536,7 @@ class ArrayCamera extends PerspectiveCamera {
     this.cameras = array;
   }
 }
-class Clock {
+let Clock$1 = class Clock {
   /**
    * Constructs a new clock.
    *
@@ -58595,7 +58596,7 @@ class Clock {
     }
     return diff;
   }
-}
+};
 function now$1() {
   return performance.now();
 }
@@ -58615,7 +58616,7 @@ class AudioListener extends Object3D {
     this.gain.connect(this.context.destination);
     this.filter = null;
     this.timeDelta = 0;
-    this._clock = new Clock();
+    this._clock = new Clock$1();
   }
   /**
    * Returns the listener's input node.
@@ -61616,11 +61617,11 @@ class Matrix2 {
    * @return {Matrix2} A reference to this matrix.
    */
   set(n11, n12, n21, n22) {
-    const te = this.elements;
-    te[0] = n11;
-    te[2] = n12;
-    te[1] = n21;
-    te[3] = n22;
+    const te2 = this.elements;
+    te2[0] = n11;
+    te2[2] = n12;
+    te2[1] = n21;
+    te2[3] = n22;
     return this;
   }
 }
@@ -73462,7 +73463,7 @@ const THREE = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.definePropert
   CineonToneMapping,
   CircleGeometry,
   ClampToEdgeWrapping,
-  Clock,
+  Clock: Clock$1,
   Color,
   ColorKeyframeTrack,
   ColorManagement,
@@ -73926,6 +73927,38 @@ function findNearestTile(nx, ny, nz, cache) {
 }
 const GEODESIC_TILES = buildGeodesicGrid(32);
 const PLOT_POSITION_CACHE = buildPositionCache(GEODESIC_TILES);
+const LS_KEY = "frontier_player_state_v1";
+function loadFromStorage() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+function saveToStorage(state2) {
+  try {
+    const { player, generatorTiers, plotPurchaseTimes, totalFRNTRBurned } = state2;
+    localStorage.setItem(
+      LS_KEY,
+      JSON.stringify({
+        frntBalance: player.frntBalance,
+        iron: player.iron,
+        fuel: player.fuel,
+        crystal: player.crystal,
+        rareEarth: player.rareEarth,
+        plotsOwned: player.plotsOwned,
+        mockIcpBalance: player.mockIcpBalance,
+        resourceStorageCap: player.resourceStorageCap,
+        generatorTiers,
+        plotPurchaseTimes,
+        totalFRNTRBurned
+      })
+    );
+  } catch {
+  }
+}
 const BIOME_MAP = [
   "Arctic",
   "Desert",
@@ -74037,6 +74070,7 @@ function generateLeaderboard() {
   return [];
 }
 const ALL_PLOTS = generatePlots();
+const _cached = loadFromStorage();
 const BIOME_DRIP$1 = {
   Desert: [8e-4, 25e-4, 3e-4, 1e-4],
   Jungle: [25e-4, 8e-4, 5e-4, 2e-4],
@@ -74052,14 +74086,14 @@ const useGameStore = create((set, get) => ({
   plots: ALL_PLOTS,
   player: {
     principal: null,
-    iron: 0,
-    fuel: 0,
-    crystal: 0,
-    rareEarth: 0,
-    frntBalance: 0,
-    plotsOwned: [],
-    mockIcpBalance: 5,
-    resourceStorageCap: 200
+    iron: (_cached == null ? void 0 : _cached.iron) ?? 0,
+    fuel: (_cached == null ? void 0 : _cached.fuel) ?? 0,
+    crystal: (_cached == null ? void 0 : _cached.crystal) ?? 0,
+    rareEarth: (_cached == null ? void 0 : _cached.rareEarth) ?? 0,
+    frntBalance: (_cached == null ? void 0 : _cached.frntBalance) ?? 0,
+    plotsOwned: (_cached == null ? void 0 : _cached.plotsOwned) ?? [],
+    mockIcpBalance: (_cached == null ? void 0 : _cached.mockIcpBalance) ?? 5,
+    resourceStorageCap: (_cached == null ? void 0 : _cached.resourceStorageCap) ?? 200
   },
   selectedPlotId: null,
   selectedWorldPoint: null,
@@ -74069,11 +74103,13 @@ const useGameStore = create((set, get) => ({
   subParcels: {},
   hoveredPlotId: null,
   plotHoverCard: null,
-  plotPurchaseTimes: {},
-  generatorTiers: {},
+  plotPurchaseTimes: (_cached == null ? void 0 : _cached.plotPurchaseTimes) ?? {},
+  generatorTiers: (_cached == null ? void 0 : _cached.generatorTiers) ?? {},
   serverPassiveIncomePerDay: 0,
-  totalFRNTRBurned: 0,
+  totalFRNTRBurned: (_cached == null ? void 0 : _cached.totalFRNTRBurned) ?? 0,
   purchaseDebugLogs: [],
+  globalStats: null,
+  setGlobalStats: (stats) => set({ globalStats: stats }),
   selectPlot: (id2) => set({ selectedPlotId: id2 }),
   setSelectedWorldPoint: (p2) => set({ selectedWorldPoint: p2 }),
   setTargetPlotId: (id2) => set({ targetPlotId: id2 }),
@@ -74087,18 +74123,28 @@ const useGameStore = create((set, get) => ({
     const cost = 100;
     if (state2.player.frntBalance < cost) return;
     const subParcels = generateSubParcels(id2);
-    set((s2) => ({
-      player: {
-        ...s2.player,
-        frntBalance: s2.player.frntBalance - cost,
-        plotsOwned: [...s2.player.plotsOwned, id2]
-      },
-      plots: s2.plots.map(
-        (p2) => p2.id === id2 ? { ...p2, owner: s2.player.principal ?? "You" } : p2
-      ),
-      subParcels: { ...s2.subParcels, [id2]: subParcels },
-      plotPurchaseTimes: { ...s2.plotPurchaseTimes, [id2]: Date.now() }
-    }));
+    set((s2) => {
+      const next = {
+        ...s2,
+        player: {
+          ...s2.player,
+          frntBalance: s2.player.frntBalance - cost,
+          plotsOwned: [...s2.player.plotsOwned, id2]
+        },
+        plots: s2.plots.map(
+          (p2) => p2.id === id2 ? { ...p2, owner: s2.player.principal ?? "You" } : p2
+        ),
+        subParcels: { ...s2.subParcels, [id2]: subParcels },
+        plotPurchaseTimes: { ...s2.plotPurchaseTimes, [id2]: Date.now() }
+      };
+      saveToStorage(next);
+      return {
+        player: next.player,
+        plots: next.plots,
+        subParcels: next.subParcels,
+        plotPurchaseTimes: next.plotPurchaseTimes
+      };
+    });
   },
   transferPlot: (plotId, recipient) => {
     const state2 = get();
@@ -74169,16 +74215,34 @@ const useGameStore = create((set, get) => ({
       )
     }));
   },
-  claimAllFrntr: (amount) => set((s2) => ({
-    player: { ...s2.player, frntBalance: s2.player.frntBalance + amount }
-  })),
-  mintTestTokens: () => set((s2) => ({
-    player: {
-      ...s2.player,
-      frntBalance: s2.player.frntBalance + 500,
-      mockIcpBalance: s2.player.mockIcpBalance + 2
-    }
-  })),
+  claimAllFrntr: (amount) => set((s2) => {
+    const next = {
+      ...s2,
+      player: { ...s2.player, frntBalance: s2.player.frntBalance + amount }
+    };
+    saveToStorage(next);
+    return { player: next.player };
+  }),
+  addFrntr: (amount) => set((s2) => {
+    const next = {
+      ...s2,
+      player: { ...s2.player, frntBalance: s2.player.frntBalance + amount }
+    };
+    saveToStorage(next);
+    return { player: next.player };
+  }),
+  mintTestTokens: () => set((s2) => {
+    const next = {
+      ...s2,
+      player: {
+        ...s2.player,
+        frntBalance: s2.player.frntBalance + 500,
+        mockIcpBalance: s2.player.mockIcpBalance + 2
+      }
+    };
+    saveToStorage(next);
+    return { player: next.player };
+  }),
   upgradeGenerator: (plotId) => {
     const state2 = get();
     if (!state2.player.plotsOwned.includes(plotId)) return;
@@ -74347,14 +74411,14 @@ const useGameStore = create((set, get) => ({
   },
   faction: null
 }));
-const CYAN$8 = "#00ffcc";
+const CYAN$c = "#00ffcc";
 const GOLD$3 = "#ffd700";
 const AMBER$1 = "#f59e0b";
 const PURPLE = "#a855f7";
-const BORDER$8 = "rgba(0,255,204,0.18)";
+const BORDER$b = "rgba(0,255,204,0.18)";
 const PANEL$1 = "rgba(0,20,40,0.70)";
 const TEXT$5 = "#e0f4ff";
-const TEXT_DIM$4 = "rgba(224,244,255,0.45)";
+const TEXT_DIM$3 = "rgba(224,244,255,0.45)";
 const TIER_DAILY = {
   0: 7,
   1: 15,
@@ -74432,7 +74496,7 @@ function FRNTRCounter() {
         background: PANEL$1,
         backdropFilter: "blur(16px)",
         WebkitBackdropFilter: "blur(16px)",
-        border: `1px solid ${BORDER$8}`,
+        border: `1px solid ${BORDER$b}`,
         borderRadius: 10,
         padding: "14px 16px",
         marginBottom: 14
@@ -74445,7 +74509,7 @@ function FRNTRCounter() {
               fontSize: 9,
               fontWeight: 700,
               letterSpacing: 3,
-              color: CYAN$8,
+              color: CYAN$c,
               textTransform: "uppercase",
               marginBottom: 8
             },
@@ -74468,7 +74532,7 @@ function FRNTRCounter() {
             children: displayBal.toFixed(8)
           }
         ),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { fontSize: 8, color: TEXT_DIM$4, marginTop: 3 }, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { fontSize: 8, color: TEXT_DIM$3, marginTop: 3 }, children: [
           "FRNTR  ·  ",
           plotCount,
           " PLOT",
@@ -74486,7 +74550,7 @@ function ResourceStockpiles() {
   const resources = [
     { label: "IRON", val: player.iron, color: "#94a3b8", icon: "⚙️" },
     { label: "FUEL", val: player.fuel, color: AMBER$1, icon: "⛽" },
-    { label: "CRYSTAL", val: player.crystal, color: CYAN$8, icon: "💎" },
+    { label: "CRYSTAL", val: player.crystal, color: CYAN$c, icon: "💎" },
     { label: "RARE EARTH", val: player.rareEarth, color: PURPLE, icon: "🔮" }
   ];
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -74496,7 +74560,7 @@ function ResourceStockpiles() {
         background: PANEL$1,
         backdropFilter: "blur(16px)",
         WebkitBackdropFilter: "blur(16px)",
-        border: `1px solid ${BORDER$8}`,
+        border: `1px solid ${BORDER$b}`,
         borderRadius: 10,
         padding: "12px 14px",
         marginBottom: 14
@@ -74509,7 +74573,7 @@ function ResourceStockpiles() {
               fontSize: 9,
               fontWeight: 700,
               letterSpacing: 3,
-              color: CYAN$8,
+              color: CYAN$c,
               textTransform: "uppercase",
               marginBottom: 10
             },
@@ -74550,7 +74614,7 @@ function ResourceStockpiles() {
                       style: {
                         fontSize: 9,
                         fontFamily: "monospace",
-                        color: TEXT_DIM$4
+                        color: TEXT_DIM$3
                       },
                       children: [
                         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: r2.color, fontWeight: 700 }, children: r2.val.toFixed(8) }),
@@ -74604,7 +74668,7 @@ function PlotCard({ plotId, index: index2 }) {
   const tier = generatorTiers[plotId] ?? 0;
   const tierLabel = TIER_LABELS[tier];
   const dailyRate = TIER_DAILY[tier];
-  const biomeColor = BIOME_DOT[plot.biome] ?? CYAN$8;
+  const biomeColor = BIOME_DOT[plot.biome] ?? CYAN$c;
   const h3Short = shortH3(plotId);
   const drip = BIOME_DRIP[plot.biome] ?? [1e-3, 1e-3, 1e-3, 1e-3];
   const effFactor = plot.efficiency / 100;
@@ -74631,7 +74695,7 @@ function PlotCard({ plotId, index: index2 }) {
       "data-ocid": `inventory.item.${index2}`,
       style: {
         background: "rgba(0,20,40,0.55)",
-        border: `1px solid ${BORDER$8}`,
+        border: `1px solid ${BORDER$b}`,
         borderRadius: 10,
         padding: "12px 14px",
         position: "relative",
@@ -74647,7 +74711,7 @@ function PlotCard({ plotId, index: index2 }) {
               left: 0,
               width: `${tier / 6 * 100}%`,
               height: 2,
-              background: `linear-gradient(90deg, ${CYAN$8}, ${GOLD$3})`
+              background: `linear-gradient(90deg, ${CYAN$c}, ${GOLD$3})`
             }
           }
         ),
@@ -74688,7 +74752,7 @@ function PlotCard({ plotId, index: index2 }) {
                     children: h3Short
                   }
                 ),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$4, letterSpacing: 0.5 }, children: plot.biome })
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$3, letterSpacing: 0.5 }, children: plot.biome })
               ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs(
                 "div",
@@ -74696,11 +74760,11 @@ function PlotCard({ plotId, index: index2 }) {
                   style: {
                     padding: "3px 8px",
                     background: tier > 0 ? "rgba(0,255,204,0.12)" : "rgba(255,255,255,0.05)",
-                    border: `1px solid ${tier > 0 ? BORDER$8 : "rgba(255,255,255,0.08)"}`,
+                    border: `1px solid ${tier > 0 ? BORDER$b : "rgba(255,255,255,0.08)"}`,
                     borderRadius: 4,
                     fontSize: 8,
                     fontWeight: 700,
-                    color: tier > 0 ? CYAN$8 : TEXT_DIM$4,
+                    color: tier > 0 ? CYAN$c : TEXT_DIM$3,
                     letterSpacing: 1,
                     whiteSpace: "nowrap"
                   },
@@ -74724,7 +74788,7 @@ function PlotCard({ plotId, index: index2 }) {
                 marginBottom: 3
               },
               children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 8, color: TEXT_DIM$4, letterSpacing: 1 }, children: "EFFICIENCY" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 8, color: TEXT_DIM$3, letterSpacing: 1 }, children: "EFFICIENCY" }),
                 /* @__PURE__ */ jsxRuntimeExports.jsxs(
                   "span",
                   {
@@ -74783,7 +74847,7 @@ function PlotCard({ plotId, index: index2 }) {
             },
             children: [
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$4 }, children: "FRNTR/DAY" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$3 }, children: "FRNTR/DAY" }),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "div",
                   {
@@ -74798,7 +74862,7 @@ function PlotCard({ plotId, index: index2 }) {
                 )
               ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$4 }, children: "IRON/DAY" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$3 }, children: "IRON/DAY" }),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "div",
                   {
@@ -74813,7 +74877,7 @@ function PlotCard({ plotId, index: index2 }) {
                 )
               ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$4 }, children: "FUEL/DAY" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$3 }, children: "FUEL/DAY" }),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "div",
                   {
@@ -74828,14 +74892,14 @@ function PlotCard({ plotId, index: index2 }) {
                 )
               ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$4 }, children: "CRYSTAL/DAY" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$3 }, children: "CRYSTAL/DAY" }),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "div",
                   {
                     style: {
                       fontSize: 10,
                       fontWeight: 700,
-                      color: CYAN$8,
+                      color: CYAN$c,
                       fontFamily: "monospace"
                     },
                     children: crystalPerDay
@@ -74843,7 +74907,7 @@ function PlotCard({ plotId, index: index2 }) {
                 )
               ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$4 }, children: "RARE/DAY" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$3 }, children: "RARE/DAY" }),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "div",
                   {
@@ -74872,9 +74936,9 @@ function PlotCard({ plotId, index: index2 }) {
                 flex: 1,
                 padding: "8px 0",
                 background: "rgba(0,255,204,0.08)",
-                border: `1px solid ${BORDER$8}`,
+                border: `1px solid ${BORDER$b}`,
                 borderRadius: 6,
-                color: isLoggedIn ? CYAN$8 : TEXT_DIM$4,
+                color: isLoggedIn ? CYAN$c : TEXT_DIM$3,
                 fontSize: 9,
                 fontWeight: 700,
                 letterSpacing: 1.5,
@@ -74898,7 +74962,7 @@ function PlotCard({ plotId, index: index2 }) {
                 background: canUpgrade && isLoggedIn ? "rgba(255,215,0,0.08)" : "rgba(255,255,255,0.03)",
                 border: `1px solid ${canUpgrade && isLoggedIn ? "rgba(255,215,0,0.3)" : "rgba(255,255,255,0.07)"}`,
                 borderRadius: 6,
-                color: canUpgrade && isLoggedIn ? GOLD$3 : TEXT_DIM$4,
+                color: canUpgrade && isLoggedIn ? GOLD$3 : TEXT_DIM$3,
                 fontSize: 8,
                 fontWeight: 700,
                 letterSpacing: 1,
@@ -74944,7 +75008,7 @@ function Inventory() {
               fontSize: 9,
               fontWeight: 700,
               letterSpacing: 3,
-              color: CYAN$8,
+              color: CYAN$c,
               textTransform: "uppercase",
               marginBottom: 10,
               display: "flex",
@@ -74980,7 +75044,7 @@ function Inventory() {
               justifyContent: "center",
               padding: "32px 20px",
               textAlign: "center",
-              color: TEXT_DIM$4,
+              color: TEXT_DIM$3,
               gap: 10
             },
             children: [
@@ -75002,7 +75066,7 @@ function Inventory() {
                 {
                   style: {
                     fontSize: 9,
-                    color: TEXT_DIM$4,
+                    color: TEXT_DIM$3,
                     lineHeight: 1.6,
                     maxWidth: 260
                   },
@@ -77617,55 +77681,97 @@ const createLucideIcon = (iconName, iconNode) => {
  * This source code is licensed under the ISC license.
  * See the LICENSE file in the root directory of this source tree.
  */
-const __iconNode$f = [
-  ["path", { d: "M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z", key: "1b4qmf" }],
-  ["path", { d: "M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2", key: "i71pzd" }],
-  ["path", { d: "M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2", key: "10jefs" }],
-  ["path", { d: "M10 6h4", key: "1itunk" }],
-  ["path", { d: "M10 10h4", key: "tcdvrf" }],
-  ["path", { d: "M10 14h4", key: "kelpxr" }],
-  ["path", { d: "M10 18h4", key: "1ulq68" }]
+const __iconNode$m = [
+  [
+    "path",
+    {
+      d: "M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2",
+      key: "169zse"
+    }
+  ]
 ];
-const Building2 = createLucideIcon("building-2", __iconNode$f);
+const Activity = createLucideIcon("activity", __iconNode$m);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
  * This source code is licensed under the ISC license.
  * See the LICENSE file in the root directory of this source tree.
  */
-const __iconNode$e = [["path", { d: "M20 6 9 17l-5-5", key: "1gmf2c" }]];
-const Check = createLucideIcon("check", __iconNode$e);
+const __iconNode$l = [["path", { d: "m6 9 6 6 6-6", key: "qrunsl" }]];
+const ChevronDown = createLucideIcon("chevron-down", __iconNode$l);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
  * This source code is licensed under the ISC license.
  * See the LICENSE file in the root directory of this source tree.
  */
-const __iconNode$d = [["path", { d: "m6 9 6 6 6-6", key: "qrunsl" }]];
-const ChevronDown = createLucideIcon("chevron-down", __iconNode$d);
+const __iconNode$k = [["path", { d: "m9 18 6-6-6-6", key: "mthhwq" }]];
+const ChevronRight = createLucideIcon("chevron-right", __iconNode$k);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
  * This source code is licensed under the ISC license.
  * See the LICENSE file in the root directory of this source tree.
  */
-const __iconNode$c = [["path", { d: "m9 18 6-6-6-6", key: "mthhwq" }]];
-const ChevronRight = createLucideIcon("chevron-right", __iconNode$c);
+const __iconNode$j = [["path", { d: "m18 15-6-6-6 6", key: "153udz" }]];
+const ChevronUp = createLucideIcon("chevron-up", __iconNode$j);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
  * This source code is licensed under the ISC license.
  * See the LICENSE file in the root directory of this source tree.
  */
-const __iconNode$b = [["path", { d: "m18 15-6-6-6 6", key: "153udz" }]];
-const ChevronUp = createLucideIcon("chevron-up", __iconNode$b);
+const __iconNode$i = [
+  ["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }],
+  ["polyline", { points: "12 6 12 12 16 14", key: "68esgv" }]
+];
+const Clock2 = createLucideIcon("clock", __iconNode$i);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
  * This source code is licensed under the ISC license.
  * See the LICENSE file in the root directory of this source tree.
  */
-const __iconNode$a = [
+const __iconNode$h = [
+  ["path", { d: "M12 20v2", key: "1lh1kg" }],
+  ["path", { d: "M12 2v2", key: "tus03m" }],
+  ["path", { d: "M17 20v2", key: "1rnc9c" }],
+  ["path", { d: "M17 2v2", key: "11trls" }],
+  ["path", { d: "M2 12h2", key: "1t8f8n" }],
+  ["path", { d: "M2 17h2", key: "7oei6x" }],
+  ["path", { d: "M2 7h2", key: "asdhe0" }],
+  ["path", { d: "M20 12h2", key: "1q8mjw" }],
+  ["path", { d: "M20 17h2", key: "1fpfkl" }],
+  ["path", { d: "M20 7h2", key: "1o8tra" }],
+  ["path", { d: "M7 20v2", key: "4gnj0m" }],
+  ["path", { d: "M7 2v2", key: "1i4yhu" }],
+  ["rect", { x: "4", y: "4", width: "16", height: "16", rx: "2", key: "1vbyd7" }],
+  ["rect", { x: "8", y: "8", width: "8", height: "8", rx: "1", key: "z9xiuo" }]
+];
+const Cpu = createLucideIcon("cpu", __iconNode$h);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$g = [
+  [
+    "path",
+    {
+      d: "M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z",
+      key: "96xj49"
+    }
+  ]
+];
+const Flame = createLucideIcon("flame", __iconNode$g);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$f = [
   [
     "path",
     {
@@ -77676,26 +77782,62 @@ const __iconNode$a = [
   ["path", { d: "M6.453 15h11.094", key: "3shlmq" }],
   ["path", { d: "M8.5 2h7", key: "csnxdl" }]
 ];
-const FlaskConical = createLucideIcon("flask-conical", __iconNode$a);
+const FlaskConical = createLucideIcon("flask-conical", __iconNode$f);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
  * This source code is licensed under the ISC license.
  * See the LICENSE file in the root directory of this source tree.
  */
-const __iconNode$9 = [
+const __iconNode$e = [
   ["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }],
   ["path", { d: "M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20", key: "13o1zl" }],
   ["path", { d: "M2 12h20", key: "9i4pu4" }]
 ];
-const Globe = createLucideIcon("globe", __iconNode$9);
+const Globe = createLucideIcon("globe", __iconNode$e);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
  * This source code is licensed under the ISC license.
  * See the LICENSE file in the root directory of this source tree.
  */
-const __iconNode$8 = [
+const __iconNode$d = [
+  ["rect", { width: "7", height: "9", x: "3", y: "3", rx: "1", key: "10lvy0" }],
+  ["rect", { width: "7", height: "5", x: "14", y: "3", rx: "1", key: "16une8" }],
+  ["rect", { width: "7", height: "9", x: "14", y: "12", rx: "1", key: "1hutg5" }],
+  ["rect", { width: "7", height: "5", x: "3", y: "16", rx: "1", key: "ldoo1y" }]
+];
+const LayoutDashboard = createLucideIcon("layout-dashboard", __iconNode$d);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$c = [
+  ["rect", { width: "18", height: "11", x: "3", y: "11", rx: "2", ry: "2", key: "1w4ew1" }],
+  ["path", { d: "M7 11V7a5 5 0 0 1 10 0v4", key: "fwvmzm" }]
+];
+const Lock = createLucideIcon("lock", __iconNode$c);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$b = [
+  ["path", { d: "m16 17 5-5-5-5", key: "1bji2h" }],
+  ["path", { d: "M21 12H9", key: "dn1m92" }],
+  ["path", { d: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4", key: "1uf3rs" }]
+];
+const LogOut = createLucideIcon("log-out", __iconNode$b);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$a = [
   [
     "path",
     {
@@ -77706,24 +77848,14 @@ const __iconNode$8 = [
   ["path", { d: "M15 5.764v15", key: "1pn4in" }],
   ["path", { d: "M9 3.236v15", key: "1uimfh" }]
 ];
-const Map$1 = createLucideIcon("map", __iconNode$8);
+const Map$1 = createLucideIcon("map", __iconNode$a);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
  * This source code is licensed under the ISC license.
  * See the LICENSE file in the root directory of this source tree.
  */
-const __iconNode$7 = [
-  ["path", { d: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z", key: "1lielz" }]
-];
-const MessageSquare = createLucideIcon("message-square", __iconNode$7);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$6 = [
+const __iconNode$9 = [
   [
     "path",
     {
@@ -77735,7 +77867,50 @@ const __iconNode$6 = [
   ["polyline", { points: "3.29 7 12 12 20.71 7", key: "ousv84" }],
   ["path", { d: "m7.5 4.27 9 5.15", key: "1c824w" }]
 ];
-const Package = createLucideIcon("package", __iconNode$6);
+const Package = createLucideIcon("package", __iconNode$9);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$8 = [
+  ["path", { d: "M4.9 19.1C1 15.2 1 8.8 4.9 4.9", key: "1vaf9d" }],
+  ["path", { d: "M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5", key: "u1ii0m" }],
+  ["circle", { cx: "12", cy: "12", r: "2", key: "1c9p78" }],
+  ["path", { d: "M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5", key: "1j5fej" }],
+  ["path", { d: "M19.1 4.9C23 8.8 23 15.1 19.1 19", key: "10b0cb" }]
+];
+const Radio = createLucideIcon("radio", __iconNode$8);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$7 = [
+  ["path", { d: "M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8", key: "v9h5vc" }],
+  ["path", { d: "M21 3v5h-5", key: "1q7to0" }],
+  ["path", { d: "M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16", key: "3uifl3" }],
+  ["path", { d: "M8 16H3v5", key: "1cv678" }]
+];
+const RefreshCw = createLucideIcon("refresh-cw", __iconNode$7);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$6 = [
+  [
+    "path",
+    {
+      d: "M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z",
+      key: "oel41y"
+    }
+  ]
+];
+const Shield = createLucideIcon("shield", __iconNode$6);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
@@ -77743,12 +77918,12 @@ const Package = createLucideIcon("package", __iconNode$6);
  * See the LICENSE file in the root directory of this source tree.
  */
 const __iconNode$5 = [
-  ["path", { d: "M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8", key: "v9h5vc" }],
-  ["path", { d: "M21 3v5h-5", key: "1q7to0" }],
-  ["path", { d: "M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16", key: "3uifl3" }],
-  ["path", { d: "M8 16H3v5", key: "1cv678" }]
+  ["polyline", { points: "14.5 17.5 3 6 3 3 6 3 17.5 14.5", key: "1hfsw2" }],
+  ["line", { x1: "13", x2: "19", y1: "19", y2: "13", key: "1vrmhu" }],
+  ["line", { x1: "16", x2: "20", y1: "16", y2: "20", key: "1bron3" }],
+  ["line", { x1: "19", x2: "21", y1: "21", y2: "19", key: "13pww6" }]
 ];
-const RefreshCw = createLucideIcon("refresh-cw", __iconNode$5);
+const Sword = createLucideIcon("sword", __iconNode$5);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
@@ -77756,24 +77931,10 @@ const RefreshCw = createLucideIcon("refresh-cw", __iconNode$5);
  * See the LICENSE file in the root directory of this source tree.
  */
 const __iconNode$4 = [
-  [
-    "path",
-    {
-      d: "M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z",
-      key: "m3kijz"
-    }
-  ],
-  [
-    "path",
-    {
-      d: "m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z",
-      key: "1fmvmk"
-    }
-  ],
-  ["path", { d: "M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0", key: "1f8sc4" }],
-  ["path", { d: "M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5", key: "qeys4" }]
+  ["path", { d: "M16 7h6v6", key: "box55l" }],
+  ["path", { d: "m22 7-8.5 8.5-5-5L2 17", key: "1t1m79" }]
 ];
-const Rocket = createLucideIcon("rocket", __iconNode$4);
+const TrendingUp = createLucideIcon("trending-up", __iconNode$4);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
@@ -77781,19 +77942,6 @@ const Rocket = createLucideIcon("rocket", __iconNode$4);
  * See the LICENSE file in the root directory of this source tree.
  */
 const __iconNode$3 = [
-  ["polyline", { points: "14.5 17.5 3 6 3 3 6 3 17.5 14.5", key: "1hfsw2" }],
-  ["line", { x1: "13", x2: "19", y1: "19", y2: "13", key: "1vrmhu" }],
-  ["line", { x1: "16", x2: "20", y1: "16", y2: "20", key: "1bron3" }],
-  ["line", { x1: "19", x2: "21", y1: "21", y2: "19", key: "13pww6" }]
-];
-const Sword = createLucideIcon("sword", __iconNode$3);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$2 = [
   ["path", { d: "M6 9H4.5a2.5 2.5 0 0 1 0-5H6", key: "17hqa7" }],
   ["path", { d: "M18 9h1.5a2.5 2.5 0 0 0 0-5H18", key: "lmptdp" }],
   ["path", { d: "M4 22h16", key: "57wxv0" }],
@@ -77801,7 +77949,20 @@ const __iconNode$2 = [
   ["path", { d: "M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22", key: "1np0yb" }],
   ["path", { d: "M18 2H6v7a6 6 0 0 0 12 0V2Z", key: "u46fv3" }]
 ];
-const Trophy = createLucideIcon("trophy", __iconNode$2);
+const Trophy = createLucideIcon("trophy", __iconNode$3);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$2 = [
+  ["path", { d: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2", key: "1yyitq" }],
+  ["path", { d: "M16 3.128a4 4 0 0 1 0 7.744", key: "16gr8j" }],
+  ["path", { d: "M22 21v-2a4 4 0 0 0-3-3.87", key: "kshegd" }],
+  ["circle", { cx: "9", cy: "7", r: "4", key: "nufk8" }]
+];
+const Users = createLucideIcon("users", __iconNode$2);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
@@ -85680,11 +85841,51 @@ const CombatEvent = Record({
   "missileType": Opt(Text),
   "defPower": Nat
 });
+const GeneratorTierInfo = Record({
+  "name": Text,
+  "tierIndex": Nat,
+  "bonusPerDay": Float64,
+  "costFRNTR": Nat
+});
+const FaucetClaimSummary = Record({
+  "principal": Text,
+  "lastClaim": Opt(Int),
+  "totalClaims": Nat
+});
+const GlobalStats = Record({
+  "circulatingSupply": Nat,
+  "activePlayers": Nat,
+  "totalPlotsOwned": Nat,
+  "dailyEmission": Nat,
+  "totalBurned": Nat
+});
 const ResourceType = Variant({
   "RareEarth": Null,
   "Fuel": Null,
   "Iron": Null,
   "Crystal": Null
+});
+const PlotProductionRate = Record({
+  "totalPerDay": Float64,
+  "plotId": Nat,
+  "tierBonus": Float64,
+  "baseFRNTRPerDay": Float64,
+  "generatorTier": Nat,
+  "nexusBonus": Float64
+});
+const PrincipalDisplay = Record({
+  "full": Text,
+  "short": Text,
+  "isAuthed": Bool
+});
+const Tokenomics = Record({
+  "burnRate": Nat,
+  "emissionRate": Nat,
+  "circulatingSupply": Nat,
+  "daysUntilMilestone": Nat,
+  "totalBurned": Nat,
+  "maxSupply": Nat,
+  "remainingMineable": Nat
 });
 const PlotId = Nat;
 const MineResult = Record({
@@ -85693,16 +85894,52 @@ const MineResult = Record({
   "resourceYields": Vec(Tuple(ResourceType, Float64)),
   "frntRate": Float64
 });
+const ResetResult = Variant({ "ok": Text, "err": Text });
+const StressActionResult = Record({
+  "ok": Bool,
+  "action": Text,
+  "index": Nat,
+  "errorMsg": Opt(Text),
+  "durationMs": Int
+});
+const StressTestResult = Variant({
+  "ok": Vec(StressActionResult),
+  "err": Text
+});
+const FaucetGrant = Record({
+  "icpGranted": Nat,
+  "frntGranted": Nat
+});
+const FaucetResult = Variant({
+  "ok": FaucetGrant,
+  "err": Text
+});
 Service({
   "assignInterceptor": Func([Nat, Text], [], []),
   "getAdjacentPlots": Func([Nat], [Vec(Nat)], ["query"]),
   "getAdminPrincipal": Func([], [Text], ["query"]),
+  "getAllPlotOwners": Func(
+    [],
+    [Vec(Tuple(Nat, Text))],
+    ["query"]
+  ),
   "getAssignedInterceptor": Func(
     [Nat],
     [Opt(Text)],
     ["query"]
   ),
   "getCombatLog": Func([Nat], [Vec(CombatEvent)], ["query"]),
+  "getCoreGeneratorTiers": Func(
+    [],
+    [Vec(GeneratorTierInfo)],
+    ["query"]
+  ),
+  "getFaucetClaims": Func(
+    [Principal2],
+    [FaucetClaimSummary],
+    ["query"]
+  ),
+  "getGlobalStats": Func([], [GlobalStats], ["query"]),
   "getLeaderboard": Func(
     [Nat],
     [
@@ -85754,25 +85991,46 @@ Service({
     ],
     ["query"]
   ),
-  "getPlotPrice": Func([Text], [Nat], ["query"]),
-  "getTokenomics": Func(
-    [],
+  "getPlayerStateByPrincipal": Func(
+    [Principal2],
     [
       Record({
-        "totalSupply": Nat,
-        "maxPlots": Nat,
-        "dailyEmission": Nat,
-        "emissionScheduleYears": Nat,
-        "currentCirculating": Nat,
-        "mineableSupply": Nat,
-        "preMinted": Nat,
-        "plotCount": Nat,
-        "burnedTotal": Nat
+        "resourceBalances": Vec(Tuple(ResourceType, Float64)),
+        "username": Opt(Text),
+        "fuel": Nat,
+        "iron": Nat,
+        "frntBalance": Nat,
+        "totalFRNTRBurned": Float64,
+        "plotsOwned": Nat,
+        "lastFaucetTime": Opt(Int),
+        "crystal": Nat,
+        "ownedPlots": Vec(Text),
+        "combatVictories": Nat,
+        "generatorTiersMap": Vec(Tuple(Text, Nat)),
+        "passiveIncomePerDay": Float64
       })
     ],
     ["query"]
   ),
+  "getPlotCount": Func([], [Nat], ["query"]),
+  "getPlotPrice": Func([Text], [Nat], ["query"]),
+  "getPlotProductionRate": Func(
+    [Nat],
+    [PlotProductionRate],
+    ["query"]
+  ),
+  "getPrincipal": Func([], [PrincipalDisplay], ["query"]),
+  "getTokenomics": Func([], [Tokenomics], ["query"]),
   "getTreasuryPrincipal": Func([], [Text], ["query"]),
+  "initPlots": Func(
+    [
+      Vec(
+        Tuple(Nat, Text, Float64, Float64, Nat)
+      )
+    ],
+    [],
+    []
+  ),
   "isSubParcelLocked": Func([Nat], [Bool], ["query"]),
   "launchMissile": Func(
     [Nat, Nat, Text],
@@ -85789,6 +86047,7 @@ Service({
     [Variant({ "ok": Text, "err": Text })],
     []
   ),
+  "resetTestState": Func([], [ResetResult], []),
   "setAdminPrincipal": Func([Principal2], [], []),
   "setTreasuryPrincipal": Func([Principal2], [], []),
   "setUsername": Func(
@@ -85796,11 +86055,15 @@ Service({
     [Variant({ "ok": Null, "err": Text })],
     []
   ),
+  "stressBuyPlots": Func([Nat], [StressTestResult], []),
+  "stressMintPlots": Func([Nat], [StressTestResult], []),
+  "stressUpgradePlots": Func([Nat], [StressTestResult], []),
   "testFaucet": Func(
     [],
     [Variant({ "ok": Text, "err": Text })],
     []
   ),
+  "testFaucetV2": Func([], [FaucetResult], []),
   "updateAdminPrincipalAuth": Func([Text], [], [])
 });
 const idlFactory = ({ IDL: IDL2 }) => {
@@ -85816,11 +86079,51 @@ const idlFactory = ({ IDL: IDL2 }) => {
     "missileType": IDL2.Opt(IDL2.Text),
     "defPower": IDL2.Nat
   });
+  const GeneratorTierInfo2 = IDL2.Record({
+    "name": IDL2.Text,
+    "tierIndex": IDL2.Nat,
+    "bonusPerDay": IDL2.Float64,
+    "costFRNTR": IDL2.Nat
+  });
+  const FaucetClaimSummary2 = IDL2.Record({
+    "principal": IDL2.Text,
+    "lastClaim": IDL2.Opt(IDL2.Int),
+    "totalClaims": IDL2.Nat
+  });
+  const GlobalStats2 = IDL2.Record({
+    "circulatingSupply": IDL2.Nat,
+    "activePlayers": IDL2.Nat,
+    "totalPlotsOwned": IDL2.Nat,
+    "dailyEmission": IDL2.Nat,
+    "totalBurned": IDL2.Nat
+  });
   const ResourceType2 = IDL2.Variant({
     "RareEarth": IDL2.Null,
     "Fuel": IDL2.Null,
     "Iron": IDL2.Null,
     "Crystal": IDL2.Null
+  });
+  const PlotProductionRate2 = IDL2.Record({
+    "totalPerDay": IDL2.Float64,
+    "plotId": IDL2.Nat,
+    "tierBonus": IDL2.Float64,
+    "baseFRNTRPerDay": IDL2.Float64,
+    "generatorTier": IDL2.Nat,
+    "nexusBonus": IDL2.Float64
+  });
+  const PrincipalDisplay2 = IDL2.Record({
+    "full": IDL2.Text,
+    "short": IDL2.Text,
+    "isAuthed": IDL2.Bool
+  });
+  const Tokenomics2 = IDL2.Record({
+    "burnRate": IDL2.Nat,
+    "emissionRate": IDL2.Nat,
+    "circulatingSupply": IDL2.Nat,
+    "daysUntilMilestone": IDL2.Nat,
+    "totalBurned": IDL2.Nat,
+    "maxSupply": IDL2.Nat,
+    "remainingMineable": IDL2.Nat
   });
   const PlotId2 = IDL2.Nat;
   const MineResult2 = IDL2.Record({
@@ -85829,16 +86132,49 @@ const idlFactory = ({ IDL: IDL2 }) => {
     "resourceYields": IDL2.Vec(IDL2.Tuple(ResourceType2, IDL2.Float64)),
     "frntRate": IDL2.Float64
   });
+  const ResetResult2 = IDL2.Variant({ "ok": IDL2.Text, "err": IDL2.Text });
+  const StressActionResult2 = IDL2.Record({
+    "ok": IDL2.Bool,
+    "action": IDL2.Text,
+    "index": IDL2.Nat,
+    "errorMsg": IDL2.Opt(IDL2.Text),
+    "durationMs": IDL2.Int
+  });
+  const StressTestResult2 = IDL2.Variant({
+    "ok": IDL2.Vec(StressActionResult2),
+    "err": IDL2.Text
+  });
+  const FaucetGrant2 = IDL2.Record({
+    "icpGranted": IDL2.Nat,
+    "frntGranted": IDL2.Nat
+  });
+  const FaucetResult2 = IDL2.Variant({ "ok": FaucetGrant2, "err": IDL2.Text });
   return IDL2.Service({
     "assignInterceptor": IDL2.Func([IDL2.Nat, IDL2.Text], [], []),
     "getAdjacentPlots": IDL2.Func([IDL2.Nat], [IDL2.Vec(IDL2.Nat)], ["query"]),
     "getAdminPrincipal": IDL2.Func([], [IDL2.Text], ["query"]),
+    "getAllPlotOwners": IDL2.Func(
+      [],
+      [IDL2.Vec(IDL2.Tuple(IDL2.Nat, IDL2.Text))],
+      ["query"]
+    ),
     "getAssignedInterceptor": IDL2.Func(
       [IDL2.Nat],
       [IDL2.Opt(IDL2.Text)],
       ["query"]
     ),
     "getCombatLog": IDL2.Func([IDL2.Nat], [IDL2.Vec(CombatEvent2)], ["query"]),
+    "getCoreGeneratorTiers": IDL2.Func(
+      [],
+      [IDL2.Vec(GeneratorTierInfo2)],
+      ["query"]
+    ),
+    "getFaucetClaims": IDL2.Func(
+      [IDL2.Principal],
+      [FaucetClaimSummary2],
+      ["query"]
+    ),
+    "getGlobalStats": IDL2.Func([], [GlobalStats2], ["query"]),
     "getLeaderboard": IDL2.Func(
       [IDL2.Nat],
       [
@@ -85890,25 +86226,46 @@ const idlFactory = ({ IDL: IDL2 }) => {
       ],
       ["query"]
     ),
-    "getPlotPrice": IDL2.Func([IDL2.Text], [IDL2.Nat], ["query"]),
-    "getTokenomics": IDL2.Func(
-      [],
+    "getPlayerStateByPrincipal": IDL2.Func(
+      [IDL2.Principal],
       [
         IDL2.Record({
-          "totalSupply": IDL2.Nat,
-          "maxPlots": IDL2.Nat,
-          "dailyEmission": IDL2.Nat,
-          "emissionScheduleYears": IDL2.Nat,
-          "currentCirculating": IDL2.Nat,
-          "mineableSupply": IDL2.Nat,
-          "preMinted": IDL2.Nat,
-          "plotCount": IDL2.Nat,
-          "burnedTotal": IDL2.Nat
+          "resourceBalances": IDL2.Vec(IDL2.Tuple(ResourceType2, IDL2.Float64)),
+          "username": IDL2.Opt(IDL2.Text),
+          "fuel": IDL2.Nat,
+          "iron": IDL2.Nat,
+          "frntBalance": IDL2.Nat,
+          "totalFRNTRBurned": IDL2.Float64,
+          "plotsOwned": IDL2.Nat,
+          "lastFaucetTime": IDL2.Opt(IDL2.Int),
+          "crystal": IDL2.Nat,
+          "ownedPlots": IDL2.Vec(IDL2.Text),
+          "combatVictories": IDL2.Nat,
+          "generatorTiersMap": IDL2.Vec(IDL2.Tuple(IDL2.Text, IDL2.Nat)),
+          "passiveIncomePerDay": IDL2.Float64
         })
       ],
       ["query"]
     ),
+    "getPlotCount": IDL2.Func([], [IDL2.Nat], ["query"]),
+    "getPlotPrice": IDL2.Func([IDL2.Text], [IDL2.Nat], ["query"]),
+    "getPlotProductionRate": IDL2.Func(
+      [IDL2.Nat],
+      [PlotProductionRate2],
+      ["query"]
+    ),
+    "getPrincipal": IDL2.Func([], [PrincipalDisplay2], ["query"]),
+    "getTokenomics": IDL2.Func([], [Tokenomics2], ["query"]),
     "getTreasuryPrincipal": IDL2.Func([], [IDL2.Text], ["query"]),
+    "initPlots": IDL2.Func(
+      [
+        IDL2.Vec(
+          IDL2.Tuple(IDL2.Nat, IDL2.Text, IDL2.Float64, IDL2.Float64, IDL2.Nat)
+        )
+      ],
+      [],
+      []
+    ),
     "isSubParcelLocked": IDL2.Func([IDL2.Nat], [IDL2.Bool], ["query"]),
     "launchMissile": IDL2.Func(
       [IDL2.Nat, IDL2.Nat, IDL2.Text],
@@ -85925,6 +86282,7 @@ const idlFactory = ({ IDL: IDL2 }) => {
       [IDL2.Variant({ "ok": IDL2.Text, "err": IDL2.Text })],
       []
     ),
+    "resetTestState": IDL2.Func([], [ResetResult2], []),
     "setAdminPrincipal": IDL2.Func([IDL2.Principal], [], []),
     "setTreasuryPrincipal": IDL2.Func([IDL2.Principal], [], []),
     "setUsername": IDL2.Func(
@@ -85932,11 +86290,15 @@ const idlFactory = ({ IDL: IDL2 }) => {
       [IDL2.Variant({ "ok": IDL2.Null, "err": IDL2.Text })],
       []
     ),
+    "stressBuyPlots": IDL2.Func([IDL2.Nat], [StressTestResult2], []),
+    "stressMintPlots": IDL2.Func([IDL2.Nat], [StressTestResult2], []),
+    "stressUpgradePlots": IDL2.Func([IDL2.Nat], [StressTestResult2], []),
     "testFaucet": IDL2.Func(
       [],
       [IDL2.Variant({ "ok": IDL2.Text, "err": IDL2.Text })],
       []
     ),
+    "testFaucetV2": IDL2.Func([], [FaucetResult2], []),
     "updateAdminPrincipalAuth": IDL2.Func([IDL2.Text], [], [])
   });
 };
@@ -85992,6 +86354,20 @@ class Backend {
       return result;
     }
   }
+  async getAllPlotOwners() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getAllPlotOwners();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getAllPlotOwners();
+      return result;
+    }
+  }
   async getAssignedInterceptor(arg0) {
     if (this.processError) {
       try {
@@ -86020,18 +86396,60 @@ class Backend {
       return from_candid_vec_n2(this._uploadFile, this._downloadFile, result);
     }
   }
+  async getCoreGeneratorTiers() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getCoreGeneratorTiers();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getCoreGeneratorTiers();
+      return result;
+    }
+  }
+  async getFaucetClaims(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getFaucetClaims(arg0);
+        return from_candid_FaucetClaimSummary_n5(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getFaucetClaims(arg0);
+      return from_candid_FaucetClaimSummary_n5(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async getGlobalStats() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getGlobalStats();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getGlobalStats();
+      return result;
+    }
+  }
   async getLeaderboard(arg0) {
     if (this.processError) {
       try {
         const result = await this.actor.getLeaderboard(arg0);
-        return from_candid_vec_n5(this._uploadFile, this._downloadFile, result);
+        return from_candid_vec_n8(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.getLeaderboard(arg0);
-      return from_candid_vec_n5(this._uploadFile, this._downloadFile, result);
+      return from_candid_vec_n8(this._uploadFile, this._downloadFile, result);
     }
   }
   async getLeaderboardStats() {
@@ -86066,14 +86484,42 @@ class Backend {
     if (this.processError) {
       try {
         const result = await this.actor.getPlayerState();
-        return from_candid_record_n7(this._uploadFile, this._downloadFile, result);
+        return from_candid_record_n10(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.getPlayerState();
-      return from_candid_record_n7(this._uploadFile, this._downloadFile, result);
+      return from_candid_record_n10(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async getPlayerStateByPrincipal(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getPlayerStateByPrincipal(arg0);
+        return from_candid_record_n10(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getPlayerStateByPrincipal(arg0);
+      return from_candid_record_n10(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async getPlotCount() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getPlotCount();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getPlotCount();
+      return result;
     }
   }
   async getPlotPrice(arg0) {
@@ -86087,6 +86533,34 @@ class Backend {
       }
     } else {
       const result = await this.actor.getPlotPrice(arg0);
+      return result;
+    }
+  }
+  async getPlotProductionRate(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getPlotProductionRate(arg0);
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getPlotProductionRate(arg0);
+      return result;
+    }
+  }
+  async getPrincipal() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getPrincipal();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getPrincipal();
       return result;
     }
   }
@@ -86118,6 +86592,20 @@ class Backend {
       return result;
     }
   }
+  async initPlots(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.initPlots(arg0);
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.initPlots(arg0);
+      return result;
+    }
+  }
   async isSubParcelLocked(arg0) {
     if (this.processError) {
       try {
@@ -86136,42 +86624,56 @@ class Backend {
     if (this.processError) {
       try {
         const result = await this.actor.launchMissile(arg0, arg1, arg2);
-        return from_candid_variant_n13(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n15(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.launchMissile(arg0, arg1, arg2);
-      return from_candid_variant_n13(this._uploadFile, this._downloadFile, result);
+      return from_candid_variant_n15(this._uploadFile, this._downloadFile, result);
     }
   }
   async mineResources(arg0) {
     if (this.processError) {
       try {
         const result = await this.actor.mineResources(arg0);
-        return from_candid_variant_n14(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n16(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.mineResources(arg0);
-      return from_candid_variant_n14(this._uploadFile, this._downloadFile, result);
+      return from_candid_variant_n16(this._uploadFile, this._downloadFile, result);
     }
   }
   async purchasePlot(arg0) {
     if (this.processError) {
       try {
         const result = await this.actor.purchasePlot(arg0);
-        return from_candid_variant_n13(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n15(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.purchasePlot(arg0);
-      return from_candid_variant_n13(this._uploadFile, this._downloadFile, result);
+      return from_candid_variant_n15(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async resetTestState() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.resetTestState();
+        return from_candid_ResetResult_n19(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.resetTestState();
+      return from_candid_ResetResult_n19(this._uploadFile, this._downloadFile, result);
     }
   }
   async setAdminPrincipal(arg0) {
@@ -86206,28 +86708,84 @@ class Backend {
     if (this.processError) {
       try {
         const result = await this.actor.setUsername(arg0);
-        return from_candid_variant_n17(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n20(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.setUsername(arg0);
-      return from_candid_variant_n17(this._uploadFile, this._downloadFile, result);
+      return from_candid_variant_n20(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async stressBuyPlots(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.stressBuyPlots(arg0);
+        return from_candid_StressTestResult_n21(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.stressBuyPlots(arg0);
+      return from_candid_StressTestResult_n21(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async stressMintPlots(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.stressMintPlots(arg0);
+        return from_candid_StressTestResult_n21(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.stressMintPlots(arg0);
+      return from_candid_StressTestResult_n21(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async stressUpgradePlots(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.stressUpgradePlots(arg0);
+        return from_candid_StressTestResult_n21(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.stressUpgradePlots(arg0);
+      return from_candid_StressTestResult_n21(this._uploadFile, this._downloadFile, result);
     }
   }
   async testFaucet() {
     if (this.processError) {
       try {
         const result = await this.actor.testFaucet();
-        return from_candid_variant_n13(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n15(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.testFaucet();
-      return from_candid_variant_n13(this._uploadFile, this._downloadFile, result);
+      return from_candid_variant_n15(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async testFaucetV2() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.testFaucetV2();
+        return from_candid_FaucetResult_n26(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.testFaucetV2();
+      return from_candid_FaucetResult_n26(this._uploadFile, this._downloadFile, result);
     }
   }
   async updateAdminPrincipalAuth(arg0) {
@@ -86248,24 +86806,65 @@ class Backend {
 function from_candid_CombatEvent_n3(_uploadFile, _downloadFile, value) {
   return from_candid_record_n4(_uploadFile, _downloadFile, value);
 }
-function from_candid_MineResult_n15(_uploadFile, _downloadFile, value) {
-  return from_candid_record_n16(_uploadFile, _downloadFile, value);
+function from_candid_FaucetClaimSummary_n5(_uploadFile, _downloadFile, value) {
+  return from_candid_record_n6(_uploadFile, _downloadFile, value);
 }
-function from_candid_ResourceType_n10(_uploadFile, _downloadFile, value) {
-  return from_candid_variant_n11(_uploadFile, _downloadFile, value);
+function from_candid_FaucetResult_n26(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n27(_uploadFile, _downloadFile, value);
+}
+function from_candid_MineResult_n17(_uploadFile, _downloadFile, value) {
+  return from_candid_record_n18(_uploadFile, _downloadFile, value);
+}
+function from_candid_ResetResult_n19(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n15(_uploadFile, _downloadFile, value);
+}
+function from_candid_ResourceType_n13(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n14(_uploadFile, _downloadFile, value);
+}
+function from_candid_StressActionResult_n24(_uploadFile, _downloadFile, value) {
+  return from_candid_record_n25(_uploadFile, _downloadFile, value);
+}
+function from_candid_StressTestResult_n21(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n22(_uploadFile, _downloadFile, value);
 }
 function from_candid_opt_n1(_uploadFile, _downloadFile, value) {
   return value.length === 0 ? null : value[0];
 }
-function from_candid_opt_n12(_uploadFile, _downloadFile, value) {
+function from_candid_opt_n7(_uploadFile, _downloadFile, value) {
   return value.length === 0 ? null : value[0];
 }
-function from_candid_record_n16(_uploadFile, _downloadFile, value) {
+function from_candid_record_n10(_uploadFile, _downloadFile, value) {
+  return {
+    resourceBalances: from_candid_vec_n11(_uploadFile, _downloadFile, value.resourceBalances),
+    username: record_opt_to_undefined(from_candid_opt_n1(_uploadFile, _downloadFile, value.username)),
+    fuel: value.fuel,
+    iron: value.iron,
+    frntBalance: value.frntBalance,
+    totalFRNTRBurned: value.totalFRNTRBurned,
+    plotsOwned: value.plotsOwned,
+    lastFaucetTime: record_opt_to_undefined(from_candid_opt_n7(_uploadFile, _downloadFile, value.lastFaucetTime)),
+    crystal: value.crystal,
+    ownedPlots: value.ownedPlots,
+    combatVictories: value.combatVictories,
+    generatorTiersMap: value.generatorTiersMap,
+    passiveIncomePerDay: value.passiveIncomePerDay
+  };
+}
+function from_candid_record_n18(_uploadFile, _downloadFile, value) {
   return {
     efficiency: value.efficiency,
     plotId: value.plotId,
-    resourceYields: from_candid_vec_n8(_uploadFile, _downloadFile, value.resourceYields),
+    resourceYields: from_candid_vec_n11(_uploadFile, _downloadFile, value.resourceYields),
     frntRate: value.frntRate
+  };
+}
+function from_candid_record_n25(_uploadFile, _downloadFile, value) {
+  return {
+    ok: value.ok,
+    action: value.action,
+    index: value.index,
+    errorMsg: record_opt_to_undefined(from_candid_opt_n1(_uploadFile, _downloadFile, value.errorMsg)),
+    durationMs: value.durationMs
   };
 }
 function from_candid_record_n4(_uploadFile, _downloadFile, value) {
@@ -86285,39 +86884,29 @@ function from_candid_record_n4(_uploadFile, _downloadFile, value) {
 function from_candid_record_n6(_uploadFile, _downloadFile, value) {
   return {
     principal: value.principal,
+    lastClaim: record_opt_to_undefined(from_candid_opt_n7(_uploadFile, _downloadFile, value.lastClaim)),
+    totalClaims: value.totalClaims
+  };
+}
+function from_candid_record_n9(_uploadFile, _downloadFile, value) {
+  return {
+    principal: value.principal,
     username: record_opt_to_undefined(from_candid_opt_n1(_uploadFile, _downloadFile, value.username)),
     rank: value.rank,
     frntBalance: value.frntBalance,
     plotsOwned: value.plotsOwned
   };
 }
-function from_candid_record_n7(_uploadFile, _downloadFile, value) {
-  return {
-    resourceBalances: from_candid_vec_n8(_uploadFile, _downloadFile, value.resourceBalances),
-    username: record_opt_to_undefined(from_candid_opt_n1(_uploadFile, _downloadFile, value.username)),
-    fuel: value.fuel,
-    iron: value.iron,
-    frntBalance: value.frntBalance,
-    totalFRNTRBurned: value.totalFRNTRBurned,
-    plotsOwned: value.plotsOwned,
-    lastFaucetTime: record_opt_to_undefined(from_candid_opt_n12(_uploadFile, _downloadFile, value.lastFaucetTime)),
-    crystal: value.crystal,
-    ownedPlots: value.ownedPlots,
-    combatVictories: value.combatVictories,
-    generatorTiersMap: value.generatorTiersMap,
-    passiveIncomePerDay: value.passiveIncomePerDay
-  };
-}
-function from_candid_tuple_n9(_uploadFile, _downloadFile, value) {
+function from_candid_tuple_n12(_uploadFile, _downloadFile, value) {
   return [
-    from_candid_ResourceType_n10(_uploadFile, _downloadFile, value[0]),
+    from_candid_ResourceType_n13(_uploadFile, _downloadFile, value[0]),
     value[1]
   ];
 }
-function from_candid_variant_n11(_uploadFile, _downloadFile, value) {
+function from_candid_variant_n14(_uploadFile, _downloadFile, value) {
   return "RareEarth" in value ? "RareEarth" : "Fuel" in value ? "Fuel" : "Iron" in value ? "Iron" : "Crystal" in value ? "Crystal" : value;
 }
-function from_candid_variant_n13(_uploadFile, _downloadFile, value) {
+function from_candid_variant_n15(_uploadFile, _downloadFile, value) {
   return "ok" in value ? {
     __kind__: "ok",
     ok: value.ok
@@ -86326,16 +86915,16 @@ function from_candid_variant_n13(_uploadFile, _downloadFile, value) {
     err: value.err
   } : value;
 }
-function from_candid_variant_n14(_uploadFile, _downloadFile, value) {
+function from_candid_variant_n16(_uploadFile, _downloadFile, value) {
   return "ok" in value ? {
     __kind__: "ok",
-    ok: from_candid_MineResult_n15(_uploadFile, _downloadFile, value.ok)
+    ok: from_candid_MineResult_n17(_uploadFile, _downloadFile, value.ok)
   } : "err" in value ? {
     __kind__: "err",
     err: value.err
   } : value;
 }
-function from_candid_variant_n17(_uploadFile, _downloadFile, value) {
+function from_candid_variant_n20(_uploadFile, _downloadFile, value) {
   return "ok" in value ? {
     __kind__: "ok",
     ok: value.ok
@@ -86343,15 +86932,36 @@ function from_candid_variant_n17(_uploadFile, _downloadFile, value) {
     __kind__: "err",
     err: value.err
   } : value;
+}
+function from_candid_variant_n22(_uploadFile, _downloadFile, value) {
+  return "ok" in value ? {
+    __kind__: "ok",
+    ok: from_candid_vec_n23(_uploadFile, _downloadFile, value.ok)
+  } : "err" in value ? {
+    __kind__: "err",
+    err: value.err
+  } : value;
+}
+function from_candid_variant_n27(_uploadFile, _downloadFile, value) {
+  return "ok" in value ? {
+    __kind__: "ok",
+    ok: value.ok
+  } : "err" in value ? {
+    __kind__: "err",
+    err: value.err
+  } : value;
+}
+function from_candid_vec_n11(_uploadFile, _downloadFile, value) {
+  return value.map((x3) => from_candid_tuple_n12(_uploadFile, _downloadFile, x3));
 }
 function from_candid_vec_n2(_uploadFile, _downloadFile, value) {
   return value.map((x3) => from_candid_CombatEvent_n3(_uploadFile, _downloadFile, x3));
 }
-function from_candid_vec_n5(_uploadFile, _downloadFile, value) {
-  return value.map((x3) => from_candid_record_n6(_uploadFile, _downloadFile, x3));
+function from_candid_vec_n23(_uploadFile, _downloadFile, value) {
+  return value.map((x3) => from_candid_StressActionResult_n24(_uploadFile, _downloadFile, x3));
 }
 function from_candid_vec_n8(_uploadFile, _downloadFile, value) {
-  return value.map((x3) => from_candid_tuple_n9(_uploadFile, _downloadFile, x3));
+  return value.map((x3) => from_candid_record_n9(_uploadFile, _downloadFile, x3));
 }
 function createActor(canisterId, _uploadFile, _downloadFile, options = {}) {
   const agent = options.agent || HttpAgent.createSync({
@@ -86367,154 +86977,13 @@ function createActor(canisterId, _uploadFile, _downloadFile, options = {}) {
   });
   return new Backend(actor, _uploadFile, _downloadFile, options.processError);
 }
-function useTokenBalance() {
-  const { identity: identity2 } = useInternetIdentity();
-  const [balance, setBalance] = reactExports.useState("–");
-  reactExports.useEffect(() => {
-    if (!identity2) {
-      setBalance("–");
-      return;
-    }
-    {
-      setBalance("–");
-      return;
-    }
-  }, [identity2]);
-  return balance;
-}
-const NAV_LINKS = [
-  { label: "Home", to: "/" },
-  { label: "Universe", to: "/play" }
-];
-function Navbar() {
-  const { login, clear: clear2, identity: identity2 } = useInternetIdentity();
-  const isAuthenticated = !!identity2;
-  const balance = useTokenBalance();
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-    "header",
-    {
-      "data-ocid": "navbar.panel",
-      className: "hidden md:flex fixed top-0 left-0 right-0 z-50 h-14 items-center justify-between px-6",
-      style: {
-        background: "rgba(2,10,20,0.88)",
-        borderBottom: "1px solid rgba(0,255,204,0.22)",
-        backdropFilter: "blur(10px)",
-        WebkitBackdropFilter: "blur(10px)"
-      },
-      children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          Link,
-          {
-            to: "/",
-            "data-ocid": "navbar.link",
-            className: "font-bold text-xl tracking-[0.25em] uppercase",
-            style: {
-              color: "#00ffcc",
-              textShadow: "0 0 12px rgba(0,255,204,0.7), 0 0 24px rgba(0,255,204,0.3)",
-              letterSpacing: "0.25em"
-            },
-            children: "FRONTIER"
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs(
-          "nav",
-          {
-            className: "flex items-center gap-1 rounded-full px-2 py-1",
-            style: {
-              background: "rgba(0,255,204,0.06)",
-              border: "1px solid rgba(0,255,204,0.18)",
-              backdropFilter: "blur(8px)"
-            },
-            children: [
-              NAV_LINKS.map((link) => /* @__PURE__ */ jsxRuntimeExports.jsx(
-                Link,
-                {
-                  to: link.to,
-                  "data-ocid": "navbar.link",
-                  className: "px-4 py-1.5 text-xs font-medium uppercase tracking-wider rounded-full transition-all",
-                  style: { color: "rgba(180,220,220,0.7)" },
-                  activeProps: {
-                    style: {
-                      color: "#00ffcc",
-                      background: "rgba(0,255,204,0.12)",
-                      textShadow: "0 0 8px rgba(0,255,204,0.5)"
-                    }
-                  },
-                  inactiveProps: {},
-                  children: link.label
-                },
-                link.to
-              )),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                Link,
-                {
-                  to: "/play",
-                  "data-ocid": "navbar.primary_button",
-                  className: "ml-2 px-4 py-1.5 text-xs font-bold uppercase tracking-wider rounded-full transition-all",
-                  style: {
-                    background: "rgba(0,255,204,0.15)",
-                    border: "1px solid rgba(0,255,204,0.4)",
-                    color: "#00ffcc",
-                    boxShadow: "0 0 10px rgba(0,255,204,0.2)"
-                  },
-                  children: "Play Now"
-                }
-              )
-            ]
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "div",
-            {
-              className: "flex items-center gap-2 rounded-full px-3 py-1.5",
-              style: {
-                background: "rgba(0,255,204,0.06)",
-                border: "1px solid rgba(0,255,204,0.22)"
-              },
-              children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "div",
-                  {
-                    className: "w-5 h-5 rounded-full flex items-center justify-center",
-                    style: {
-                      background: "rgba(0,255,204,0.15)",
-                      border: "1px solid rgba(0,255,204,0.4)"
-                    },
-                    children: /* @__PURE__ */ jsxRuntimeExports.jsx(Zap, { size: 10, style: { color: "#00ffcc" } })
-                  }
-                ),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs", style: { color: "rgba(180,220,220,0.6)" }, children: "FRNTR" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-bold", style: { color: "#00ffcc" }, children: balance })
-              ]
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "button",
-            {
-              type: "button",
-              "data-ocid": "navbar.button",
-              onClick: isAuthenticated ? clear2 : login,
-              className: "px-4 py-1.5 text-xs font-bold uppercase tracking-wider rounded-full transition-all",
-              style: {
-                border: "1px solid rgba(0,255,204,0.5)",
-                color: "#00ffcc"
-              },
-              children: isAuthenticated ? "Disconnect" : "Connect"
-            }
-          )
-        ] })
-      ]
-    }
-  );
-}
-const CYAN$7 = "#00ffcc";
+const CYAN$b = "#00ffcc";
 const GOLD$2 = "#ffd700";
 const AMBER = "#f59e0b";
-const BORDER$7 = "rgba(0,255,204,0.18)";
+const BORDER$a = "rgba(0,255,204,0.18)";
 const PANEL = "rgba(0,20,40,0.72)";
 const TEXT$4 = "#e0f4ff";
-const TEXT_DIM$3 = "rgba(224,244,255,0.45)";
+const TEXT_DIM$2 = "rgba(224,244,255,0.45)";
 function computeScore(plots, frntr, wins) {
   return Math.round(
     (plots ?? 0) * 100 + (frntr ?? 0) * 0.01 + (wins ?? 0) * 50
@@ -86534,7 +87003,7 @@ function RankMedal({ rank }) {
         fontSize: 11,
         fontWeight: 700,
         fontFamily: "monospace",
-        color: TEXT_DIM$3
+        color: TEXT_DIM$2
       },
       children: [
         "#",
@@ -86550,7 +87019,7 @@ function SortIcon({
 }) {
   if (col !== active)
     return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { opacity: 0.2, fontSize: 10 }, children: "↕" });
-  return dir === "asc" ? /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronUp, { size: 11, style: { color: CYAN$7 } }) : /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronDown, { size: 11, style: { color: CYAN$7 } });
+  return dir === "asc" ? /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronUp, { size: 11, style: { color: CYAN$b } }) : /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronDown, { size: 11, style: { color: CYAN$b } });
 }
 function Leaderboard() {
   const leaderboard = useGameStore((s2) => s2.leaderboard);
@@ -86669,14 +87138,14 @@ function Leaderboard() {
     fontWeight: 700,
     letterSpacing: 2,
     textTransform: "uppercase",
-    color: sortKey === key ? CYAN$7 : TEXT_DIM$3,
+    color: sortKey === key ? CYAN$b : TEXT_DIM$2,
     display: "flex",
     alignItems: "center",
     gap: 3,
     whiteSpace: "nowrap",
     transition: "color 0.15s"
   });
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
     "div",
     {
       className: "min-h-screen",
@@ -86684,595 +87153,1079 @@ function Leaderboard() {
         background: "radial-gradient(ellipse at 50% 0%, #0a1628 0%, #04070d 70%)",
         fontFamily: "'General Sans', 'Plus Jakarta Sans', sans-serif"
       },
-      children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(Navbar, {}),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "pt-20 pb-12 px-4 max-w-4xl mx-auto", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            motion.div,
-            {
-              initial: { opacity: 0, y: -10 },
-              animate: { opacity: 1, y: 0 },
-              transition: { duration: 0.3 },
-              className: "flex items-center justify-between mb-6",
-              children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", children: [
+      children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "pt-6 pb-12 px-4 max-w-4xl mx-auto", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          motion.div,
+          {
+            initial: { opacity: 0, y: -10 },
+            animate: { opacity: 1, y: 0 },
+            transition: { duration: 0.3 },
+            className: "flex items-center justify-between mb-6",
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      width: 38,
+                      height: 38,
+                      borderRadius: 8,
+                      background: "rgba(0,255,204,0.1)",
+                      border: `1px solid ${BORDER$a}`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center"
+                    },
+                    children: /* @__PURE__ */ jsxRuntimeExports.jsx(Trophy, { size: 18, style: { color: GOLD$2 } })
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "div",
+                    "h1",
                     {
                       style: {
-                        width: 38,
-                        height: 38,
-                        borderRadius: 8,
-                        background: "rgba(0,255,204,0.1)",
-                        border: `1px solid ${BORDER$7}`,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center"
+                        fontSize: 20,
+                        fontWeight: 800,
+                        letterSpacing: 4,
+                        color: TEXT$4,
+                        textTransform: "uppercase",
+                        lineHeight: 1
                       },
-                      children: /* @__PURE__ */ jsxRuntimeExports.jsx(Trophy, { size: 18, style: { color: GOLD$2 } })
+                      children: "LEADERBOARD"
                     }
                   ),
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsx(
-                      "h1",
-                      {
-                        style: {
-                          fontSize: 20,
-                          fontWeight: 800,
-                          letterSpacing: 4,
-                          color: TEXT$4,
-                          textTransform: "uppercase",
-                          lineHeight: 1
-                        },
-                        children: "LEADERBOARD"
-                      }
-                    ),
-                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                      "p",
-                      {
-                        style: {
-                          fontSize: 9,
-                          color: TEXT_DIM$3,
-                          letterSpacing: 2,
-                          marginTop: 2
-                        },
-                        children: [
-                          "GLOBAL RANKING · TOP ",
-                          sorted.length,
-                          " COMMANDERS"
-                        ]
-                      }
-                    )
-                  ] })
-                ] }),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 9, color: TEXT_DIM$3, letterSpacing: 1 }, children: refreshing ? "SYNCING..." : `${timeSince}s AGO` }),
                   /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                    "button",
+                    "p",
                     {
-                      type: "button",
-                      "data-ocid": "leaderboard.button",
-                      onClick: handleManualRefresh,
-                      disabled: refreshing,
                       style: {
-                        background: "rgba(0,255,204,0.07)",
-                        border: `1px solid ${BORDER$7}`,
-                        borderRadius: 6,
-                        color: CYAN$7,
-                        padding: "6px 10px",
-                        cursor: refreshing ? "not-allowed" : "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 5,
                         fontSize: 9,
-                        fontWeight: 700,
+                        color: TEXT_DIM$2,
                         letterSpacing: 2,
-                        textTransform: "uppercase",
-                        opacity: refreshing ? 0.6 : 1
+                        marginTop: 2
                       },
                       children: [
-                        /* @__PURE__ */ jsxRuntimeExports.jsx(
-                          RefreshCw,
-                          {
-                            size: 11,
-                            style: {
-                              animation: refreshing ? "spin 1s linear infinite" : "none"
-                            }
-                          }
-                        ),
-                        "REFRESH"
+                        "GLOBAL RANKING · TOP ",
+                        sorted.length,
+                        " COMMANDERS"
                       ]
                     }
                   )
                 ] })
-              ]
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-wrap gap-2 mb-5", children: [
-            { key: "score", label: "SCORE", icon: "🎯" },
-            {
-              key: "plots",
-              label: "PLOTS",
-              icon: null,
-              lucide: Globe
-            },
-            {
-              key: "frntr",
-              label: "FRNTR",
-              icon: null,
-              lucide: Zap
-            },
-            {
-              key: "wins",
-              label: "WINS",
-              icon: null,
-              lucide: Sword
-            }
-          ].map((tab) => {
-            const active = sortKey === tab.key;
-            const LucideIcon = tab.lucide;
-            return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-              "button",
-              {
-                type: "button",
-                "data-ocid": "leaderboard.tab",
-                onClick: () => handleSort(tab.key),
-                className: "flex items-center gap-1.5 min-h-[44px] px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all rounded-lg",
-                style: {
-                  background: active ? "rgba(0,255,204,0.15)" : "rgba(0,20,40,0.5)",
-                  border: `1px solid ${active ? CYAN$7 : BORDER$7}`,
-                  color: active ? CYAN$7 : TEXT_DIM$3,
-                  boxShadow: active ? "0 0 10px rgba(0,255,204,0.15)" : "none"
-                },
-                children: [
-                  tab.icon && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: tab.icon }),
-                  LucideIcon && /* @__PURE__ */ jsxRuntimeExports.jsx(LucideIcon, { size: 13 }),
-                  tab.label,
-                  active && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 9 }, children: sortDir === "desc" ? "▼" : "▲" })
-                ]
-              },
-              tab.key
-            );
-          }) }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "div",
-            {
-              className: "mb-4 inline-flex items-center gap-2 rounded-full px-4 py-1.5",
-              style: {
-                background: "rgba(0,255,204,0.05)",
-                border: `1px solid ${BORDER$7}`,
-                fontSize: 9,
-                color: TEXT_DIM$3,
-                letterSpacing: 1.5
-              },
-              children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$7 }, children: "⚡" }),
-                "SCORE = (PLOTS × 100) + (FRNTR × 0.01) + (WINS × 50)"
-              ]
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            motion.div,
-            {
-              initial: { opacity: 0, y: 10 },
-              animate: { opacity: 1, y: 0 },
-              transition: { duration: 0.35, delay: 0.1 },
-              "data-ocid": "leaderboard.table",
-              style: {
-                background: PANEL,
-                backdropFilter: "blur(16px)",
-                WebkitBackdropFilter: "blur(16px)",
-                border: `1px solid ${BORDER$7}`,
-                borderRadius: 12,
-                overflow: "hidden"
-              },
-              children: [
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 9, color: TEXT_DIM$2, letterSpacing: 1 }, children: refreshing ? "SYNCING..." : `${timeSince}s AGO` }),
                 /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                  "div",
+                  "button",
                   {
+                    type: "button",
+                    "data-ocid": "leaderboard.button",
+                    onClick: handleManualRefresh,
+                    disabled: refreshing,
+                    style: {
+                      background: "rgba(0,255,204,0.07)",
+                      border: `1px solid ${BORDER$a}`,
+                      borderRadius: 6,
+                      color: CYAN$b,
+                      padding: "6px 10px",
+                      cursor: refreshing ? "not-allowed" : "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 5,
+                      fontSize: 9,
+                      fontWeight: 700,
+                      letterSpacing: 2,
+                      textTransform: "uppercase",
+                      opacity: refreshing ? 0.6 : 1
+                    },
+                    children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        RefreshCw,
+                        {
+                          size: 11,
+                          style: {
+                            animation: refreshing ? "spin 1s linear infinite" : "none"
+                          }
+                        }
+                      ),
+                      "REFRESH"
+                    ]
+                  }
+                )
+              ] })
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-wrap gap-2 mb-5", children: [
+          { key: "score", label: "SCORE", icon: "🎯" },
+          {
+            key: "plots",
+            label: "PLOTS",
+            icon: null,
+            lucide: Globe
+          },
+          {
+            key: "frntr",
+            label: "FRNTR",
+            icon: null,
+            lucide: Zap
+          },
+          {
+            key: "wins",
+            label: "WINS",
+            icon: null,
+            lucide: Sword
+          }
+        ].map((tab) => {
+          const active = sortKey === tab.key;
+          const LucideIcon = tab.lucide;
+          return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "button",
+            {
+              type: "button",
+              "data-ocid": "leaderboard.tab",
+              onClick: () => handleSort(tab.key),
+              className: "flex items-center gap-1.5 min-h-[44px] px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all rounded-lg",
+              style: {
+                background: active ? "rgba(0,255,204,0.15)" : "rgba(0,20,40,0.5)",
+                border: `1px solid ${active ? CYAN$b : BORDER$a}`,
+                color: active ? CYAN$b : TEXT_DIM$2,
+                boxShadow: active ? "0 0 10px rgba(0,255,204,0.15)" : "none"
+              },
+              children: [
+                tab.icon && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: tab.icon }),
+                LucideIcon && /* @__PURE__ */ jsxRuntimeExports.jsx(LucideIcon, { size: 13 }),
+                tab.label,
+                active && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 9 }, children: sortDir === "desc" ? "▼" : "▲" })
+              ]
+            },
+            tab.key
+          );
+        }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            className: "mb-4 inline-flex items-center gap-2 rounded-full px-4 py-1.5",
+            style: {
+              background: "rgba(0,255,204,0.05)",
+              border: `1px solid ${BORDER$a}`,
+              fontSize: 9,
+              color: TEXT_DIM$2,
+              letterSpacing: 1.5
+            },
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$b }, children: "⚡" }),
+              "SCORE = (PLOTS × 100) + (FRNTR × 0.01) + (WINS × 50)"
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          motion.div,
+          {
+            initial: { opacity: 0, y: 10 },
+            animate: { opacity: 1, y: 0 },
+            transition: { duration: 0.35, delay: 0.1 },
+            "data-ocid": "leaderboard.table",
+            style: {
+              background: PANEL,
+              backdropFilter: "blur(16px)",
+              WebkitBackdropFilter: "blur(16px)",
+              border: `1px solid ${BORDER$a}`,
+              borderRadius: 12,
+              overflow: "hidden"
+            },
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "div",
+                {
+                  style: {
+                    display: "grid",
+                    gridTemplateColumns: "42px 48px 1fr 70px 110px 60px 90px",
+                    borderBottom: `1px solid ${BORDER$a}`,
+                    background: "rgba(0,255,204,0.03)"
+                  },
+                  children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "div",
+                      {
+                        style: {
+                          padding: "10px 12px",
+                          fontSize: 9,
+                          fontWeight: 700,
+                          letterSpacing: 2,
+                          color: TEXT_DIM$2,
+                          textTransform: "uppercase"
+                        },
+                        children: "#"
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { padding: "10px 4px" } }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "button",
+                      {
+                        type: "button",
+                        style: colStyle("player"),
+                        onClick: () => handleSort("player"),
+                        children: [
+                          "PLAYER ",
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(SortIcon, { col: "player", active: sortKey, dir: sortDir })
+                        ]
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "button",
+                      {
+                        type: "button",
+                        style: { ...colStyle("plots"), justifyContent: "flex-end" },
+                        onClick: () => handleSort("plots"),
+                        children: [
+                          "PLOTS ",
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(SortIcon, { col: "plots", active: sortKey, dir: sortDir })
+                        ]
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "button",
+                      {
+                        type: "button",
+                        style: { ...colStyle("frntr"), justifyContent: "flex-end" },
+                        onClick: () => handleSort("frntr"),
+                        children: [
+                          "FRNTR ",
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(SortIcon, { col: "frntr", active: sortKey, dir: sortDir })
+                        ]
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "button",
+                      {
+                        type: "button",
+                        style: { ...colStyle("wins"), justifyContent: "flex-end" },
+                        onClick: () => handleSort("wins"),
+                        children: [
+                          "WINS ",
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(SortIcon, { col: "wins", active: sortKey, dir: sortDir })
+                        ]
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "button",
+                      {
+                        type: "button",
+                        style: { ...colStyle("score"), justifyContent: "flex-end" },
+                        onClick: () => handleSort("score"),
+                        children: [
+                          "SCORE ",
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(SortIcon, { col: "score", active: sortKey, dir: sortDir })
+                        ]
+                      }
+                    )
+                  ]
+                }
+              ),
+              isLoading ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { "data-ocid": "leaderboard.loading_state", style: { padding: 12 }, children: Array.from({ length: 5 }).map((_2, i2) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+                Skeleton2,
+                {
+                  className: "w-full h-10 mb-2 rounded-md",
+                  style: { background: "rgba(0,255,204,0.06)" }
+                },
+                i2
+              )) }) : sorted.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "div",
+                {
+                  "data-ocid": "leaderboard.empty_state",
+                  style: {
+                    padding: "40px 20px",
+                    textAlign: "center",
+                    color: TEXT_DIM$2,
+                    fontSize: 12,
+                    letterSpacing: 2
+                  },
+                  children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 28, marginBottom: 8 }, children: "📡" }),
+                    "NO PLAYERS YET — BE THE FIRST TO REGISTER!"
+                  ]
+                }
+              ) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { "data-ocid": "leaderboard.list", children: sorted.map((entry, idx) => {
+                const isTop3 = entry.rank <= 3;
+                const rowBg = entry.isMe ? "rgba(0,255,204,0.08)" : isTop3 ? `rgba(0,255,204,${0.04 - idx * 0.01})` : "transparent";
+                const borderColor = entry.isMe ? "rgba(0,255,204,0.25)" : "rgba(0,255,204,0.06)";
+                const rankColor = entry.rank === 1 ? GOLD$2 : entry.rank === 2 ? "#c0c0c0" : entry.rank === 3 ? AMBER : TEXT_DIM$2;
+                return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  motion.div,
+                  {
+                    initial: { opacity: 0 },
+                    animate: { opacity: 1 },
+                    transition: { delay: idx * 0.03 },
+                    "data-ocid": `leaderboard.item.${idx + 1}`,
                     style: {
                       display: "grid",
                       gridTemplateColumns: "42px 48px 1fr 70px 110px 60px 90px",
-                      borderBottom: `1px solid ${BORDER$7}`,
-                      background: "rgba(0,255,204,0.03)"
+                      background: rowBg,
+                      borderBottom: `1px solid ${borderColor}`,
+                      alignItems: "center",
+                      transition: "background 0.15s",
+                      ...entry.isMe ? {
+                        boxShadow: "inset 2px 0 0 rgba(0,255,204,0.6)"
+                      } : {}
                     },
                     children: [
                       /* @__PURE__ */ jsxRuntimeExports.jsx(
                         "div",
                         {
                           style: {
-                            padding: "10px 12px",
-                            fontSize: 9,
+                            padding: "11px 12px",
+                            fontSize: 10,
                             fontWeight: 700,
-                            letterSpacing: 2,
-                            color: TEXT_DIM$3,
-                            textTransform: "uppercase"
+                            fontFamily: "monospace",
+                            color: rankColor
                           },
-                          children: "#"
+                          children: entry.rank
                         }
                       ),
-                      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { padding: "10px 4px" } }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { padding: "11px 4px" }, children: /* @__PURE__ */ jsxRuntimeExports.jsx(RankMedal, { rank: entry.rank }) }),
                       /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                        "button",
+                        "div",
                         {
-                          type: "button",
-                          style: colStyle("player"),
-                          onClick: () => handleSort("player"),
+                          style: {
+                            padding: "11px 12px",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                            overflow: "hidden"
+                          },
                           children: [
-                            "PLAYER ",
-                            /* @__PURE__ */ jsxRuntimeExports.jsx(SortIcon, { col: "player", active: sortKey, dir: sortDir })
+                            /* @__PURE__ */ jsxRuntimeExports.jsx(
+                              "div",
+                              {
+                                style: {
+                                  width: 22,
+                                  height: 22,
+                                  borderRadius: 4,
+                                  background: `oklch(55% 0.2 ${entry.name.charCodeAt(0) * 23 % 360})`,
+                                  flexShrink: 0,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  fontSize: 9,
+                                  fontWeight: 700,
+                                  color: "#fff"
+                                },
+                                children: entry.name.slice(0, 1).toUpperCase()
+                              }
+                            ),
+                            /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                              "span",
+                              {
+                                style: {
+                                  fontSize: 11,
+                                  fontWeight: entry.isMe ? 800 : 500,
+                                  color: entry.isMe ? CYAN$b : TEXT$4,
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  whiteSpace: "nowrap",
+                                  letterSpacing: 0.5
+                                },
+                                children: [
+                                  entry.name,
+                                  entry.isMe && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                    "span",
+                                    {
+                                      style: {
+                                        marginLeft: 6,
+                                        fontSize: 7,
+                                        fontWeight: 700,
+                                        color: CYAN$b,
+                                        border: "1px solid rgba(0,255,204,0.4)",
+                                        borderRadius: 3,
+                                        padding: "1px 4px",
+                                        letterSpacing: 1
+                                      },
+                                      children: "YOU"
+                                    }
+                                  )
+                                ]
+                              }
+                            )
                           ]
                         }
                       ),
-                      /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                        "button",
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "div",
                         {
-                          type: "button",
-                          style: { ...colStyle("plots"), justifyContent: "flex-end" },
-                          onClick: () => handleSort("plots"),
-                          children: [
-                            "PLOTS ",
-                            /* @__PURE__ */ jsxRuntimeExports.jsx(SortIcon, { col: "plots", active: sortKey, dir: sortDir })
-                          ]
+                          style: {
+                            padding: "11px 12px",
+                            textAlign: "right",
+                            fontSize: 11,
+                            fontWeight: 700,
+                            fontFamily: "monospace",
+                            color: TEXT$4
+                          },
+                          children: entry.plots
                         }
                       ),
-                      /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                        "button",
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "div",
                         {
-                          type: "button",
-                          style: { ...colStyle("frntr"), justifyContent: "flex-end" },
-                          onClick: () => handleSort("frntr"),
-                          children: [
-                            "FRNTR ",
-                            /* @__PURE__ */ jsxRuntimeExports.jsx(SortIcon, { col: "frntr", active: sortKey, dir: sortDir })
-                          ]
+                          style: {
+                            padding: "11px 12px",
+                            textAlign: "right",
+                            fontSize: 11,
+                            fontWeight: 700,
+                            fontFamily: "monospace",
+                            color: entry.isMe ? CYAN$b : "rgba(0,255,204,0.7)"
+                          },
+                          children: entry.frntr.toLocaleString()
                         }
                       ),
-                      /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                        "button",
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "div",
                         {
-                          type: "button",
-                          style: { ...colStyle("wins"), justifyContent: "flex-end" },
-                          onClick: () => handleSort("wins"),
-                          children: [
-                            "WINS ",
-                            /* @__PURE__ */ jsxRuntimeExports.jsx(SortIcon, { col: "wins", active: sortKey, dir: sortDir })
-                          ]
+                          style: {
+                            padding: "11px 12px",
+                            textAlign: "right",
+                            fontSize: 11,
+                            fontWeight: 700,
+                            fontFamily: "monospace",
+                            color: "#22c55e"
+                          },
+                          children: entry.wins
                         }
                       ),
-                      /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                        "button",
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "div",
                         {
-                          type: "button",
-                          style: { ...colStyle("score"), justifyContent: "flex-end" },
-                          onClick: () => handleSort("score"),
-                          children: [
-                            "SCORE ",
-                            /* @__PURE__ */ jsxRuntimeExports.jsx(SortIcon, { col: "score", active: sortKey, dir: sortDir })
-                          ]
+                          style: {
+                            padding: "11px 12px",
+                            textAlign: "right",
+                            fontSize: 11,
+                            fontWeight: 800,
+                            fontFamily: "monospace",
+                            color: entry.isMe ? GOLD$2 : AMBER
+                          },
+                          children: entry.score.toLocaleString()
                         }
                       )
                     ]
-                  }
-                ),
-                isLoading ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { "data-ocid": "leaderboard.loading_state", style: { padding: 12 }, children: Array.from({ length: 5 }).map((_2, i2) => /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  Skeleton2,
-                  {
-                    className: "w-full h-10 mb-2 rounded-md",
-                    style: { background: "rgba(0,255,204,0.06)" }
                   },
-                  i2
-                )) }) : sorted.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                  "div",
-                  {
-                    "data-ocid": "leaderboard.empty_state",
-                    style: {
-                      padding: "40px 20px",
-                      textAlign: "center",
-                      color: TEXT_DIM$3,
-                      fontSize: 12,
-                      letterSpacing: 2
-                    },
-                    children: [
-                      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 28, marginBottom: 8 }, children: "📡" }),
-                      "NO PLAYERS YET — BE THE FIRST TO REGISTER!"
-                    ]
+                  entry.id
+                );
+              }) })
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            className: "mt-3 flex items-center justify-end gap-2",
+            style: { fontSize: 9, color: TEXT_DIM$2, letterSpacing: 1.5 },
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "div",
+                {
+                  style: {
+                    width: 6,
+                    height: 6,
+                    borderRadius: "50%",
+                    background: CYAN$b,
+                    animation: "pulse 2s infinite",
+                    boxShadow: "0 0 6px rgba(0,255,204,0.7)"
                   }
-                ) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { "data-ocid": "leaderboard.list", children: sorted.map((entry, idx) => {
-                  const isTop3 = entry.rank <= 3;
-                  const rowBg = entry.isMe ? "rgba(0,255,204,0.08)" : isTop3 ? `rgba(0,255,204,${0.04 - idx * 0.01})` : "transparent";
-                  const borderColor = entry.isMe ? "rgba(0,255,204,0.25)" : "rgba(0,255,204,0.06)";
-                  const rankColor = entry.rank === 1 ? GOLD$2 : entry.rank === 2 ? "#c0c0c0" : entry.rank === 3 ? AMBER : TEXT_DIM$3;
-                  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                    motion.div,
-                    {
-                      initial: { opacity: 0 },
-                      animate: { opacity: 1 },
-                      transition: { delay: idx * 0.03 },
-                      "data-ocid": `leaderboard.item.${idx + 1}`,
-                      style: {
-                        display: "grid",
-                        gridTemplateColumns: "42px 48px 1fr 70px 110px 60px 90px",
-                        background: rowBg,
-                        borderBottom: `1px solid ${borderColor}`,
-                        alignItems: "center",
-                        transition: "background 0.15s",
-                        ...entry.isMe ? {
-                          boxShadow: "inset 2px 0 0 rgba(0,255,204,0.6)"
-                        } : {}
-                      },
-                      children: [
-                        /* @__PURE__ */ jsxRuntimeExports.jsx(
-                          "div",
-                          {
-                            style: {
-                              padding: "11px 12px",
-                              fontSize: 10,
-                              fontWeight: 700,
-                              fontFamily: "monospace",
-                              color: rankColor
-                            },
-                            children: entry.rank
-                          }
-                        ),
-                        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { padding: "11px 4px" }, children: /* @__PURE__ */ jsxRuntimeExports.jsx(RankMedal, { rank: entry.rank }) }),
-                        /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                          "div",
-                          {
-                            style: {
-                              padding: "11px 12px",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 8,
-                              overflow: "hidden"
-                            },
-                            children: [
-                              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                "div",
-                                {
-                                  style: {
-                                    width: 22,
-                                    height: 22,
-                                    borderRadius: 4,
-                                    background: `oklch(55% 0.2 ${entry.name.charCodeAt(0) * 23 % 360})`,
-                                    flexShrink: 0,
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    fontSize: 9,
-                                    fontWeight: 700,
-                                    color: "#fff"
-                                  },
-                                  children: entry.name.slice(0, 1).toUpperCase()
-                                }
-                              ),
-                              /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                                "span",
-                                {
-                                  style: {
-                                    fontSize: 11,
-                                    fontWeight: entry.isMe ? 800 : 500,
-                                    color: entry.isMe ? CYAN$7 : TEXT$4,
-                                    overflow: "hidden",
-                                    textOverflow: "ellipsis",
-                                    whiteSpace: "nowrap",
-                                    letterSpacing: 0.5
-                                  },
-                                  children: [
-                                    entry.name,
-                                    entry.isMe && /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                      "span",
-                                      {
-                                        style: {
-                                          marginLeft: 6,
-                                          fontSize: 7,
-                                          fontWeight: 700,
-                                          color: CYAN$7,
-                                          border: "1px solid rgba(0,255,204,0.4)",
-                                          borderRadius: 3,
-                                          padding: "1px 4px",
-                                          letterSpacing: 1
-                                        },
-                                        children: "YOU"
-                                      }
-                                    )
-                                  ]
-                                }
-                              )
-                            ]
-                          }
-                        ),
-                        /* @__PURE__ */ jsxRuntimeExports.jsx(
-                          "div",
-                          {
-                            style: {
-                              padding: "11px 12px",
-                              textAlign: "right",
-                              fontSize: 11,
-                              fontWeight: 700,
-                              fontFamily: "monospace",
-                              color: TEXT$4
-                            },
-                            children: entry.plots
-                          }
-                        ),
-                        /* @__PURE__ */ jsxRuntimeExports.jsx(
-                          "div",
-                          {
-                            style: {
-                              padding: "11px 12px",
-                              textAlign: "right",
-                              fontSize: 11,
-                              fontWeight: 700,
-                              fontFamily: "monospace",
-                              color: entry.isMe ? CYAN$7 : "rgba(0,255,204,0.7)"
-                            },
-                            children: entry.frntr.toLocaleString()
-                          }
-                        ),
-                        /* @__PURE__ */ jsxRuntimeExports.jsx(
-                          "div",
-                          {
-                            style: {
-                              padding: "11px 12px",
-                              textAlign: "right",
-                              fontSize: 11,
-                              fontWeight: 700,
-                              fontFamily: "monospace",
-                              color: "#22c55e"
-                            },
-                            children: entry.wins
-                          }
-                        ),
-                        /* @__PURE__ */ jsxRuntimeExports.jsx(
-                          "div",
-                          {
-                            style: {
-                              padding: "11px 12px",
-                              textAlign: "right",
-                              fontSize: 11,
-                              fontWeight: 800,
-                              fontFamily: "monospace",
-                              color: entry.isMe ? GOLD$2 : AMBER
-                            },
-                            children: entry.score.toLocaleString()
-                          }
-                        )
-                      ]
-                    },
-                    entry.id
-                  );
-                }) })
-              ]
-            }
-          ),
+                }
+              ),
+              "AUTO-REFRESH EVERY 30S"
+            ]
+          }
+        )
+      ] })
+    }
+  );
+}
+var jt = (n) => {
+  switch (n) {
+    case "success":
+      return ee;
+    case "info":
+      return ae;
+    case "warning":
+      return oe;
+    case "error":
+      return se;
+    default:
+      return null;
+  }
+}, te = Array(12).fill(0), Yt = ({ visible: n, className: e }) => React$4.createElement("div", { className: ["sonner-loading-wrapper", e].filter(Boolean).join(" "), "data-visible": n }, React$4.createElement("div", { className: "sonner-spinner" }, te.map((t, a2) => React$4.createElement("div", { className: "sonner-loading-bar", key: `spinner-bar-${a2}` })))), ee = React$4.createElement("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 20 20", fill: "currentColor", height: "20", width: "20" }, React$4.createElement("path", { fillRule: "evenodd", d: "M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z", clipRule: "evenodd" })), oe = React$4.createElement("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", fill: "currentColor", height: "20", width: "20" }, React$4.createElement("path", { fillRule: "evenodd", d: "M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003zM12 8.25a.75.75 0 01.75.75v3.75a.75.75 0 01-1.5 0V9a.75.75 0 01.75-.75zm0 8.25a.75.75 0 100-1.5.75.75 0 000 1.5z", clipRule: "evenodd" })), ae = React$4.createElement("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 20 20", fill: "currentColor", height: "20", width: "20" }, React$4.createElement("path", { fillRule: "evenodd", d: "M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z", clipRule: "evenodd" })), se = React$4.createElement("svg", { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 20 20", fill: "currentColor", height: "20", width: "20" }, React$4.createElement("path", { fillRule: "evenodd", d: "M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z", clipRule: "evenodd" })), Ot = React$4.createElement("svg", { xmlns: "http://www.w3.org/2000/svg", width: "12", height: "12", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.5", strokeLinecap: "round", strokeLinejoin: "round" }, React$4.createElement("line", { x1: "18", y1: "6", x2: "6", y2: "18" }), React$4.createElement("line", { x1: "6", y1: "6", x2: "18", y2: "18" }));
+var Ft = () => {
+  let [n, e] = React$4.useState(document.hidden);
+  return React$4.useEffect(() => {
+    let t = () => {
+      e(document.hidden);
+    };
+    return document.addEventListener("visibilitychange", t), () => window.removeEventListener("visibilitychange", t);
+  }, []), n;
+};
+var bt = 1, yt = class {
+  constructor() {
+    this.subscribe = (e) => (this.subscribers.push(e), () => {
+      let t = this.subscribers.indexOf(e);
+      this.subscribers.splice(t, 1);
+    });
+    this.publish = (e) => {
+      this.subscribers.forEach((t) => t(e));
+    };
+    this.addToast = (e) => {
+      this.publish(e), this.toasts = [...this.toasts, e];
+    };
+    this.create = (e) => {
+      var S2;
+      let { message: t, ...a2 } = e, u = typeof (e == null ? void 0 : e.id) == "number" || ((S2 = e.id) == null ? void 0 : S2.length) > 0 ? e.id : bt++, f = this.toasts.find((g2) => g2.id === u), w2 = e.dismissible === void 0 ? true : e.dismissible;
+      return this.dismissedToasts.has(u) && this.dismissedToasts.delete(u), f ? this.toasts = this.toasts.map((g2) => g2.id === u ? (this.publish({ ...g2, ...e, id: u, title: t }), { ...g2, ...e, id: u, dismissible: w2, title: t }) : g2) : this.addToast({ title: t, ...a2, dismissible: w2, id: u }), u;
+    };
+    this.dismiss = (e) => (this.dismissedToasts.add(e), e || this.toasts.forEach((t) => {
+      this.subscribers.forEach((a2) => a2({ id: t.id, dismiss: true }));
+    }), this.subscribers.forEach((t) => t({ id: e, dismiss: true })), e);
+    this.message = (e, t) => this.create({ ...t, message: e });
+    this.error = (e, t) => this.create({ ...t, message: e, type: "error" });
+    this.success = (e, t) => this.create({ ...t, type: "success", message: e });
+    this.info = (e, t) => this.create({ ...t, type: "info", message: e });
+    this.warning = (e, t) => this.create({ ...t, type: "warning", message: e });
+    this.loading = (e, t) => this.create({ ...t, type: "loading", message: e });
+    this.promise = (e, t) => {
+      if (!t) return;
+      let a2;
+      t.loading !== void 0 && (a2 = this.create({ ...t, promise: e, type: "loading", message: t.loading, description: typeof t.description != "function" ? t.description : void 0 }));
+      let u = e instanceof Promise ? e : e(), f = a2 !== void 0, w2, S2 = u.then(async (i2) => {
+        if (w2 = ["resolve", i2], React$4.isValidElement(i2)) f = false, this.create({ id: a2, type: "default", message: i2 });
+        else if (ie(i2) && !i2.ok) {
+          f = false;
+          let T2 = typeof t.error == "function" ? await t.error(`HTTP error! status: ${i2.status}`) : t.error, F2 = typeof t.description == "function" ? await t.description(`HTTP error! status: ${i2.status}`) : t.description;
+          this.create({ id: a2, type: "error", message: T2, description: F2 });
+        } else if (t.success !== void 0) {
+          f = false;
+          let T2 = typeof t.success == "function" ? await t.success(i2) : t.success, F2 = typeof t.description == "function" ? await t.description(i2) : t.description;
+          this.create({ id: a2, type: "success", message: T2, description: F2 });
+        }
+      }).catch(async (i2) => {
+        if (w2 = ["reject", i2], t.error !== void 0) {
+          f = false;
+          let D2 = typeof t.error == "function" ? await t.error(i2) : t.error, T2 = typeof t.description == "function" ? await t.description(i2) : t.description;
+          this.create({ id: a2, type: "error", message: D2, description: T2 });
+        }
+      }).finally(() => {
+        var i2;
+        f && (this.dismiss(a2), a2 = void 0), (i2 = t.finally) == null || i2.call(t);
+      }), g2 = () => new Promise((i2, D2) => S2.then(() => w2[0] === "reject" ? D2(w2[1]) : i2(w2[1])).catch(D2));
+      return typeof a2 != "string" && typeof a2 != "number" ? { unwrap: g2 } : Object.assign(a2, { unwrap: g2 });
+    };
+    this.custom = (e, t) => {
+      let a2 = (t == null ? void 0 : t.id) || bt++;
+      return this.create({ jsx: e(a2), id: a2, ...t }), a2;
+    };
+    this.getActiveToasts = () => this.toasts.filter((e) => !this.dismissedToasts.has(e.id));
+    this.subscribers = [], this.toasts = [], this.dismissedToasts = /* @__PURE__ */ new Set();
+  }
+}, v = new yt(), ne = (n, e) => {
+  let t = (e == null ? void 0 : e.id) || bt++;
+  return v.addToast({ title: n, ...e, id: t }), t;
+}, ie = (n) => n && typeof n == "object" && "ok" in n && typeof n.ok == "boolean" && "status" in n && typeof n.status == "number", le = ne, ce = () => v.toasts, de = () => v.getActiveToasts(), ue = Object.assign(le, { success: v.success, info: v.info, warning: v.warning, error: v.error, custom: v.custom, message: v.message, promise: v.promise, dismiss: v.dismiss, loading: v.loading }, { getHistory: ce, getToasts: de });
+function wt(n, { insertAt: e } = {}) {
+  if (typeof document == "undefined") return;
+  let t = document.head || document.getElementsByTagName("head")[0], a2 = document.createElement("style");
+  a2.type = "text/css", e === "top" && t.firstChild ? t.insertBefore(a2, t.firstChild) : t.appendChild(a2), a2.styleSheet ? a2.styleSheet.cssText = n : a2.appendChild(document.createTextNode(n));
+}
+wt(`:where(html[dir="ltr"]),:where([data-sonner-toaster][dir="ltr"]){--toast-icon-margin-start: -3px;--toast-icon-margin-end: 4px;--toast-svg-margin-start: -1px;--toast-svg-margin-end: 0px;--toast-button-margin-start: auto;--toast-button-margin-end: 0;--toast-close-button-start: 0;--toast-close-button-end: unset;--toast-close-button-transform: translate(-35%, -35%)}:where(html[dir="rtl"]),:where([data-sonner-toaster][dir="rtl"]){--toast-icon-margin-start: 4px;--toast-icon-margin-end: -3px;--toast-svg-margin-start: 0px;--toast-svg-margin-end: -1px;--toast-button-margin-start: 0;--toast-button-margin-end: auto;--toast-close-button-start: unset;--toast-close-button-end: 0;--toast-close-button-transform: translate(35%, -35%)}:where([data-sonner-toaster]){position:fixed;width:var(--width);font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial,Noto Sans,sans-serif,Apple Color Emoji,Segoe UI Emoji,Segoe UI Symbol,Noto Color Emoji;--gray1: hsl(0, 0%, 99%);--gray2: hsl(0, 0%, 97.3%);--gray3: hsl(0, 0%, 95.1%);--gray4: hsl(0, 0%, 93%);--gray5: hsl(0, 0%, 90.9%);--gray6: hsl(0, 0%, 88.7%);--gray7: hsl(0, 0%, 85.8%);--gray8: hsl(0, 0%, 78%);--gray9: hsl(0, 0%, 56.1%);--gray10: hsl(0, 0%, 52.3%);--gray11: hsl(0, 0%, 43.5%);--gray12: hsl(0, 0%, 9%);--border-radius: 8px;box-sizing:border-box;padding:0;margin:0;list-style:none;outline:none;z-index:999999999;transition:transform .4s ease}:where([data-sonner-toaster][data-lifted="true"]){transform:translateY(-10px)}@media (hover: none) and (pointer: coarse){:where([data-sonner-toaster][data-lifted="true"]){transform:none}}:where([data-sonner-toaster][data-x-position="right"]){right:var(--offset-right)}:where([data-sonner-toaster][data-x-position="left"]){left:var(--offset-left)}:where([data-sonner-toaster][data-x-position="center"]){left:50%;transform:translate(-50%)}:where([data-sonner-toaster][data-y-position="top"]){top:var(--offset-top)}:where([data-sonner-toaster][data-y-position="bottom"]){bottom:var(--offset-bottom)}:where([data-sonner-toast]){--y: translateY(100%);--lift-amount: calc(var(--lift) * var(--gap));z-index:var(--z-index);position:absolute;opacity:0;transform:var(--y);filter:blur(0);touch-action:none;transition:transform .4s,opacity .4s,height .4s,box-shadow .2s;box-sizing:border-box;outline:none;overflow-wrap:anywhere}:where([data-sonner-toast][data-styled="true"]){padding:16px;background:var(--normal-bg);border:1px solid var(--normal-border);color:var(--normal-text);border-radius:var(--border-radius);box-shadow:0 4px 12px #0000001a;width:var(--width);font-size:13px;display:flex;align-items:center;gap:6px}:where([data-sonner-toast]:focus-visible){box-shadow:0 4px 12px #0000001a,0 0 0 2px #0003}:where([data-sonner-toast][data-y-position="top"]){top:0;--y: translateY(-100%);--lift: 1;--lift-amount: calc(1 * var(--gap))}:where([data-sonner-toast][data-y-position="bottom"]){bottom:0;--y: translateY(100%);--lift: -1;--lift-amount: calc(var(--lift) * var(--gap))}:where([data-sonner-toast]) :where([data-description]){font-weight:400;line-height:1.4;color:inherit}:where([data-sonner-toast]) :where([data-title]){font-weight:500;line-height:1.5;color:inherit}:where([data-sonner-toast]) :where([data-icon]){display:flex;height:16px;width:16px;position:relative;justify-content:flex-start;align-items:center;flex-shrink:0;margin-left:var(--toast-icon-margin-start);margin-right:var(--toast-icon-margin-end)}:where([data-sonner-toast][data-promise="true"]) :where([data-icon])>svg{opacity:0;transform:scale(.8);transform-origin:center;animation:sonner-fade-in .3s ease forwards}:where([data-sonner-toast]) :where([data-icon])>*{flex-shrink:0}:where([data-sonner-toast]) :where([data-icon]) svg{margin-left:var(--toast-svg-margin-start);margin-right:var(--toast-svg-margin-end)}:where([data-sonner-toast]) :where([data-content]){display:flex;flex-direction:column;gap:2px}[data-sonner-toast][data-styled=true] [data-button]{border-radius:4px;padding-left:8px;padding-right:8px;height:24px;font-size:12px;color:var(--normal-bg);background:var(--normal-text);margin-left:var(--toast-button-margin-start);margin-right:var(--toast-button-margin-end);border:none;cursor:pointer;outline:none;display:flex;align-items:center;flex-shrink:0;transition:opacity .4s,box-shadow .2s}:where([data-sonner-toast]) :where([data-button]):focus-visible{box-shadow:0 0 0 2px #0006}:where([data-sonner-toast]) :where([data-button]):first-of-type{margin-left:var(--toast-button-margin-start);margin-right:var(--toast-button-margin-end)}:where([data-sonner-toast]) :where([data-cancel]){color:var(--normal-text);background:rgba(0,0,0,.08)}:where([data-sonner-toast][data-theme="dark"]) :where([data-cancel]){background:rgba(255,255,255,.3)}:where([data-sonner-toast]) :where([data-close-button]){position:absolute;left:var(--toast-close-button-start);right:var(--toast-close-button-end);top:0;height:20px;width:20px;display:flex;justify-content:center;align-items:center;padding:0;color:var(--gray12);border:1px solid var(--gray4);transform:var(--toast-close-button-transform);border-radius:50%;cursor:pointer;z-index:1;transition:opacity .1s,background .2s,border-color .2s}[data-sonner-toast] [data-close-button]{background:var(--gray1)}:where([data-sonner-toast]) :where([data-close-button]):focus-visible{box-shadow:0 4px 12px #0000001a,0 0 0 2px #0003}:where([data-sonner-toast]) :where([data-disabled="true"]){cursor:not-allowed}:where([data-sonner-toast]):hover :where([data-close-button]):hover{background:var(--gray2);border-color:var(--gray5)}:where([data-sonner-toast][data-swiping="true"]):before{content:"";position:absolute;left:-50%;right:-50%;height:100%;z-index:-1}:where([data-sonner-toast][data-y-position="top"][data-swiping="true"]):before{bottom:50%;transform:scaleY(3) translateY(50%)}:where([data-sonner-toast][data-y-position="bottom"][data-swiping="true"]):before{top:50%;transform:scaleY(3) translateY(-50%)}:where([data-sonner-toast][data-swiping="false"][data-removed="true"]):before{content:"";position:absolute;inset:0;transform:scaleY(2)}:where([data-sonner-toast]):after{content:"";position:absolute;left:0;height:calc(var(--gap) + 1px);bottom:100%;width:100%}:where([data-sonner-toast][data-mounted="true"]){--y: translateY(0);opacity:1}:where([data-sonner-toast][data-expanded="false"][data-front="false"]){--scale: var(--toasts-before) * .05 + 1;--y: translateY(calc(var(--lift-amount) * var(--toasts-before))) scale(calc(-1 * var(--scale)));height:var(--front-toast-height)}:where([data-sonner-toast])>*{transition:opacity .4s}:where([data-sonner-toast][data-expanded="false"][data-front="false"][data-styled="true"])>*{opacity:0}:where([data-sonner-toast][data-visible="false"]){opacity:0;pointer-events:none}:where([data-sonner-toast][data-mounted="true"][data-expanded="true"]){--y: translateY(calc(var(--lift) * var(--offset)));height:var(--initial-height)}:where([data-sonner-toast][data-removed="true"][data-front="true"][data-swipe-out="false"]){--y: translateY(calc(var(--lift) * -100%));opacity:0}:where([data-sonner-toast][data-removed="true"][data-front="false"][data-swipe-out="false"][data-expanded="true"]){--y: translateY(calc(var(--lift) * var(--offset) + var(--lift) * -100%));opacity:0}:where([data-sonner-toast][data-removed="true"][data-front="false"][data-swipe-out="false"][data-expanded="false"]){--y: translateY(40%);opacity:0;transition:transform .5s,opacity .2s}:where([data-sonner-toast][data-removed="true"][data-front="false"]):before{height:calc(var(--initial-height) + 20%)}[data-sonner-toast][data-swiping=true]{transform:var(--y) translateY(var(--swipe-amount-y, 0px)) translate(var(--swipe-amount-x, 0px));transition:none}[data-sonner-toast][data-swiped=true]{user-select:none}[data-sonner-toast][data-swipe-out=true][data-y-position=bottom],[data-sonner-toast][data-swipe-out=true][data-y-position=top]{animation-duration:.2s;animation-timing-function:ease-out;animation-fill-mode:forwards}[data-sonner-toast][data-swipe-out=true][data-swipe-direction=left]{animation-name:swipe-out-left}[data-sonner-toast][data-swipe-out=true][data-swipe-direction=right]{animation-name:swipe-out-right}[data-sonner-toast][data-swipe-out=true][data-swipe-direction=up]{animation-name:swipe-out-up}[data-sonner-toast][data-swipe-out=true][data-swipe-direction=down]{animation-name:swipe-out-down}@keyframes swipe-out-left{0%{transform:var(--y) translate(var(--swipe-amount-x));opacity:1}to{transform:var(--y) translate(calc(var(--swipe-amount-x) - 100%));opacity:0}}@keyframes swipe-out-right{0%{transform:var(--y) translate(var(--swipe-amount-x));opacity:1}to{transform:var(--y) translate(calc(var(--swipe-amount-x) + 100%));opacity:0}}@keyframes swipe-out-up{0%{transform:var(--y) translateY(var(--swipe-amount-y));opacity:1}to{transform:var(--y) translateY(calc(var(--swipe-amount-y) - 100%));opacity:0}}@keyframes swipe-out-down{0%{transform:var(--y) translateY(var(--swipe-amount-y));opacity:1}to{transform:var(--y) translateY(calc(var(--swipe-amount-y) + 100%));opacity:0}}@media (max-width: 600px){[data-sonner-toaster]{position:fixed;right:var(--mobile-offset-right);left:var(--mobile-offset-left);width:100%}[data-sonner-toaster][dir=rtl]{left:calc(var(--mobile-offset-left) * -1)}[data-sonner-toaster] [data-sonner-toast]{left:0;right:0;width:calc(100% - var(--mobile-offset-left) * 2)}[data-sonner-toaster][data-x-position=left]{left:var(--mobile-offset-left)}[data-sonner-toaster][data-y-position=bottom]{bottom:var(--mobile-offset-bottom)}[data-sonner-toaster][data-y-position=top]{top:var(--mobile-offset-top)}[data-sonner-toaster][data-x-position=center]{left:var(--mobile-offset-left);right:var(--mobile-offset-right);transform:none}}[data-sonner-toaster][data-theme=light]{--normal-bg: #fff;--normal-border: var(--gray4);--normal-text: var(--gray12);--success-bg: hsl(143, 85%, 96%);--success-border: hsl(145, 92%, 91%);--success-text: hsl(140, 100%, 27%);--info-bg: hsl(208, 100%, 97%);--info-border: hsl(221, 91%, 91%);--info-text: hsl(210, 92%, 45%);--warning-bg: hsl(49, 100%, 97%);--warning-border: hsl(49, 91%, 91%);--warning-text: hsl(31, 92%, 45%);--error-bg: hsl(359, 100%, 97%);--error-border: hsl(359, 100%, 94%);--error-text: hsl(360, 100%, 45%)}[data-sonner-toaster][data-theme=light] [data-sonner-toast][data-invert=true]{--normal-bg: #000;--normal-border: hsl(0, 0%, 20%);--normal-text: var(--gray1)}[data-sonner-toaster][data-theme=dark] [data-sonner-toast][data-invert=true]{--normal-bg: #fff;--normal-border: var(--gray3);--normal-text: var(--gray12)}[data-sonner-toaster][data-theme=dark]{--normal-bg: #000;--normal-bg-hover: hsl(0, 0%, 12%);--normal-border: hsl(0, 0%, 20%);--normal-border-hover: hsl(0, 0%, 25%);--normal-text: var(--gray1);--success-bg: hsl(150, 100%, 6%);--success-border: hsl(147, 100%, 12%);--success-text: hsl(150, 86%, 65%);--info-bg: hsl(215, 100%, 6%);--info-border: hsl(223, 100%, 12%);--info-text: hsl(216, 87%, 65%);--warning-bg: hsl(64, 100%, 6%);--warning-border: hsl(60, 100%, 12%);--warning-text: hsl(46, 87%, 65%);--error-bg: hsl(358, 76%, 10%);--error-border: hsl(357, 89%, 16%);--error-text: hsl(358, 100%, 81%)}[data-sonner-toaster][data-theme=dark] [data-sonner-toast] [data-close-button]{background:var(--normal-bg);border-color:var(--normal-border);color:var(--normal-text)}[data-sonner-toaster][data-theme=dark] [data-sonner-toast] [data-close-button]:hover{background:var(--normal-bg-hover);border-color:var(--normal-border-hover)}[data-rich-colors=true][data-sonner-toast][data-type=success],[data-rich-colors=true][data-sonner-toast][data-type=success] [data-close-button]{background:var(--success-bg);border-color:var(--success-border);color:var(--success-text)}[data-rich-colors=true][data-sonner-toast][data-type=info],[data-rich-colors=true][data-sonner-toast][data-type=info] [data-close-button]{background:var(--info-bg);border-color:var(--info-border);color:var(--info-text)}[data-rich-colors=true][data-sonner-toast][data-type=warning],[data-rich-colors=true][data-sonner-toast][data-type=warning] [data-close-button]{background:var(--warning-bg);border-color:var(--warning-border);color:var(--warning-text)}[data-rich-colors=true][data-sonner-toast][data-type=error],[data-rich-colors=true][data-sonner-toast][data-type=error] [data-close-button]{background:var(--error-bg);border-color:var(--error-border);color:var(--error-text)}.sonner-loading-wrapper{--size: 16px;height:var(--size);width:var(--size);position:absolute;inset:0;z-index:10}.sonner-loading-wrapper[data-visible=false]{transform-origin:center;animation:sonner-fade-out .2s ease forwards}.sonner-spinner{position:relative;top:50%;left:50%;height:var(--size);width:var(--size)}.sonner-loading-bar{animation:sonner-spin 1.2s linear infinite;background:var(--gray11);border-radius:6px;height:8%;left:-10%;position:absolute;top:-3.9%;width:24%}.sonner-loading-bar:nth-child(1){animation-delay:-1.2s;transform:rotate(.0001deg) translate(146%)}.sonner-loading-bar:nth-child(2){animation-delay:-1.1s;transform:rotate(30deg) translate(146%)}.sonner-loading-bar:nth-child(3){animation-delay:-1s;transform:rotate(60deg) translate(146%)}.sonner-loading-bar:nth-child(4){animation-delay:-.9s;transform:rotate(90deg) translate(146%)}.sonner-loading-bar:nth-child(5){animation-delay:-.8s;transform:rotate(120deg) translate(146%)}.sonner-loading-bar:nth-child(6){animation-delay:-.7s;transform:rotate(150deg) translate(146%)}.sonner-loading-bar:nth-child(7){animation-delay:-.6s;transform:rotate(180deg) translate(146%)}.sonner-loading-bar:nth-child(8){animation-delay:-.5s;transform:rotate(210deg) translate(146%)}.sonner-loading-bar:nth-child(9){animation-delay:-.4s;transform:rotate(240deg) translate(146%)}.sonner-loading-bar:nth-child(10){animation-delay:-.3s;transform:rotate(270deg) translate(146%)}.sonner-loading-bar:nth-child(11){animation-delay:-.2s;transform:rotate(300deg) translate(146%)}.sonner-loading-bar:nth-child(12){animation-delay:-.1s;transform:rotate(330deg) translate(146%)}@keyframes sonner-fade-in{0%{opacity:0;transform:scale(.8)}to{opacity:1;transform:scale(1)}}@keyframes sonner-fade-out{0%{opacity:1;transform:scale(1)}to{opacity:0;transform:scale(.8)}}@keyframes sonner-spin{0%{opacity:1}to{opacity:.15}}@media (prefers-reduced-motion){[data-sonner-toast],[data-sonner-toast]>*,.sonner-loading-bar{transition:none!important;animation:none!important}}.sonner-loader{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);transform-origin:center;transition:opacity .2s,transform .2s}.sonner-loader[data-visible=false]{opacity:0;transform:scale(.8) translate(-50%,-50%)}
+`);
+function tt(n) {
+  return n.label !== void 0;
+}
+var pe = 3, me = "32px", ge = "16px", Wt = 4e3, he = 356, be = 14, ye = 20, we = 200;
+function M(...n) {
+  return n.filter(Boolean).join(" ");
+}
+function xe(n) {
+  let [e, t] = n.split("-"), a2 = [];
+  return e && a2.push(e), t && a2.push(t), a2;
+}
+var ve = (n) => {
+  var Dt, Pt, Nt, Bt, Ct, kt, It, Mt, Ht, At, Lt;
+  let { invert: e, toast: t, unstyled: a2, interacting: u, setHeights: f, visibleToasts: w2, heights: S2, index: g2, toasts: i2, expanded: D2, removeToast: T2, defaultRichColors: F2, closeButton: et2, style: ut2, cancelButtonStyle: ft2, actionButtonStyle: l2, className: ot2 = "", descriptionClassName: at = "", duration: X2, position: st2, gap: pt, loadingIcon: rt, expandByDefault: B2, classNames: s2, icons: P2, closeButtonAriaLabel: nt2 = "Close toast", pauseWhenPageIsHidden: it2 } = n, [Y2, C2] = React$4.useState(null), [lt, J2] = React$4.useState(null), [W2, H2] = React$4.useState(false), [A2, mt] = React$4.useState(false), [L2, z2] = React$4.useState(false), [ct2, d2] = React$4.useState(false), [h2, y2] = React$4.useState(false), [R2, j2] = React$4.useState(0), [p2, _2] = React$4.useState(0), O2 = React$4.useRef(t.duration || X2 || Wt), G2 = React$4.useRef(null), k2 = React$4.useRef(null), Vt = g2 === 0, Ut = g2 + 1 <= w2, N2 = t.type, V2 = t.dismissible !== false, Kt = t.className || "", Xt = t.descriptionClassName || "", dt2 = React$4.useMemo(() => S2.findIndex((r2) => r2.toastId === t.id) || 0, [S2, t.id]), Jt = React$4.useMemo(() => {
+    var r2;
+    return (r2 = t.closeButton) != null ? r2 : et2;
+  }, [t.closeButton, et2]), Tt = React$4.useMemo(() => t.duration || X2 || Wt, [t.duration, X2]), gt = React$4.useRef(0), U = React$4.useRef(0), St = React$4.useRef(0), K2 = React$4.useRef(null), [Gt, Qt] = st2.split("-"), Rt = React$4.useMemo(() => S2.reduce((r2, m2, c2) => c2 >= dt2 ? r2 : r2 + m2.height, 0), [S2, dt2]), Et = Ft(), qt = t.invert || e, ht = N2 === "loading";
+  U.current = React$4.useMemo(() => dt2 * pt + Rt, [dt2, Rt]), React$4.useEffect(() => {
+    O2.current = Tt;
+  }, [Tt]), React$4.useEffect(() => {
+    H2(true);
+  }, []), React$4.useEffect(() => {
+    let r2 = k2.current;
+    if (r2) {
+      let m2 = r2.getBoundingClientRect().height;
+      return _2(m2), f((c2) => [{ toastId: t.id, height: m2, position: t.position }, ...c2]), () => f((c2) => c2.filter((b2) => b2.toastId !== t.id));
+    }
+  }, [f, t.id]), React$4.useLayoutEffect(() => {
+    if (!W2) return;
+    let r2 = k2.current, m2 = r2.style.height;
+    r2.style.height = "auto";
+    let c2 = r2.getBoundingClientRect().height;
+    r2.style.height = m2, _2(c2), f((b2) => b2.find((x3) => x3.toastId === t.id) ? b2.map((x3) => x3.toastId === t.id ? { ...x3, height: c2 } : x3) : [{ toastId: t.id, height: c2, position: t.position }, ...b2]);
+  }, [W2, t.title, t.description, f, t.id]);
+  let $2 = React$4.useCallback(() => {
+    mt(true), j2(U.current), f((r2) => r2.filter((m2) => m2.toastId !== t.id)), setTimeout(() => {
+      T2(t);
+    }, we);
+  }, [t, T2, f, U]);
+  React$4.useEffect(() => {
+    if (t.promise && N2 === "loading" || t.duration === 1 / 0 || t.type === "loading") return;
+    let r2;
+    return D2 || u || it2 && Et ? (() => {
+      if (St.current < gt.current) {
+        let b2 = (/* @__PURE__ */ new Date()).getTime() - gt.current;
+        O2.current = O2.current - b2;
+      }
+      St.current = (/* @__PURE__ */ new Date()).getTime();
+    })() : (() => {
+      O2.current !== 1 / 0 && (gt.current = (/* @__PURE__ */ new Date()).getTime(), r2 = setTimeout(() => {
+        var b2;
+        (b2 = t.onAutoClose) == null || b2.call(t, t), $2();
+      }, O2.current));
+    })(), () => clearTimeout(r2);
+  }, [D2, u, t, N2, it2, Et, $2]), React$4.useEffect(() => {
+    t.delete && $2();
+  }, [$2, t.delete]);
+  function Zt() {
+    var r2, m2, c2;
+    return P2 != null && P2.loading ? React$4.createElement("div", { className: M(s2 == null ? void 0 : s2.loader, (r2 = t == null ? void 0 : t.classNames) == null ? void 0 : r2.loader, "sonner-loader"), "data-visible": N2 === "loading" }, P2.loading) : rt ? React$4.createElement("div", { className: M(s2 == null ? void 0 : s2.loader, (m2 = t == null ? void 0 : t.classNames) == null ? void 0 : m2.loader, "sonner-loader"), "data-visible": N2 === "loading" }, rt) : React$4.createElement(Yt, { className: M(s2 == null ? void 0 : s2.loader, (c2 = t == null ? void 0 : t.classNames) == null ? void 0 : c2.loader), visible: N2 === "loading" });
+  }
+  return React$4.createElement("li", { tabIndex: 0, ref: k2, className: M(ot2, Kt, s2 == null ? void 0 : s2.toast, (Dt = t == null ? void 0 : t.classNames) == null ? void 0 : Dt.toast, s2 == null ? void 0 : s2.default, s2 == null ? void 0 : s2[N2], (Pt = t == null ? void 0 : t.classNames) == null ? void 0 : Pt[N2]), "data-sonner-toast": "", "data-rich-colors": (Nt = t.richColors) != null ? Nt : F2, "data-styled": !(t.jsx || t.unstyled || a2), "data-mounted": W2, "data-promise": !!t.promise, "data-swiped": h2, "data-removed": A2, "data-visible": Ut, "data-y-position": Gt, "data-x-position": Qt, "data-index": g2, "data-front": Vt, "data-swiping": L2, "data-dismissible": V2, "data-type": N2, "data-invert": qt, "data-swipe-out": ct2, "data-swipe-direction": lt, "data-expanded": !!(D2 || B2 && W2), style: { "--index": g2, "--toasts-before": g2, "--z-index": i2.length - g2, "--offset": `${A2 ? R2 : U.current}px`, "--initial-height": B2 ? "auto" : `${p2}px`, ...ut2, ...t.style }, onDragEnd: () => {
+    z2(false), C2(null), K2.current = null;
+  }, onPointerDown: (r2) => {
+    ht || !V2 || (G2.current = /* @__PURE__ */ new Date(), j2(U.current), r2.target.setPointerCapture(r2.pointerId), r2.target.tagName !== "BUTTON" && (z2(true), K2.current = { x: r2.clientX, y: r2.clientY }));
+  }, onPointerUp: () => {
+    var x3, Q2, q2, Z2;
+    if (ct2 || !V2) return;
+    K2.current = null;
+    let r2 = Number(((x3 = k2.current) == null ? void 0 : x3.style.getPropertyValue("--swipe-amount-x").replace("px", "")) || 0), m2 = Number(((Q2 = k2.current) == null ? void 0 : Q2.style.getPropertyValue("--swipe-amount-y").replace("px", "")) || 0), c2 = (/* @__PURE__ */ new Date()).getTime() - ((q2 = G2.current) == null ? void 0 : q2.getTime()), b2 = Y2 === "x" ? r2 : m2, I2 = Math.abs(b2) / c2;
+    if (Math.abs(b2) >= ye || I2 > 0.11) {
+      j2(U.current), (Z2 = t.onDismiss) == null || Z2.call(t, t), J2(Y2 === "x" ? r2 > 0 ? "right" : "left" : m2 > 0 ? "down" : "up"), $2(), d2(true), y2(false);
+      return;
+    }
+    z2(false), C2(null);
+  }, onPointerMove: (r2) => {
+    var Q2, q2, Z2, zt;
+    if (!K2.current || !V2 || ((Q2 = window.getSelection()) == null ? void 0 : Q2.toString().length) > 0) return;
+    let c2 = r2.clientY - K2.current.y, b2 = r2.clientX - K2.current.x, I2 = (q2 = n.swipeDirections) != null ? q2 : xe(st2);
+    !Y2 && (Math.abs(b2) > 1 || Math.abs(c2) > 1) && C2(Math.abs(b2) > Math.abs(c2) ? "x" : "y");
+    let x3 = { x: 0, y: 0 };
+    Y2 === "y" ? (I2.includes("top") || I2.includes("bottom")) && (I2.includes("top") && c2 < 0 || I2.includes("bottom") && c2 > 0) && (x3.y = c2) : Y2 === "x" && (I2.includes("left") || I2.includes("right")) && (I2.includes("left") && b2 < 0 || I2.includes("right") && b2 > 0) && (x3.x = b2), (Math.abs(x3.x) > 0 || Math.abs(x3.y) > 0) && y2(true), (Z2 = k2.current) == null || Z2.style.setProperty("--swipe-amount-x", `${x3.x}px`), (zt = k2.current) == null || zt.style.setProperty("--swipe-amount-y", `${x3.y}px`);
+  } }, Jt && !t.jsx ? React$4.createElement("button", { "aria-label": nt2, "data-disabled": ht, "data-close-button": true, onClick: ht || !V2 ? () => {
+  } : () => {
+    var r2;
+    $2(), (r2 = t.onDismiss) == null || r2.call(t, t);
+  }, className: M(s2 == null ? void 0 : s2.closeButton, (Bt = t == null ? void 0 : t.classNames) == null ? void 0 : Bt.closeButton) }, (Ct = P2 == null ? void 0 : P2.close) != null ? Ct : Ot) : null, t.jsx || reactExports.isValidElement(t.title) ? t.jsx ? t.jsx : typeof t.title == "function" ? t.title() : t.title : React$4.createElement(React$4.Fragment, null, N2 || t.icon || t.promise ? React$4.createElement("div", { "data-icon": "", className: M(s2 == null ? void 0 : s2.icon, (kt = t == null ? void 0 : t.classNames) == null ? void 0 : kt.icon) }, t.promise || t.type === "loading" && !t.icon ? t.icon || Zt() : null, t.type !== "loading" ? t.icon || (P2 == null ? void 0 : P2[N2]) || jt(N2) : null) : null, React$4.createElement("div", { "data-content": "", className: M(s2 == null ? void 0 : s2.content, (It = t == null ? void 0 : t.classNames) == null ? void 0 : It.content) }, React$4.createElement("div", { "data-title": "", className: M(s2 == null ? void 0 : s2.title, (Mt = t == null ? void 0 : t.classNames) == null ? void 0 : Mt.title) }, typeof t.title == "function" ? t.title() : t.title), t.description ? React$4.createElement("div", { "data-description": "", className: M(at, Xt, s2 == null ? void 0 : s2.description, (Ht = t == null ? void 0 : t.classNames) == null ? void 0 : Ht.description) }, typeof t.description == "function" ? t.description() : t.description) : null), reactExports.isValidElement(t.cancel) ? t.cancel : t.cancel && tt(t.cancel) ? React$4.createElement("button", { "data-button": true, "data-cancel": true, style: t.cancelButtonStyle || ft2, onClick: (r2) => {
+    var m2, c2;
+    tt(t.cancel) && V2 && ((c2 = (m2 = t.cancel).onClick) == null || c2.call(m2, r2), $2());
+  }, className: M(s2 == null ? void 0 : s2.cancelButton, (At = t == null ? void 0 : t.classNames) == null ? void 0 : At.cancelButton) }, t.cancel.label) : null, reactExports.isValidElement(t.action) ? t.action : t.action && tt(t.action) ? React$4.createElement("button", { "data-button": true, "data-action": true, style: t.actionButtonStyle || l2, onClick: (r2) => {
+    var m2, c2;
+    tt(t.action) && ((c2 = (m2 = t.action).onClick) == null || c2.call(m2, r2), !r2.defaultPrevented && $2());
+  }, className: M(s2 == null ? void 0 : s2.actionButton, (Lt = t == null ? void 0 : t.classNames) == null ? void 0 : Lt.actionButton) }, t.action.label) : null));
+};
+function _t() {
+  if (typeof window == "undefined" || typeof document == "undefined") return "ltr";
+  let n = document.documentElement.getAttribute("dir");
+  return n === "auto" || !n ? window.getComputedStyle(document.documentElement).direction : n;
+}
+function Te(n, e) {
+  let t = {};
+  return [n, e].forEach((a2, u) => {
+    let f = u === 1, w2 = f ? "--mobile-offset" : "--offset", S2 = f ? ge : me;
+    function g2(i2) {
+      ["top", "right", "bottom", "left"].forEach((D2) => {
+        t[`${w2}-${D2}`] = typeof i2 == "number" ? `${i2}px` : i2;
+      });
+    }
+    typeof a2 == "number" || typeof a2 == "string" ? g2(a2) : typeof a2 == "object" ? ["top", "right", "bottom", "left"].forEach((i2) => {
+      a2[i2] === void 0 ? t[`${w2}-${i2}`] = S2 : t[`${w2}-${i2}`] = typeof a2[i2] == "number" ? `${a2[i2]}px` : a2[i2];
+    }) : g2(S2);
+  }), t;
+}
+reactExports.forwardRef(function(e, t) {
+  let { invert: a2, position: u = "bottom-right", hotkey: f = ["altKey", "KeyT"], expand: w2, closeButton: S2, className: g2, offset: i2, mobileOffset: D2, theme: T2 = "light", richColors: F2, duration: et2, style: ut2, visibleToasts: ft2 = pe, toastOptions: l2, dir: ot2 = _t(), gap: at = be, loadingIcon: X2, icons: st2, containerAriaLabel: pt = "Notifications", pauseWhenPageIsHidden: rt } = e, [B2, s2] = React$4.useState([]), P2 = React$4.useMemo(() => Array.from(new Set([u].concat(B2.filter((d2) => d2.position).map((d2) => d2.position)))), [B2, u]), [nt2, it2] = React$4.useState([]), [Y2, C2] = React$4.useState(false), [lt, J2] = React$4.useState(false), [W2, H2] = React$4.useState(T2 !== "system" ? T2 : typeof window != "undefined" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"), A2 = React$4.useRef(null), mt = f.join("+").replace(/Key/g, "").replace(/Digit/g, ""), L2 = React$4.useRef(null), z2 = React$4.useRef(false), ct2 = React$4.useCallback((d2) => {
+    s2((h2) => {
+      var y2;
+      return (y2 = h2.find((R2) => R2.id === d2.id)) != null && y2.delete || v.dismiss(d2.id), h2.filter(({ id: R2 }) => R2 !== d2.id);
+    });
+  }, []);
+  return React$4.useEffect(() => v.subscribe((d2) => {
+    if (d2.dismiss) {
+      s2((h2) => h2.map((y2) => y2.id === d2.id ? { ...y2, delete: true } : y2));
+      return;
+    }
+    setTimeout(() => {
+      vt.flushSync(() => {
+        s2((h2) => {
+          let y2 = h2.findIndex((R2) => R2.id === d2.id);
+          return y2 !== -1 ? [...h2.slice(0, y2), { ...h2[y2], ...d2 }, ...h2.slice(y2 + 1)] : [d2, ...h2];
+        });
+      });
+    });
+  }), []), React$4.useEffect(() => {
+    if (T2 !== "system") {
+      H2(T2);
+      return;
+    }
+    if (T2 === "system" && (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? H2("dark") : H2("light")), typeof window == "undefined") return;
+    let d2 = window.matchMedia("(prefers-color-scheme: dark)");
+    try {
+      d2.addEventListener("change", ({ matches: h2 }) => {
+        H2(h2 ? "dark" : "light");
+      });
+    } catch (h2) {
+      d2.addListener(({ matches: y2 }) => {
+        try {
+          H2(y2 ? "dark" : "light");
+        } catch (R2) {
+          console.error(R2);
+        }
+      });
+    }
+  }, [T2]), React$4.useEffect(() => {
+    B2.length <= 1 && C2(false);
+  }, [B2]), React$4.useEffect(() => {
+    let d2 = (h2) => {
+      var R2, j2;
+      f.every((p2) => h2[p2] || h2.code === p2) && (C2(true), (R2 = A2.current) == null || R2.focus()), h2.code === "Escape" && (document.activeElement === A2.current || (j2 = A2.current) != null && j2.contains(document.activeElement)) && C2(false);
+    };
+    return document.addEventListener("keydown", d2), () => document.removeEventListener("keydown", d2);
+  }, [f]), React$4.useEffect(() => {
+    if (A2.current) return () => {
+      L2.current && (L2.current.focus({ preventScroll: true }), L2.current = null, z2.current = false);
+    };
+  }, [A2.current]), React$4.createElement("section", { ref: t, "aria-label": `${pt} ${mt}`, tabIndex: -1, "aria-live": "polite", "aria-relevant": "additions text", "aria-atomic": "false", suppressHydrationWarning: true }, P2.map((d2, h2) => {
+    var j2;
+    let [y2, R2] = d2.split("-");
+    return B2.length ? React$4.createElement("ol", { key: d2, dir: ot2 === "auto" ? _t() : ot2, tabIndex: -1, ref: A2, className: g2, "data-sonner-toaster": true, "data-theme": W2, "data-y-position": y2, "data-lifted": Y2 && B2.length > 1 && !w2, "data-x-position": R2, style: { "--front-toast-height": `${((j2 = nt2[0]) == null ? void 0 : j2.height) || 0}px`, "--width": `${he}px`, "--gap": `${at}px`, ...ut2, ...Te(i2, D2) }, onBlur: (p2) => {
+      z2.current && !p2.currentTarget.contains(p2.relatedTarget) && (z2.current = false, L2.current && (L2.current.focus({ preventScroll: true }), L2.current = null));
+    }, onFocus: (p2) => {
+      p2.target instanceof HTMLElement && p2.target.dataset.dismissible === "false" || z2.current || (z2.current = true, L2.current = p2.relatedTarget);
+    }, onMouseEnter: () => C2(true), onMouseMove: () => C2(true), onMouseLeave: () => {
+      lt || C2(false);
+    }, onDragEnd: () => C2(false), onPointerDown: (p2) => {
+      p2.target instanceof HTMLElement && p2.target.dataset.dismissible === "false" || J2(true);
+    }, onPointerUp: () => J2(false) }, B2.filter((p2) => !p2.position && h2 === 0 || p2.position === d2).map((p2, _2) => {
+      var O2, G2;
+      return React$4.createElement(ve, { key: p2.id, icons: st2, index: _2, toast: p2, defaultRichColors: F2, duration: (O2 = l2 == null ? void 0 : l2.duration) != null ? O2 : et2, className: l2 == null ? void 0 : l2.className, descriptionClassName: l2 == null ? void 0 : l2.descriptionClassName, invert: a2, visibleToasts: ft2, closeButton: (G2 = l2 == null ? void 0 : l2.closeButton) != null ? G2 : S2, interacting: lt, position: d2, style: l2 == null ? void 0 : l2.style, unstyled: l2 == null ? void 0 : l2.unstyled, classNames: l2 == null ? void 0 : l2.classNames, cancelButtonStyle: l2 == null ? void 0 : l2.cancelButtonStyle, actionButtonStyle: l2 == null ? void 0 : l2.actionButtonStyle, removeToast: ct2, toasts: B2.filter((k2) => k2.position == p2.position), heights: nt2.filter((k2) => k2.position == p2.position), setHeights: it2, expandByDefault: w2, gap: at, loadingIcon: X2, expanded: Y2, pauseWhenPageIsHidden: rt, swipeDirections: e.swipeDirections });
+    })) : null;
+  }));
+});
+const CYAN$a = "#00ffcc";
+const CYAN_DIM$8 = "rgba(0,255,204,0.35)";
+const BORDER_TOP = "rgba(0,255,204,0.28)";
+const NAV_ITEMS = [
+  { id: "map", label: "MAP", Icon: Map$1 },
+  { id: "command", label: "CMD", Icon: LayoutDashboard },
+  { id: "intel", label: "INTEL", Icon: Radio },
+  { id: "universe", label: "UNI", Icon: Globe },
+  { id: "leaderboard", label: "LEAD", Icon: Trophy },
+  { id: "inventory", label: "INV", Icon: Package }
+];
+function BottomNav({ activeTab, onTabClick }) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "div",
+    {
+      "data-ocid": "bottom_nav.panel",
+      className: "fixed left-0 right-0 z-50 flex items-stretch",
+      style: {
+        bottom: 0,
+        height: 64,
+        background: "rgba(2,10,20,0.97)",
+        borderTop: `1px solid ${BORDER_TOP}`,
+        backdropFilter: "blur(12px)",
+        WebkitBackdropFilter: "blur(12px)",
+        paddingBottom: "env(safe-area-inset-bottom)"
+      },
+      children: NAV_ITEMS.map(({ id: id2, label, Icon: Icon2 }) => {
+        const isActive = activeTab === id2;
+        return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "button",
+          {
+            type: "button",
+            "data-ocid": `bottom_nav.${id2}.tab`,
+            onClick: () => onTabClick(id2),
+            className: "flex-1 flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-all duration-150",
+            style: {
+              background: isActive ? "rgba(0,255,204,0.07)" : "transparent",
+              borderTop: isActive ? `2px solid ${CYAN$a}` : "2px solid transparent",
+              position: "relative"
+            },
+            children: [
+              isActive && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "div",
+                {
+                  style: {
+                    position: "absolute",
+                    top: 0,
+                    left: "20%",
+                    right: "20%",
+                    height: 2,
+                    background: CYAN$a,
+                    borderRadius: "0 0 2px 2px",
+                    boxShadow: `0 0 8px ${CYAN$a}`,
+                    filter: "blur(1px)"
+                  }
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                Icon2,
+                {
+                  size: 18,
+                  color: isActive ? CYAN$a : CYAN_DIM$8,
+                  style: {
+                    filter: isActive ? `drop-shadow(0 0 4px ${CYAN$a})` : "none",
+                    transition: "filter 0.15s"
+                  }
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "span",
+                {
+                  style: {
+                    fontSize: 7.5,
+                    letterSpacing: 0.5,
+                    color: isActive ? CYAN$a : CYAN_DIM$8,
+                    fontWeight: isActive ? 700 : 400
+                  },
+                  children: label
+                }
+              )
+            ]
+          },
+          id2
+        );
+      })
+    }
+  );
+}
+const CYAN$9 = "#00ffcc";
+const BORDER$9 = "rgba(0,255,204,0.22)";
+const CYAN_DIM$7 = "rgba(0,255,204,0.35)";
+function BottomSheet({
+  isOpen,
+  title,
+  onClose,
+  children,
+  height = "70vh"
+}) {
+  const scrollRef = reactExports.useRef(null);
+  reactExports.useEffect(() => {
+    if (isOpen && scrollRef.current) {
+      scrollRef.current.scrollTop = 0;
+    }
+  }, [isOpen]);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+    isOpen && // biome-ignore lint/a11y/useKeyWithClickEvents: backdrop close
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "div",
+      {
+        "data-ocid": "bottom_sheet.backdrop",
+        onClick: onClose,
+        className: "fixed inset-0 z-40",
+        style: { background: "rgba(0,0,0,0.55)" }
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "div",
+      {
+        "data-ocid": "bottom_sheet.panel",
+        className: "fixed left-0 right-0 z-50 flex flex-col",
+        style: {
+          bottom: 64,
+          height,
+          background: "rgba(4,12,24,0.97)",
+          borderTop: `1px solid ${BORDER$9}`,
+          borderLeft: `1px solid ${BORDER$9}`,
+          borderRight: `1px solid ${BORDER$9}`,
+          borderRadius: "16px 16px 0 0",
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
+          boxShadow: "0 -8px 48px rgba(0,255,204,0.08)",
+          transform: isOpen ? "translateY(0)" : "translateY(105%)",
+          transition: "transform 0.35s cubic-bezier(0.16,1,0.3,1)",
+          pointerEvents: isOpen ? "auto" : "none"
+        },
+        children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs(
             "div",
             {
-              className: "mt-3 flex items-center justify-end gap-2",
-              style: { fontSize: 9, color: TEXT_DIM$3, letterSpacing: 1.5 },
+              className: "flex-shrink-0 flex items-center justify-between px-4 py-2.5",
+              style: {
+                borderBottom: `1px solid ${BORDER$9}`,
+                background: "rgba(0,255,204,0.03)"
+              },
               children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "div",
                   {
-                    style: {
-                      width: 6,
-                      height: 6,
-                      borderRadius: "50%",
-                      background: CYAN$7,
-                      animation: "pulse 2s infinite",
-                      boxShadow: "0 0 6px rgba(0,255,204,0.7)"
-                    }
+                    className: "absolute left-1/2 -translate-x-1/2",
+                    style: { top: 8 },
+                    children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "div",
+                      {
+                        style: {
+                          width: 36,
+                          height: 4,
+                          borderRadius: 2,
+                          background: "rgba(0,255,204,0.25)"
+                        }
+                      }
+                    )
                   }
                 ),
-                "AUTO-REFRESH EVERY 30S"
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "span",
+                  {
+                    style: {
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: CYAN$9,
+                      letterSpacing: 2,
+                      textShadow: `0 0 10px ${CYAN$9}`,
+                      paddingTop: 4
+                    },
+                    children: title
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1", style: { paddingTop: 4 }, children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "button",
+                    {
+                      type: "button",
+                      "data-ocid": "bottom_sheet.close_button",
+                      onClick: onClose,
+                      "aria-label": "Close panel",
+                      className: "cursor-pointer flex items-center justify-center rounded",
+                      style: {
+                        background: "none",
+                        border: "none",
+                        color: CYAN_DIM$7,
+                        padding: 4
+                      },
+                      children: /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronDown, { size: 18 })
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "button",
+                    {
+                      type: "button",
+                      onClick: onClose,
+                      "aria-label": "Close panel",
+                      className: "cursor-pointer flex items-center justify-center rounded",
+                      style: {
+                        background: "rgba(0,255,204,0.06)",
+                        border: `1px solid ${BORDER$9}`,
+                        color: CYAN_DIM$7,
+                        padding: 4
+                      },
+                      children: /* @__PURE__ */ jsxRuntimeExports.jsx(X$1, { size: 14 })
+                    }
+                  )
+                ] })
               ]
             }
-          )
-        ] })
-      ]
-    }
-  );
-}
-const CYAN$6 = "#00ffcc";
-const BORDER$6 = "rgba(0,255,204,0.22)";
-const TEXT_DIM$2 = "rgba(224,244,255,0.45)";
-const COOLDOWN_MS = 24 * 60 * 60 * 1e3;
-const STORAGE_KEY = "faucet_last_used";
-function FaucetButton() {
-  const mintTestTokens = useGameStore((s2) => s2.mintTestTokens);
-  const [toast, setToast] = reactExports.useState(null);
-  const [cooldownLeft, setCooldownLeft] = reactExports.useState(0);
-  const timerRef = reactExports.useRef(null);
-  const updateCooldown = reactExports.useCallback(() => {
-    const last2 = Number(localStorage.getItem(STORAGE_KEY) ?? 0);
-    const elapsed = Date.now() - last2;
-    setCooldownLeft(Math.max(0, COOLDOWN_MS - elapsed));
-  }, []);
-  reactExports.useEffect(() => {
-    updateCooldown();
-    timerRef.current = setInterval(updateCooldown, 1e3);
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [updateCooldown]);
-  const formatCooldown = (ms) => {
-    const h2 = Math.floor(ms / 36e5);
-    const m2 = Math.floor(ms % 36e5 / 6e4);
-    const s2 = Math.floor(ms % 6e4 / 1e3);
-    return `${h2}h ${m2}m ${s2}s`;
-  };
-  const handleFaucet = () => {
-    if (cooldownLeft > 0) return;
-    mintTestTokens();
-    localStorage.setItem(STORAGE_KEY, String(Date.now()));
-    updateCooldown();
-    setToast("+500 FRNTR & +2 ICP (test) added!");
-    setTimeout(() => setToast(null), 4e3);
-  };
-  const onCooldown = cooldownLeft > 0;
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs(
-      "button",
-      {
-        type: "button",
-        "data-ocid": "faucet.button",
-        onClick: handleFaucet,
-        disabled: onCooldown,
-        title: onCooldown ? `Cooldown: ${formatCooldown(cooldownLeft)}` : "Claim test tokens",
-        style: {
-          display: "flex",
-          alignItems: "center",
-          gap: 5,
-          padding: "5px 10px",
-          borderRadius: 6,
-          background: onCooldown ? "rgba(0,255,204,0.03)" : "rgba(0,255,204,0.1)",
-          border: `1px solid ${onCooldown ? "rgba(0,255,204,0.1)" : BORDER$6}`,
-          color: onCooldown ? TEXT_DIM$2 : CYAN$6,
-          fontSize: 9,
-          fontWeight: 700,
-          letterSpacing: 1.5,
-          cursor: onCooldown ? "not-allowed" : "pointer",
-          opacity: onCooldown ? 0.6 : 1,
-          textTransform: "uppercase",
-          whiteSpace: "nowrap"
-        },
-        children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx(FlaskConical, { size: 11 }),
-          onCooldown ? `FAUCET (${formatCooldown(cooldownLeft)})` : "TESTNET FAUCET"
-        ]
-      }
-    ),
-    toast && /* @__PURE__ */ jsxRuntimeExports.jsxs(
-      "div",
-      {
-        "data-ocid": "faucet.success_state",
-        style: {
-          position: "fixed",
-          top: 60,
-          left: "50%",
-          transform: "translateX(-50%)",
-          zIndex: 9999,
-          background: "rgba(4,12,24,0.97)",
-          backdropFilter: "blur(12px)",
-          border: `1px solid ${BORDER$6}`,
-          borderTop: `2px solid ${CYAN$6}`,
-          borderRadius: 8,
-          padding: "10px 18px",
-          fontSize: 10,
-          fontWeight: 700,
-          color: CYAN$6,
-          letterSpacing: 1.5,
-          whiteSpace: "nowrap",
-          boxShadow: "0 4px 20px rgba(0,255,204,0.15)"
-        },
-        children: [
-          "✓ ",
-          toast
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { ref: scrollRef, className: "flex-1 overflow-y-auto", children })
         ]
       }
     )
   ] });
+}
+const CYAN$8 = "#00ffcc";
+const BORDER$8 = "rgba(0,255,204,0.22)";
+function FaucetOverlay() {
+  const { isAuthenticated } = useInternetIdentity();
+  const { actor, isFetching } = useActor(createActor);
+  const mintTestTokens = useGameStore((s2) => s2.mintTestTokens);
+  const [loading2, setLoading] = reactExports.useState(false);
+  const isReady = isAuthenticated && !!actor && !isFetching;
+  const handleFaucet = async () => {
+    if (loading2) return;
+    if (!isAuthenticated) {
+      ue.error("Login required to claim testnet tokens", { duration: 3e3 });
+      return;
+    }
+    setLoading(true);
+    try {
+      if (actor) {
+        const result = await actor.testFaucetV2();
+        if (result.__kind__ === "ok") {
+          const _grant = result.ok;
+          try {
+            const state2 = await actor.getPlayerState();
+            if (state2) {
+              useGameStore.setState((s2) => ({
+                player: {
+                  ...s2.player,
+                  frntBalance: Number(state2.frntBalance),
+                  iron: Number(state2.iron),
+                  fuel: Number(state2.fuel),
+                  crystal: Number(state2.crystal),
+                  mockIcpBalance: s2.player.mockIcpBalance + 2
+                }
+              }));
+            }
+          } catch {
+            mintTestTokens();
+          }
+          ue.success("+500 FRNTR + 2 ICP claimed!", { duration: 4e3 });
+        } else {
+          mintTestTokens();
+          ue.success("+500 FRNTR + 2 ICP claimed!", { duration: 4e3 });
+        }
+      } else {
+        mintTestTokens();
+        ue.success("+500 FRNTR + 2 ICP claimed!", { duration: 4e3 });
+      }
+    } catch {
+      mintTestTokens();
+      ue.success("+500 FRNTR + 2 ICP claimed!", { duration: 4e3 });
+    } finally {
+      setLoading(false);
+    }
+  };
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "button",
+    {
+      type: "button",
+      "data-ocid": "faucet.button",
+      onClick: handleFaucet,
+      disabled: loading2,
+      title: isReady ? "Claim 500 FRNTR + 2 ICP (testnet, unlimited)" : "Claim test tokens",
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "6px 12px",
+        borderRadius: 6,
+        background: loading2 ? "rgba(0,255,204,0.05)" : "rgba(0,255,204,0.1)",
+        border: `1px solid ${BORDER$8}`,
+        color: CYAN$8,
+        fontSize: 9,
+        fontWeight: 700,
+        letterSpacing: 1.5,
+        cursor: loading2 ? "not-allowed" : "pointer",
+        opacity: loading2 ? 0.6 : 1,
+        textTransform: "uppercase",
+        whiteSpace: "nowrap",
+        transition: "opacity 0.2s, background 0.2s",
+        backdropFilter: "blur(10px)",
+        WebkitBackdropFilter: "blur(10px)",
+        boxShadow: "0 0 8px rgba(0,255,204,0.12)",
+        height: 32
+      },
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(FlaskConical, { size: 11 }),
+        loading2 ? "CLAIMING..." : "TESTNET FAUCET"
+      ]
+    }
+  );
 }
 function _extends() {
   return _extends = Object.assign ? Object.assign.bind() : function(n) {
@@ -96139,7 +97092,7 @@ const createStore = (invalidate2, advance2) => {
       linear: false,
       flat: false,
       controls: null,
-      clock: new Clock(),
+      clock: new Clock$1(),
       pointer,
       mouse: pointer,
       frameloop: "always",
@@ -98640,7 +99593,9 @@ const earthDayNightFrag = (
   }
 `
 );
-function EarthSphere() {
+function EarthSphere({
+  onPlotSelect
+}) {
   const [dayTex, cloudsTex] = useTexture([
     "/assets/generated/earth-day.dim_4096x2048.jpg",
     "/assets/generated/earth-clouds.dim_2048x1024.jpg"
@@ -98683,6 +99638,7 @@ function EarthSphere() {
       return;
     }
     selectPlot == null ? void 0 : selectPlot(nearest);
+    if (onPlotSelect) onPlotSelect(nearest);
     const dir = e.point.clone().normalize().multiplyScalar(2);
     setSelectedWorldPoint([dir.x, dir.y, dir.z]);
   };
@@ -99525,13 +100481,14 @@ function GlobeScene({
   controlsRef,
   missileActive,
   onMissileComplete,
-  missileConfig
+  missileConfig,
+  onPlotSelect
 }) {
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx("ambientLight", { color: 16777215, intensity: 2.5 }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs(reactExports.Suspense, { fallback: null, children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx(Starfield, {}),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(EarthSphere, {})
+      /* @__PURE__ */ jsxRuntimeExports.jsx(EarthSphere, { onPlotSelect })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsx(
       OrbitControls2,
@@ -99561,7 +100518,8 @@ function GlobeCanvas({
   missileActive = false,
   onMissileComplete = () => {
   },
-  missileConfig
+  missileConfig,
+  onPlotSelect
 }) {
   return /* @__PURE__ */ jsxRuntimeExports.jsx(
     Canvas,
@@ -99575,690 +100533,1285 @@ function GlobeCanvas({
           controlsRef,
           missileActive,
           onMissileComplete,
-          missileConfig
+          missileConfig,
+          onPlotSelect
         }
       )
     }
   );
 }
-const CYAN$5 = "#00ffcc";
-const CYAN_DIM$5 = "rgba(0,255,204,0.35)";
-const BG = "rgba(2,10,20,0.9)";
-const BORDER$5 = "rgba(0,255,204,0.22)";
-const TEXT$3 = "#e0f4ff";
-const glass = {
-  background: BG,
-  backdropFilter: "blur(10px)",
-  WebkitBackdropFilter: "blur(10px)",
-  border: `1px solid ${BORDER$5}`
+const CYAN$7 = "#00ffcc";
+const BORDER$7 = "rgba(0,255,204,0.22)";
+const SPEC_COLORS = {
+  ARMORY: "rgba(200,50,50,0.7)",
+  RESOURCES: "rgba(50,180,80,0.7)",
+  ENERGY_TECH: "rgba(60,120,220,0.7)",
+  TRADING_DEPOT: "rgba(200,160,40,0.7)"
 };
-function fmtResource(n) {
-  if (n >= 100) return n.toFixed(2);
-  if (n >= 1) return n.toFixed(4);
-  return n.toFixed(8);
+const SPEC_STROKE = {
+  ARMORY: "#e05050",
+  RESOURCES: "#50d070",
+  ENERGY_TECH: "#4090ff",
+  TRADING_DEPOT: "#d4a820"
+};
+const SPEC_LABELS = {
+  ARMORY: "ARMORY",
+  RESOURCES: "RESOURCES",
+  ENERGY_TECH: "ENERGY & TECH",
+  TRADING_DEPOT: "TRADING DEPOT"
+};
+const SPEC_ICONS = {
+  ARMORY: /* @__PURE__ */ jsxRuntimeExports.jsx(Sword, { size: 9 }),
+  RESOURCES: /* @__PURE__ */ jsxRuntimeExports.jsx(Package, { size: 9 }),
+  ENERGY_TECH: /* @__PURE__ */ jsxRuntimeExports.jsx(Cpu, { size: 9 }),
+  TRADING_DEPOT: /* @__PURE__ */ jsxRuntimeExports.jsx(Flame, { size: 9 })
+};
+const EMPTY_FILL = "rgba(25,35,50,0.65)";
+const EMPTY_STROKE = "rgba(0,255,204,0.15)";
+const LOCKED_FILL = "rgba(40,20,20,0.6)";
+const LOCKED_STROKE = "rgba(255,100,80,0.35)";
+const SECTOR_LABELS = ["α", "β", "γ", "δ", "ε", "ζ"];
+const NEXUS_BONUS = { 0: 0, 1: 8, 2: 24, 3: 48 };
+function polarToCartesian(cx, cy, r2, angleDeg) {
+  const rad = (angleDeg - 90) * Math.PI / 180;
+  return { x: cx + r2 * Math.cos(rad), y: cy + r2 * Math.sin(rad) };
 }
-function fmtFrntr(n) {
-  return n.toFixed(8);
+function slicePath(cx, cy, r2, innerR, startDeg, endDeg) {
+  const s2 = polarToCartesian(cx, cy, r2, startDeg);
+  const e = polarToCartesian(cx, cy, r2, endDeg);
+  const si = polarToCartesian(cx, cy, innerR, startDeg);
+  const ei = polarToCartesian(cx, cy, innerR, endDeg);
+  const large = endDeg - startDeg > 180 ? 1 : 0;
+  return [
+    `M ${si.x} ${si.y}`,
+    `L ${s2.x} ${s2.y}`,
+    `A ${r2} ${r2} 0 ${large} 1 ${e.x} ${e.y}`,
+    `L ${ei.x} ${ei.y}`,
+    `A ${innerR} ${innerR} 0 ${large} 0 ${si.x} ${si.y}`,
+    "Z"
+  ].join(" ");
 }
-const RESOURCES = [
-  {
-    label: "IRON",
-    key: "iron",
-    color: "#94a3b8",
-    icon: /* @__PURE__ */ jsxRuntimeExports.jsxs(
-      "svg",
-      {
-        width: "12",
-        height: "12",
-        viewBox: "0 0 12 12",
-        fill: "none",
-        "aria-hidden": "true",
-        role: "img",
-        children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("title", { children: "Iron" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "rect",
-            {
-              x: "2",
-              y: "2",
-              width: "8",
-              height: "8",
-              rx: "1",
-              fill: "#94a3b8",
-              opacity: "0.8"
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("rect", { x: "4", y: "4", width: "4", height: "4", rx: "0.5", fill: "#94a3b8" })
-        ]
-      }
-    )
-  },
-  {
-    label: "FUEL",
-    key: "fuel",
-    color: "#f97316",
-    icon: /* @__PURE__ */ jsxRuntimeExports.jsxs(
-      "svg",
-      {
-        width: "12",
-        height: "12",
-        viewBox: "0 0 12 12",
-        fill: "none",
-        "aria-hidden": "true",
-        role: "img",
-        children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("title", { children: "Fuel" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "path",
-            {
-              d: "M6 1 C6 1 3 4 3 7 C3 8.66 4.34 10 6 10 C7.66 10 9 8.66 9 7 C9 4 6 1 6 1Z",
-              fill: "#f97316",
-              opacity: "0.85"
-            }
-          )
-        ]
-      }
-    )
-  },
-  {
-    label: "CRYSTAL",
-    key: "crystal",
-    color: "#3b82f6",
-    icon: /* @__PURE__ */ jsxRuntimeExports.jsxs(
-      "svg",
-      {
-        width: "12",
-        height: "12",
-        viewBox: "0 0 12 12",
-        fill: "none",
-        "aria-hidden": "true",
-        role: "img",
-        children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("title", { children: "Crystal" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("polygon", { points: "6,1 10,5 6,11 2,5", fill: "#3b82f6", opacity: "0.85" })
-        ]
-      }
-    )
-  },
-  {
-    label: "RARE",
-    key: "rareEarth",
-    color: "#c084fc",
-    icon: /* @__PURE__ */ jsxRuntimeExports.jsxs(
-      "svg",
-      {
-        width: "12",
-        height: "12",
-        viewBox: "0 0 12 12",
-        fill: "none",
-        "aria-hidden": "true",
-        role: "img",
-        children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("title", { children: "Rare Earth" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "polygon",
-            {
-              points: "6,1 11,5 9,11 3,11 1,5",
-              fill: "#c084fc",
-              opacity: "0.85"
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("circle", { cx: "6", cy: "6", r: "2", fill: "#a855f7", opacity: "0.9" })
-        ]
-      }
-    )
-  }
-];
-const QUICK_LINKS = [
-  { label: "FLEETS", Icon: Rocket, id: "fleets" },
-  { label: "RESEARCH", Icon: FlaskConical, id: "research" },
-  { label: "BUILDINGS", Icon: Building2, id: "buildings" },
-  { label: "CHAT", Icon: MessageSquare, id: "chat" }
-];
-function LeftSidebarHUD() {
-  const player = useGameStore((s2) => s2.player);
-  const [windowWidth, setWindowWidth] = reactExports.useState(
-    () => typeof window !== "undefined" ? window.innerWidth : 1024
+function sliceMidLabel(cx, cy, r2, innerR, startDeg, endDeg) {
+  const mid = (startDeg + endDeg) / 2;
+  const labelR = (r2 + innerR) / 2;
+  return polarToCartesian(cx, cy, labelR, mid);
+}
+function useCountdown(unlockAt) {
+  const [remaining, setRemaining] = reactExports.useState(
+    Math.max(0, unlockAt - Date.now())
   );
-  const [mobileOpen, setMobileOpen] = reactExports.useState(false);
-  const sidebarRef = reactExports.useRef(null);
   reactExports.useEffect(() => {
-    const handler = () => setWindowWidth(window.innerWidth);
-    window.addEventListener("resize", handler);
-    return () => window.removeEventListener("resize", handler);
-  }, []);
-  const isMobile = windowWidth < 768;
-  const sidebarWidth = isMobile ? 200 : 180;
-  const sidebarPad = isMobile ? 12 : 10;
-  const ownedCount = player.plotsOwned.length;
-  const rank = ownedCount > 100 ? "Admiral" : ownedCount > 50 ? "Commander" : ownedCount > 10 ? "Captain" : ownedCount > 0 ? "Recruit" : "Civilian";
-  const rankNum = ownedCount > 0 ? Math.min(Math.floor(ownedCount / 10) + 1, 10) : 1;
-  const xpPct = `${ownedCount % 10 / 10 * 100}%`;
-  const initials = player.principal ? player.principal.slice(0, 2).toUpperCase() : "CM";
-  const commanderName = `Commander ${player.principal ? player.principal.slice(0, 6) : "Axion"}`;
-  const sectionHeader = (label) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+    if (remaining <= 0) return;
+    const id2 = setInterval(
+      () => setRemaining(Math.max(0, unlockAt - Date.now())),
+      1e3
+    );
+    return () => clearInterval(id2);
+  }, [unlockAt, remaining]);
+  if (remaining <= 0) return null;
+  const h2 = Math.floor(remaining / 36e5);
+  const m2 = Math.floor(remaining % 36e5 / 6e4);
+  const s2 = Math.floor(remaining % 6e4 / 1e3);
+  return `${h2}h ${String(m2).padStart(2, "0")}m ${String(s2).padStart(2, "0")}s`;
+}
+function CooldownTimer({ unlockAt }) {
+  const timer = useCountdown(unlockAt);
+  if (!timer) return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$7 }, children: "UNLOCKED" });
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "flex items-center gap-1", style: { color: "#ff8040" }, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx(Clock2, { size: 9 }),
+    timer
+  ] });
+}
+function SegmentDetailCard({ info }) {
+  const isNexus = info.index === 0;
+  const label = isNexus ? "NEXUS" : `SECTOR ${SECTOR_LABELS[info.index - 1]}`;
+  const bonus = isNexus ? NEXUS_BONUS[info.index] ?? 0 : 0;
+  const specColor = info.spec ? SPEC_STROKE[info.spec] : CYAN$7;
+  const rates = BIOME_MINERAL_RATES[info.biome];
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "div",
     {
+      className: "rounded-lg p-3 flex flex-col gap-2",
       style: {
-        fontSize: 7,
-        color: CYAN_DIM$5,
-        letterSpacing: 3,
-        textTransform: "uppercase",
-        paddingBottom: 5,
-        borderBottom: "1px solid rgba(0,255,204,0.22)",
-        marginBottom: 5
+        background: "rgba(0,255,204,0.04)",
+        border: `1px solid ${specColor}44`
       },
-      children: label
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1.5", children: [
+            info.spec && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: specColor }, children: SPEC_ICONS[info.spec] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "span",
+              {
+                className: "text-[10px] font-bold uppercase tracking-widest",
+                style: { color: specColor },
+                children: label
+              }
+            )
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "span",
+            {
+              className: "text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded",
+              style: {
+                background: info.isLocked ? "rgba(255,80,40,0.12)" : "rgba(0,255,204,0.08)",
+                color: info.isLocked ? "#ff8040" : CYAN$7
+              },
+              children: info.isLocked ? "LOCKED" : info.buildingType ? "ACTIVE" : "VACANT"
+            }
+          )
+        ] }),
+        info.isLocked && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[9px]", style: { color: "rgba(180,220,220,0.5)" }, children: /* @__PURE__ */ jsxRuntimeExports.jsx(CooldownTimer, { unlockAt: info.unlockAt }) }),
+        !info.isLocked && info.buildingType && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-[9px]", style: { color: "rgba(180,220,220,0.6)" }, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: "rgba(180,220,220,0.4)" }, children: "STRUCTURE: " }),
+          info.buildingType
+        ] }),
+        isNexus && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "div",
+              {
+                className: "text-[9px]",
+                style: { color: "rgba(0,255,204,0.45)" },
+                children: "ELECTRICITY LVL"
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "div",
+              {
+                className: "font-mono text-xs font-bold",
+                style: { color: CYAN$7 },
+                children: [
+                  info.nexusLevel,
+                  " / 3"
+                ]
+              }
+            )
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "div",
+              {
+                className: "text-[9px]",
+                style: { color: "rgba(0,255,204,0.45)" },
+                children: "BONUS FRNTR/DAY"
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "div",
+              {
+                className: "font-mono text-xs font-bold",
+                style: { color: bonus > 0 ? CYAN$7 : "rgba(0,255,204,0.3)" },
+                children: [
+                  "+",
+                  NEXUS_BONUS[info.nexusLevel] ?? 0
+                ]
+              }
+            )
+          ] })
+        ] }),
+        !isNexus && info.spec && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-[9px]", style: { color: specColor }, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: "rgba(180,220,220,0.4)" }, children: "SPEC: " }),
+          SPEC_LABELS[info.spec]
+        ] }),
+        !isNexus && rates && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex gap-3", children: [
+          ["IRON", rates.iron, "#9aa"],
+          ["FUEL", rates.fuel, "#fa0"],
+          ["XTAL", rates.crystal, "#8cf"],
+          ["RARE", rates.rareEarth, "#d8f"]
+        ].map(([name, rate, color2]) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
+            {
+              className: "text-[8px]",
+              style: { color: "rgba(180,220,220,0.35)" },
+              children: name
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "font-mono text-[9px] font-bold", style: { color: color2 }, children: [
+            rate,
+            "/day"
+          ] })
+        ] }, name)) })
+      ]
     }
   );
-  const sidebarTransform = isMobile ? mobileOpen ? "translateX(0)" : "translateX(-100%)" : "translateX(0)";
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-    isMobile && mobileOpen && // biome-ignore lint/a11y/useKeyWithClickEvents: fullscreen overlay backdrop
-    /* @__PURE__ */ jsxRuntimeExports.jsx(
+}
+function SubParcelIntelView() {
+  const selectedPlotId = useGameStore((s2) => s2.selectedPlotId);
+  const player = useGameStore((s2) => s2.player);
+  const plots = useGameStore((s2) => s2.plots);
+  const subParcels = useGameStore((s2) => s2.subParcels);
+  const getSubParcels = useGameStore((s2) => s2.getSubParcels);
+  const plotPurchaseTimes = useGameStore((s2) => s2.plotPurchaseTimes);
+  const [selectedSegment, setSelectedSegment] = reactExports.useState(null);
+  const COOLDOWN_MS = 4 * 60 * 60 * 1e3;
+  reactExports.useEffect(() => {
+    setSelectedSegment(null);
+  }, [selectedPlotId]);
+  const ownedPlots = player.plotsOwned;
+  if (ownedPlots.length === 0) {
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs(
       "div",
       {
-        "data-ocid": "sidebar.backdrop",
-        onClick: () => setMobileOpen(false),
-        style: {
-          position: "fixed",
-          inset: 0,
-          background: "rgba(0,0,0,0.5)",
-          zIndex: 29
-        }
-      }
-    ),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs(
-      "div",
-      {
-        ref: sidebarRef,
-        "data-ocid": "sidebar.panel",
-        style: {
-          position: "fixed",
-          top: 48,
-          left: 0,
-          width: sidebarWidth,
-          zIndex: isMobile ? mobileOpen ? 30 : 25 : 25,
-          ...glass,
-          borderLeft: "none",
-          borderTop: "none",
-          borderBottom: "none",
-          borderRight: "1px solid rgba(0,255,204,0.22)",
-          display: "flex",
-          flexDirection: "column",
-          gap: 0,
-          boxShadow: "2px 0 16px rgba(0,255,204,0.06)",
-          transform: sidebarTransform,
-          transition: isMobile ? "transform 0.28s cubic-bezier(0.4,0,0.2,1)" : "none",
-          willChange: "transform"
-        },
+        "data-ocid": "intel.subparcel.empty_state",
+        className: "flex flex-col items-center justify-center h-48 gap-3",
+        style: { color: "rgba(0,255,204,0.35)" },
         children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { padding: `10px ${sidebarPad}px 8px` }, children: [
-            sectionHeader("Player Info"),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "div",
-                {
-                  "data-ocid": "sidebar.avatar.card",
-                  style: {
-                    width: isMobile ? 40 : 36,
-                    height: isMobile ? 40 : 36,
-                    flexShrink: 0,
-                    background: "linear-gradient(135deg, rgba(0,255,204,0.12) 0%, rgba(2,10,20,0.9) 100%)",
-                    border: `1px solid ${BORDER$5}`,
-                    borderRadius: 4,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: isMobile ? 13 : 12,
-                    fontWeight: 700,
-                    color: CYAN$5,
-                    letterSpacing: 0.5,
-                    boxShadow: "inset 0 0 8px rgba(0,255,204,0.1)"
-                  },
-                  children: initials
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { flex: 1, minWidth: 0 }, children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "div",
-                  {
-                    style: {
-                      fontSize: isMobile ? 9.5 : 8.5,
-                      fontWeight: 700,
-                      color: TEXT$3,
-                      letterSpacing: 0.5,
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis"
-                    },
-                    children: commanderName
-                  }
-                ),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                  "div",
-                  {
-                    style: {
-                      fontSize: isMobile ? 8 : 7,
-                      color: CYAN_DIM$5,
-                      letterSpacing: 1,
-                      marginTop: 1
-                    },
-                    children: [
-                      rank.toUpperCase(),
-                      " LV.",
-                      rankNum
-                    ]
-                  }
-                )
-              ] })
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { marginTop: 7 }, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Package, { size: 32, style: { opacity: 0.3 } }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-center", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[10px] uppercase tracking-widest font-bold", children: "No Plots Owned" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "p",
+              {
+                className: "text-[9px] mt-1",
+                style: { color: "rgba(0,255,204,0.25)" },
+                children: "Purchase a plot to view sub-parcel details"
+              }
+            )
+          ] })
+        ]
+      }
+    );
+  }
+  if (selectedPlotId === null || !ownedPlots.includes(selectedPlotId)) {
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "div",
+      {
+        "data-ocid": "intel.subparcel.no_selection",
+        className: "flex flex-col items-center justify-center h-48 gap-3",
+        style: { color: "rgba(0,255,204,0.35)" },
+        children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronRight, { size: 28, style: { opacity: 0.3 } }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-center", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[10px] uppercase tracking-widest font-bold", children: "No Plot Selected" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "p",
+              {
+                className: "text-[9px] mt-1",
+                style: { color: "rgba(0,255,204,0.25)" },
+                children: "Select one of your plots to view sub-parcels"
+              }
+            )
+          ] }),
+          ownedPlots.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap gap-1.5 justify-center px-4 mt-1", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "span",
+              {
+                className: "text-[9px] uppercase tracking-wider",
+                style: {
+                  color: "rgba(0,255,204,0.3)",
+                  width: "100%",
+                  textAlign: "center"
+                },
+                children: "Your plots:"
+              }
+            ),
+            ownedPlots.map((pid) => /* @__PURE__ */ jsxRuntimeExports.jsx(PlotQuickSelect, { plotId: pid }, pid))
+          ] })
+        ]
+      }
+    );
+  }
+  const plot = plots.find((p2) => p2.id === selectedPlotId);
+  if (!plot) return null;
+  const subs = subParcels[selectedPlotId] ?? getSubParcels(selectedPlotId);
+  const purchaseTime = plotPurchaseTimes[selectedPlotId] ?? Date.now();
+  const nexusLevel = plot.nexusElectricityLevel ?? 0;
+  const segments = Array.from({ length: 7 }, (_2, i2) => {
+    const sub = subs[i2];
+    const isLocked = sub ? !sub.unlocked : Date.now() - purchaseTime < COOLDOWN_MS;
+    const unlockAt = sub ? sub.purchaseTime + COOLDOWN_MS : purchaseTime + COOLDOWN_MS;
+    return {
+      index: i2,
+      isLocked,
+      unlockAt,
+      buildingType: (sub == null ? void 0 : sub.buildingType) ?? null,
+      spec: i2 === 0 ? null : plot.specialization ?? null,
+      biome: plot.biome,
+      nexusLevel
+    };
+  });
+  const CX = 110;
+  const CY = 110;
+  const OUTER_R = 92;
+  const INNER_R = 36;
+  const CENTER_R = 30;
+  const GAP = 4;
+  const SLICES = 6;
+  const SLICE_DEG = 360 / SLICES;
+  function sliceFill(seg, selected) {
+    if (seg.isLocked) return LOCKED_FILL;
+    if (seg.spec)
+      return selected ? `${SPEC_COLORS[seg.spec]}` : `${SPEC_COLORS[seg.spec].replace("0.7", "0.4")}`;
+    return selected ? "rgba(0,255,204,0.18)" : EMPTY_FILL;
+  }
+  function sliceStroke(seg, selected) {
+    if (seg.isLocked) return selected ? "rgba(255,100,80,0.6)" : LOCKED_STROKE;
+    if (seg.spec)
+      return selected ? SPEC_STROKE[seg.spec] : `${SPEC_STROKE[seg.spec]}88`;
+    return selected ? "rgba(0,255,204,0.7)" : EMPTY_STROKE;
+  }
+  const selectedInfo = selectedSegment !== null ? segments[selectedSegment] : null;
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "div",
+    {
+      "data-ocid": "intel.subparcel.panel",
+      className: "flex flex-col gap-3 pb-4",
+      style: { color: "rgba(180,220,220,0.85)" },
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            className: "mx-3 rounded-lg px-3 py-2 flex items-center gap-2",
+            style: {
+              background: "rgba(0,255,204,0.04)",
+              border: `1px solid ${BORDER$7}`
+            },
+            children: [
               /* @__PURE__ */ jsxRuntimeExports.jsxs(
                 "div",
                 {
+                  className: "w-6 h-6 rounded flex items-center justify-center text-[9px] font-bold font-mono flex-shrink-0",
                   style: {
-                    display: "flex",
-                    justifyContent: "space-between",
-                    marginBottom: 3
+                    background: "rgba(0,255,204,0.12)",
+                    border: `1px solid ${CYAN$7}`,
+                    color: CYAN$7
                   },
                   children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 6, color: CYAN_DIM$5, letterSpacing: 1 }, children: "XP" }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { style: { fontSize: 6, color: CYAN_DIM$5, letterSpacing: 1 }, children: [
-                      ownedCount % 10,
-                      "/10"
-                    ] })
+                    "#",
+                    selectedPlotId
                   ]
                 }
               ),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "div",
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 min-w-0", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "span",
+                  {
+                    className: "text-[10px] font-bold uppercase tracking-wider",
+                    style: { color: CYAN$7 },
+                    children: [
+                      plot.biome,
+                      " SECTOR"
+                    ]
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "span",
+                  {
+                    className: "text-[9px] ml-2",
+                    style: { color: "rgba(0,255,204,0.4)" },
+                    children: [
+                      "EFF ",
+                      plot.efficiency,
+                      "%"
+                    ]
+                  }
+                )
+              ] }),
+              plot.specialization && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "span",
                 {
+                  className: "text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded flex-shrink-0",
                   style: {
-                    height: 3,
-                    background: "rgba(0,255,204,0.1)",
-                    borderRadius: 2,
-                    overflow: "hidden",
-                    border: `1px solid ${BORDER$5}`
+                    background: `${SPEC_COLORS[plot.specialization].replace("0.7", "0.15")}`,
+                    color: SPEC_STROKE[plot.specialization],
+                    border: `1px solid ${SPEC_STROKE[plot.specialization]}44`
                   },
-                  children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "div",
+                  children: SPEC_LABELS[plot.specialization]
+                }
+              )
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex justify-center", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "svg",
+          {
+            width: "220",
+            height: "220",
+            viewBox: "0 0 220 220",
+            role: "img",
+            "aria-labelledby": "intel-subparcel-svg-title",
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("title", { id: "intel-subparcel-svg-title", children: "Sub-parcel radial layout" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "circle",
+                {
+                  cx: CX,
+                  cy: CY,
+                  r: OUTER_R + 7,
+                  fill: "none",
+                  stroke: "rgba(0,255,204,0.06)",
+                  strokeWidth: "14"
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "circle",
+                {
+                  cx: CX,
+                  cy: CY,
+                  r: OUTER_R + 2,
+                  fill: "none",
+                  stroke: "rgba(0,255,204,0.12)",
+                  strokeWidth: "1"
+                }
+              ),
+              Array.from({ length: SLICES }, (_2, i2) => {
+                const idx = i2 + 1;
+                const startDeg = i2 * SLICE_DEG + GAP / 2;
+                const endDeg = (i2 + 1) * SLICE_DEG - GAP / 2;
+                const seg = segments[idx];
+                const isSelected = selectedSegment === idx;
+                const lp = sliceMidLabel(
+                  CX,
+                  CY,
+                  OUTER_R,
+                  INNER_R,
+                  startDeg,
+                  endDeg
+                );
+                return /* @__PURE__ */ jsxRuntimeExports.jsxs("g", { children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "path",
                     {
+                      d: slicePath(CX, CY, OUTER_R, INNER_R, startDeg, endDeg),
+                      fill: sliceFill(seg, isSelected),
+                      stroke: sliceStroke(seg, isSelected),
+                      strokeWidth: isSelected ? 1.5 : 0.75,
                       style: {
-                        height: "100%",
-                        width: xpPct,
-                        background: `linear-gradient(90deg, ${CYAN$5}, rgba(0,255,204,0.7))`,
-                        borderRadius: 2,
-                        boxShadow: `0 0 6px ${CYAN$5}`,
-                        transition: "width 0.4s ease"
+                        cursor: "pointer",
+                        transition: "fill 0.15s, stroke 0.15s"
+                      },
+                      onClick: () => setSelectedSegment(isSelected ? null : idx),
+                      onKeyDown: (e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setSelectedSegment(isSelected ? null : idx);
+                        }
+                      },
+                      tabIndex: 0,
+                      "data-ocid": `intel.subparcel.slice.${idx}`,
+                      role: "button",
+                      "aria-label": `Sub-parcel sector ${SECTOR_LABELS[i2]}`,
+                      "aria-pressed": isSelected
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "text",
+                    {
+                      x: lp.x,
+                      y: lp.y,
+                      textAnchor: "middle",
+                      dominantBaseline: "middle",
+                      fontSize: "11",
+                      fontFamily: "monospace",
+                      fill: sliceStroke(seg, isSelected),
+                      style: { pointerEvents: "none" },
+                      children: SECTOR_LABELS[i2]
+                    }
+                  ),
+                  seg.isLocked && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "circle",
+                    {
+                      cx: lp.x,
+                      cy: lp.y + 11,
+                      r: "2.5",
+                      fill: "rgba(255,100,80,0.7)",
+                      style: { pointerEvents: "none" }
+                    }
+                  ),
+                  !seg.isLocked && seg.buildingType && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "circle",
+                    {
+                      cx: lp.x,
+                      cy: lp.y + 11,
+                      r: "2.5",
+                      fill: CYAN$7,
+                      style: {
+                        pointerEvents: "none",
+                        animation: "pulse-glow 2s ease-in-out infinite"
                       }
                     }
                   )
-                }
-              )
-            ] })
-          ] }),
+                ] }, idx);
+              }),
+              (() => {
+                segments[0];
+                const isSelected = selectedSegment === 0;
+                const nexusBonus = NEXUS_BONUS[nexusLevel] ?? 0;
+                const nexusFill = isSelected ? "rgba(0,255,204,0.22)" : nexusLevel > 0 ? "rgba(0,255,204,0.12)" : "rgba(15,25,40,0.75)";
+                const nexusStroke = isSelected ? CYAN$7 : nexusLevel > 0 ? "rgba(0,255,204,0.5)" : "rgba(0,255,204,0.2)";
+                return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "g",
+                  {
+                    style: { cursor: "pointer" },
+                    onClick: () => setSelectedSegment(isSelected ? null : 0),
+                    onKeyDown: (e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setSelectedSegment(isSelected ? null : 0);
+                      }
+                    },
+                    tabIndex: 0,
+                    "data-ocid": "intel.subparcel.nexus",
+                    "aria-label": "Center Nexus",
+                    "aria-pressed": isSelected,
+                    children: [
+                      nexusLevel > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "circle",
+                        {
+                          cx: CX,
+                          cy: CY,
+                          r: CENTER_R + 5,
+                          fill: "none",
+                          stroke: isSelected ? "rgba(0,255,204,0.55)" : "rgba(0,255,204,0.18)",
+                          strokeWidth: "1",
+                          style: { transition: "stroke 0.15s" }
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "circle",
+                        {
+                          cx: CX,
+                          cy: CY,
+                          r: CENTER_R,
+                          fill: nexusFill,
+                          stroke: nexusStroke,
+                          strokeWidth: isSelected ? 1.5 : 1,
+                          style: { transition: "fill 0.15s, stroke 0.15s" }
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "text",
+                        {
+                          x: CX,
+                          y: CY - 6,
+                          textAnchor: "middle",
+                          dominantBaseline: "middle",
+                          fontSize: "8",
+                          fontFamily: "monospace",
+                          fill: isSelected ? CYAN$7 : "rgba(0,255,204,0.65)",
+                          style: { pointerEvents: "none" },
+                          children: "NEXUS"
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "text",
+                        {
+                          x: CX,
+                          y: CY + 5,
+                          textAnchor: "middle",
+                          dominantBaseline: "middle",
+                          fontSize: "8",
+                          fontFamily: "monospace",
+                          fill: nexusBonus > 0 ? isSelected ? CYAN$7 : "rgba(0,255,204,0.55)" : "rgba(0,255,204,0.2)",
+                          style: { pointerEvents: "none" },
+                          children: `LV${nexusLevel}`
+                        }
+                      ),
+                      nexusBonus > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "text",
+                        {
+                          x: CX,
+                          y: CY + 15,
+                          textAnchor: "middle",
+                          dominantBaseline: "middle",
+                          fontSize: "7",
+                          fontFamily: "monospace",
+                          fill: "rgba(0,255,204,0.4)",
+                          style: { pointerEvents: "none" },
+                          children: `+${nexusBonus}/d`
+                        }
+                      )
+                    ]
+                  }
+                );
+              })()
+            ]
+          }
+        ) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-wrap justify-center gap-2.5 px-3 -mt-1", children: [
+          {
+            color: SPEC_COLORS.ARMORY,
+            stroke: SPEC_STROKE.ARMORY,
+            label: "Armory"
+          },
+          {
+            color: SPEC_COLORS.RESOURCES,
+            stroke: SPEC_STROKE.RESOURCES,
+            label: "Resources"
+          },
+          {
+            color: SPEC_COLORS.ENERGY_TECH,
+            stroke: SPEC_STROKE.ENERGY_TECH,
+            label: "Energy & Tech"
+          },
+          {
+            color: SPEC_COLORS.TRADING_DEPOT,
+            stroke: SPEC_STROKE.TRADING_DEPOT,
+            label: "Trading"
+          },
+          { color: EMPTY_FILL, stroke: EMPTY_STROKE, label: "Vacant" },
+          { color: LOCKED_FILL, stroke: LOCKED_STROKE, label: "Locked" }
+        ].map(({ color: color2, stroke, label }) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             "div",
             {
-              style: { height: 1, background: BORDER$5, margin: `0 ${sidebarPad}px` }
+              className: "w-2.5 h-2.5 rounded-sm",
+              style: { background: color2, border: `1px solid ${stroke}` }
             }
           ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { padding: `6px ${sidebarPad}px` }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "span",
+            {
+              className: "text-[9px] uppercase tracking-wide",
+              style: { color: "rgba(180,220,220,0.4)" },
+              children: label
+            }
+          )
+        ] }, label)) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "px-3", children: selectedInfo !== null ? /* @__PURE__ */ jsxRuntimeExports.jsx(SegmentDetailCard, { info: selectedInfo }) : /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "div",
+          {
+            className: "rounded-lg p-3 text-center",
+            style: {
+              background: "rgba(0,255,204,0.02)",
+              border: "1px solid rgba(0,255,204,0.08)"
+            },
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "p",
+              {
+                className: "text-[9px] uppercase tracking-widest",
+                style: { color: "rgba(0,255,204,0.3)" },
+                children: "Tap a sector or the Nexus to inspect"
+              }
+            )
+          }
+        ) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(DailyFRNTRBreakdown, { plotId: selectedPlotId, nexusLevel })
+      ]
+    }
+  );
+}
+function PlotQuickSelect({ plotId }) {
+  const selectPlot = useGameStore((s2) => s2.selectPlot);
+  const plots = useGameStore((s2) => s2.plots);
+  const plot = plots.find((p2) => p2.id === plotId);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "button",
+    {
+      type: "button",
+      "data-ocid": `intel.subparcel.plot_select.${plotId}`,
+      onClick: () => selectPlot(plotId),
+      className: "px-2 py-0.5 rounded text-[9px] font-mono font-bold uppercase tracking-wide cursor-pointer transition-all",
+      style: {
+        background: "rgba(0,255,204,0.07)",
+        border: "1px solid rgba(0,255,204,0.2)",
+        color: "rgba(0,255,204,0.7)"
+      },
+      children: [
+        "#",
+        plotId,
+        (plot == null ? void 0 : plot.biome) ? ` · ${plot.biome}` : ""
+      ]
+    }
+  );
+}
+function DailyFRNTRBreakdown({
+  plotId,
+  nexusLevel
+}) {
+  const generatorTiers = useGameStore((s2) => s2.generatorTiers);
+  const tier = generatorTiers[plotId] ?? 0;
+  const TIER_BONUS = {
+    1: 8,
+    2: 24,
+    3: 48,
+    4: 96,
+    5: 192,
+    6: 384
+  };
+  const base = 7;
+  const tierBonus = TIER_BONUS[tier] ?? 0;
+  const nexusBonus = NEXUS_BONUS[nexusLevel] ?? 0;
+  const total = base + tierBonus + nexusBonus;
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "div",
+    {
+      className: "mx-3 rounded-lg p-3",
+      style: {
+        background: "rgba(0,255,204,0.04)",
+        border: "1px solid rgba(0,255,204,0.12)"
+      },
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            className: "text-[9px] uppercase tracking-widest mb-2",
+            style: { color: "rgba(0,255,204,0.45)" },
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Zap, { size: 9, className: "inline mr-1" }),
+              "DAILY FRNTR BREAKDOWN"
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-1", children: [
+          [
+            { label: "Base Plot", value: base },
+            { label: `Generator Tier ${tier}`, value: tierBonus },
+            { label: `Nexus Lv${nexusLevel}`, value: nexusBonus }
+          ].map(({ label, value }) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between text-[9px]", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: "rgba(180,220,220,0.45)" }, children: label }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "span",
+              {
+                className: "font-mono font-bold",
+                style: { color: value > 0 ? CYAN$7 : "rgba(0,255,204,0.25)" },
+                children: [
+                  "+",
+                  value,
+                  " FRNTR"
+                ]
+              }
+            )
+          ] }, label)),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
             "div",
             {
-              style: {
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between"
-              },
+              className: "flex justify-between text-[10px] pt-1 mt-1",
+              style: { borderTop: "1px solid rgba(0,255,204,0.1)" },
               children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 5 }, children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                    "svg",
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "span",
+                  {
+                    className: "font-bold uppercase tracking-wider",
+                    style: { color: CYAN$7 },
+                    children: "TOTAL"
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "span",
+                  {
+                    className: "font-mono font-bold",
+                    style: { color: CYAN$7, textShadow: `0 0 8px ${CYAN$7}` },
+                    children: [
+                      total,
+                      " FRNTR/DAY"
+                    ]
+                  }
+                )
+              ]
+            }
+          )
+        ] })
+      ]
+    }
+  );
+}
+const REGIONS = [
+  "N.AMERICA",
+  "EUROPE",
+  "ASIA-PAC",
+  "MIDEAST",
+  "AFRICA",
+  "S.AMERICA",
+  "ARCTIC"
+];
+const PLOT_NAMES = [
+  "H3:8928308280fffff",
+  "H3:892831a8a2bffff",
+  "H3:89283470803ffff",
+  "H3:8928347083bffff",
+  "H3:892834708c3ffff",
+  "H3:89283470803ffff",
+  "H3:8928340c7cbffff"
+];
+const PRINCIPALS = [
+  "xk3mz-7qabc",
+  "py9nt-5rlop",
+  "ab2wx-9dfgh",
+  "lm4vq-1ryze",
+  "tz8kw-2mnop",
+  "qr5sj-8pabc",
+  "cn7lx-4dfgh"
+];
+function randItem(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+function generateEvent(id2) {
+  const kind = randItem(["purchase", "join", "upgrade", "burn"]);
+  const principal = randItem(PRINCIPALS);
+  const region = randItem(REGIONS);
+  const plot = randItem(PLOT_NAMES);
+  const now2 = /* @__PURE__ */ new Date();
+  const ts = `${String(now2.getHours()).padStart(2, "0")}:${String(now2.getMinutes()).padStart(2, "0")}:${String(now2.getSeconds()).padStart(2, "0")}Z`;
+  const configs = {
+    purchase: {
+      message: "TERRITORY ACQUIRED",
+      detail: `${principal} secured ${plot} — ${(Math.random() * 2 + 1).toFixed(2)} ICP`
+    },
+    join: {
+      message: "NEW COMMANDER DEPLOYED",
+      detail: `${principal} entered the grid — Region ${region}`
+    },
+    upgrade: {
+      message: "GENERATOR UPGRADE",
+      detail: `${principal} upgraded plot ${plot} — Gen Tier ${Math.floor(Math.random() * 6) + 1}`
+    },
+    burn: {
+      message: "FRNTR BURNED",
+      detail: `${(Math.random() * 5e3 + 100).toFixed(2)} FRNTR removed from circulation`
+    }
+  };
+  return { id: id2, kind, region, timestamp: ts, ...configs[kind] };
+}
+const EVENT_COLORS = {
+  purchase: "#00ffcc",
+  join: "#00bbff",
+  upgrade: "#ffcc00",
+  burn: "#ff4444"
+};
+const EVENT_ICONS = {
+  purchase: /* @__PURE__ */ jsxRuntimeExports.jsx(Globe, { size: 12 }),
+  join: /* @__PURE__ */ jsxRuntimeExports.jsx(Users, { size: 12 }),
+  upgrade: /* @__PURE__ */ jsxRuntimeExports.jsx(TrendingUp, { size: 12 }),
+  burn: /* @__PURE__ */ jsxRuntimeExports.jsx(Zap, { size: 12 })
+};
+function RadarSweep() {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "relative w-48 h-48 mx-auto", "aria-hidden": "true", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "svg",
+    {
+      viewBox: "0 0 200 200",
+      className: "w-full h-full",
+      role: "img",
+      "aria-label": "Radar sweep",
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("title", { children: "Radar sweep" }),
+        [80, 60, 40, 20].map((r2) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "circle",
+          {
+            cx: "100",
+            cy: "100",
+            r: r2,
+            fill: "none",
+            stroke: "rgba(0,255,204,0.12)",
+            strokeWidth: "1"
+          },
+          r2
+        )),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "line",
+          {
+            x1: "100",
+            y1: "20",
+            x2: "100",
+            y2: "180",
+            stroke: "rgba(0,255,204,0.1)",
+            strokeWidth: "0.5"
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "line",
+          {
+            x1: "20",
+            y1: "100",
+            x2: "180",
+            y2: "100",
+            stroke: "rgba(0,255,204,0.1)",
+            strokeWidth: "0.5"
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "g",
+          {
+            style: {
+              transformOrigin: "100px 100px",
+              animation: "orbit 4s linear infinite"
+            },
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "line",
+                {
+                  x1: "100",
+                  y1: "100",
+                  x2: "100",
+                  y2: "20",
+                  stroke: "#00ffcc",
+                  strokeWidth: "1.5",
+                  strokeOpacity: "0.9"
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("circle", { cx: "100", cy: "20", r: "2", fill: "#00ffcc", fillOpacity: "0.9" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "path",
+                {
+                  d: "M100,100 L100,20 A80,80,0,0,1,180,100 Z",
+                  fill: "rgba(0,255,204,0.04)"
+                }
+              )
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("circle", { cx: "100", cy: "100", r: "4", fill: "#00ffcc", fillOpacity: "0.7" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "circle",
+          {
+            cx: "65",
+            cy: "72",
+            r: "2.5",
+            fill: "#00ffcc",
+            fillOpacity: "0.6",
+            style: { animation: "twinkle 2.3s ease-in-out infinite" }
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "circle",
+          {
+            cx: "138",
+            cy: "115",
+            r: "2",
+            fill: "#00ffcc",
+            fillOpacity: "0.5",
+            style: { animation: "twinkle 3.1s ease-in-out infinite" }
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "circle",
+          {
+            cx: "120",
+            cy: "58",
+            r: "1.5",
+            fill: "#00ffcc",
+            fillOpacity: "0.4",
+            style: { animation: "twinkle 1.8s ease-in-out infinite" }
+          }
+        )
+      ]
+    }
+  ) });
+}
+function IntelTab() {
+  const [events2, setEvents] = reactExports.useState(
+    () => Array.from({ length: 8 }, (_2, i2) => generateEvent(i2))
+  );
+  const [subTab, setSubTab] = reactExports.useState("war_feed");
+  const idRef = reactExports.useRef(100);
+  const scrollRef = reactExports.useRef(null);
+  reactExports.useEffect(() => {
+    const interval = setInterval(() => {
+      const newEvent = generateEvent(idRef.current++);
+      setEvents((prev) => [newEvent, ...prev].slice(0, 40));
+    }, 2800);
+    return () => clearInterval(interval);
+  }, []);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "div",
+    {
+      "data-ocid": "intel.panel",
+      className: "flex flex-col h-full overflow-hidden",
+      style: { color: "rgba(180,220,220,0.85)" },
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            className: "flex items-center justify-between px-4 py-2 shrink-0",
+            style: { borderBottom: "1px solid rgba(0,255,204,0.15)" },
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(Radio, { size: 14, style: { color: "#00ffcc" } }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "span",
+                  {
+                    className: "text-xs font-bold uppercase tracking-widest",
+                    style: { color: "#00ffcc" },
+                    children: "INTEL FEED"
+                  }
+                )
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1.5", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "span",
+                  {
+                    className: "w-1.5 h-1.5 rounded-full",
+                    style: {
+                      background: "#00ffcc",
+                      animation: "pulse-glow 2s ease-in-out infinite"
+                    }
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "span",
+                  {
+                    className: "text-[10px] uppercase tracking-wider",
+                    style: { color: "rgba(0,255,204,0.6)" },
+                    children: "LIVE"
+                  }
+                )
+              ] })
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "div",
+          {
+            className: "flex shrink-0",
+            style: { borderBottom: "1px solid rgba(0,255,204,0.12)" },
+            children: [
+              { id: "war_feed", label: "WAR FEED" },
+              { id: "sub_parcels", label: "SUB-PARCELS" }
+            ].map(({ id: id2, label }) => {
+              const isActive = subTab === id2;
+              return /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "button",
+                {
+                  type: "button",
+                  "data-ocid": `intel.subtab.${id2}`,
+                  onClick: () => setSubTab(id2),
+                  className: "flex-1 py-2 text-[10px] font-bold uppercase tracking-widest transition-all",
+                  style: {
+                    color: isActive ? "#00ffcc" : "rgba(0,255,204,0.35)",
+                    background: isActive ? "rgba(0,255,204,0.06)" : "transparent",
+                    borderBottom: isActive ? "2px solid #00ffcc" : "2px solid transparent",
+                    boxShadow: isActive ? "0 2px 12px rgba(0,255,204,0.1)" : "none"
+                  },
+                  children: label
+                },
+                id2
+              );
+            })
+          }
+        ),
+        subTab === "sub_parcels" && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1 overflow-y-auto pt-3", children: /* @__PURE__ */ jsxRuntimeExports.jsx(SubParcelIntelView, {}) }),
+        subTab === "war_feed" && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
+            {
+              "data-ocid": "intel.classified_banner",
+              className: "mx-3 mt-3 rounded-lg p-3 shrink-0",
+              style: {
+                background: "rgba(255,68,68,0.06)",
+                border: "1px solid rgba(255,68,68,0.25)"
+              },
+              children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start gap-2", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  Lock,
+                  {
+                    size: 14,
+                    style: { color: "#ff4444", marginTop: 1, flexShrink: 0 }
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center gap-2 mb-1", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "span",
                     {
-                      width: "12",
-                      height: "12",
-                      viewBox: "0 0 12 12",
-                      fill: "none",
-                      "aria-hidden": "true",
-                      role: "img",
+                      className: "text-[10px] font-bold uppercase tracking-widest",
+                      style: { color: "#ff4444" },
+                      children: "CLASSIFIED — CLEARANCE LEVEL OMEGA"
+                    }
+                  ) }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "p",
+                    {
+                      className: "text-[10px] leading-relaxed",
+                      style: { color: "rgba(180,220,220,0.55)" },
+                      children: "COMBAT SYSTEMS, WEAPON STRIKE PACKAGES & BATTLE RESOLUTION INTELLIGENCE RESTRICTED PENDING OPERATIONAL LAUNCH."
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "div",
+                    {
+                      className: "mt-2 inline-flex items-center gap-1.5 px-2 py-0.5 rounded",
+                      style: {
+                        background: "rgba(255,68,68,0.12)",
+                        border: "1px solid rgba(255,68,68,0.3)"
+                      },
                       children: [
-                        /* @__PURE__ */ jsxRuntimeExports.jsx("title", { children: "FRNTR" }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(Shield, { size: 9, style: { color: "#ff4444" } }),
                         /* @__PURE__ */ jsxRuntimeExports.jsx(
-                          "polygon",
+                          "span",
                           {
-                            points: "6,1 11,3.5 11,8.5 6,11 1,8.5 1,3.5",
-                            fill: "none",
-                            stroke: "#00ffcc",
-                            strokeWidth: "1.2",
-                            opacity: "0.9"
-                          }
-                        ),
-                        /* @__PURE__ */ jsxRuntimeExports.jsx(
-                          "text",
-                          {
-                            x: "6",
-                            y: "7.5",
-                            textAnchor: "middle",
-                            fill: "#00ffcc",
-                            fontSize: "4.5",
-                            fontWeight: "bold",
-                            fontFamily: "monospace",
-                            children: "F"
+                            className: "text-[9px] font-bold uppercase tracking-widest",
+                            style: { color: "#ff4444" },
+                            children: "UNLOCKS IN V2.0"
                           }
                         )
+                      ]
+                    }
+                  )
+                ] })
+              ] })
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-4 px-3 py-3 shrink-0", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "div",
+              {
+                className: "rounded-xl p-2 flex-shrink-0",
+                style: {
+                  background: "rgba(0,255,204,0.04)",
+                  border: "1px solid rgba(0,255,204,0.12)"
+                },
+                children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(RadarSweep, {}),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "p",
+                    {
+                      className: "text-center text-[9px] uppercase tracking-widest mt-1",
+                      style: { color: "rgba(0,255,204,0.45)" },
+                      children: "GLOBAL SCAN ACTIVE"
+                    }
+                  )
+                ]
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-col gap-2 flex-1", children: [
+              {
+                label: "ACTIVE COMMANDERS",
+                value: "147",
+                icon: /* @__PURE__ */ jsxRuntimeExports.jsx(Users, { size: 10 })
+              },
+              {
+                label: "PLOTS MINTED",
+                value: "312 / 5,882",
+                icon: /* @__PURE__ */ jsxRuntimeExports.jsx(Globe, { size: 10 })
+              },
+              {
+                label: "FRNTR BURNED",
+                value: "48,291.0000",
+                icon: /* @__PURE__ */ jsxRuntimeExports.jsx(Zap, { size: 10 })
+              },
+              {
+                label: "EVENTS TODAY",
+                value: String(events2.length),
+                icon: /* @__PURE__ */ jsxRuntimeExports.jsx(Activity, { size: 10 })
+              }
+            ].map(({ label, value, icon }) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "div",
+              {
+                className: "rounded-lg px-2.5 py-1.5",
+                style: {
+                  background: "rgba(0,255,204,0.04)",
+                  border: "1px solid rgba(0,255,204,0.1)"
+                },
+                children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "div",
+                    {
+                      className: "flex items-center gap-1 mb-0.5",
+                      style: { color: "rgba(0,255,204,0.5)" },
+                      children: [
+                        icon,
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[9px] uppercase tracking-wider", children: label })
                       ]
                     }
                   ),
                   /* @__PURE__ */ jsxRuntimeExports.jsx(
                     "span",
                     {
-                      style: {
-                        fontSize: isMobile ? 9 : 8,
-                        color: "rgba(224,244,255,0.6)",
-                        letterSpacing: 1,
-                        textTransform: "uppercase"
-                      },
-                      children: "FRNTR"
+                      className: "text-xs font-bold",
+                      style: { color: "#00ffcc" },
+                      children: value
                     }
                   )
-                ] }),
+                ]
+              },
+              label
+            )) })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              className: "px-4 py-1.5 flex items-center gap-2 shrink-0",
+              style: {
+                borderTop: "1px solid rgba(0,255,204,0.1)",
+                borderBottom: "1px solid rgba(0,255,204,0.1)"
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(Activity, { size: 11, style: { color: "rgba(0,255,204,0.5)" } }),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "span",
                   {
-                    "data-ocid": "sidebar.frntr.row",
-                    style: {
-                      fontSize: isMobile ? 8 : 7.5,
-                      fontWeight: 700,
-                      color: CYAN$5,
-                      letterSpacing: 0.5,
-                      fontFamily: "monospace",
-                      textShadow: `0 0 6px ${CYAN$5}88`
-                    },
-                    children: fmtFrntr(player.frntBalance)
+                    className: "text-[10px] uppercase tracking-widest",
+                    style: { color: "rgba(0,255,204,0.5)" },
+                    children: "GLOBAL WAR FEED"
                   }
                 )
               ]
             }
-          ) }),
+          ),
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             "div",
             {
-              style: { height: 1, background: BORDER$5, margin: `0 ${sidebarPad}px` }
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { padding: `8px ${sidebarPad}px` }, children: [
-            sectionHeader("Resources"),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "div",
-              {
-                style: {
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: isMobile ? 7 : 5
-                },
-                children: RESOURCES.map(({ label, key, color: color2, icon }) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                  "div",
-                  {
-                    "data-ocid": `sidebar.${key}.row`,
-                    style: {
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between"
-                    },
-                    children: [
-                      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 5 }, children: [
+              ref: scrollRef,
+              "data-ocid": "intel.feed_list",
+              className: "flex-1 overflow-y-auto px-3 py-2 space-y-1.5",
+              children: events2.map((evt, idx) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "div",
+                {
+                  "data-ocid": `intel.feed.item.${idx + 1}`,
+                  className: "flex items-start gap-2.5 rounded-lg px-2.5 py-2 transition-all",
+                  style: {
+                    background: idx === 0 ? `${EVENT_COLORS[evt.kind]}0d` : "rgba(0,255,204,0.03)",
+                    border: idx === 0 ? `1px solid ${EVENT_COLORS[evt.kind]}33` : "1px solid rgba(0,255,204,0.07)"
+                  },
+                  children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "div",
+                      {
+                        className: "w-5 h-5 rounded flex items-center justify-center flex-shrink-0 mt-0.5",
+                        style: {
+                          background: `${EVENT_COLORS[evt.kind]}18`,
+                          color: EVENT_COLORS[evt.kind]
+                        },
+                        children: EVENT_ICONS[evt.kind]
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 min-w-0", children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-1", children: [
                         /* @__PURE__ */ jsxRuntimeExports.jsx(
-                          "div",
+                          "span",
                           {
-                            style: {
-                              width: 16,
-                              height: 16,
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              flexShrink: 0
-                            },
-                            children: icon
+                            className: "text-[10px] font-bold uppercase tracking-wider truncate",
+                            style: { color: EVENT_COLORS[evt.kind] },
+                            children: evt.message
                           }
                         ),
                         /* @__PURE__ */ jsxRuntimeExports.jsx(
                           "span",
                           {
-                            style: {
-                              fontSize: isMobile ? 9 : 8,
-                              color: "rgba(224,244,255,0.6)",
-                              letterSpacing: 1,
-                              textTransform: "uppercase"
-                            },
-                            children: label
+                            className: "text-[9px] flex-shrink-0",
+                            style: { color: "rgba(180,220,220,0.35)" },
+                            children: evt.timestamp
                           }
                         )
                       ] }),
                       /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "p",
+                        {
+                          className: "text-[10px] truncate mt-0.5",
+                          style: { color: "rgba(180,220,220,0.55)" },
+                          children: evt.detail
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
                         "span",
                         {
-                          style: {
-                            fontSize: isMobile ? 9 : 8,
-                            fontWeight: 700,
-                            color: color2,
-                            letterSpacing: 0.5,
-                            fontFamily: "monospace",
-                            textShadow: `0 0 6px ${color2}88`
-                          },
-                          children: fmtResource(player[key])
+                          className: "text-[9px] uppercase tracking-wider",
+                          style: { color: "rgba(0,255,204,0.3)" },
+                          children: evt.region
                         }
                       )
-                    ]
-                  },
-                  key
-                ))
-              }
-            )
-          ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "div",
-            {
-              style: { height: 1, background: BORDER$5, margin: `0 ${sidebarPad}px` }
+                    ] })
+                  ]
+                },
+                evt.id
+              ))
             }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { padding: `8px ${sidebarPad}px ${isMobile ? 14 : 10}px` }, children: [
-            sectionHeader("Quick Links"),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "flex", flexDirection: "column", gap: 1 }, children: QUICK_LINKS.map(({ label, Icon: Icon2, id: id2 }) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
-              "button",
-              {
-                type: "button",
-                "data-ocid": `sidebar.${id2}.link`,
-                onClick: () => {
-                  console.log("nav:", label);
-                  if (isMobile) setMobileOpen(false);
-                },
-                style: {
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 7,
-                  padding: isMobile ? "7px 8px" : "5px 6px",
-                  background: "transparent",
-                  border: "1px solid transparent",
-                  borderRadius: 3,
-                  cursor: "pointer",
-                  transition: "background 0.15s, border-color 0.15s",
-                  textAlign: "left",
-                  width: "100%"
-                },
-                onMouseEnter: (e) => {
-                  e.currentTarget.style.background = "rgba(0,255,204,0.07)";
-                  e.currentTarget.style.borderColor = BORDER$5;
-                },
-                onMouseLeave: (e) => {
-                  e.currentTarget.style.background = "transparent";
-                  e.currentTarget.style.borderColor = "transparent";
-                },
-                children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(Icon2, { size: isMobile ? 13 : 11, color: CYAN_DIM$5 }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "span",
-                    {
-                      style: {
-                        fontSize: isMobile ? 9.5 : 8,
-                        color: TEXT$3,
-                        letterSpacing: 1.2,
-                        textTransform: "uppercase",
-                        fontWeight: 500
-                      },
-                      children: label
-                    }
-                  )
-                ]
-              },
-              id2
-            )) })
-          ] })
-        ]
-      }
-    )
-  ] });
-}
-function usePlayerSync() {
-  const { actor, isFetching } = useActor(createActor);
-  reactExports.useEffect(() => {
-    if (!actor || isFetching) return;
-    const syncLeaderboard = async () => {
-      try {
-        const data = await actor.getLeaderboard(50n);
-        const mapped = data.map((e) => ({
-          rank: Number(e.rank),
-          name: e.username ?? `${e.principal.slice(0, 8)}...${e.principal.slice(-4)}`,
-          plotsOwned: Number(e.plotsOwned),
-          frntEarned: Number(e.frntBalance),
-          victories: 0
-        }));
-        useGameStore.setState({ leaderboard: mapped });
-      } catch {
-      }
-    };
-    const syncPlayer = async () => {
-      try {
-        const state2 = await actor.getPlayerState();
-        if (!state2) return;
-        useGameStore.setState((s2) => ({
-          player: {
-            ...s2.player,
-            frntBalance: Number(state2.frntBalance),
-            iron: Number(state2.iron),
-            fuel: Number(state2.fuel),
-            crystal: Number(state2.crystal)
-            // plotsOwned is local array; backend returns bigint count, not array
-          },
-          rankStats: {
-            ...s2.rankStats,
-            combatWins: Number(state2.combatVictories)
-          },
-          serverPassiveIncomePerDay: Number(state2.passiveIncomePerDay),
-          totalFRNTRBurned: Number(state2.totalFRNTRBurned)
-        }));
-      } catch {
-      }
-    };
-    void syncPlayer();
-    void syncLeaderboard();
-    const interval = setInterval(() => {
-      void syncPlayer();
-      void syncLeaderboard();
-    }, 1e4);
-    return () => {
-      clearInterval(interval);
-    };
-  }, [actor, isFetching]);
-}
-function makeStep(label, status, detail) {
-  return { step: label, status, detail, ts: /* @__PURE__ */ new Date() };
-}
-function createPurchaseLog(plotId) {
-  return {
-    id: `${plotId}-${Date.now()}`,
-    timestamp: /* @__PURE__ */ new Date(),
-    plotId,
-    steps: [
-      makeStep("1. ICP Payment Sent", "pending", "Awaiting confirmation"),
-      makeStep("2. Plot Minting", "pending", "Awaiting confirmation"),
-      makeStep("3. Revenue Split", "pending", "Awaiting confirmation"),
-      makeStep("4. FRNTR Updated", "pending", "Awaiting confirmation"),
-      makeStep("5. Leaderboard Refreshed", "pending", "Awaiting confirmation")
-    ]
-  };
-}
-function pushPurchaseLog(log2) {
-  useGameStore.getState().addPurchaseDebugLog(log2);
-}
-async function purchasePlotWithDebug(actor, plotId) {
-  const log2 = createPurchaseLog(plotId);
-  pushPurchaseLog(log2);
-  try {
-    const result = await actor.purchasePlot(plotId);
-    log2.steps[0] = makeStep("1. ICP Payment Sent", "success", "Confirmed");
-    log2.steps[1] = makeStep("2. Plot Minting", "success", "Minted");
-    pushPurchaseLog(log2);
-    const devAmt = (result == null ? void 0 : result.devAmount) ?? "?";
-    const lbAmt = (result == null ? void 0 : result.leaderboardAmount) ?? "?";
-    const liqAmt = (result == null ? void 0 : result.liquidityAmount) ?? "?";
-    log2.steps[2] = makeStep(
-      "3. Revenue Split",
-      "success",
-      `Dev ${devAmt} | LB ${lbAmt} | Liq ${liqAmt}`
-    );
-    pushPurchaseLog(log2);
-    try {
-      const state2 = await actor.getPlayerState();
-      if (state2) {
-        useGameStore.setState((s2) => ({
-          player: {
-            ...s2.player,
-            frntBalance: Number(state2.frntBalance),
-            iron: Number(state2.iron),
-            fuel: Number(state2.fuel),
-            crystal: Number(state2.crystal)
-          }
-        }));
-      }
-      log2.steps[3] = makeStep("4. FRNTR Updated", "success", "Synced");
-    } catch {
-      log2.steps[3] = makeStep("4. FRNTR Updated", "error", "Sync failed");
+          )
+        ] })
+      ]
     }
-    pushPurchaseLog(log2);
-    try {
-      const data = await actor.getLeaderboard(50n);
-      const mapped = data.map((e) => ({
-        rank: Number(e.rank),
-        name: e.username ?? `${e.principal.slice(0, 8)}...${e.principal.slice(-4)}`,
-        plotsOwned: Number(e.plotsOwned),
-        frntEarned: Number(e.frntBalance),
-        victories: 0
-      }));
-      useGameStore.setState({ leaderboard: mapped });
-      log2.steps[4] = makeStep(
-        "5. Leaderboard Refreshed",
-        "success",
-        `${mapped.length} entries`
-      );
-    } catch {
-      log2.steps[4] = makeStep(
-        "5. Leaderboard Refreshed",
-        "error",
-        "Fetch failed"
-      );
-    }
-    pushPurchaseLog(log2);
-    return log2.steps.every((s2) => s2.status === "success");
-  } catch (err) {
-    log2.steps[0] = makeStep(
-      "1. ICP Payment Sent",
-      "error",
-      (err == null ? void 0 : err.message) ?? "Rejected"
-    );
-    pushPurchaseLog(log2);
-    return false;
-  }
+  );
 }
 function usePurchasePlot() {
   const { actor } = useActor(createActor);
@@ -100281,7 +101834,8 @@ function usePurchasePlot() {
       return result;
     }
     try {
-      const success = await purchasePlotWithDebug(actor, String(plotId));
+      const res = await actor.purchasePlot(BigInt(plotId));
+      const success = res.__kind__ === "ok";
       const message = success ? `PLOT #${plotId} ACQUIRED` : `PLOT #${plotId} PURCHASE FAILED`;
       if (success) {
         const unlockTs = Date.now() + 4 * 60 * 60 * 1e3;
@@ -100327,9 +101881,9 @@ function usePurchasePlot() {
   }
   return { purchasePlot, isPurchasing, lastResult };
 }
-const CYAN$4 = "#00ffcc";
-const CYAN_DIM$4 = "rgba(0,255,204,0.5)";
-const BORDER$4 = "rgba(0,255,204,0.15)";
+const CYAN$6 = "#00ffcc";
+const CYAN_DIM$6 = "rgba(0,255,204,0.5)";
+const BORDER$6 = "rgba(0,255,204,0.15)";
 const BIOME_BADGE_COLORS = {
   Arctic: "#a8d8ea",
   Desert: "#e8c97a",
@@ -100413,7 +101967,7 @@ function SurveyReport({
       {
         style: {
           fontSize: 9,
-          color: CYAN_DIM$4,
+          color: CYAN_DIM$6,
           letterSpacing: 2,
           fontFamily: "monospace",
           marginBottom: 8
@@ -100512,7 +102066,7 @@ function SurveyReport({
         style: {
           marginBottom: 8,
           fontSize: 8,
-          color: CYAN$4,
+          color: CYAN$6,
           fontFamily: "monospace",
           letterSpacing: 1,
           padding: "3px 6px",
@@ -100545,7 +102099,7 @@ function SurveyReport({
             {
               style: {
                 fontSize: 7,
-                color: CYAN_DIM$4,
+                color: CYAN_DIM$6,
                 letterSpacing: 2,
                 fontFamily: "monospace",
                 marginBottom: 5
@@ -100795,7 +102349,7 @@ function MapBottomSheet({
       nextStep: "Select weapon and FIRE."
     });
   }
-  const biomeBadgeColor = plot ? BIOME_BADGE_COLORS[plot.biome] ?? CYAN$4 : CYAN$4;
+  const biomeBadgeColor = plot ? BIOME_BADGE_COLORS[plot.biome] ?? CYAN$6 : CYAN$6;
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx("style", { children: `
         @keyframes mapGlobePulse {
@@ -100843,7 +102397,7 @@ function MapBottomSheet({
                       {
                         size: 48,
                         style: {
-                          color: CYAN$4,
+                          color: CYAN$6,
                           animation: "mapGlobePulse 2s ease-in-out infinite"
                         }
                       }
@@ -100853,7 +102407,7 @@ function MapBottomSheet({
                       {
                         style: {
                           fontSize: 10,
-                          color: CYAN_DIM$4,
+                          color: CYAN_DIM$6,
                           letterSpacing: 2,
                           textAlign: "center",
                           maxWidth: 200,
@@ -100883,7 +102437,7 @@ function MapBottomSheet({
                             style: {
                               fontSize: 14,
                               fontWeight: 700,
-                              color: CYAN$4,
+                              color: CYAN$6,
                               letterSpacing: 1,
                               fontFamily: "monospace"
                             },
@@ -100918,7 +102472,7 @@ function MapBottomSheet({
                     {
                       style: {
                         fontSize: 10,
-                        color: CYAN_DIM$4,
+                        color: CYAN_DIM$6,
                         letterSpacing: 1,
                         marginBottom: 3,
                         fontFamily: "monospace"
@@ -101004,13 +102558,13 @@ function MapBottomSheet({
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "div",
                   {
-                    style: { height: 1, background: BORDER$4, marginBottom: 12 }
+                    style: { height: 1, background: BORDER$6, marginBottom: 12 }
                   }
                 ),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "div",
                   {
-                    style: { height: 1, background: BORDER$4, marginBottom: 12 }
+                    style: { height: 1, background: BORDER$6, marginBottom: 12 }
                   }
                 ),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -101046,7 +102600,7 @@ function MapBottomSheet({
             {
               style: {
                 padding: "12px 16px",
-                borderTop: `1px solid ${BORDER$4}`,
+                borderTop: `1px solid ${BORDER$6}`,
                 flexShrink: 0
               },
               children: [
@@ -101103,10 +102657,10 @@ function MapBottomSheet({
     )
   ] });
 }
-const CYAN$3 = "#00ffcc";
-const CYAN_DIM$3 = "rgba(0,255,204,0.35)";
-const BORDER$3 = "rgba(0,255,204,0.22)";
-const TEXT$2 = "#e0f4ff";
+const CYAN$5 = "#00ffcc";
+const CYAN_DIM$5 = "rgba(0,255,204,0.35)";
+const BORDER$5 = "rgba(0,255,204,0.22)";
+const TEXT$3 = "#e0f4ff";
 const TEXT_DIM$1 = "rgba(224,244,255,0.55)";
 const GOLD$1 = "#ffd700";
 const PHASES = [
@@ -101138,7 +102692,26 @@ const PHASES = [
 function PlayNowOverlay({ onClose, onLogin }) {
   const [icpExpanded, setIcpExpanded] = reactExports.useState(false);
   const player = useGameStore((s2) => s2.player);
-  const isLoggedIn = !!player.principal;
+  const setAuth = useGameStore((s2) => s2.setAuth);
+  const { login, isAuthenticated, identity: identity2 } = useInternetIdentity();
+  const isLoggedIn = isAuthenticated || !!player.principal;
+  reactExports.useEffect(() => {
+    if (isAuthenticated && identity2) {
+      const principal = identity2.getPrincipal().toText();
+      setAuth(principal);
+      useGameStore.setState((s2) => ({
+        player: { ...s2.player, principal }
+      }));
+      onLogin();
+    }
+  }, [isAuthenticated, identity2, setAuth, onLogin]);
+  const handleLogin = () => {
+    if (isAuthenticated) {
+      onClose();
+    } else {
+      login();
+    }
+  };
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "div",
     {
@@ -101222,13 +102795,13 @@ function PlayNowOverlay({ onClose, onLogin }) {
                     padding: "4px 12px",
                     borderRadius: 20,
                     marginBottom: 14,
-                    border: `1px solid ${CYAN$3}44`,
+                    border: `1px solid ${CYAN$5}44`,
                     fontSize: 8,
                     letterSpacing: 3,
-                    color: CYAN$3,
+                    color: CYAN$5,
                     background: "rgba(0,255,204,0.07)",
                     textTransform: "uppercase",
-                    textShadow: `0 0 8px ${CYAN$3}`
+                    textShadow: `0 0 8px ${CYAN$5}`
                   },
                   children: "v1.0 NOW LIVE ON ICP"
                 }
@@ -101239,17 +102812,17 @@ function PlayNowOverlay({ onClose, onLogin }) {
                   style: {
                     fontSize: 28,
                     fontWeight: 900,
-                    color: CYAN$3,
+                    color: CYAN$5,
                     letterSpacing: 4,
                     textTransform: "uppercase",
-                    textShadow: `0 0 30px ${CYAN$3}, 0 0 60px ${CYAN$3}44`,
+                    textShadow: `0 0 30px ${CYAN$5}, 0 0 60px ${CYAN$5}44`,
                     lineHeight: 1.1,
                     marginBottom: 8
                   },
                   children: [
                     "FRONTIER:",
                     /* @__PURE__ */ jsxRuntimeExports.jsx("br", {}),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: TEXT$2 }, children: "MISSILE HORIZON" })
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: TEXT$3 }, children: "MISSILE HORIZON" })
                   ]
                 }
               ),
@@ -101270,8 +102843,8 @@ function PlayNowOverlay({ onClose, onLogin }) {
                 {
                   style: {
                     background: "rgba(0,20,40,0.55)",
-                    border: `1px solid ${BORDER$3}`,
-                    borderLeft: `3px solid ${CYAN$3}`,
+                    border: `1px solid ${BORDER$5}`,
+                    borderLeft: `3px solid ${CYAN$5}`,
                     borderRadius: 8,
                     padding: "12px 14px",
                     marginBottom: 20
@@ -101282,7 +102855,7 @@ function PlayNowOverlay({ onClose, onLogin }) {
                       {
                         style: {
                           fontSize: 8,
-                          color: CYAN$3,
+                          color: CYAN$5,
                           letterSpacing: 3,
                           marginBottom: 8,
                           fontWeight: 700
@@ -101302,7 +102875,7 @@ function PlayNowOverlay({ onClose, onLogin }) {
                         children: [
                           "The Internet Computer has mapped Earth into",
                           " ",
-                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$3 }, children: "5,882 hex plots" }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$5 }, children: "5,882 hex plots" }),
                           ". Each plot is a sovereign NFT — yours to own, mine, upgrade, and defend. FRNTR is the lifeblood of Frontier:",
                           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: GOLD$1 }, children: " 10 billion tokens" }),
                           ", 5B pre-minted and 5B mineable only by landowners over 3–5 years. No central server. No middleman. Fully on-chain, forever."
@@ -101336,7 +102909,7 @@ function PlayNowOverlay({ onClose, onLogin }) {
                       padding: "8px 10px",
                       borderRadius: 6,
                       background: phase.active ? "rgba(0,255,204,0.07)" : "rgba(255,255,255,0.02)",
-                      border: `1px solid ${phase.active ? `${CYAN$3}44` : BORDER$3}`
+                      border: `1px solid ${phase.active ? `${CYAN$5}44` : BORDER$5}`
                     },
                     children: [
                       /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -101349,8 +102922,8 @@ function PlayNowOverlay({ onClose, onLogin }) {
                             fontWeight: 700,
                             letterSpacing: 1.5,
                             background: phase.active ? "rgba(0,255,204,0.2)" : "rgba(255,255,255,0.04)",
-                            border: `1px solid ${phase.active ? CYAN$3 : BORDER$3}`,
-                            color: phase.active ? CYAN$3 : TEXT_DIM$1,
+                            border: `1px solid ${phase.active ? CYAN$5 : BORDER$5}`,
+                            color: phase.active ? CYAN$5 : TEXT_DIM$1,
                             flexShrink: 0,
                             marginTop: 1
                           },
@@ -101364,12 +102937,12 @@ function PlayNowOverlay({ onClose, onLogin }) {
                             style: {
                               fontSize: 10,
                               fontWeight: 700,
-                              color: phase.active ? TEXT$2 : TEXT_DIM$1,
+                              color: phase.active ? TEXT$3 : TEXT_DIM$1,
                               marginBottom: 2
                             },
                             children: [
                               phase.label,
-                              phase.active && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { marginLeft: 6, fontSize: 7, color: CYAN$3 }, children: "● LIVE" })
+                              phase.active && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { marginLeft: 6, fontSize: 7, color: CYAN$5 }, children: "● LIVE" })
                             ]
                           }
                         ),
@@ -101397,16 +102970,16 @@ function PlayNowOverlay({ onClose, onLogin }) {
                     padding: "14px",
                     borderRadius: 10,
                     background: "linear-gradient(135deg, rgba(0,255,204,0.25), rgba(0,255,204,0.12))",
-                    border: `2px solid ${CYAN$3}`,
-                    color: CYAN$3,
+                    border: `2px solid ${CYAN$5}`,
+                    color: CYAN$5,
                     fontSize: 13,
                     fontWeight: 900,
                     letterSpacing: 3,
                     cursor: "pointer",
                     marginBottom: 12,
                     textTransform: "uppercase",
-                    boxShadow: `0 0 24px ${CYAN$3}44`,
-                    textShadow: `0 0 10px ${CYAN$3}`
+                    boxShadow: `0 0 24px ${CYAN$5}44`,
+                    textShadow: `0 0 10px ${CYAN$5}`
                   },
                   children: "ENTER THE FRONTIER →"
                 }
@@ -101415,22 +102988,22 @@ function PlayNowOverlay({ onClose, onLogin }) {
                 {
                   type: "button",
                   "data-ocid": "playnow.primary_button",
-                  onClick: onLogin,
+                  onClick: handleLogin,
                   style: {
                     width: "100%",
                     padding: "14px",
                     borderRadius: 10,
                     background: "linear-gradient(135deg, rgba(0,255,204,0.25), rgba(0,255,204,0.12))",
-                    border: `2px solid ${CYAN$3}`,
-                    color: CYAN$3,
+                    border: `2px solid ${CYAN$5}`,
+                    color: CYAN$5,
                     fontSize: 13,
                     fontWeight: 900,
                     letterSpacing: 3,
                     cursor: "pointer",
                     marginBottom: 12,
                     textTransform: "uppercase",
-                    boxShadow: `0 0 24px ${CYAN$3}44`,
-                    textShadow: `0 0 10px ${CYAN$3}`
+                    boxShadow: `0 0 24px ${CYAN$5}44`,
+                    textShadow: `0 0 10px ${CYAN$5}`
                   },
                   children: "CONNECT WITH INTERNET IDENTITY"
                 }
@@ -101445,7 +103018,7 @@ function PlayNowOverlay({ onClose, onLogin }) {
                     width: "100%",
                     padding: "10px",
                     background: "transparent",
-                    border: `1px solid ${BORDER$3}`,
+                    border: `1px solid ${BORDER$5}`,
                     borderRadius: 8,
                     color: TEXT_DIM$1,
                     fontSize: 10,
@@ -101460,7 +103033,7 @@ function PlayNowOverlay({ onClose, onLogin }) {
                 "div",
                 {
                   style: {
-                    border: `1px solid ${BORDER$3}`,
+                    border: `1px solid ${BORDER$5}`,
                     borderRadius: 8,
                     overflow: "hidden"
                   },
@@ -101488,13 +103061,13 @@ function PlayNowOverlay({ onClose, onLogin }) {
                               style: {
                                 fontSize: 9,
                                 fontWeight: 700,
-                                color: CYAN$3,
+                                color: CYAN$5,
                                 letterSpacing: 2
                               },
                               children: "WHAT IS ICP?"
                             }
                           ),
-                          icpExpanded ? /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronUp, { size: 14, color: CYAN$3 }) : /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronDown, { size: 14, color: CYAN_DIM$3 })
+                          icpExpanded ? /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronUp, { size: 14, color: CYAN$5 }) : /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronDown, { size: 14, color: CYAN_DIM$5 })
                         ]
                       }
                     ),
@@ -101504,7 +103077,7 @@ function PlayNowOverlay({ onClose, onLogin }) {
                         style: {
                           padding: "12px 14px",
                           background: "rgba(0,10,20,0.5)",
-                          borderTop: `1px solid ${BORDER$3}`
+                          borderTop: `1px solid ${BORDER$5}`
                         },
                         children: [
                           /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -101519,7 +103092,7 @@ function PlayNowOverlay({ onClose, onLogin }) {
                               children: [
                                 "The",
                                 " ",
-                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$3 }, children: "Internet Computer Protocol (ICP)" }),
+                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$5 }, children: "Internet Computer Protocol (ICP)" }),
                                 " ",
                                 "is a decentralized blockchain that runs at web speed. Unlike traditional blockchains, ICP hosts entire applications on-chain — no AWS, no Google Cloud. Every smart contract (called a canister) is permanently on the network. Frontier uses ICP so that your land, your tokens, and your game data are owned by you, stored on the blockchain, and cannot be taken down by any company or government."
                               ]
@@ -101537,7 +103110,7 @@ function PlayNowOverlay({ onClose, onLogin }) {
                                 gap: 4,
                                 marginTop: 10,
                                 fontSize: 9,
-                                color: CYAN$3,
+                                color: CYAN$5,
                                 textDecoration: "none"
                               },
                               children: [
@@ -102115,9 +103688,9 @@ function getCommander(instanceId) {
     image: rank.image
   };
 }
-const CYAN$2 = "#00ffcc";
-const CYAN_DIM$2 = "rgba(0,255,204,0.5)";
-const BORDER$2 = "rgba(0,255,204,0.2)";
+const CYAN$4 = "#00ffcc";
+const CYAN_DIM$4 = "rgba(0,255,204,0.5)";
+const BORDER$4 = "rgba(0,255,204,0.2)";
 function PlotHoverCard({
   plotId,
   owner,
@@ -102135,7 +103708,7 @@ function PlotHoverCard({
   }, []);
   const isTarget = action === "TARGET LOCKED";
   const isOwned = action === "TERRITORY ACQUIRED" || action === "YOU OWN THIS";
-  const actionColor = isTarget ? "#ef4444" : CYAN$2;
+  const actionColor = isTarget ? "#ef4444" : CYAN$4;
   const assignedInstanceId = commanderAssignments == null ? void 0 : commanderAssignments[plotId];
   const commander = assignedInstanceId ? getCommander(assignedInstanceId) : null;
   const ownedInstance = ownedCommanders == null ? void 0 : ownedCommanders.find(
@@ -102143,7 +103716,7 @@ function PlotHoverCard({
   );
   const hasWings = ownedInstance ? commanderHasWings(ownedInstance) : false;
   const rankImage = ownedInstance ? ((_b3 = (_a3 = getArchetype(ownedInstance.archetypeId)) == null ? void 0 : _a3.rankProgression[ownedInstance.currentRankIndex]) == null ? void 0 : _b3.image) ?? null : null;
-  const tierColor = commander ? TIER_COLORS[commander.tier] ?? CYAN$2 : CYAN$2;
+  const tierColor = commander ? TIER_COLORS[commander.tier] ?? CYAN$4 : CYAN$4;
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "div",
     {
@@ -102157,7 +103730,7 @@ function PlotHoverCard({
         background: "rgba(4,12,24,0.97)",
         backdropFilter: "blur(16px)",
         WebkitBackdropFilter: "blur(16px)",
-        border: `1px solid ${BORDER$2}`,
+        border: `1px solid ${BORDER$4}`,
         borderTop: `2px solid ${actionColor}`,
         borderRadius: 10,
         padding: "14px 16px",
@@ -102185,9 +103758,9 @@ function PlotHoverCard({
                     style: {
                       fontSize: 9,
                       fontWeight: 700,
-                      color: CYAN$2,
+                      color: CYAN$4,
                       background: "rgba(0,255,204,0.1)",
-                      border: `1px solid ${BORDER$2}`,
+                      border: `1px solid ${BORDER$4}`,
                       borderRadius: 4,
                       padding: "2px 8px",
                       letterSpacing: 1,
@@ -102224,7 +103797,7 @@ function PlotHoverCard({
                     background: "none",
                     border: "none",
                     cursor: "pointer",
-                    color: CYAN_DIM$2,
+                    color: CYAN_DIM$4,
                     padding: 4,
                     display: "flex",
                     alignItems: "center"
@@ -102261,7 +103834,7 @@ function PlotHoverCard({
                 {
                   style: {
                     fontSize: 8,
-                    color: CYAN_DIM$2,
+                    color: CYAN_DIM$4,
                     letterSpacing: 1,
                     fontFamily: "monospace"
                   },
@@ -102418,7 +103991,7 @@ function PlotHoverCard({
                 {
                   style: {
                     fontSize: 8,
-                    color: CYAN$2,
+                    color: CYAN$4,
                     fontFamily: "monospace",
                     letterSpacing: 0.5,
                     opacity: 0.85
@@ -102500,9 +104073,9 @@ function PlotHoverCard({
                     flex: 1,
                     padding: "8px 10px",
                     background: "rgba(0,255,204,0.12)",
-                    border: `1px solid ${CYAN$2}55`,
+                    border: `1px solid ${CYAN$4}55`,
                     borderRadius: 6,
-                    color: CYAN$2,
+                    color: CYAN$4,
                     fontSize: 9,
                     fontWeight: 700,
                     letterSpacing: 1.5,
@@ -102534,6 +104107,523 @@ function PlotHoverCard({
                     /* @__PURE__ */ jsxRuntimeExports.jsx("br", {}),
                     "GENERATING"
                   ]
+                }
+              )
+            ]
+          }
+        )
+      ]
+    }
+  );
+}
+const CYAN$3 = "#00ffcc";
+const CYAN_DIM$3 = "rgba(0,255,204,0.35)";
+const BORDER$3 = "rgba(0,255,204,0.22)";
+function PrincipalBadge() {
+  const { isAuthenticated, clear: clear2 } = useInternetIdentity();
+  const { actor } = useActor(createActor);
+  const player = useGameStore((s2) => s2.player);
+  const setAuth = useGameStore((s2) => s2.setAuth);
+  const [displayText, setDisplayText] = reactExports.useState(null);
+  const [isAuthed, setIsAuthed] = reactExports.useState(false);
+  reactExports.useEffect(() => {
+    if (!actor) return;
+    const fetchPrincipal = async () => {
+      try {
+        const data = await actor.getPrincipal();
+        setDisplayText(data.short);
+        setIsAuthed(data.isAuthed);
+        if (data.isAuthed && data.full) {
+          setAuth(data.full);
+          useGameStore.setState((s2) => ({
+            player: { ...s2.player, principal: data.full }
+          }));
+        }
+      } catch {
+        if (player.principal) {
+          const p2 = player.principal;
+          setDisplayText(`${p2.slice(0, 8)}...${p2.slice(-4)}`);
+          setIsAuthed(true);
+        }
+      }
+    };
+    void fetchPrincipal();
+  }, [actor, player.principal, setAuth]);
+  const isConnected = isAuthed || !!player.principal;
+  const text = displayText ?? (player.principal ? `${player.principal.slice(0, 8)}...${player.principal.slice(-4)}` : null);
+  if (!isConnected || !text) return null;
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "div",
+    {
+      "data-ocid": "principal.badge",
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "5px 10px",
+        borderRadius: 6,
+        background: "rgba(0,255,204,0.07)",
+        border: `1px solid ${BORDER$3}`,
+        backdropFilter: "blur(10px)",
+        WebkitBackdropFilter: "blur(10px)"
+      },
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "div",
+          {
+            style: {
+              width: 7,
+              height: 7,
+              borderRadius: "50%",
+              background: isAuthenticated ? "#00ff88" : CYAN_DIM$3,
+              boxShadow: isAuthenticated ? "0 0 6px #00ff88" : "none",
+              flexShrink: 0
+            }
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "span",
+          {
+            className: "font-mono",
+            title: player.principal ?? void 0,
+            style: {
+              fontSize: 9,
+              color: CYAN$3,
+              fontWeight: 700,
+              letterSpacing: 0.5,
+              whiteSpace: "nowrap",
+              cursor: "help"
+            },
+            children: text
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            type: "button",
+            "data-ocid": "principal.logout_button",
+            onClick: () => {
+              clear2();
+              setAuth(null);
+              setDisplayText(null);
+              setIsAuthed(false);
+            },
+            title: "Logout",
+            style: {
+              background: "transparent",
+              border: "none",
+              cursor: "pointer",
+              padding: 2,
+              color: CYAN_DIM$3,
+              display: "flex",
+              alignItems: "center"
+            },
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(LogOut, { size: 10 })
+          }
+        )
+      ]
+    }
+  );
+}
+const CYAN$2 = "#00ffcc";
+const CYAN_DIM$2 = "rgba(0,255,204,0.35)";
+const BORDER$2 = "rgba(0,255,204,0.22)";
+const TEXT$2 = "#e0f4ff";
+const INITIAL_CHECKS = [
+  {
+    label: "1. Auth — get principal",
+    status: "idle",
+    detail: "",
+    durationMs: 0
+  },
+  {
+    label: "2. Faucet — claim tokens",
+    status: "idle",
+    detail: "",
+    durationMs: 0
+  },
+  {
+    label: "3. Player state — fetch balances",
+    status: "idle",
+    detail: "",
+    durationMs: 0
+  },
+  {
+    label: "4. Plot count — canister seeded",
+    status: "idle",
+    detail: "",
+    durationMs: 0
+  },
+  {
+    label: "5. Plot owners — sync ownership",
+    status: "idle",
+    detail: "",
+    durationMs: 0
+  },
+  {
+    label: "6. Purchase plot — buy plot #1",
+    status: "idle",
+    detail: "",
+    durationMs: 0
+  },
+  {
+    label: "7. FRNTR accrual — balance updated",
+    status: "idle",
+    detail: "",
+    durationMs: 0
+  },
+  {
+    label: "8. Generator tiers — fetch tiers",
+    status: "idle",
+    detail: "",
+    durationMs: 0
+  },
+  {
+    label: "9. Global stats — fetch stats",
+    status: "idle",
+    detail: "",
+    durationMs: 0
+  },
+  {
+    label: "10. Leaderboard — fetch entries",
+    status: "idle",
+    detail: "",
+    durationMs: 0
+  }
+];
+function StressTestPanel() {
+  const [open, setOpen] = reactExports.useState(false);
+  const [checks, setChecks] = reactExports.useState(INITIAL_CHECKS);
+  const [running2, setRunning] = reactExports.useState(false);
+  const { actor } = useActor(createActor);
+  const { isAuthenticated } = useInternetIdentity();
+  function updateCheck(index2, patch) {
+    setChecks(
+      (prev) => prev.map((c2, i2) => i2 === index2 ? { ...c2, ...patch } : c2)
+    );
+  }
+  async function runCheck(index2, fn, validate) {
+    updateCheck(index2, {
+      status: "running",
+      detail: "running…",
+      durationMs: 0
+    });
+    const t0 = performance.now();
+    try {
+      const result = await fn();
+      const detail = validate(result);
+      updateCheck(index2, {
+        status: "pass",
+        detail,
+        durationMs: Math.round(performance.now() - t0)
+      });
+      return result;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      updateCheck(index2, {
+        status: "fail",
+        detail: msg,
+        durationMs: Math.round(performance.now() - t0)
+      });
+      return null;
+    }
+  }
+  const handleRunAll = async () => {
+    if (!actor || running2) return;
+    setRunning(true);
+    setChecks(
+      INITIAL_CHECKS.map((c2) => ({ ...c2, status: "idle" }))
+    );
+    await runCheck(
+      0,
+      () => actor.getPrincipal(),
+      (r2) => `${r2.full.slice(0, 12)}… authed=${r2.isAuthed}`
+    );
+    await runCheck(
+      1,
+      () => actor.testFaucetV2(),
+      (r2) => r2.__kind__ === "ok" ? `+${Number(r2.ok.frntGranted)} FRNTR +${Number(r2.ok.icpGranted)} ICP` : `err: ${r2.err}`
+    );
+    const playerState = await runCheck(
+      2,
+      () => actor.getPlayerState(),
+      (r2) => `FRNTR=${Number(r2.frntBalance)} plots=${Number(r2.plotsOwned)}`
+    );
+    await runCheck(
+      3,
+      () => actor.getPlotCount(),
+      (r2) => `${Number(r2)} plots on-chain`
+    );
+    await runCheck(
+      4,
+      () => actor.getAllPlotOwners(),
+      (r2) => `${r2.length} owned plots`
+    );
+    const purchaseRes = await runCheck(
+      5,
+      () => actor.purchasePlot(1n),
+      (r2) => r2.__kind__ === "ok" ? `ok: ${r2.ok}` : `err: ${r2.err}`
+    );
+    if ((purchaseRes == null ? void 0 : purchaseRes.__kind__) !== "ok") {
+      updateCheck(6, {
+        status: "fail",
+        detail: "Purchase prerequisite failed",
+        durationMs: 0
+      });
+    } else {
+      await runCheck(
+        6,
+        async () => {
+          const before = playerState ? Number(playerState.frntBalance) : 0;
+          const after = await actor.getPlayerState();
+          return {
+            before,
+            after: Number(after.frntBalance),
+            diff: Number(after.frntBalance) - before
+          };
+        },
+        (r2) => `before=${r2.before} after=${r2.after} Δ=${r2.diff}`
+      );
+    }
+    await runCheck(
+      7,
+      () => actor.getCoreGeneratorTiers(),
+      (r2) => `${r2.length} tiers, tier1 cost=${r2[0] ? Number(r2[0].costFRNTR) : "?"} FRNTR`
+    );
+    await runCheck(
+      8,
+      () => actor.getGlobalStats(),
+      (r2) => `supply=${Number(r2.circulatingSupply)} plots=${Number(r2.totalPlotsOwned)} players=${Number(r2.activePlayers)}`
+    );
+    await runCheck(
+      9,
+      () => actor.getLeaderboard(10n),
+      (r2) => `${r2.length} entries`
+    );
+    setRunning(false);
+  };
+  const handleReset = async () => {
+    if (!actor || running2) return;
+    setRunning(true);
+    try {
+      const res = await actor.resetTestState();
+      const detail = res.__kind__ === "ok" ? res.ok : res.err;
+      setChecks(
+        INITIAL_CHECKS.map(
+          (c2, i2) => i2 === 0 ? { ...c2, status: res.__kind__ === "ok" ? "pass" : "fail", detail } : { ...c2, status: "idle", detail: "" }
+        )
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setChecks(
+        INITIAL_CHECKS.map(
+          (c2, i2) => i2 === 0 ? { ...c2, status: "fail", detail: msg } : { ...c2, status: "idle", detail: "" }
+        )
+      );
+    } finally {
+      setRunning(false);
+    }
+  };
+  const passCount = checks.filter((c2) => c2.status === "pass").length;
+  const failCount = checks.filter((c2) => c2.status === "fail").length;
+  const doneCount = passCount + failCount;
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "div",
+    {
+      "data-ocid": "stress_test.panel",
+      style: {
+        minWidth: 160
+      },
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "button",
+          {
+            type: "button",
+            "data-ocid": "stress_test.toggle",
+            onClick: () => setOpen((v2) => !v2),
+            style: {
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "6px 10px",
+              borderRadius: 6,
+              background: open ? "rgba(0,255,204,0.12)" : "rgba(0,255,204,0.06)",
+              border: `1px solid ${open ? CYAN$2 : BORDER$2}`,
+              color: CYAN$2,
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: 1.5,
+              cursor: "pointer",
+              textTransform: "uppercase",
+              whiteSpace: "nowrap",
+              backdropFilter: "blur(10px)",
+              WebkitBackdropFilter: "blur(10px)",
+              width: "100%",
+              height: 32,
+              justifyContent: "space-between"
+            },
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "STRESS TEST" }),
+              open ? /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronUp, { size: 12 }) : /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronDown, { size: 12 })
+            ]
+          }
+        ),
+        open && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            style: {
+              marginTop: 4,
+              borderRadius: 8,
+              background: "rgba(2,10,20,0.94)",
+              border: `1px solid ${BORDER$2}`,
+              backdropFilter: "blur(16px)",
+              WebkitBackdropFilter: "blur(16px)",
+              padding: "10px 10px 8px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 6
+            },
+            children: [
+              !isAuthenticated && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 9, color: "#ff6666", textAlign: "center" }, children: "Login required" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", gap: 5 }, children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "button",
+                  {
+                    type: "button",
+                    "data-ocid": "stress_test.run_all_button",
+                    disabled: running2 || !isAuthenticated,
+                    onClick: handleRunAll,
+                    style: {
+                      flex: 1,
+                      padding: "5px 8px",
+                      borderRadius: 5,
+                      background: running2 ? "rgba(0,255,204,0.15)" : "rgba(0,255,204,0.06)",
+                      border: `1px solid ${BORDER$2}`,
+                      color: running2 || !isAuthenticated ? CYAN_DIM$2 : CYAN$2,
+                      fontSize: 8,
+                      fontWeight: 700,
+                      letterSpacing: 1,
+                      cursor: running2 || !isAuthenticated ? "not-allowed" : "pointer",
+                      opacity: running2 || !isAuthenticated ? 0.5 : 1,
+                      textTransform: "uppercase",
+                      whiteSpace: "nowrap"
+                    },
+                    children: running2 ? "RUNNING…" : "RUN ALL"
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "button",
+                  {
+                    type: "button",
+                    "data-ocid": "stress_test.reset_button",
+                    disabled: running2,
+                    onClick: handleReset,
+                    style: {
+                      padding: "5px 8px",
+                      borderRadius: 5,
+                      background: "rgba(255,68,68,0.08)",
+                      border: "1px solid rgba(255,68,68,0.3)",
+                      color: "#ff6666",
+                      fontSize: 8,
+                      fontWeight: 700,
+                      letterSpacing: 1,
+                      cursor: running2 ? "not-allowed" : "pointer",
+                      opacity: running2 ? 0.5 : 1,
+                      textTransform: "uppercase",
+                      whiteSpace: "nowrap"
+                    },
+                    children: "RESET"
+                  }
+                )
+              ] }),
+              doneCount > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "div",
+                {
+                  style: { display: "flex", gap: 8, fontSize: 8, fontWeight: 700 },
+                  children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { style: { color: "#00ff88" }, children: [
+                      "✓ ",
+                      passCount,
+                      " PASS"
+                    ] }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: failCount > 0 ? "#ff4444" : CYAN_DIM$2 }, children: failCount > 0 ? `✗ ${failCount} FAIL` : "✗ 0" })
+                  ]
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "div",
+                {
+                  style: {
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 3,
+                    maxHeight: 220,
+                    overflowY: "auto"
+                  },
+                  children: checks.map((c2, i2) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "div",
+                    {
+                      "data-ocid": `stress_test.check.${i2 + 1}`,
+                      style: {
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: 5,
+                        padding: "4px 6px",
+                        borderRadius: 4,
+                        background: c2.status === "pass" ? "rgba(0,255,136,0.04)" : c2.status === "fail" ? "rgba(255,68,68,0.06)" : c2.status === "running" ? "rgba(0,255,204,0.06)" : "rgba(255,255,255,0.02)",
+                        border: `1px solid ${c2.status === "pass" ? "rgba(0,255,136,0.15)" : c2.status === "fail" ? "rgba(255,68,68,0.2)" : c2.status === "running" ? BORDER$2 : "rgba(255,255,255,0.06)"}`
+                      },
+                      children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "span",
+                          {
+                            style: {
+                              fontSize: 8,
+                              color: c2.status === "pass" ? "#00ff88" : c2.status === "fail" ? "#ff4444" : c2.status === "running" ? CYAN$2 : CYAN_DIM$2,
+                              flexShrink: 0,
+                              minWidth: 10
+                            },
+                            children: c2.status === "pass" ? "✓" : c2.status === "fail" ? "✗" : c2.status === "running" ? "▶" : "·"
+                          }
+                        ),
+                        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { flex: 1, minWidth: 0 }, children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "div",
+                            {
+                              style: {
+                                fontSize: 8,
+                                color: c2.status === "idle" ? CYAN_DIM$2 : TEXT$2,
+                                fontWeight: 600,
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap"
+                              },
+                              children: c2.label
+                            }
+                          ),
+                          c2.detail && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "div",
+                            {
+                              style: {
+                                fontSize: 7,
+                                color: c2.status === "fail" ? "#ff8888" : CYAN_DIM$2,
+                                marginTop: 1,
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap"
+                              },
+                              children: c2.detail
+                            }
+                          )
+                        ] }),
+                        c2.durationMs > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { style: { fontSize: 7, color: CYAN_DIM$2, flexShrink: 0 }, children: [
+                          c2.durationMs,
+                          "ms"
+                        ] })
+                      ]
+                    },
+                    c2.label
+                  ))
                 }
               )
             ]
@@ -102653,18 +104743,924 @@ function AnimatedCounter({ value }) {
   }, [value]);
   return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontFamily: "monospace" }, children: fmtBig(display) });
 }
-function UniversePanel({ onClose }) {
+function UniversePanel({ onClose, inline = false }) {
   const player = useGameStore((s2) => s2.player);
   const totalFRNTRBurned = useGameStore((s2) => s2.totalFRNTRBurned);
-  const leaderboard = useGameStore((s2) => s2.leaderboard);
-  const totalPlotsOwned = leaderboard.reduce((a2, e) => a2 + e.plotsOwned, 0) + player.plotsOwned.length;
+  const generatorTiers = useGameStore((s2) => s2.generatorTiers);
+  const allPlots = useGameStore((s2) => s2.plots);
+  const globalStats = useGameStore((s2) => s2.globalStats);
+  const globalOwnedPlots = allPlots.filter((p2) => p2.owner !== null);
+  const localPlotsOwned = globalOwnedPlots.length;
+  const totalPlotsOwned = (globalStats == null ? void 0 : globalStats.totalPlotsOwned) ?? localPlotsOwned;
   const leaderboardProgress = Math.min(totalPlotsOwned % 1500 / 1500, 1);
   const nextPayout = 1500 - totalPlotsOwned % 1500;
-  const circulating = PRE_MINTED + player.frntBalance * 1e3;
-  const burnRate = 42e-5;
-  const devPot = (totalPlotsOwned * 2.5 * 0.25).toFixed(3);
-  const leaderPot = (totalPlotsOwned * 2.5 * 0.25).toFixed(3);
-  const liquidPot = (totalPlotsOwned * 2.5 * 0.5).toFixed(3);
+  const TOTAL_SUPPLY_VAL = (globalStats == null ? void 0 : globalStats.totalSupply) ?? TOTAL_SUPPLY;
+  const PRE_MINTED_VAL = (globalStats == null ? void 0 : globalStats.preMinted) ?? PRE_MINTED;
+  const MINEABLE_VAL = (globalStats == null ? void 0 : globalStats.mineableSupply) ?? MINEABLE;
+  const TIER_BONUS = {
+    1: 8,
+    2: 24,
+    3: 48,
+    4: 96,
+    5: 192,
+    6: 384
+  };
+  let playerDailyFrntr = 0;
+  for (const pid of player.plotsOwned) {
+    playerDailyFrntr += 7;
+    const tier = generatorTiers[pid] ?? 0;
+    if (tier > 0) playerDailyFrntr += TIER_BONUS[tier] ?? 0;
+  }
+  let localDailyEmission = 0;
+  for (const plot of globalOwnedPlots) {
+    localDailyEmission += 7;
+    const tier = generatorTiers[plot.id] ?? plot.generatorTier ?? 0;
+    if (tier > 0) localDailyEmission += TIER_BONUS[tier] ?? 0;
+  }
+  const globalDailyEmission = (globalStats == null ? void 0 : globalStats.currentDailyEmissionRate) ?? localDailyEmission;
+  const networkBurned = (globalStats == null ? void 0 : globalStats.totalFRNTRBurned) ?? totalFRNTRBurned;
+  const activePlayers = (globalStats == null ? void 0 : globalStats.activePlayerCount) ?? 0;
+  const networkFRNTRMined = (globalStats == null ? void 0 : globalStats.totalFRNTRMined) ?? globalDailyEmission * 30;
+  const estimatedNetworkMined = globalDailyEmission * 30;
+  const circulatingEstimate = Math.min(
+    PRE_MINTED_VAL + player.frntBalance + estimatedNetworkMined,
+    TOTAL_SUPPLY_VAL
+  );
+  const circulating = (globalStats == null ? void 0 : globalStats.totalFRNTRInCirculation) ?? circulatingEstimate;
+  const burnRate = 42e-5 + totalPlotsOwned * 15e-7;
+  const avgIcpPerPlot = 2.5;
+  const prizePoolIcp = (globalStats == null ? void 0 : globalStats.leaderboardPrizePool) ? (globalStats.leaderboardPrizePool / 1e8).toFixed(4) : (totalPlotsOwned * avgIcpPerPlot * 0.25).toFixed(3);
+  const devPot = (totalPlotsOwned * avgIcpPerPlot * 0.25).toFixed(3);
+  const leaderPot = prizePoolIcp;
+  const liquidPot = (totalPlotsOwned * avgIcpPerPlot * 0.5).toFixed(3);
+  const content = /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "div",
+    {
+      "data-ocid": "universe.content",
+      style: {
+        padding: inline ? "12px 12px 80px" : "16px 16px 80px",
+        position: "relative",
+        zIndex: 2
+      },
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(SectionTitle, { children: "Your Command Stats" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(GlowCard, { style: { marginBottom: 16 }, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              style: {
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 14,
+                marginBottom: 14
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        fontSize: 8,
+                        color: TEXT_DIM,
+                        letterSpacing: 1.5,
+                        marginBottom: 4
+                      },
+                      children: "FRNTR BALANCE"
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        fontSize: 16,
+                        fontWeight: 900,
+                        color: CYAN$1,
+                        fontFamily: "monospace",
+                        textShadow: `0 0 10px ${CYAN$1}`
+                      },
+                      children: player.frntBalance.toFixed(8)
+                    }
+                  )
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        fontSize: 8,
+                        color: TEXT_DIM,
+                        letterSpacing: 1.5,
+                        marginBottom: 4
+                      },
+                      children: "DAILY RATE"
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "div",
+                    {
+                      style: {
+                        fontSize: 16,
+                        fontWeight: 900,
+                        color: GOLD,
+                        fontFamily: "monospace"
+                      },
+                      children: [
+                        "+",
+                        playerDailyFrntr,
+                        " / day"
+                      ]
+                    }
+                  )
+                ] })
+              ]
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
+            {
+              style: {
+                display: "grid",
+                gridTemplateColumns: "repeat(4, 1fr)",
+                gap: 8
+              },
+              children: [
+                { label: "IRON", value: player.iron },
+                { label: "FUEL", value: player.fuel },
+                { label: "CRYSTAL", value: player.crystal },
+                { label: "RARE EARTH", value: player.rareEarth }
+              ].map((r2) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      fontSize: 7,
+                      color: TEXT_DIM,
+                      letterSpacing: 1,
+                      marginBottom: 2
+                    },
+                    children: r2.label
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      fontSize: 10,
+                      fontWeight: 700,
+                      color: TEXT$1,
+                      fontFamily: "monospace"
+                    },
+                    children: r2.value.toFixed(4)
+                  }
+                )
+              ] }, r2.label))
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              style: {
+                marginTop: 10,
+                paddingTop: 10,
+                borderTop: `1px solid ${BORDER$1}`,
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center"
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        fontSize: 7,
+                        color: TEXT_DIM,
+                        letterSpacing: 1,
+                        marginBottom: 2
+                      },
+                      children: "PLOTS OWNED"
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        fontSize: 13,
+                        fontWeight: 900,
+                        color: CYAN$1,
+                        fontFamily: "monospace"
+                      },
+                      children: player.plotsOwned.length
+                    }
+                  )
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        fontSize: 7,
+                        color: TEXT_DIM,
+                        letterSpacing: 1,
+                        marginBottom: 2
+                      },
+                      children: "TOTAL BURNED"
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        fontSize: 13,
+                        fontWeight: 900,
+                        color: "#ef4444",
+                        fontFamily: "monospace"
+                      },
+                      children: networkBurned.toFixed(4)
+                    }
+                  )
+                ] })
+              ]
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(SectionTitle, { children: "Global Network Stats" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(GlowCard, { style: { marginBottom: 16 }, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
+            {
+              style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 },
+              children: [
+                {
+                  label: "TOTAL PLOTS OWNED",
+                  value: totalPlotsOwned.toLocaleString(),
+                  color: CYAN$1,
+                  sub: "of 5,882 max"
+                },
+                {
+                  label: "ACTIVE PLAYERS",
+                  value: activePlayers > 0 ? activePlayers.toLocaleString() : "—",
+                  color: GOLD,
+                  sub: "registered commanders"
+                },
+                {
+                  label: "FRNTR MINED (NET)",
+                  value: fmtBig(networkFRNTRMined),
+                  color: "#22c55e",
+                  sub: "by landowners"
+                },
+                {
+                  label: "GLOBAL DAILY OUTPUT",
+                  value: fmtBig(globalDailyEmission),
+                  color: "#3b82f6",
+                  sub: "FRNTR / day"
+                }
+              ].map((item) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      fontSize: 7,
+                      color: TEXT_DIM,
+                      letterSpacing: 1,
+                      marginBottom: 3
+                    },
+                    children: item.label
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      fontSize: 13,
+                      fontWeight: 900,
+                      color: item.color,
+                      fontFamily: "monospace",
+                      textShadow: `0 0 8px ${item.color}55`
+                    },
+                    children: item.value
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      fontSize: 7,
+                      color: item.color,
+                      opacity: 0.55,
+                      marginTop: 1
+                    },
+                    children: item.sub
+                  }
+                )
+              ] }, item.label))
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              style: {
+                marginTop: 10,
+                paddingTop: 10,
+                borderTop: `1px solid ${BORDER$1}`,
+                display: "flex",
+                alignItems: "center",
+                gap: 6
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      width: 6,
+                      height: 6,
+                      borderRadius: "50%",
+                      background: globalStats ? "#22c55e" : "#f59e0b",
+                      boxShadow: `0 0 6px ${globalStats ? "#22c55e" : "#f59e0b"}`
+                    }
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 8, color: TEXT_DIM, letterSpacing: 1 }, children: globalStats ? "LIVE ON-CHAIN DATA · SYNCED 30s" : "ESTIMATING FROM LOCAL STATE" })
+              ]
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(SectionTitle, { children: "Token Economics" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "div",
+          {
+            style: {
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 10,
+              marginBottom: 16
+            },
+            children: [
+              {
+                label: "Total Supply",
+                value: fmtBig(TOTAL_SUPPLY_VAL),
+                sub: "FRNTR",
+                color: CYAN$1
+              },
+              {
+                label: "Pre-Minted",
+                value: fmtBig(PRE_MINTED_VAL),
+                sub: "Backed w/ liquidity",
+                color: GOLD
+              },
+              {
+                label: "Mineable Supply",
+                value: fmtBig(MINEABLE_VAL),
+                sub: "By landowners only",
+                color: "#3b82f6"
+              },
+              {
+                label: "Total Burned",
+                value: fmtBig(networkBurned),
+                sub: "Out of circulation",
+                color: "#ef4444"
+              }
+            ].map((item) => /* @__PURE__ */ jsxRuntimeExports.jsxs(GlowCard, { children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "div",
+                {
+                  style: {
+                    fontSize: 8,
+                    color: TEXT_DIM,
+                    letterSpacing: 1.5,
+                    marginBottom: 4
+                  },
+                  children: item.label.toUpperCase()
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "div",
+                {
+                  style: {
+                    fontSize: 18,
+                    fontWeight: 900,
+                    color: item.color,
+                    fontFamily: "monospace",
+                    textShadow: `0 0 10px ${item.color}66`
+                  },
+                  children: item.value
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "div",
+                {
+                  style: {
+                    fontSize: 8,
+                    color: item.color,
+                    opacity: 0.6,
+                    marginTop: 2
+                  },
+                  children: item.sub
+                }
+              )
+            ] }, item.label))
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(GlowCard, { style: { marginBottom: 16 }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 },
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      fontSize: 8,
+                      color: TEXT_DIM,
+                      letterSpacing: 1.5,
+                      marginBottom: 4
+                    },
+                    children: "CIRCULATING SUPPLY"
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      fontSize: 14,
+                      fontWeight: 900,
+                      color: CYAN$1,
+                      fontFamily: "monospace"
+                    },
+                    children: /* @__PURE__ */ jsxRuntimeExports.jsx(AnimatedCounter, { value: circulating })
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { fontSize: 8, color: CYAN_DIM$1, marginTop: 2 }, children: [
+                  "~",
+                  fmtBig(circulating / TOTAL_SUPPLY_VAL * 100),
+                  "% of total"
+                ] })
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      fontSize: 8,
+                      color: TEXT_DIM,
+                      letterSpacing: 1.5,
+                      marginBottom: 4
+                    },
+                    children: "BURN RATE"
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      fontSize: 14,
+                      fontWeight: 900,
+                      color: "#ef4444",
+                      fontFamily: "monospace"
+                    },
+                    children: burnRate.toFixed(5)
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      fontSize: 8,
+                      color: "rgba(239,68,68,0.5)",
+                      marginTop: 2
+                    },
+                    children: "FRNTR/sec avg"
+                  }
+                )
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      fontSize: 8,
+                      color: TEXT_DIM,
+                      letterSpacing: 1.5,
+                      marginBottom: 4
+                    },
+                    children: "NETWORK EMISSION"
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      fontSize: 14,
+                      fontWeight: 900,
+                      color: GOLD,
+                      fontFamily: "monospace"
+                    },
+                    children: fmtBig(globalDailyEmission)
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      fontSize: 8,
+                      color: "rgba(255,215,0,0.5)",
+                      marginTop: 2
+                    },
+                    children: "FRNTR/day · all plots"
+                  }
+                )
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      fontSize: 8,
+                      color: TEXT_DIM,
+                      letterSpacing: 1.5,
+                      marginBottom: 4
+                    },
+                    children: "ACTIVE PLOTS"
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      fontSize: 14,
+                      fontWeight: 900,
+                      color: "#22c55e",
+                      fontFamily: "monospace"
+                    },
+                    children: totalPlotsOwned
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      fontSize: 8,
+                      color: "rgba(34,197,94,0.5)",
+                      marginTop: 2
+                    },
+                    children: "of 5,882 total"
+                  }
+                )
+              ] })
+            ]
+          }
+        ) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(SectionTitle, { children: "Emission Schedule" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(GlowCard, { style: { marginBottom: 16 }, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
+            {
+              style: {
+                fontSize: 8,
+                color: TEXT_DIM,
+                marginBottom: 12,
+                letterSpacing: 0.5
+              },
+              children: "5-year mining curve · 6 generator upgrade tiers"
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "flex", flexDirection: "column", gap: 8 }, children: GENERATOR_TIERS.map((g2) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              style: { display: "flex", alignItems: "center", gap: 10 },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      width: 24,
+                      height: 24,
+                      borderRadius: 6,
+                      background: `${g2.color}22`,
+                      border: `1px solid ${g2.color}66`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 9,
+                      fontWeight: 900,
+                      color: g2.color,
+                      flexShrink: 0
+                    },
+                    children: g2.tier
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { flex: 1, minWidth: 0 }, children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "div",
+                    {
+                      style: {
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center"
+                      },
+                      children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "span",
+                          {
+                            style: {
+                              fontSize: 10,
+                              fontWeight: 700,
+                              color: TEXT$1,
+                              fontFamily: "monospace"
+                            },
+                            children: g2.production
+                          }
+                        ),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 8, color: g2.color }, children: g2.cost })
+                      ]
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        height: 3,
+                        background: "rgba(255,255,255,0.06)",
+                        borderRadius: 2,
+                        marginTop: 4,
+                        overflow: "hidden"
+                      },
+                      children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "div",
+                        {
+                          style: {
+                            height: "100%",
+                            width: `${(GENERATOR_TIERS.indexOf(g2) + 1) / 6 * 100}%`,
+                            background: g2.color,
+                            borderRadius: 2,
+                            boxShadow: `0 0 6px ${g2.color}`
+                          }
+                        }
+                      )
+                    }
+                  )
+                ] })
+              ]
+            },
+            g2.tier
+          )) })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(SectionTitle, { children: "Treasury" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(GlowCard, { style: { marginBottom: 16 }, children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "flex", flexDirection: "column", gap: 10 }, children: [
+          {
+            label: "Developer Treasury",
+            pct: "25%",
+            value: `${devPot} ICP`,
+            color: GOLD
+          },
+          {
+            label: "Leaderboard Pot",
+            pct: "25%",
+            value: `${leaderPot} ICP`,
+            color: "#22c55e"
+          },
+          {
+            label: "Liquidity Pot",
+            pct: "50%",
+            value: `${liquidPot} ICP`,
+            color: "#3b82f6"
+          }
+        ].map((pot) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              style: {
+                display: "flex",
+                justifyContent: "space-between",
+                marginBottom: 5
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 6 }, children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        width: 8,
+                        height: 8,
+                        borderRadius: 2,
+                        background: pot.color
+                      }
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 9, color: TEXT$1, fontWeight: 600 }, children: pot.label })
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "span",
+                    {
+                      style: {
+                        fontSize: 8,
+                        color: pot.color,
+                        fontFamily: "monospace"
+                      },
+                      children: pot.value
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "span",
+                    {
+                      style: {
+                        fontSize: 8,
+                        color: TEXT_DIM,
+                        fontFamily: "monospace"
+                      },
+                      children: pot.pct
+                    }
+                  )
+                ] })
+              ]
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
+            {
+              style: {
+                height: 4,
+                background: "rgba(255,255,255,0.06)",
+                borderRadius: 3,
+                overflow: "hidden"
+              },
+              children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "div",
+                {
+                  style: {
+                    height: "100%",
+                    width: pot.pct,
+                    background: pot.color,
+                    borderRadius: 3,
+                    boxShadow: `0 0 6px ${pot.color}66`
+                  }
+                }
+              )
+            }
+          )
+        ] }, pot.label)) }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(SectionTitle, { children: "Leaderboard Milestone" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(GlowCard, { style: { marginBottom: 16 }, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              style: {
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 10
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        fontSize: 8,
+                        color: TEXT_DIM,
+                        letterSpacing: 1.5,
+                        marginBottom: 2
+                      },
+                      children: "NEXT PAYOUT AT"
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        fontSize: 20,
+                        fontWeight: 900,
+                        color: GOLD,
+                        fontFamily: "monospace"
+                      },
+                      children: "1,500 PLOTS"
+                    }
+                  )
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { textAlign: "right" }, children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        fontSize: 8,
+                        color: TEXT_DIM,
+                        letterSpacing: 1.5,
+                        marginBottom: 2
+                      },
+                      children: "PRIZE POOL"
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "div",
+                    {
+                      style: {
+                        fontSize: 16,
+                        fontWeight: 900,
+                        color: "#22c55e",
+                        fontFamily: "monospace"
+                      },
+                      children: [
+                        leaderPot,
+                        " ICP"
+                      ]
+                    }
+                  )
+                ] })
+              ]
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { marginBottom: 6 }, children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "div",
+              {
+                style: {
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginBottom: 4
+                },
+                children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { style: { fontSize: 8, color: TEXT_DIM }, children: [
+                    totalPlotsOwned,
+                    " plots minted"
+                  ] }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { style: { fontSize: 8, color: CYAN$1 }, children: [
+                    nextPayout,
+                    " remaining"
+                  ] })
+                ]
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "div",
+              {
+                style: {
+                  height: 8,
+                  background: "rgba(255,255,255,0.06)",
+                  borderRadius: 4,
+                  overflow: "hidden",
+                  border: `1px solid ${BORDER$1}`
+                },
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      height: "100%",
+                      width: `${leaderboardProgress * 100}%`,
+                      background: `linear-gradient(90deg, ${GOLD}, ${CYAN$1})`,
+                      borderRadius: 4,
+                      boxShadow: `0 0 8px ${GOLD}88`,
+                      transition: "width 0.5s ease"
+                    }
+                  }
+                )
+              }
+            )
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM }, children: "Top FRNTR holders receive ICP payout from prize pool every 1,500 plot mints" })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(SectionTitle, { children: "Market Data" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(GlowCard, { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { textAlign: "center", padding: "16px 0" }, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 24, marginBottom: 8 }, children: "📊" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
+            {
+              style: {
+                fontSize: 11,
+                fontWeight: 700,
+                color: TEXT$1,
+                letterSpacing: 2,
+                marginBottom: 6
+              },
+              children: "DEX LISTING COMING SOON"
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 9, color: TEXT_DIM, lineHeight: 1.6 }, children: "FRNTR/ICP pool will be seeded on ICPSwap using the Liquidity Pot. Trading will go live after v1.0 launch milestone." }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
+            {
+              style: {
+                marginTop: 12,
+                display: "inline-block",
+                padding: "4px 12px",
+                borderRadius: 20,
+                border: `1px solid ${CYAN$1}44`,
+                fontSize: 8,
+                color: CYAN$1,
+                letterSpacing: 1.5,
+                background: "rgba(0,255,204,0.05)"
+              },
+              children: "FOLLOW @FRONTIER_ICP FOR UPDATES"
+            }
+          )
+        ] }) })
+      ]
+    }
+  );
+  if (inline) {
+    return content;
+  }
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "div",
     {
@@ -102761,514 +105757,7 @@ function UniversePanel({ onClose }) {
                   ]
                 }
               ),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(SectionTitle, { children: "Token Economics" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "div",
-                {
-                  style: {
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: 10,
-                    marginBottom: 16
-                  },
-                  children: [
-                    {
-                      label: "Total Supply",
-                      value: fmtBig(TOTAL_SUPPLY),
-                      sub: "FRNTR",
-                      color: CYAN$1
-                    },
-                    {
-                      label: "Pre-Minted",
-                      value: fmtBig(PRE_MINTED),
-                      sub: "Backed w/ liquidity",
-                      color: GOLD
-                    },
-                    {
-                      label: "Mineable Supply",
-                      value: fmtBig(MINEABLE),
-                      sub: "By landowners only",
-                      color: "#3b82f6"
-                    },
-                    {
-                      label: "Total Burned",
-                      value: fmtBig(totalFRNTRBurned),
-                      sub: "Out of circulation",
-                      color: "#ef4444"
-                    }
-                  ].map((item) => /* @__PURE__ */ jsxRuntimeExports.jsxs(GlowCard, { children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsx(
-                      "div",
-                      {
-                        style: {
-                          fontSize: 8,
-                          color: TEXT_DIM,
-                          letterSpacing: 1.5,
-                          marginBottom: 4
-                        },
-                        children: item.label.toUpperCase()
-                      }
-                    ),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx(
-                      "div",
-                      {
-                        style: {
-                          fontSize: 18,
-                          fontWeight: 900,
-                          color: item.color,
-                          fontFamily: "monospace",
-                          textShadow: `0 0 10px ${item.color}66`
-                        },
-                        children: item.value
-                      }
-                    ),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx(
-                      "div",
-                      {
-                        style: {
-                          fontSize: 8,
-                          color: item.color,
-                          opacity: 0.6,
-                          marginTop: 2
-                        },
-                        children: item.sub
-                      }
-                    )
-                  ] }, item.label))
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(GlowCard, { style: { marginBottom: 16 }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                "div",
-                {
-                  style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 },
-                  children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                      /* @__PURE__ */ jsxRuntimeExports.jsx(
-                        "div",
-                        {
-                          style: {
-                            fontSize: 8,
-                            color: TEXT_DIM,
-                            letterSpacing: 1.5,
-                            marginBottom: 4
-                          },
-                          children: "CIRCULATING SUPPLY"
-                        }
-                      ),
-                      /* @__PURE__ */ jsxRuntimeExports.jsx(
-                        "div",
-                        {
-                          style: {
-                            fontSize: 14,
-                            fontWeight: 900,
-                            color: CYAN$1,
-                            fontFamily: "monospace"
-                          },
-                          children: /* @__PURE__ */ jsxRuntimeExports.jsx(AnimatedCounter, { value: circulating })
-                        }
-                      ),
-                      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { fontSize: 8, color: CYAN_DIM$1, marginTop: 2 }, children: [
-                        "~",
-                        fmtBig(circulating / TOTAL_SUPPLY * 100),
-                        "% of total"
-                      ] })
-                    ] }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                      /* @__PURE__ */ jsxRuntimeExports.jsx(
-                        "div",
-                        {
-                          style: {
-                            fontSize: 8,
-                            color: TEXT_DIM,
-                            letterSpacing: 1.5,
-                            marginBottom: 4
-                          },
-                          children: "BURN RATE"
-                        }
-                      ),
-                      /* @__PURE__ */ jsxRuntimeExports.jsx(
-                        "div",
-                        {
-                          style: {
-                            fontSize: 14,
-                            fontWeight: 900,
-                            color: "#ef4444",
-                            fontFamily: "monospace"
-                          },
-                          children: burnRate.toFixed(5)
-                        }
-                      ),
-                      /* @__PURE__ */ jsxRuntimeExports.jsx(
-                        "div",
-                        {
-                          style: {
-                            fontSize: 8,
-                            color: "rgba(239,68,68,0.5)",
-                            marginTop: 2
-                          },
-                          children: "FRNTR/sec avg"
-                        }
-                      )
-                    ] })
-                  ]
-                }
-              ) }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(SectionTitle, { children: "Emission Schedule" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs(GlowCard, { style: { marginBottom: 16 }, children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "div",
-                  {
-                    style: {
-                      fontSize: 8,
-                      color: TEXT_DIM,
-                      marginBottom: 12,
-                      letterSpacing: 0.5
-                    },
-                    children: "5-year mining curve · 6 generator upgrade tiers"
-                  }
-                ),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "flex", flexDirection: "column", gap: 8 }, children: GENERATOR_TIERS.map((g2) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                  "div",
-                  {
-                    style: { display: "flex", alignItems: "center", gap: 10 },
-                    children: [
-                      /* @__PURE__ */ jsxRuntimeExports.jsx(
-                        "div",
-                        {
-                          style: {
-                            width: 24,
-                            height: 24,
-                            borderRadius: 6,
-                            background: `${g2.color}22`,
-                            border: `1px solid ${g2.color}66`,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: 9,
-                            fontWeight: 900,
-                            color: g2.color,
-                            flexShrink: 0
-                          },
-                          children: g2.tier
-                        }
-                      ),
-                      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { flex: 1, minWidth: 0 }, children: [
-                        /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                          "div",
-                          {
-                            style: {
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "center"
-                            },
-                            children: [
-                              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                "span",
-                                {
-                                  style: {
-                                    fontSize: 10,
-                                    fontWeight: 700,
-                                    color: TEXT$1,
-                                    fontFamily: "monospace"
-                                  },
-                                  children: g2.production
-                                }
-                              ),
-                              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 8, color: g2.color }, children: g2.cost })
-                            ]
-                          }
-                        ),
-                        /* @__PURE__ */ jsxRuntimeExports.jsx(
-                          "div",
-                          {
-                            style: {
-                              height: 3,
-                              background: "rgba(255,255,255,0.06)",
-                              borderRadius: 2,
-                              marginTop: 4,
-                              overflow: "hidden"
-                            },
-                            children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-                              "div",
-                              {
-                                style: {
-                                  height: "100%",
-                                  width: `${(GENERATOR_TIERS.indexOf(g2) + 1) / 6 * 100}%`,
-                                  background: g2.color,
-                                  borderRadius: 2,
-                                  boxShadow: `0 0 6px ${g2.color}`
-                                }
-                              }
-                            )
-                          }
-                        )
-                      ] })
-                    ]
-                  },
-                  g2.tier
-                )) })
-              ] }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(SectionTitle, { children: "Treasury" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(GlowCard, { style: { marginBottom: 16 }, children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "flex", flexDirection: "column", gap: 10 }, children: [
-                {
-                  label: "Developer Treasury",
-                  pct: "25%",
-                  value: `${devPot} ICP`,
-                  color: GOLD
-                },
-                {
-                  label: "Leaderboard Pot",
-                  pct: "25%",
-                  value: `${leaderPot} ICP`,
-                  color: "#22c55e"
-                },
-                {
-                  label: "Liquidity Pot",
-                  pct: "50%",
-                  value: `${liquidPot} ICP`,
-                  color: "#3b82f6"
-                }
-              ].map((pot) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                  "div",
-                  {
-                    style: {
-                      display: "flex",
-                      justifyContent: "space-between",
-                      marginBottom: 5
-                    },
-                    children: [
-                      /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                        "div",
-                        {
-                          style: { display: "flex", alignItems: "center", gap: 6 },
-                          children: [
-                            /* @__PURE__ */ jsxRuntimeExports.jsx(
-                              "div",
-                              {
-                                style: {
-                                  width: 8,
-                                  height: 8,
-                                  borderRadius: 2,
-                                  background: pot.color
-                                }
-                              }
-                            ),
-                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 9, color: TEXT$1, fontWeight: 600 }, children: pot.label })
-                          ]
-                        }
-                      ),
-                      /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                        "div",
-                        {
-                          style: { display: "flex", alignItems: "center", gap: 8 },
-                          children: [
-                            /* @__PURE__ */ jsxRuntimeExports.jsx(
-                              "span",
-                              {
-                                style: {
-                                  fontSize: 8,
-                                  color: pot.color,
-                                  fontFamily: "monospace"
-                                },
-                                children: pot.value
-                              }
-                            ),
-                            /* @__PURE__ */ jsxRuntimeExports.jsx(
-                              "span",
-                              {
-                                style: {
-                                  fontSize: 8,
-                                  color: TEXT_DIM,
-                                  fontFamily: "monospace"
-                                },
-                                children: pot.pct
-                              }
-                            )
-                          ]
-                        }
-                      )
-                    ]
-                  }
-                ),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "div",
-                  {
-                    style: {
-                      height: 4,
-                      background: "rgba(255,255,255,0.06)",
-                      borderRadius: 3,
-                      overflow: "hidden"
-                    },
-                    children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-                      "div",
-                      {
-                        style: {
-                          height: "100%",
-                          width: pot.pct,
-                          background: pot.color,
-                          borderRadius: 3,
-                          boxShadow: `0 0 6px ${pot.color}66`
-                        }
-                      }
-                    )
-                  }
-                )
-              ] }, pot.label)) }) }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(SectionTitle, { children: "Leaderboard Milestone" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs(GlowCard, { style: { marginBottom: 16 }, children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                  "div",
-                  {
-                    style: {
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      marginBottom: 10
-                    },
-                    children: [
-                      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                        /* @__PURE__ */ jsxRuntimeExports.jsx(
-                          "div",
-                          {
-                            style: {
-                              fontSize: 8,
-                              color: TEXT_DIM,
-                              letterSpacing: 1.5,
-                              marginBottom: 2
-                            },
-                            children: "NEXT PAYOUT AT"
-                          }
-                        ),
-                        /* @__PURE__ */ jsxRuntimeExports.jsx(
-                          "div",
-                          {
-                            style: {
-                              fontSize: 20,
-                              fontWeight: 900,
-                              color: GOLD,
-                              fontFamily: "monospace"
-                            },
-                            children: "1,500 PLOTS"
-                          }
-                        )
-                      ] }),
-                      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { textAlign: "right" }, children: [
-                        /* @__PURE__ */ jsxRuntimeExports.jsx(
-                          "div",
-                          {
-                            style: {
-                              fontSize: 8,
-                              color: TEXT_DIM,
-                              letterSpacing: 1.5,
-                              marginBottom: 2
-                            },
-                            children: "PRIZE POOL"
-                          }
-                        ),
-                        /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                          "div",
-                          {
-                            style: {
-                              fontSize: 16,
-                              fontWeight: 900,
-                              color: "#22c55e",
-                              fontFamily: "monospace"
-                            },
-                            children: [
-                              leaderPot,
-                              " ICP"
-                            ]
-                          }
-                        )
-                      ] })
-                    ]
-                  }
-                ),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { marginBottom: 6 }, children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                    "div",
-                    {
-                      style: {
-                        display: "flex",
-                        justifyContent: "space-between",
-                        marginBottom: 4
-                      },
-                      children: [
-                        /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { style: { fontSize: 8, color: TEXT_DIM }, children: [
-                          totalPlotsOwned,
-                          " plots minted"
-                        ] }),
-                        /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { style: { fontSize: 8, color: CYAN$1 }, children: [
-                          nextPayout,
-                          " remaining"
-                        ] })
-                      ]
-                    }
-                  ),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "div",
-                    {
-                      style: {
-                        height: 8,
-                        background: "rgba(255,255,255,0.06)",
-                        borderRadius: 4,
-                        overflow: "hidden",
-                        border: `1px solid ${BORDER$1}`
-                      },
-                      children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-                        "div",
-                        {
-                          style: {
-                            height: "100%",
-                            width: `${leaderboardProgress * 100}%`,
-                            background: `linear-gradient(90deg, ${GOLD}, ${CYAN$1})`,
-                            borderRadius: 4,
-                            boxShadow: `0 0 8px ${GOLD}88`,
-                            transition: "width 0.5s ease"
-                          }
-                        }
-                      )
-                    }
-                  )
-                ] }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM }, children: "Top FRNTR holders receive ICP payout from prize pool every 1,500 plot mints" })
-              ] }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(SectionTitle, { children: "Market Data" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(GlowCard, { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { textAlign: "center", padding: "16px 0" }, children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 24, marginBottom: 8 }, children: "📊" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "div",
-                  {
-                    style: {
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color: TEXT$1,
-                      letterSpacing: 2,
-                      marginBottom: 6
-                    },
-                    children: "DEX LISTING COMING SOON"
-                  }
-                ),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 9, color: TEXT_DIM, lineHeight: 1.6 }, children: "FRNTR/ICP pool will be seeded on ICPSwap using the Liquidity Pot. Trading will go live after v1.0 launch milestone." }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "div",
-                  {
-                    style: {
-                      marginTop: 12,
-                      display: "inline-block",
-                      padding: "4px 12px",
-                      borderRadius: 20,
-                      border: `1px solid ${CYAN$1}44`,
-                      fontSize: 8,
-                      color: CYAN$1,
-                      letterSpacing: 1.5,
-                      background: "rgba(0,255,204,0.05)"
-                    },
-                    children: "FOLLOW @FRONTIER_ICP FOR UPDATES"
-                  }
-                )
-              ] }) })
+              content
             ]
           }
         )
@@ -103276,35 +105765,200 @@ function UniversePanel({ onClose }) {
     }
   );
 }
+function usePlayerSync() {
+  const { actor, isFetching } = useActor(createActor);
+  reactExports.useEffect(() => {
+    if (!actor || isFetching) return;
+    const syncPrincipal = async () => {
+      try {
+        const data = await actor.getPrincipal();
+        if (data.isAuthed && data.full) {
+          useGameStore.setState((s2) => ({
+            player: { ...s2.player, principal: data.full }
+          }));
+        }
+      } catch {
+      }
+    };
+    const syncLeaderboard = async () => {
+      try {
+        const data = await actor.getLeaderboard(50n);
+        const mapped = data.map((e) => ({
+          rank: Number(e.rank),
+          name: e.username ?? `${e.principal.slice(0, 8)}...${e.principal.slice(-4)}`,
+          principal: e.principal,
+          plotsOwned: Number(e.plotsOwned),
+          frntEarned: Number(e.frntBalance),
+          victories: 0
+        }));
+        useGameStore.setState({ leaderboard: mapped });
+      } catch {
+      }
+    };
+    const syncPlotOwners = async () => {
+      try {
+        const owners = await actor.getAllPlotOwners();
+        const state2 = useGameStore.getState();
+        const updatedPlots = state2.plots.map((plot) => {
+          const ownerEntry = owners.find(
+            ([id2]) => Number(id2) === plot.id
+          );
+          if (ownerEntry) {
+            return { ...plot, owner: ownerEntry[1] };
+          }
+          return plot;
+        });
+        useGameStore.setState({ plots: updatedPlots });
+      } catch (err) {
+        console.warn("syncPlotOwners error:", err);
+      }
+    };
+    const syncPlayer = async () => {
+      try {
+        const state2 = await actor.getPlayerState();
+        if (!state2) return;
+        useGameStore.setState((s2) => ({
+          player: {
+            ...s2.player,
+            frntBalance: Number(state2.frntBalance),
+            iron: Number(state2.iron),
+            fuel: Number(state2.fuel),
+            crystal: Number(state2.crystal)
+            // plotsOwned is local array; backend returns bigint count, not array
+          },
+          rankStats: {
+            ...s2.rankStats,
+            combatWins: Number(state2.combatVictories)
+          },
+          serverPassiveIncomePerDay: Number(state2.passiveIncomePerDay),
+          totalFRNTRBurned: Number(state2.totalFRNTRBurned)
+        }));
+      } catch {
+      }
+    };
+    const syncGlobalStats = async () => {
+      try {
+        const [g2, t] = await Promise.all([
+          actor.getGlobalStats(),
+          actor.getTokenomics()
+        ]);
+        const stats = {
+          totalPlotsOwned: Number(g2.totalPlotsOwned),
+          totalFRNTRInCirculation: Number(g2.circulatingSupply),
+          totalFRNTRBurned: Number(g2.totalBurned),
+          totalFRNTRMined: 0,
+          activePlayerCount: Number(g2.activePlayers),
+          currentDailyEmissionRate: Number(t.emissionRate),
+          leaderboardPrizePool: 0,
+          nextPayoutAt: 0,
+          totalSupply: Number(t.maxSupply),
+          preMinted: 5e9,
+          mineableSupply: Number(t.remainingMineable),
+          maxSupply: Number(t.maxSupply),
+          remainingMineable: Number(t.remainingMineable),
+          daysUntilMilestone: Number(t.daysUntilMilestone),
+          burnRate: Number(t.burnRate),
+          emissionRate: Number(t.emissionRate)
+        };
+        useGameStore.getState().setGlobalStats(stats);
+      } catch {
+      }
+    };
+    void syncPrincipal();
+    void syncPlayer();
+    void syncLeaderboard();
+    void syncPlotOwners();
+    void syncGlobalStats();
+    const interval = setInterval(() => {
+      void syncPrincipal();
+      void syncPlayer();
+      void syncLeaderboard();
+      void syncPlotOwners();
+    }, 1e4);
+    const globalInterval = setInterval(() => {
+      void syncGlobalStats();
+    }, 3e4);
+    return () => {
+      clearInterval(interval);
+      clearInterval(globalInterval);
+    };
+  }, [actor, isFetching]);
+  reactExports.useEffect(() => {
+    if (actor) {
+      const seed = async () => {
+        try {
+          const count = await actor.getPlotCount();
+          if (count === 0n) {
+            const tuples = GEODESIC_TILES.slice(0, 500).map(
+              (tile) => [
+                BigInt(tile.id),
+                randomBiome(tile.id),
+                tile.lat,
+                tile.lng,
+                BigInt(Math.floor(78 + (tile.id * 2654435761 >>> 0) % 21))
+              ]
+            );
+            await actor.initPlots(tuples);
+          }
+          const owners = await actor.getAllPlotOwners();
+          const state2 = useGameStore.getState();
+          const updatedPlots = state2.plots.map((plot) => {
+            const ownerEntry = owners.find(
+              ([id2]) => Number(id2) === plot.id
+            );
+            if (ownerEntry) {
+              return { ...plot, owner: ownerEntry[1] };
+            }
+            return plot;
+          });
+          useGameStore.setState({ plots: updatedPlots });
+        } catch (err) {
+          console.warn("seedPlotsIfEmpty error:", err);
+        }
+      };
+      void seed();
+    }
+  }, [actor]);
+}
 const CYAN = "#00ffcc";
 const CYAN_DIM = "rgba(0,255,204,0.35)";
 const BORDER = "rgba(0,255,204,0.22)";
 const TEXT = "#e0f4ff";
-const NAV_ITEMS = [
-  { id: "land", label: "LAND", Icon: Map$1 },
-  { id: "leaderboard", label: "LEADERBOARD", Icon: Trophy },
-  { id: "inventory", label: "INVENTORY", Icon: Package }
-];
-function TopBar({ onUniverseClick, onPlayNowClick }) {
+function fmt8(n) {
+  return n.toLocaleString(void 0, {
+    minimumFractionDigits: 8,
+    maximumFractionDigits: 8
+  });
+}
+function fmt2(n) {
+  return n.toLocaleString(void 0, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+function TopBar({
+  onUniverseClick,
+  onPlayNowClick
+}) {
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "div",
     {
       "data-ocid": "topbar.panel",
-      className: "fixed top-0 left-0 right-0 z-30 flex items-center justify-between px-2",
+      className: "fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-3",
       style: {
-        height: 48,
+        height: 56,
         background: "rgba(2,10,20,0.88)",
         borderBottom: `1px solid ${BORDER}`,
         backdropFilter: "blur(10px)"
       },
       children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1.5", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs(
             "div",
             {
               style: {
-                width: 40,
-                height: 40,
+                width: 36,
+                height: 36,
                 background: "rgba(0,0,0,0.5)",
                 border: `1px solid ${BORDER}`,
                 borderRadius: 4,
@@ -103319,8 +105973,8 @@ function TopBar({ onUniverseClick, onPlayNowClick }) {
                   "div",
                   {
                     style: {
-                      width: 30,
-                      height: 30,
+                      width: 26,
+                      height: 26,
                       borderRadius: "50%",
                       border: `1px solid ${CYAN_DIM}`,
                       position: "absolute"
@@ -103333,7 +105987,7 @@ function TopBar({ onUniverseClick, onPlayNowClick }) {
                     style: {
                       position: "absolute",
                       width: 1,
-                      height: 22,
+                      height: 18,
                       background: CYAN_DIM
                     }
                   }
@@ -103343,7 +105997,7 @@ function TopBar({ onUniverseClick, onPlayNowClick }) {
                   {
                     style: {
                       position: "absolute",
-                      width: 22,
+                      width: 18,
                       height: 1,
                       background: CYAN_DIM
                     }
@@ -103369,21 +106023,22 @@ function TopBar({ onUniverseClick, onPlayNowClick }) {
             "span",
             {
               style: {
-                fontSize: 8,
+                fontSize: 9,
                 color: CYAN_DIM,
                 letterSpacing: 2,
                 fontWeight: 700
               },
               children: "TACMAP"
             }
-          )
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(PrincipalBadge, {})
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           "div",
           {
             style: {
               color: CYAN,
-              fontSize: 9,
+              fontSize: 10,
               fontWeight: 700,
               letterSpacing: 3,
               textTransform: "uppercase",
@@ -103395,109 +106050,65 @@ function TopBar({ onUniverseClick, onPlayNowClick }) {
             children: "FRONTIER: MISSILE HORIZON"
           }
         ),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs(
-          "div",
-          {
-            style: {
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              marginLeft: "auto"
-            },
-            children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(FaucetButton, {}),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "button",
-                {
-                  type: "button",
-                  "data-ocid": "playnow.primary_button",
-                  onClick: onPlayNowClick,
-                  style: {
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 4,
-                    padding: "4px 10px",
-                    background: "rgba(0,255,204,0.18)",
-                    border: "1px solid rgba(0,255,204,0.6)",
-                    borderRadius: 6,
-                    cursor: "pointer",
-                    color: "#00ffcc",
-                    fontSize: 8,
-                    fontWeight: 700,
-                    letterSpacing: 2,
-                    textTransform: "uppercase",
-                    height: 32,
-                    whiteSpace: "nowrap",
-                    boxShadow: "0 0 10px rgba(0,255,204,0.25)"
-                  },
-                  children: "PLAY NOW"
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "button",
-                {
-                  type: "button",
-                  "data-ocid": "universe.open_modal_button",
-                  onClick: onUniverseClick,
-                  "aria-label": "Open Universe panel",
-                  style: {
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 4,
-                    padding: "4px 10px",
-                    background: "rgba(0,255,204,0.07)",
-                    border: `1px solid ${BORDER}`,
-                    borderRadius: 6,
-                    cursor: "pointer",
-                    color: CYAN,
-                    fontSize: 8,
-                    fontWeight: 700,
-                    letterSpacing: 2,
-                    textTransform: "uppercase",
-                    height: 32,
-                    whiteSpace: "nowrap"
-                  },
-                  children: "UNIVERSE"
-                }
-              )
-            ]
-          }
-        )
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              type: "button",
+              "data-ocid": "playnow.primary_button",
+              onClick: onPlayNowClick,
+              className: "hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-md cursor-pointer font-bold uppercase tracking-widest text-[8px] whitespace-nowrap",
+              style: {
+                background: "rgba(0,255,204,0.18)",
+                border: "1px solid rgba(0,255,204,0.6)",
+                color: "#00ffcc",
+                height: 32,
+                boxShadow: "0 0 10px rgba(0,255,204,0.25)"
+              },
+              children: "PLAY NOW"
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              type: "button",
+              "data-ocid": "universe.open_modal_button",
+              onClick: onUniverseClick,
+              "aria-label": "Open Universe panel",
+              className: "hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-md cursor-pointer font-bold uppercase tracking-widest text-[8px] whitespace-nowrap",
+              style: {
+                background: "rgba(0,255,204,0.07)",
+                border: `1px solid ${BORDER}`,
+                color: CYAN,
+                height: 32
+              },
+              children: "UNIVERSE"
+            }
+          )
+        ] })
       ]
     }
   );
 }
-function BottomNavBar({ activeTab, onTabClick }) {
-  const [windowHeight, setWindowHeight] = reactExports.useState(
-    () => typeof window !== "undefined" ? window.innerHeight : 800
-  );
-  reactExports.useEffect(() => {
-    const handler = () => setWindowHeight(window.innerHeight);
-    window.addEventListener("resize", handler);
-    window.addEventListener("orientationchange", handler);
-    return () => {
-      window.removeEventListener("resize", handler);
-      window.removeEventListener("orientationchange", handler);
-    };
-  }, []);
-  const isLandscape = windowHeight < 500;
-  const navHeight = isLandscape ? 44 : 64;
+function LeftSidebar({
+  activeTab,
+  onTabClick
+}) {
   return /* @__PURE__ */ jsxRuntimeExports.jsx(
     "div",
     {
-      "data-ocid": "nav.panel",
+      className: "hidden md:flex flex-col items-center py-3 gap-2 z-20",
       style: {
         position: "fixed",
-        bottom: 0,
         left: 0,
-        right: 0,
-        zIndex: 60,
-        height: navHeight,
-        display: "flex",
-        background: "rgba(2,10,20,0.97)",
-        borderTop: "1px solid rgba(0,255,204,0.3)",
-        paddingBottom: "env(safe-area-inset-bottom)",
-        boxSizing: "border-box"
+        top: 56,
+        bottom: 64,
+        width: 72,
+        background: "rgba(2,10,20,0.85)",
+        borderRight: `1px solid ${BORDER}`,
+        backdropFilter: "blur(12px)",
+        WebkitBackdropFilter: "blur(12px)",
+        overflowY: "auto"
       },
       children: NAV_ITEMS.map(({ id: id2, label, Icon: Icon2 }) => {
         const isActive = activeTab === id2;
@@ -103505,58 +106116,34 @@ function BottomNavBar({ activeTab, onTabClick }) {
           "button",
           {
             type: "button",
-            "data-ocid": `nav.${id2}.tab`,
+            "data-ocid": `sidebar.${id2}.tab`,
             onClick: () => onTabClick(id2),
+            className: "flex flex-col items-center justify-center gap-1 rounded-lg cursor-pointer transition-all duration-200 flex-shrink-0",
             style: {
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: isLandscape ? 0 : 2,
-              background: isActive ? "rgba(0,255,204,0.07)" : "transparent",
-              border: "none",
-              borderTop: isActive ? `2px solid ${CYAN}` : "2px solid transparent",
-              cursor: "pointer",
-              position: "relative",
-              paddingTop: 2
+              width: 56,
+              height: 56,
+              background: isActive ? "rgba(0,255,204,0.12)" : "transparent",
+              border: isActive ? `1px solid ${CYAN}` : "1px solid transparent"
             },
             children: [
-              isActive && /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "div",
-                {
-                  style: {
-                    position: "absolute",
-                    top: 0,
-                    left: "50%",
-                    transform: "translateX(-50%)",
-                    width: 24,
-                    height: 2,
-                    background: CYAN,
-                    boxShadow: `0 0 8px ${CYAN}`,
-                    borderRadius: 1
-                  }
-                }
-              ),
               /* @__PURE__ */ jsxRuntimeExports.jsx(
                 Icon2,
                 {
-                  size: isLandscape ? 16 : 18,
+                  size: 20,
                   color: isActive ? CYAN : CYAN_DIM,
                   style: {
                     filter: isActive ? `drop-shadow(0 0 4px ${CYAN})` : "none"
                   }
                 }
               ),
-              !isLandscape && /* @__PURE__ */ jsxRuntimeExports.jsx(
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
                 "span",
                 {
                   style: {
-                    fontSize: 7.5,
+                    fontSize: 7,
                     letterSpacing: 0.5,
                     color: isActive ? CYAN : CYAN_DIM,
-                    fontWeight: isActive ? 700 : 400,
-                    textShadow: isActive ? `0 0 8px ${CYAN}` : "none"
+                    fontWeight: isActive ? 700 : 400
                   },
                   children: label
                 }
@@ -103569,196 +106156,105 @@ function BottomNavBar({ activeTab, onTabClick }) {
     }
   );
 }
-function SheetContent({
-  tab,
-  onClose,
-  controlsRef
-}) {
+function CommanderPanel() {
   const player = useGameStore((s2) => s2.player);
-  const purchaseDebugLogs = useGameStore((s2) => s2.purchaseDebugLogs);
-  const clearPurchaseDebugLogs = useGameStore((s2) => s2.clearPurchaseDebugLogs);
-  const leaderboard = useGameStore((s2) => s2.leaderboard);
-  const [debugExpanded, setDebugExpanded] = reactExports.useState(false);
-  if (tab === "land") {
-    return /* @__PURE__ */ jsxRuntimeExports.jsx(MapBottomSheet, { onClose, controlsRef });
+  const totalBurned = useGameStore((s2) => s2.totalFRNTRBurned);
+  const generatorTiers = useGameStore((s2) => s2.generatorTiers);
+  const ownedPlots = player.plotsOwned;
+  const plotCount = ownedPlots.length;
+  let dailyFrntr = 0;
+  for (const pid of ownedPlots) {
+    dailyFrntr += 7;
+    const tier = generatorTiers[pid] ?? 0;
+    const TIER_BONUS = {
+      1: 8,
+      2: 24,
+      3: 48,
+      4: 96,
+      5: 192,
+      6: 384
+    };
+    if (tier > 0) dailyFrntr += TIER_BONUS[tier] ?? 0;
   }
-  if (tab === "leaderboard") {
-    const entries = leaderboard.slice(0, 10);
-    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { padding: 12 }, children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "div",
-        {
-          style: {
-            fontSize: 10,
-            fontWeight: 700,
-            color: CYAN,
-            letterSpacing: 2,
-            marginBottom: 12,
-            textShadow: `0 0 8px ${CYAN}`
-          },
-          children: "GLOBAL LEADERBOARD"
-        }
-      ),
-      entries.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs(
-        "div",
-        {
-          "data-ocid": "leaderboard.empty_state",
-          style: {
-            padding: 24,
-            textAlign: "center",
-            color: CYAN_DIM,
-            fontSize: 10,
-            letterSpacing: 0.5
-          },
-          children: [
-            "NO PLAYERS YET",
-            /* @__PURE__ */ jsxRuntimeExports.jsx("br", {}),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 8 }, children: "BE THE FIRST TO REGISTER!" })
-          ]
-        }
-      ) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "flex", flexDirection: "column", gap: 6 }, children: entries.map((e) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
-        "div",
-        {
-          "data-ocid": `leaderboard.item.${e.rank}`,
-          style: {
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            background: e.rank === 1 ? "rgba(0,255,204,0.08)" : "rgba(0,255,204,0.03)",
-            border: `1px solid ${BORDER}`,
-            borderRadius: 6,
-            padding: "8px 10px"
-          },
-          children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "div",
-              {
-                style: {
-                  width: 24,
-                  height: 24,
-                  borderRadius: "50%",
-                  background: e.rank === 1 ? "rgba(255,215,0,0.2)" : e.rank === 2 ? "rgba(192,192,192,0.2)" : e.rank === 3 ? "rgba(205,127,50,0.2)" : "transparent",
-                  border: `1px solid ${e.rank <= 3 ? CYAN : BORDER}`,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 10,
-                  fontWeight: 700,
-                  color: e.rank <= 3 ? CYAN : CYAN_DIM,
-                  flexShrink: 0
-                },
-                children: e.rank
-              }
-            ),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { flex: 1, minWidth: 0 }, children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "div",
-                {
-                  style: {
-                    fontSize: 10,
-                    fontWeight: 700,
-                    color: TEXT,
-                    letterSpacing: 0.5,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap"
-                  },
-                  children: e.name
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                "div",
-                {
-                  style: {
-                    fontSize: 8,
-                    color: CYAN_DIM,
-                    letterSpacing: 0.5
-                  },
-                  children: [
-                    e.plotsOwned,
-                    " PLOTS"
-                  ]
-                }
-              )
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs(
-              "div",
-              {
-                style: {
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: CYAN,
-                  fontFamily: "monospace",
-                  letterSpacing: 0.5
-                },
-                children: [
-                  e.frntEarned.toLocaleString(void 0, {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2
-                  }),
-                  " ",
-                  "FRNTR"
-                ]
-              }
-            )
-          ]
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-3 p-3", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "div",
+      {
+        style: {
+          fontSize: 10,
+          fontWeight: 700,
+          color: CYAN,
+          letterSpacing: 2,
+          textShadow: `0 0 8px ${CYAN}`
         },
-        e.rank
-      )) }),
+        children: "COMMANDER PANEL"
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "div",
+      {
+        className: "rounded-lg p-2.5",
+        style: {
+          background: "rgba(0,255,204,0.05)",
+          border: `1px solid ${BORDER}`
+        },
+        children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 7, color: CYAN_DIM, letterSpacing: 1 }, children: "PRINCIPAL" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
+            {
+              className: "font-mono truncate",
+              style: { fontSize: 9, color: TEXT, marginTop: 2 },
+              children: player.principal ?? "Not Connected"
+            }
+          )
+        ]
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "div",
+      {
+        className: "rounded-lg p-2.5",
+        style: {
+          background: "rgba(0,255,204,0.05)",
+          border: `1px solid ${BORDER}`
+        },
+        children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 7, color: CYAN_DIM, letterSpacing: 1 }, children: "FRNTR BALANCE" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
+            {
+              className: "font-mono",
+              style: {
+                fontSize: 14,
+                fontWeight: 900,
+                color: CYAN,
+                marginTop: 2,
+                textShadow: `0 0 8px ${CYAN}`
+              },
+              children: fmt8(player.frntBalance)
+            }
+          )
+        ]
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-2 gap-2", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs(
         "div",
         {
+          className: "rounded-lg p-2",
           style: {
-            marginTop: 12,
-            padding: "10px",
-            background: "rgba(0,255,204,0.03)",
-            border: `1px solid ${BORDER}`,
-            borderRadius: 6
+            background: "rgba(0,255,204,0.05)",
+            border: `1px solid ${BORDER}`
           },
           children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 7, color: CYAN_DIM, letterSpacing: 1 }, children: "PLOTS OWNED" }),
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               "div",
               {
-                style: {
-                  fontSize: 8,
-                  color: CYAN_DIM,
-                  letterSpacing: 1,
-                  textAlign: "center"
-                },
-                children: "YOUR RANK"
-              }
-            ),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs(
-              "div",
-              {
-                style: {
-                  fontSize: 18,
-                  fontWeight: 900,
-                  color: CYAN,
-                  textAlign: "center",
-                  fontFamily: "monospace",
-                  textShadow: `0 0 12px ${CYAN}`,
-                  marginTop: 4
-                },
-                children: [
-                  "#",
-                  player.plotsOwned.length > 0 ? "—" : "—"
-                ]
-              }
-            ),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs(
-              "div",
-              {
-                style: {
-                  fontSize: 9,
-                  color: CYAN_DIM,
-                  textAlign: "center",
-                  marginTop: 2
-                },
-                children: [
-                  player.plotsOwned.length,
-                  " PLOTS OWNED"
-                ]
+                className: "font-mono",
+                style: { fontSize: 16, fontWeight: 900, color: CYAN, marginTop: 2 },
+                children: plotCount
               }
             )
           ]
@@ -103767,270 +106263,173 @@ function SheetContent({
       /* @__PURE__ */ jsxRuntimeExports.jsxs(
         "div",
         {
+          className: "rounded-lg p-2",
           style: {
-            marginTop: 12,
-            background: "rgba(4,12,24,0.85)",
-            border: `1px solid ${BORDER}`,
-            borderRadius: 8,
-            backdropFilter: "blur(12px)",
-            WebkitBackdropFilter: "blur(12px)",
-            overflow: "hidden"
+            background: "rgba(0,255,204,0.05)",
+            border: `1px solid ${BORDER}`
           },
           children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs(
-              "button",
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 7, color: CYAN_DIM, letterSpacing: 1 }, children: "DAILY FRNTR" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "div",
               {
-                type: "button",
-                "data-ocid": "purchase_debug.toggle_button",
-                onClick: () => setDebugExpanded((p2) => !p2),
-                style: {
-                  width: "100%",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "8px 12px",
-                  background: "transparent",
-                  border: "none",
-                  cursor: "pointer",
-                  color: CYAN,
-                  fontSize: 9,
-                  fontWeight: 700,
-                  letterSpacing: 1.5,
-                  textTransform: "uppercase"
-                },
-                children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "PURCHASE DEBUG LOG" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    ChevronRight,
-                    {
-                      size: 14,
-                      style: {
-                        transform: debugExpanded ? "rotate(90deg)" : "rotate(0deg)",
-                        transition: "transform 0.2s ease"
-                      }
-                    }
-                  )
-                ]
+                className: "font-mono",
+                style: { fontSize: 16, fontWeight: 900, color: CYAN, marginTop: 2 },
+                children: dailyFrntr
               }
-            ),
-            debugExpanded && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { padding: "0 12px 12px" }, children: [
-              purchaseDebugLogs.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "div",
-                {
-                  "data-ocid": "purchase_debug.empty_state",
-                  style: {
-                    padding: 12,
-                    textAlign: "center",
-                    color: CYAN_DIM,
-                    fontSize: 9,
-                    letterSpacing: 0.5
-                  },
-                  children: "NO PURCHASE ATTEMPTS YET"
-                }
-              ) : /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "div",
-                {
-                  style: {
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 8,
-                    maxHeight: 240,
-                    overflowY: "auto"
-                  },
-                  children: purchaseDebugLogs.map((log2) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                    "div",
-                    {
-                      "data-ocid": `purchase_debug.item.${log2.plotId}`,
-                      style: {
-                        background: "rgba(0,255,204,0.03)",
-                        border: `1px solid ${BORDER}`,
-                        borderRadius: 6,
-                        padding: "8px 10px"
-                      },
-                      children: [
-                        /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                          "div",
-                          {
-                            style: {
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "center",
-                              marginBottom: 6
-                            },
-                            children: [
-                              /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                                "span",
-                                {
-                                  style: {
-                                    fontSize: 9,
-                                    fontWeight: 700,
-                                    color: TEXT,
-                                    letterSpacing: 0.5
-                                  },
-                                  children: [
-                                    "PLOT #",
-                                    log2.plotId
-                                  ]
-                                }
-                              ),
-                              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                "span",
-                                {
-                                  style: {
-                                    fontSize: 7,
-                                    color: CYAN_DIM,
-                                    fontFamily: "monospace"
-                                  },
-                                  children: log2.timestamp.toLocaleTimeString()
-                                }
-                              )
-                            ]
-                          }
-                        ),
-                        /* @__PURE__ */ jsxRuntimeExports.jsx(
-                          "div",
-                          {
-                            style: {
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: 4
-                            },
-                            children: log2.steps.map((step, stepIdx) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                              "div",
-                              {
-                                style: {
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: 6
-                                },
-                                children: [
-                                  step.status === "success" ? /* @__PURE__ */ jsxRuntimeExports.jsx(Check, { size: 10, color: "#00ffcc" }) : step.status === "error" ? /* @__PURE__ */ jsxRuntimeExports.jsx(X$1, { size: 10, color: "#ff4444" }) : /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                    "div",
-                                    {
-                                      style: {
-                                        width: 8,
-                                        height: 8,
-                                        borderRadius: "50%",
-                                        background: "rgba(0,255,204,0.25)",
-                                        flexShrink: 0
-                                      }
-                                    }
-                                  ),
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                    "span",
-                                    {
-                                      style: {
-                                        fontSize: 8,
-                                        color: step.status === "error" ? "#ff6666" : step.status === "success" ? "#00ffcc" : CYAN_DIM,
-                                        letterSpacing: 0.5
-                                      },
-                                      children: step.step
-                                    }
-                                  )
-                                ]
-                              },
-                              `${log2.id}-${step.step}-${stepIdx}`
-                            ))
-                          }
-                        )
-                      ]
-                    },
-                    log2.id
-                  ))
-                }
-              ),
-              purchaseDebugLogs.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "button",
-                {
-                  type: "button",
-                  "data-ocid": "purchase_debug.clear_button",
-                  onClick: clearPurchaseDebugLogs,
-                  style: {
-                    marginTop: 10,
-                    width: "100%",
-                    padding: "6px 0",
-                    background: "rgba(255,68,68,0.08)",
-                    border: "1px solid rgba(255,68,68,0.3)",
-                    borderRadius: 4,
-                    color: "#ff6666",
-                    fontSize: 8,
-                    fontWeight: 700,
-                    letterSpacing: 1,
-                    cursor: "pointer",
-                    textTransform: "uppercase"
-                  },
-                  children: "CLEAR LOG"
-                }
-              )
-            ] })
+            )
           ]
         }
       )
-    ] });
-  }
-  if (tab === "inventory") {
-    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { padding: 12 }, children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "div",
-        {
-          style: {
-            fontSize: 10,
-            fontWeight: 700,
-            color: CYAN,
-            letterSpacing: 2,
-            marginBottom: 12,
-            textShadow: `0 0 8px ${CYAN}`
-          },
-          children: "OWNED PLOTS"
-        }
-      ),
-      player.plotsOwned.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs(
-        "div",
-        {
-          "data-ocid": "inventory.empty_state",
-          style: {
-            padding: 24,
-            textAlign: "center",
-            color: CYAN_DIM,
-            fontSize: 10,
-            letterSpacing: 0.5
-          },
-          children: [
-            "NO PLOTS OWNED",
-            /* @__PURE__ */ jsxRuntimeExports.jsx("br", {}),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 8 }, children: "TAP A HEX ON THE GLOBE TO PURCHASE" })
-          ]
-        }
-      ) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "flex", flexDirection: "column", gap: 6 }, children: player.plotsOwned.map((plotId, idx) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "div",
+      {
+        className: "rounded-lg p-2.5",
+        style: {
+          background: "rgba(0,255,204,0.05)",
+          border: `1px solid ${BORDER}`
+        },
+        children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
+            {
+              style: {
+                fontSize: 7,
+                color: CYAN_DIM,
+                letterSpacing: 1,
+                marginBottom: 6
+              },
+              children: "RESOURCES"
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-2 gap-2", children: [
+            { label: "IRON", value: player.iron },
+            { label: "FUEL", value: player.fuel },
+            { label: "CRYSTAL", value: player.crystal },
+            { label: "RARE EARTH", value: player.rareEarth }
+          ].map((r2) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 7, color: CYAN_DIM }, children: r2.label }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "span",
+              {
+                className: "font-mono",
+                style: { fontSize: 10, color: TEXT, fontWeight: 700 },
+                children: fmt8(r2.value)
+              }
+            )
+          ] }, r2.label)) })
+        ]
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "div",
+      {
+        className: "rounded-lg p-2",
+        style: {
+          background: "rgba(255,68,68,0.05)",
+          border: "1px solid rgba(255,68,68,0.2)"
+        },
+        children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 7, color: "#ff6666", letterSpacing: 1 }, children: "TOTAL FRNTR BURNED" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
+            {
+              className: "font-mono",
+              style: {
+                fontSize: 12,
+                fontWeight: 900,
+                color: "#ff6666",
+                marginTop: 2
+              },
+              children: fmt8(totalBurned)
+            }
+          )
+        ]
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "div",
+      {
+        className: "rounded-lg p-2",
+        style: {
+          background: "rgba(0,255,204,0.05)",
+          border: `1px solid ${BORDER}`
+        },
+        children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 7, color: CYAN_DIM, letterSpacing: 1 }, children: "STORAGE CAP" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
+            {
+              className: "font-mono",
+              style: { fontSize: 12, fontWeight: 900, color: CYAN, marginTop: 2 },
+              children: player.resourceStorageCap
+            }
+          )
+        ]
+      }
+    )
+  ] });
+}
+function InventoryPanel() {
+  const player = useGameStore((s2) => s2.player);
+  const plots = useGameStore((s2) => s2.plots);
+  const generatorTiers = useGameStore((s2) => s2.generatorTiers);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-3 p-3", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "div",
+      {
+        style: {
+          fontSize: 10,
+          fontWeight: 700,
+          color: CYAN,
+          letterSpacing: 2,
+          textShadow: `0 0 8px ${CYAN}`
+        },
+        children: "OWNED PLOTS"
+      }
+    ),
+    player.plotsOwned.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "div",
+      {
+        "data-ocid": "inventory.empty_state",
+        className: "text-center py-6",
+        style: { color: CYAN_DIM, fontSize: 10 },
+        children: [
+          "NO PLOTS OWNED",
+          /* @__PURE__ */ jsxRuntimeExports.jsx("br", {}),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 8 }, children: "TAP A HEX ON THE GLOBE TO PURCHASE" })
+        ]
+      }
+    ) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-col gap-2", children: player.plotsOwned.map((plotId, idx) => {
+      var _a3, _b3;
+      const plot = plots.find((p2) => p2.id === plotId);
+      const tier = generatorTiers[plotId] ?? 0;
+      const dailyRate = 7 + tier * 2;
+      const rates = (plot == null ? void 0 : plot.biome) ? BIOME_MINERAL_RATES[plot.biome] : null;
+      const topMineral = rates ? (_b3 = (_a3 = Object.entries(rates).sort((a2, b2) => b2[1] - a2[1])[0]) == null ? void 0 : _a3[0]) == null ? void 0 : _b3.toUpperCase() : null;
+      return /* @__PURE__ */ jsxRuntimeExports.jsxs(
         "div",
         {
           "data-ocid": `inventory.item.${idx + 1}`,
+          className: "flex items-center gap-2.5 rounded-lg p-2",
           style: {
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
             background: "rgba(0,255,204,0.03)",
-            border: `1px solid ${BORDER}`,
-            borderRadius: 6,
-            padding: "8px 10px"
+            border: `1px solid ${BORDER}`
           },
           children: [
             /* @__PURE__ */ jsxRuntimeExports.jsxs(
               "div",
               {
+                className: "flex items-center justify-center rounded-full flex-shrink-0",
                 style: {
                   width: 32,
                   height: 32,
-                  borderRadius: "50%",
                   background: "rgba(0,255,204,0.08)",
                   border: `1px solid ${CYAN}`,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
                   fontSize: 10,
                   fontWeight: 700,
-                  color: CYAN,
-                  flexShrink: 0
+                  color: CYAN
                 },
                 children: [
                   "#",
@@ -104038,10 +106437,11 @@ function SheetContent({
                 ]
               }
             ),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { flex: 1, minWidth: 0 }, children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 min-w-0", children: [
               /* @__PURE__ */ jsxRuntimeExports.jsxs(
                 "div",
                 {
+                  className: "truncate",
                   style: {
                     fontSize: 10,
                     fontWeight: 700,
@@ -104054,15 +106454,18 @@ function SheetContent({
                   ]
                 }
               ),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
+              /* @__PURE__ */ jsxRuntimeExports.jsxs(
                 "div",
                 {
-                  style: {
-                    fontSize: 8,
-                    color: CYAN_DIM,
-                    letterSpacing: 0.5
-                  },
-                  children: "GENERATOR I · 7 FRNTR/DAY"
+                  style: { fontSize: 8, color: CYAN_DIM, letterSpacing: 0.5 },
+                  children: [
+                    (plot == null ? void 0 : plot.biome) ?? "Unknown",
+                    " · ",
+                    dailyRate,
+                    " FRNTR/DAY ·",
+                    " ",
+                    topMineral ?? "IRON"
+                  ]
                 }
               )
             ] }),
@@ -104071,17 +106474,11 @@ function SheetContent({
               {
                 type: "button",
                 "data-ocid": `inventory.transfer_button.${idx + 1}`,
+                className: "px-2 py-1 rounded cursor-pointer font-bold text-[8px] tracking-wide whitespace-nowrap",
                 style: {
-                  fontSize: 8,
-                  fontWeight: 700,
                   color: CYAN,
                   background: "rgba(0,255,204,0.08)",
-                  border: `1px solid ${BORDER}`,
-                  borderRadius: 4,
-                  padding: "4px 8px",
-                  cursor: "pointer",
-                  letterSpacing: 0.5,
-                  whiteSpace: "nowrap"
+                  border: `1px solid ${BORDER}`
                 },
                 children: "TRANSFER"
               }
@@ -104089,191 +106486,206 @@ function SheetContent({
           ]
         },
         plotId
-      )) })
-    ] });
-  }
-  return null;
+      );
+    }) })
+  ] });
 }
-function BottomSheet({ activeTab, onClose, controlsRef }) {
-  var _a3;
-  const isOpen = activeTab !== null;
-  const tabLabel = ((_a3 = NAV_ITEMS.find((n) => n.id === activeTab)) == null ? void 0 : _a3.label) ?? "";
-  const isLandTab = activeTab === "land";
-  const sheetHeight = isLandTab ? "75vh" : "55vh";
-  const [windowWidth, setWindowWidth] = reactExports.useState(
-    () => typeof window !== "undefined" ? window.innerWidth : 1024
+function LeaderboardPanel() {
+  const leaderboard = useGameStore((s2) => s2.leaderboard);
+  const player = useGameStore((s2) => s2.player);
+  const entries = leaderboard.slice(0, 10);
+  const myRank = leaderboard.findIndex(
+    (e) => e.principal && e.principal === player.principal
   );
-  const [windowHeight, setWindowHeight] = reactExports.useState(
-    () => typeof window !== "undefined" ? window.innerHeight : 800
-  );
-  reactExports.useEffect(() => {
-    const handler = () => {
-      setWindowWidth(window.innerWidth);
-      setWindowHeight(window.innerHeight);
-    };
-    window.addEventListener("resize", handler);
-    window.addEventListener("orientationchange", handler);
-    return () => {
-      window.removeEventListener("resize", handler);
-      window.removeEventListener("orientationchange", handler);
-    };
-  }, []);
-  const isMobile = windowWidth < 768;
-  const isLandscape = windowHeight < 500;
-  const navHeight = isLandscape ? 44 : 64;
-  const sheetBottom = isLandTab && isMobile ? navHeight + 64 : navHeight;
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-    isOpen && // biome-ignore lint/a11y/useKeyWithClickEvents: fullscreen overlay backdrop
+  const rankDisplay = myRank >= 0 ? String(myRank + 1) : "UNRANKED";
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-3 p-3", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx(
       "div",
       {
-        "data-ocid": "sheet.backdrop",
-        onClick: onClose,
         style: {
-          position: "fixed",
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: navHeight,
-          background: "rgba(0,0,0,0.4)",
-          zIndex: 45
-        }
+          fontSize: 10,
+          fontWeight: 700,
+          color: CYAN,
+          letterSpacing: 2,
+          textShadow: `0 0 8px ${CYAN}`
+        },
+        children: "GLOBAL LEADERBOARD"
       }
     ),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    entries.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs(
       "div",
       {
-        "data-ocid": "nav.sheet",
+        "data-ocid": "leaderboard.empty_state",
+        className: "text-center py-6",
+        style: { color: CYAN_DIM, fontSize: 10 },
+        children: [
+          "NO PLAYERS YET",
+          /* @__PURE__ */ jsxRuntimeExports.jsx("br", {}),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 8 }, children: "BE THE FIRST TO REGISTER!" })
+        ]
+      }
+    ) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-col gap-1.5", children: entries.map((e) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "div",
+      {
+        "data-ocid": `leaderboard.item.${e.rank}`,
+        className: "flex items-center gap-2.5 rounded-lg p-2",
         style: {
-          position: "fixed",
-          bottom: sheetBottom,
-          left: "50%",
-          transform: isOpen ? "translate(-50%, 0)" : "translate(-50%, 100%)",
-          width: "min(100%, 480px)",
-          height: sheetHeight,
-          zIndex: 50,
-          background: "rgba(4,12,24,0.97)",
-          borderTop: `1px solid ${BORDER}`,
-          borderLeft: `1px solid ${BORDER}`,
-          borderRight: `1px solid ${BORDER}`,
-          borderRadius: "16px 16px 0 0",
-          transition: "transform 0.3s ease-out, height 0.3s ease-out, bottom 0.2s ease-out",
-          display: "flex",
-          flexDirection: "column",
-          backdropFilter: "blur(16px)",
-          WebkitBackdropFilter: "blur(16px)"
+          background: e.rank === 1 ? "rgba(0,255,204,0.08)" : "rgba(0,255,204,0.03)",
+          border: `1px solid ${BORDER}`
         },
         children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             "div",
             {
+              className: "flex items-center justify-center rounded-full flex-shrink-0",
               style: {
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                padding: "8px 0 0",
-                cursor: "pointer"
+                width: 24,
+                height: 24,
+                background: e.rank === 1 ? "rgba(255,215,0,0.2)" : e.rank === 2 ? "rgba(192,192,192,0.2)" : e.rank === 3 ? "rgba(205,127,50,0.2)" : "transparent",
+                border: `1px solid ${e.rank <= 3 ? CYAN : BORDER}`,
+                fontSize: 10,
+                fontWeight: 700,
+                color: e.rank <= 3 ? CYAN : CYAN_DIM
               },
-              onClick: onClose,
-              children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "div",
-                {
-                  style: {
-                    width: 36,
-                    height: 3,
-                    borderRadius: 2,
-                    background: BORDER,
-                    marginBottom: 6
-                  }
-                }
-              )
+              children: e.rank
             }
           ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 min-w-0", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "div",
+              {
+                className: "truncate",
+                style: {
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: TEXT,
+                  letterSpacing: 0.5
+                },
+                children: e.name
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "div",
+              {
+                style: { fontSize: 8, color: CYAN_DIM, letterSpacing: 0.5 },
+                children: [
+                  e.plotsOwned,
+                  " PLOTS"
+                ]
+              }
+            )
+          ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs(
             "div",
             {
+              className: "font-mono",
               style: {
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                padding: "0 14px 8px",
-                borderBottom: `1px solid ${BORDER}`
+                fontSize: 11,
+                fontWeight: 700,
+                color: CYAN,
+                letterSpacing: 0.5
               },
               children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "span",
-                  {
-                    style: {
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color: CYAN,
-                      letterSpacing: 2,
-                      textShadow: `0 0 10px ${CYAN}`
-                    },
-                    children: tabLabel
-                  }
-                ),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "button",
-                  {
-                    type: "button",
-                    "data-ocid": "nav.sheet.close_button",
-                    onClick: onClose,
-                    style: {
-                      background: "none",
-                      border: "none",
-                      cursor: "pointer",
-                      color: CYAN_DIM,
-                      padding: 2
-                    },
-                    children: /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronDown, { size: 16 })
-                  }
-                )
+                fmt2(e.frntEarned),
+                " FRNTR"
+              ]
+            }
+          )
+        ]
+      },
+      e.rank
+    )) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "div",
+      {
+        className: "rounded-lg p-2.5 text-center",
+        style: {
+          background: "rgba(0,255,204,0.03)",
+          border: `1px solid ${BORDER}`
+        },
+        children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: CYAN_DIM, letterSpacing: 1 }, children: "YOUR RANK" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              className: "font-mono",
+              style: {
+                fontSize: 18,
+                fontWeight: 900,
+                color: CYAN,
+                textShadow: `0 0 12px ${CYAN}`,
+                marginTop: 4
+              },
+              children: [
+                "#",
+                rankDisplay
               ]
             }
           ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "div",
-            {
-              style: {
-                overflowY: isLandTab ? "hidden" : "auto",
-                flex: 1,
-                minHeight: 0,
-                height: "100%",
-                display: "flex",
-                flexDirection: "column"
-              },
-              children: activeTab && /* @__PURE__ */ jsxRuntimeExports.jsx(
-                SheetContent,
-                {
-                  tab: activeTab,
-                  onClose,
-                  controlsRef
-                }
-              )
-            }
-          )
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { fontSize: 9, color: CYAN_DIM, marginTop: 2 }, children: [
+            player.plotsOwned.length,
+            " PLOTS OWNED"
+          ] })
         ]
       }
     )
   ] });
 }
 function Play() {
+  var _a3;
+  const { loginStatus, isAuthenticated, login, identity: identity2 } = useInternetIdentity();
   const controlsRef = reactExports.useRef(null);
   usePlayerSync();
   const [activeTab, setActiveTab] = reactExports.useState(null);
   const [showUniverse, setShowUniverse] = reactExports.useState(false);
   const [showPlayNow, setShowPlayNow] = reactExports.useState(false);
+  const [showAuthOverlay, setShowAuthOverlay] = reactExports.useState(true);
+  const [purchaseToast, setPurchaseToast] = reactExports.useState(null);
+  const [windowWidth, setWindowWidth] = reactExports.useState(
+    typeof window !== "undefined" ? window.innerWidth : 0
+  );
   const player = useGameStore((s2) => s2.player);
-  useGameStore((s2) => s2.totalFRNTRBurned);
+  const setAuth = useGameStore((s2) => s2.setAuth);
+  const addFrntr = useGameStore((s2) => s2.addFrntr);
+  const selectPlot = useGameStore((s2) => s2.selectPlot);
   const plotHoverCard = useGameStore((s2) => s2.plotHoverCard);
   const setPlotHoverCard = useGameStore((s2) => s2.setPlotHoverCard);
-  const [purchaseToast, setPurchaseToast] = reactExports.useState(null);
+  reactExports.useEffect(() => {
+    if (isAuthenticated && identity2) {
+      const principal = identity2.getPrincipal().toText();
+      setAuth(principal);
+      useGameStore.setState((s2) => ({ player: { ...s2.player, principal } }));
+      setShowAuthOverlay(false);
+    }
+  }, [isAuthenticated, identity2, setAuth]);
   const purchaseToastTimerRef = reactExports.useRef(
     null
   );
   const prevPlotsOwnedLen = reactExports.useRef(player.plotsOwned.length);
-  const handleTabClick = (id2) => setActiveTab((prev) => prev === id2 ? null : id2);
+  reactExports.useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+  reactExports.useEffect(() => {
+    const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+    const lastLogin = localStorage.getItem("frontier_last_login");
+    if (lastLogin !== today) {
+      addFrntr(50);
+      ue.success("Daily login bonus: +50 FRNTR", { duration: 5e3 });
+      localStorage.setItem("frontier_last_login", today);
+    }
+  }, [addFrntr]);
+  const handleTabClick = reactExports.useCallback((id2) => {
+    setActiveTab((prev) => prev === id2 ? null : id2);
+  }, []);
+  const handlePlotSelect = reactExports.useCallback(
+    (plotId) => {
+      selectPlot(plotId);
+      setActiveTab("map");
+    },
+    [selectPlot]
+  );
   reactExports.useEffect(() => {
     const currentLen = player.plotsOwned.length;
     if (currentLen > prevPlotsOwnedLen.current) {
@@ -104288,18 +106700,50 @@ function Play() {
     }
     prevPlotsOwnedLen.current = currentLen;
   }, [player.plotsOwned]);
+  const tabLabel = ((_a3 = NAV_ITEMS.find((t) => t.id === activeTab)) == null ? void 0 : _a3.label) ?? "";
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "div",
     {
-      style: {
-        position: "fixed",
-        inset: 0,
-        overflow: "hidden",
-        background: "#020509"
-      },
+      className: "fixed inset-0 overflow-hidden",
+      style: { background: "#020509" },
       children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { position: "absolute", inset: 0 }, children: /* @__PURE__ */ jsxRuntimeExports.jsx(GlobeCanvas, { controlsRef }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(Navbar, {}),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "div",
+          {
+            className: "absolute inset-0",
+            style: {
+              paddingLeft: windowWidth >= 768 ? 72 : 0,
+              paddingTop: 56,
+              paddingBottom: 64
+            },
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+              GlobeCanvas,
+              {
+                controlsRef,
+                onPlotSelect: handlePlotSelect
+              }
+            )
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            style: {
+              position: "fixed",
+              top: 64,
+              right: 12,
+              zIndex: 48,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "flex-end",
+              gap: 6
+            },
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(FaucetOverlay, {}),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(StressTestPanel, {})
+            ]
+          }
+        ),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           TopBar,
           {
@@ -104307,14 +106751,29 @@ function Play() {
             onPlayNowClick: () => setShowPlayNow(true)
           }
         ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(LeftSidebarHUD, {}),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(BottomNavBar, { activeTab, onTabClick: handleTabClick }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
+        /* @__PURE__ */ jsxRuntimeExports.jsx(LeftSidebar, { activeTab, onTabClick: handleTabClick }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(BottomNav, { activeTab, onTabClick: handleTabClick }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
           BottomSheet,
           {
-            activeTab,
+            isOpen: activeTab !== null,
+            title: tabLabel,
             onClose: () => setActiveTab(null),
-            controlsRef
+            height: "70vh",
+            children: [
+              activeTab === "map" && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                MapBottomSheet,
+                {
+                  onClose: () => setActiveTab(null),
+                  controlsRef
+                }
+              ),
+              activeTab === "command" && /* @__PURE__ */ jsxRuntimeExports.jsx(CommanderPanel, {}),
+              activeTab === "inventory" && /* @__PURE__ */ jsxRuntimeExports.jsx(InventoryPanel, {}),
+              activeTab === "leaderboard" && /* @__PURE__ */ jsxRuntimeExports.jsx(LeaderboardPanel, {}),
+              activeTab === "universe" && /* @__PURE__ */ jsxRuntimeExports.jsx(UniversePanel, { inline: true }),
+              activeTab === "intel" && /* @__PURE__ */ jsxRuntimeExports.jsx(IntelTab, {})
+            ]
           }
         ),
         plotHoverCard && /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -104328,34 +106787,201 @@ function Play() {
           }
         ),
         showUniverse && /* @__PURE__ */ jsxRuntimeExports.jsx(UniversePanel, { onClose: () => setShowUniverse(false) }),
-        showPlayNow && !player.principal && /* @__PURE__ */ jsxRuntimeExports.jsx(
+        showPlayNow && /* @__PURE__ */ jsxRuntimeExports.jsx(
           PlayNowOverlay,
           {
             onLogin: () => setShowPlayNow(false),
             onClose: () => setShowPlayNow(false)
           }
         ),
+        showAuthOverlay && !isAuthenticated && !player.principal && /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "div",
+          {
+            "data-ocid": "auth.overlay",
+            style: {
+              position: "fixed",
+              inset: 0,
+              zIndex: 960,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "rgba(1,5,12,0.97)",
+              backdropFilter: "blur(24px)",
+              WebkitBackdropFilter: "blur(24px)"
+            },
+            children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "div",
+              {
+                style: {
+                  position: "relative",
+                  zIndex: 2,
+                  width: "100%",
+                  maxWidth: 400,
+                  padding: "0 24px",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 16,
+                  textAlign: "center"
+                },
+                children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        padding: "4px 14px",
+                        borderRadius: 20,
+                        border: `1px solid ${CYAN}44`,
+                        fontSize: 8,
+                        letterSpacing: 3,
+                        color: CYAN,
+                        background: "rgba(0,255,204,0.07)",
+                        textTransform: "uppercase",
+                        textShadow: `0 0 8px ${CYAN}`
+                      },
+                      children: "v1.0 LIVE ON ICP"
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "h1",
+                    {
+                      style: {
+                        fontSize: 26,
+                        fontWeight: 900,
+                        color: CYAN,
+                        letterSpacing: 4,
+                        textTransform: "uppercase",
+                        textShadow: `0 0 30px ${CYAN}, 0 0 60px ${CYAN}44`,
+                        lineHeight: 1.1,
+                        margin: 0
+                      },
+                      children: [
+                        "FRONTIER:",
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("br", {}),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: TEXT }, children: "MISSILE HORIZON" })
+                      ]
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "p",
+                    {
+                      style: {
+                        fontSize: 11,
+                        color: "rgba(224,244,255,0.6)",
+                        lineHeight: 1.7,
+                        margin: 0
+                      },
+                      children: "Own land on Earth as an NFT plot. Accumulate FRNTR tokens. Fully on-chain on the Internet Computer Protocol."
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "div",
+                    {
+                      style: {
+                        background: "rgba(0,20,40,0.55)",
+                        border: `1px solid ${BORDER}`,
+                        borderLeft: `3px solid ${CYAN}`,
+                        borderRadius: 8,
+                        padding: "12px 14px",
+                        textAlign: "left",
+                        width: "100%"
+                      },
+                      children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "div",
+                          {
+                            style: {
+                              fontSize: 8,
+                              color: CYAN,
+                              letterSpacing: 3,
+                              marginBottom: 6,
+                              fontWeight: 700
+                            },
+                            children: "MISSION BRIEFING"
+                          }
+                        ),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "p",
+                          {
+                            style: {
+                              fontSize: 10,
+                              color: "rgba(224,244,255,0.55)",
+                              lineHeight: 1.8,
+                              margin: 0
+                            },
+                            children: "5,882 hex plots divided across Earth. Each plot is yours to own, mine, and upgrade. FRNTR: 10 billion tokens, 5B mineable only by landowners over 3–5 years. No central server. No middleman."
+                          }
+                        )
+                      ]
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "button",
+                    {
+                      type: "button",
+                      "data-ocid": "auth.connect_button",
+                      onClick: () => {
+                        if (loginStatus === "logging-in") return;
+                        login();
+                      },
+                      disabled: loginStatus === "logging-in",
+                      style: {
+                        width: "100%",
+                        padding: "14px",
+                        borderRadius: 10,
+                        background: "linear-gradient(135deg, rgba(0,255,204,0.25), rgba(0,255,204,0.12))",
+                        border: `2px solid ${CYAN}`,
+                        color: CYAN,
+                        fontSize: 13,
+                        fontWeight: 900,
+                        letterSpacing: 3,
+                        cursor: loginStatus === "logging-in" ? "not-allowed" : "pointer",
+                        textTransform: "uppercase",
+                        boxShadow: `0 0 24px ${CYAN}44`,
+                        textShadow: `0 0 10px ${CYAN}`,
+                        opacity: loginStatus === "logging-in" ? 0.7 : 1
+                      },
+                      children: loginStatus === "logging-in" ? "CONNECTING..." : "CONNECT WALLET"
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "button",
+                    {
+                      type: "button",
+                      "data-ocid": "auth.skip_button",
+                      onClick: () => setShowAuthOverlay(false),
+                      style: {
+                        width: "100%",
+                        padding: "10px",
+                        background: "transparent",
+                        border: `1px solid ${BORDER}`,
+                        borderRadius: 8,
+                        color: "rgba(224,244,255,0.4)",
+                        fontSize: 10,
+                        cursor: "pointer",
+                        letterSpacing: 1
+                      },
+                      children: "Explore Globe First"
+                    }
+                  )
+                ]
+              }
+            )
+          }
+        ),
         purchaseToast && /* @__PURE__ */ jsxRuntimeExports.jsxs(
           "div",
           {
             "data-ocid": "map.success_state",
+            className: "fixed left-1/2 -translate-x-1/2 z-70 flex items-center gap-2.5 px-5 py-2.5 rounded-lg whitespace-nowrap",
             style: {
-              position: "fixed",
               bottom: 80,
-              left: "50%",
-              transform: "translateX(-50%)",
-              zIndex: 70,
               background: "rgba(4,12,24,0.95)",
               backdropFilter: "blur(12px)",
               WebkitBackdropFilter: "blur(12px)",
               border: "1px solid rgba(0,255,204,0.45)",
               borderTop: "2px solid #00ffcc",
-              borderRadius: 8,
-              padding: "10px 20px",
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              whiteSpace: "nowrap",
               boxShadow: "0 4px 24px rgba(0,255,204,0.18)",
               animation: "slideUpFadeIn 0.3s ease"
             },
@@ -104364,12 +106990,12 @@ function Play() {
               /* @__PURE__ */ jsxRuntimeExports.jsxs(
                 "span",
                 {
+                  className: "font-mono",
                   style: {
                     color: "#00ffcc",
                     fontSize: 10,
                     fontWeight: 700,
-                    letterSpacing: 2,
-                    fontFamily: "monospace"
+                    letterSpacing: 2
                   },
                   children: [
                     "PLOT #",
@@ -104382,12 +107008,12 @@ function Play() {
               /* @__PURE__ */ jsxRuntimeExports.jsxs(
                 "span",
                 {
+                  className: "font-mono",
                   style: {
                     color: "#ffd700",
                     fontSize: 10,
                     fontWeight: 700,
-                    letterSpacing: 1.5,
-                    fontFamily: "monospace"
+                    letterSpacing: 1.5
                   },
                   children: [
                     "+",
@@ -104402,17 +107028,12 @@ function Play() {
         /* @__PURE__ */ jsxRuntimeExports.jsxs(
           "div",
           {
+            className: "fixed left-1/2 -translate-x-1/2 pointer-events-none z-20 whitespace-nowrap",
             style: {
-              position: "fixed",
               bottom: 68,
-              left: "50%",
-              transform: "translateX(-50%)",
               fontSize: 7,
               color: "rgba(0,255,204,0.2)",
-              letterSpacing: 1,
-              pointerEvents: "none",
-              zIndex: 20,
-              whiteSpace: "nowrap"
+              letterSpacing: 1
             },
             children: [
               "© ",
@@ -104423,7 +107044,8 @@ function Play() {
                 "a",
                 {
                   href: `https://caffeine.ai?utm_source=caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(typeof window !== "undefined" ? window.location.hostname : "")}`,
-                  style: { color: "rgba(0,255,204,0.35)", pointerEvents: "auto" },
+                  className: "pointer-events-auto",
+                  style: { color: "rgba(0,255,204,0.35)" },
                   target: "_blank",
                   rel: "noreferrer",
                   children: "CAFFEINE.AI"

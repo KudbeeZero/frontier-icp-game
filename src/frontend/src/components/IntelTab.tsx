@@ -9,9 +9,11 @@ import {
   Zap,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import SubParcelIntelView from "./SubParcelIntelView";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type EventKind = "purchase" | "join" | "upgrade" | "burn";
+type IntelSubTab = "war_feed" | "sub_parcels";
 
 interface FeedEvent {
   id: number;
@@ -199,6 +201,7 @@ export default function IntelTab() {
   const [events, setEvents] = useState<FeedEvent[]>(() =>
     Array.from({ length: 8 }, (_, i) => generateEvent(i)),
   );
+  const [subTab, setSubTab] = useState<IntelSubTab>("war_feed");
   const idRef = useRef(100);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -247,202 +250,249 @@ export default function IntelTab() {
         </div>
       </div>
 
-      {/* ── V2 Classified Banner ────────────────────────────────── */}
+      {/* ── Sub-tab switcher ───────────────────────────────────── */}
       <div
-        data-ocid="intel.classified_banner"
-        className="mx-3 mt-3 rounded-lg p-3 shrink-0"
-        style={{
-          background: "rgba(255,68,68,0.06)",
-          border: "1px solid rgba(255,68,68,0.25)",
-        }}
+        className="flex shrink-0"
+        style={{ borderBottom: "1px solid rgba(0,255,204,0.12)" }}
       >
-        <div className="flex items-start gap-2">
-          <Lock
-            size={14}
-            style={{ color: "#ff4444", marginTop: 1, flexShrink: 0 }}
-          />
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span
-                className="text-[10px] font-bold uppercase tracking-widest"
-                style={{ color: "#ff4444" }}
-              >
-                CLASSIFIED — CLEARANCE LEVEL OMEGA
-              </span>
-            </div>
-            <p
-              className="text-[10px] leading-relaxed"
-              style={{ color: "rgba(180,220,220,0.55)" }}
-            >
-              COMBAT SYSTEMS, WEAPON STRIKE PACKAGES &amp; BATTLE RESOLUTION
-              INTELLIGENCE RESTRICTED PENDING OPERATIONAL LAUNCH.
-            </p>
-            <div
-              className="mt-2 inline-flex items-center gap-1.5 px-2 py-0.5 rounded"
+        {[
+          { id: "war_feed" as IntelSubTab, label: "WAR FEED" },
+          { id: "sub_parcels" as IntelSubTab, label: "SUB-PARCELS" },
+        ].map(({ id, label }) => {
+          const isActive = subTab === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              data-ocid={`intel.subtab.${id}`}
+              onClick={() => setSubTab(id)}
+              className="flex-1 py-2 text-[10px] font-bold uppercase tracking-widest transition-all"
               style={{
-                background: "rgba(255,68,68,0.12)",
-                border: "1px solid rgba(255,68,68,0.3)",
+                color: isActive ? "#00ffcc" : "rgba(0,255,204,0.35)",
+                background: isActive ? "rgba(0,255,204,0.06)" : "transparent",
+                borderBottom: isActive
+                  ? "2px solid #00ffcc"
+                  : "2px solid transparent",
+                boxShadow: isActive ? "0 2px 12px rgba(0,255,204,0.1)" : "none",
               }}
             >
-              <Shield size={9} style={{ color: "#ff4444" }} />
-              <span
-                className="text-[9px] font-bold uppercase tracking-widest"
-                style={{ color: "#ff4444" }}
-              >
-                UNLOCKS IN V2.0
-              </span>
-            </div>
-          </div>
-        </div>
+              {label}
+            </button>
+          );
+        })}
       </div>
 
-      {/* ── Radar + stats row ───────────────────────────────────── */}
-      <div className="flex items-center gap-4 px-3 py-3 shrink-0">
-        <div
-          className="rounded-xl p-2 flex-shrink-0"
-          style={{
-            background: "rgba(0,255,204,0.04)",
-            border: "1px solid rgba(0,255,204,0.12)",
-          }}
-        >
-          <RadarSweep />
-          <p
-            className="text-center text-[9px] uppercase tracking-widest mt-1"
-            style={{ color: "rgba(0,255,204,0.45)" }}
-          >
-            GLOBAL SCAN ACTIVE
-          </p>
+      {/* ── SUB-PARCELS view ───────────────────────────────────── */}
+      {subTab === "sub_parcels" && (
+        <div className="flex-1 overflow-y-auto pt-3">
+          <SubParcelIntelView />
         </div>
-        <div className="flex flex-col gap-2 flex-1">
-          {[
-            {
-              label: "ACTIVE COMMANDERS",
-              value: "147",
-              icon: <Users size={10} />,
-            },
-            {
-              label: "PLOTS MINTED",
-              value: "312 / 5,882",
-              icon: <Globe size={10} />,
-            },
-            {
-              label: "FRNTR BURNED",
-              value: "48,291.0000",
-              icon: <Zap size={10} />,
-            },
-            {
-              label: "EVENTS TODAY",
-              value: String(events.length),
-              icon: <Activity size={10} />,
-            },
-          ].map(({ label, value, icon }) => (
-            <div
-              key={label}
-              className="rounded-lg px-2.5 py-1.5"
-              style={{
-                background: "rgba(0,255,204,0.04)",
-                border: "1px solid rgba(0,255,204,0.1)",
-              }}
-            >
-              <div
-                className="flex items-center gap-1 mb-0.5"
-                style={{ color: "rgba(0,255,204,0.5)" }}
-              >
-                {icon}
-                <span className="text-[9px] uppercase tracking-wider">
-                  {label}
-                </span>
-              </div>
-              <span className="text-xs font-bold" style={{ color: "#00ffcc" }}>
-                {value}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
+      )}
 
-      {/* ── Feed label ──────────────────────────────────────────── */}
-      <div
-        className="px-4 py-1.5 flex items-center gap-2 shrink-0"
-        style={{
-          borderTop: "1px solid rgba(0,255,204,0.1)",
-          borderBottom: "1px solid rgba(0,255,204,0.1)",
-        }}
-      >
-        <Activity size={11} style={{ color: "rgba(0,255,204,0.5)" }} />
-        <span
-          className="text-[10px] uppercase tracking-widest"
-          style={{ color: "rgba(0,255,204,0.5)" }}
-        >
-          GLOBAL WAR FEED
-        </span>
-      </div>
-
-      {/* ── Scrollable event list ────────────────────────────────── */}
-      <div
-        ref={scrollRef}
-        data-ocid="intel.feed_list"
-        className="flex-1 overflow-y-auto px-3 py-2 space-y-1.5"
-      >
-        {events.map((evt, idx) => (
+      {/* ── WAR FEED view ─────────────────────────────────────── */}
+      {subTab === "war_feed" && (
+        <>
+          {/* ── V2 Classified Banner ────────────────────────────────── */}
           <div
-            key={evt.id}
-            data-ocid={`intel.feed.item.${idx + 1}`}
-            className="flex items-start gap-2.5 rounded-lg px-2.5 py-2 transition-all"
+            data-ocid="intel.classified_banner"
+            className="mx-3 mt-3 rounded-lg p-3 shrink-0"
             style={{
-              background:
-                idx === 0
-                  ? `${EVENT_COLORS[evt.kind]}0d`
-                  : "rgba(0,255,204,0.03)",
-              border:
-                idx === 0
-                  ? `1px solid ${EVENT_COLORS[evt.kind]}33`
-                  : "1px solid rgba(0,255,204,0.07)",
+              background: "rgba(255,68,68,0.06)",
+              border: "1px solid rgba(255,68,68,0.25)",
             }}
           >
-            {/* Kind icon */}
-            <div
-              className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0 mt-0.5"
-              style={{
-                background: `${EVENT_COLORS[evt.kind]}18`,
-                color: EVENT_COLORS[evt.kind],
-              }}
-            >
-              {EVENT_ICONS[evt.kind]}
-            </div>
-
-            {/* Body */}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between gap-1">
-                <span
-                  className="text-[10px] font-bold uppercase tracking-wider truncate"
-                  style={{ color: EVENT_COLORS[evt.kind] }}
+            <div className="flex items-start gap-2">
+              <Lock
+                size={14}
+                style={{ color: "#ff4444", marginTop: 1, flexShrink: 0 }}
+              />
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span
+                    className="text-[10px] font-bold uppercase tracking-widest"
+                    style={{ color: "#ff4444" }}
+                  >
+                    CLASSIFIED — CLEARANCE LEVEL OMEGA
+                  </span>
+                </div>
+                <p
+                  className="text-[10px] leading-relaxed"
+                  style={{ color: "rgba(180,220,220,0.55)" }}
                 >
-                  {evt.message}
-                </span>
-                <span
-                  className="text-[9px] flex-shrink-0"
-                  style={{ color: "rgba(180,220,220,0.35)" }}
+                  COMBAT SYSTEMS, WEAPON STRIKE PACKAGES &amp; BATTLE RESOLUTION
+                  INTELLIGENCE RESTRICTED PENDING OPERATIONAL LAUNCH.
+                </p>
+                <div
+                  className="mt-2 inline-flex items-center gap-1.5 px-2 py-0.5 rounded"
+                  style={{
+                    background: "rgba(255,68,68,0.12)",
+                    border: "1px solid rgba(255,68,68,0.3)",
+                  }}
                 >
-                  {evt.timestamp}
-                </span>
+                  <Shield size={9} style={{ color: "#ff4444" }} />
+                  <span
+                    className="text-[9px] font-bold uppercase tracking-widest"
+                    style={{ color: "#ff4444" }}
+                  >
+                    UNLOCKS IN V2.0
+                  </span>
+                </div>
               </div>
-              <p
-                className="text-[10px] truncate mt-0.5"
-                style={{ color: "rgba(180,220,220,0.55)" }}
-              >
-                {evt.detail}
-              </p>
-              <span
-                className="text-[9px] uppercase tracking-wider"
-                style={{ color: "rgba(0,255,204,0.3)" }}
-              >
-                {evt.region}
-              </span>
             </div>
           </div>
-        ))}
-      </div>
+
+          {/* ── Radar + stats row ───────────────────────────────────── */}
+          <div className="flex items-center gap-4 px-3 py-3 shrink-0">
+            <div
+              className="rounded-xl p-2 flex-shrink-0"
+              style={{
+                background: "rgba(0,255,204,0.04)",
+                border: "1px solid rgba(0,255,204,0.12)",
+              }}
+            >
+              <RadarSweep />
+              <p
+                className="text-center text-[9px] uppercase tracking-widest mt-1"
+                style={{ color: "rgba(0,255,204,0.45)" }}
+              >
+                GLOBAL SCAN ACTIVE
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 flex-1">
+              {[
+                {
+                  label: "ACTIVE COMMANDERS",
+                  value: "147",
+                  icon: <Users size={10} />,
+                },
+                {
+                  label: "PLOTS MINTED",
+                  value: "312 / 5,882",
+                  icon: <Globe size={10} />,
+                },
+                {
+                  label: "FRNTR BURNED",
+                  value: "48,291.0000",
+                  icon: <Zap size={10} />,
+                },
+                {
+                  label: "EVENTS TODAY",
+                  value: String(events.length),
+                  icon: <Activity size={10} />,
+                },
+              ].map(({ label, value, icon }) => (
+                <div
+                  key={label}
+                  className="rounded-lg px-2.5 py-1.5"
+                  style={{
+                    background: "rgba(0,255,204,0.04)",
+                    border: "1px solid rgba(0,255,204,0.1)",
+                  }}
+                >
+                  <div
+                    className="flex items-center gap-1 mb-0.5"
+                    style={{ color: "rgba(0,255,204,0.5)" }}
+                  >
+                    {icon}
+                    <span className="text-[9px] uppercase tracking-wider">
+                      {label}
+                    </span>
+                  </div>
+                  <span
+                    className="text-xs font-bold"
+                    style={{ color: "#00ffcc" }}
+                  >
+                    {value}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Feed label ──────────────────────────────────────────── */}
+          <div
+            className="px-4 py-1.5 flex items-center gap-2 shrink-0"
+            style={{
+              borderTop: "1px solid rgba(0,255,204,0.1)",
+              borderBottom: "1px solid rgba(0,255,204,0.1)",
+            }}
+          >
+            <Activity size={11} style={{ color: "rgba(0,255,204,0.5)" }} />
+            <span
+              className="text-[10px] uppercase tracking-widest"
+              style={{ color: "rgba(0,255,204,0.5)" }}
+            >
+              GLOBAL WAR FEED
+            </span>
+          </div>
+
+          {/* ── Scrollable event list ────────────────────────────────── */}
+          <div
+            ref={scrollRef}
+            data-ocid="intel.feed_list"
+            className="flex-1 overflow-y-auto px-3 py-2 space-y-1.5"
+          >
+            {events.map((evt, idx) => (
+              <div
+                key={evt.id}
+                data-ocid={`intel.feed.item.${idx + 1}`}
+                className="flex items-start gap-2.5 rounded-lg px-2.5 py-2 transition-all"
+                style={{
+                  background:
+                    idx === 0
+                      ? `${EVENT_COLORS[evt.kind]}0d`
+                      : "rgba(0,255,204,0.03)",
+                  border:
+                    idx === 0
+                      ? `1px solid ${EVENT_COLORS[evt.kind]}33`
+                      : "1px solid rgba(0,255,204,0.07)",
+                }}
+              >
+                {/* Kind icon */}
+                <div
+                  className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0 mt-0.5"
+                  style={{
+                    background: `${EVENT_COLORS[evt.kind]}18`,
+                    color: EVENT_COLORS[evt.kind],
+                  }}
+                >
+                  {EVENT_ICONS[evt.kind]}
+                </div>
+
+                {/* Body */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-1">
+                    <span
+                      className="text-[10px] font-bold uppercase tracking-wider truncate"
+                      style={{ color: EVENT_COLORS[evt.kind] }}
+                    >
+                      {evt.message}
+                    </span>
+                    <span
+                      className="text-[9px] flex-shrink-0"
+                      style={{ color: "rgba(180,220,220,0.35)" }}
+                    >
+                      {evt.timestamp}
+                    </span>
+                  </div>
+                  <p
+                    className="text-[10px] truncate mt-0.5"
+                    style={{ color: "rgba(180,220,220,0.55)" }}
+                  >
+                    {evt.detail}
+                  </p>
+                  <span
+                    className="text-[9px] uppercase tracking-wider"
+                    style={{ color: "rgba(0,255,204,0.3)" }}
+                  >
+                    {evt.region}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

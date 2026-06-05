@@ -14,6 +14,7 @@ mixin (
   pricingState : { var pricing : CommonTypes.PlotPricing },
   plotUpgrades : Map.Map<GameTypes.PlotId, GameTypes.PlotUpgrades>,
   plotRarities : Map.Map<GameTypes.PlotId, GameTypes.PlotRarity>,
+  generatorTiers : Map.Map<Nat, GameTypes.GeneratorTier>,
   plots        : Map.Map<Nat, { plotId : Nat; biome : Text; owner : ?Principal; nexusElectricityLevel : Nat; purchaseTimestamp : ?Int; var richness : Nat; lat : Float; lng : Float; iron : Nat; fuel : Nat; crystal : Nat; lastTick : Int; defenses : { turrets : Nat; shields : Nat; walls : Nat }; facilities : { electricityPlant : Bool; blockchainNode : Bool; dataCentre : Bool; aiLab : Bool }; attackCooldown : Int; faction : ?Text; morale : Nat; interceptorSystem : ?Text; nftTokenId : ?Nat }>,
   players      : Map.Map<Principal, { iron : Nat; fuel : Nat; crystal : Nat; frntBalance : Nat; plotsOwned : Nat; combatVictories : Nat; commanderType : ?Text; commanderAtk : Nat; commanderDef : Nat; satelliteExpiry : Int; reconTargets : [(Nat, Int)]; empTargets : [(Nat, Int)]; totalFRNTRBurned : Float; passiveIncomePerDay : Float }>,
   adminState   : { var adminPrincipal : Text },
@@ -109,6 +110,8 @@ mixin (
       installedAt   = ?Time.now();
     };
     plotUpgrades.add(plotId, newUpgrades);
+    // Keep generatorTiers map in sync so plotDailyRate uses the updated tier.
+    generatorTiers.add(plotId, next);
     #ok(newUpgrades);
   };
 

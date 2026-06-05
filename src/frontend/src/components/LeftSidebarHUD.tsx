@@ -119,13 +119,6 @@ const RESOURCES = [
   },
 ];
 
-const QUICK_LINKS = [
-  { label: "FLEETS", Icon: Rocket, id: "fleets" },
-  { label: "RESEARCH", Icon: FlaskConical, id: "research" },
-  { label: "BUILDINGS", Icon: Building2, id: "buildings" },
-  { label: "CHAT", Icon: MessageSquare, id: "chat" },
-];
-
 export default function LeftSidebarHUD() {
   const player = useGameStore((s) => s.player);
   const [windowWidth, setWindowWidth] = useState(() =>
@@ -208,9 +201,11 @@ export default function LeftSidebarHUD() {
         data-ocid="sidebar.panel"
         style={{
           position: "fixed",
-          top: 48,
+          top: 56,
           left: 0,
           width: sidebarWidth,
+          bottom: 64,
+          overflowY: "auto",
           zIndex: isMobile ? (mobileOpen ? 30 : 25) : 25,
           ...glass,
           borderLeft: "none",
@@ -466,13 +461,17 @@ export default function LeftSidebarHUD() {
         <div style={{ padding: `8px ${sidebarPad}px ${isMobile ? 14 : 10}px` }}>
           {sectionHeader("Quick Links")}
           <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-            {QUICK_LINKS.map(({ label, Icon, id }) => (
+            {[
+              { label: "Command Center", Icon: Building2, id: "command" },
+              { label: "Arsenal", Icon: Rocket, id: "arsenal" },
+              { label: "Research", Icon: FlaskConical, id: "research" },
+              { label: "Comms", Icon: MessageSquare, id: "comms" },
+            ].map(({ label, Icon, id }) => (
               <button
                 type="button"
                 key={id}
                 data-ocid={`sidebar.${id}.link`}
                 onClick={() => {
-                  console.log("nav:", label);
                   if (isMobile) setMobileOpen(false);
                 }}
                 style={{

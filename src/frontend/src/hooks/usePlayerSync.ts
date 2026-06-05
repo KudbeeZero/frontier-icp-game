@@ -1,7 +1,13 @@
 import { useActor } from "@caffeineai/core-infrastructure";
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { createActor } from "../backend";
-import { type PurchaseDebugLog, useGameStore } from "../store/gameStore";
+import {
+  type GlobalStats,
+  type PurchaseDebugLog,
+  randomBiome,
+  useGameStore,
+} from "../store/gameStore";
+import { GEODESIC_TILES } from "../utils/geodesicGrid";
 
 /**
  * Polls player state and leaderboard from the ICP canister.
@@ -14,6 +20,19 @@ export function usePlayerSync(): void {
   useEffect(() => {
     if (!actor || isFetching) return;
 
+    const syncPrincipal = async () => {
+      try {
+        const data = await actor.getPrincipal();
+        if (data.isAuthed && data.full) {
+          useGameStore.setState((s) => ({
+            player: { ...s.player, principal: data.full },
+          }));
+        }
+      } catch {
+        // non-critical
+      }
+    };
+
     const syncLeaderboard = async () => {
       try {
         const data = await actor.getLeaderboard(50n);
@@ -22,6 +41,7 @@ export function usePlayerSync(): void {
           name:
             e.username ??
             `${e.principal.slice(0, 8)}...${e.principal.slice(-4)}`,
+          principal: e.principal,
           plotsOwned: Number(e.plotsOwned),
           frntEarned: Number(e.frntBalance),
           victories: 0,
@@ -29,6 +49,25 @@ export function usePlayerSync(): void {
         useGameStore.setState({ leaderboard: mapped });
       } catch {
         // Non-critical: keep existing leaderboard if sync fails
+      }
+    };
+
+    const syncPlotOwners = async () => {
+      try {
+        const owners = await (actor as any).getAllPlotOwners();
+        const state = useGameStore.getState();
+        const updatedPlots = state.plots.map((plot) => {
+          const ownerEntry = owners.find(
+            ([id]: [bigint, string]) => Number(id) === plot.id,
+          );
+          if (ownerEntry) {
+            return { ...plot, owner: ownerEntry[1] };
+          }
+          return plot;
+        });
+        useGameStore.setState({ plots: updatedPlots });
+      } catch (err) {
+        console.warn("syncPlotOwners error:", err);
       }
     };
 
@@ -58,18 +97,95 @@ export function usePlayerSync(): void {
       }
     };
 
+    const syncGlobalStats = async () => {
+      try {
+        const [g, t] = await Promise.all([
+          actor.getGlobalStats(),
+          actor.getTokenomics(),
+        ]);
+        const stats: GlobalStats = {
+          totalPlotsOwned: Number(g.totalPlotsOwned),
+          totalFRNTRInCirculation: Number(g.circulatingSupply),
+          totalFRNTRBurned: Number(g.totalBurned),
+          totalFRNTRMined: 0,
+          activePlayerCount: Number(g.activePlayers),
+          currentDailyEmissionRate: Number(t.emissionRate),
+          leaderboardPrizePool: 0,
+          nextPayoutAt: 0,
+          totalSupply: Number(t.maxSupply),
+          preMinted: 5_000_000_000,
+          mineableSupply: Number(t.remainingMineable),
+          maxSupply: Number(t.maxSupply),
+          remainingMineable: Number(t.remainingMineable),
+          daysUntilMilestone: Number(t.daysUntilMilestone),
+          burnRate: Number(t.burnRate),
+          emissionRate: Number(t.emissionRate),
+        };
+        useGameStore.getState().setGlobalStats(stats);
+      } catch {
+        // Non-critical: keep existing globalStats
+      }
+    };
+
+    void syncPrincipal();
     void syncPlayer();
     void syncLeaderboard();
+    void syncPlotOwners();
+    void syncGlobalStats();
 
     const interval = setInterval(() => {
+      void syncPrincipal();
       void syncPlayer();
       void syncLeaderboard();
+      void syncPlotOwners();
     }, 10_000);
+
+    const globalInterval = setInterval(() => {
+      void syncGlobalStats();
+    }, 30_000);
 
     return () => {
       clearInterval(interval);
+      clearInterval(globalInterval);
     };
   }, [actor, isFetching]);
+
+  useEffect(() => {
+    if (actor) {
+      const seed = async () => {
+        try {
+          const count = await (actor as any).getPlotCount();
+          if (count === 0n) {
+            const tuples = GEODESIC_TILES.slice(0, 500).map(
+              (tile): [bigint, string, number, number, bigint] => [
+                BigInt(tile.id),
+                randomBiome(tile.id),
+                tile.lat,
+                tile.lng,
+                BigInt(Math.floor(78 + (((tile.id * 2654435761) >>> 0) % 21))),
+              ],
+            );
+            await (actor as any).initPlots(tuples);
+          }
+          const owners = await (actor as any).getAllPlotOwners();
+          const state = useGameStore.getState();
+          const updatedPlots = state.plots.map((plot) => {
+            const ownerEntry = owners.find(
+              ([id]: [bigint, string]) => Number(id) === plot.id,
+            );
+            if (ownerEntry) {
+              return { ...plot, owner: ownerEntry[1] };
+            }
+            return plot;
+          });
+          useGameStore.setState({ plots: updatedPlots });
+        } catch (err) {
+          console.warn("seedPlotsIfEmpty error:", err);
+        }
+      };
+      void seed();
+    }
+  }, [actor]);
 }
 
 function makeStep(
@@ -170,6 +286,7 @@ export async function purchasePlotWithDebug(
         rank: Number(e.rank),
         name:
           e.username ?? `${e.principal.slice(0, 8)}...${e.principal.slice(-4)}`,
+        principal: e.principal,
         plotsOwned: Number(e.plotsOwned),
         frntEarned: Number(e.frntBalance),
         victories: 0,

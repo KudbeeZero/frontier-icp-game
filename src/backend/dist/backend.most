@@ -89,14 +89,24 @@ type PlotState__764233857 =
   };
 actor {
   stable TESTNET_MODE : Bool;
+  stable _leaderboard :
+    {
+      var root : Node__1000929467<Principal, LeaderEntry__1009553798>;
+      var size : Nat__1040412405
+    };
+  stable _plotRarities :
+    {
+      var root : Node__1000929467<Nat, PlotRarity__638978278>;
+      var size : Nat__1040412405
+    };
   stable adminState : {var adminPrincipal : Text};
   stable combatLog :
     {
       var root : Node__1000929467<Int, CombatEvent__911207586>;
       var size : Nat__1040412405
     };
-  stable faucetLastClaim :
-    {var root : Node__1000929467<Principal, Int>; var size : Nat__1040412405};
+  stable faucetClaims :
+    {var root : Node__1000929467<Principal, Nat>; var size : Nat__1040412405};
   stable generatorTiers :
     {
       var root : Node__1000929467<Nat, GeneratorTier__319383119>;
@@ -104,19 +114,9 @@ actor {
     };
   stable interceptors :
     {var root : Node__1000929467<Nat, Text>; var size : Nat__1040412405};
-  stable leaderboard :
-    {
-      var root : Node__1000929467<Principal, LeaderEntry__1009553798>;
-      var size : Nat__1040412405
-    };
   stable players :
     {
       var root : Node__1000929467<Principal, PlayerState__809798667>;
-      var size : Nat__1040412405
-    };
-  stable plotRarities :
-    {
-      var root : Node__1000929467<Nat, PlotRarity__638978278>;
       var size : Nat__1040412405
     };
   stable plotSoldState : {var count : Nat};
@@ -126,6 +126,8 @@ actor {
       var size : Nat__1040412405
     };
   stable pricingState : {var pricing : PlotPricing__177782395};
+  stable simulatedIcp :
+    {var root : Node__1000929467<Principal, Nat>; var size : Nat__1040412405};
   stable statsState :
     {
       var activePlayers : Nat;

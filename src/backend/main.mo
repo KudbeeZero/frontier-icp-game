@@ -1,3 +1,4 @@
+
 import Principal "mo:core/Principal";
 import Nat "mo:core/Nat";
 import Nat32 "mo:core/Nat32";
@@ -14,6 +15,14 @@ import Float "mo:core/Float";
 import GameLib "lib/game";
 import GameTypes "types/game";
 import CommonTypes "types/common";
+import TestnetTypes "types/testnet";
+import SessionTypes "types/session";
+import SessionLib "lib/session";
+import TestnetLib "lib/testnet";
+import CoreTypes "types/core";
+import CoreLib "lib/core";
+import CoreApiMixin "mixins/core-api";
+
 
 actor {
   /// TESTNET_MODE = true: enables faucet endpoint for testing without real ICP.
@@ -113,17 +122,15 @@ actor {
   let plots = Map.empty<Nat, PlotState>();
   let players = Map.empty<Principal, PlayerState>();
   let combatLog = Map.empty<Int, CombatEvent>();
-  let leaderboard = Map.empty<Principal, LeaderEntry>();
+  let _leaderboard = Map.empty<Principal, LeaderEntry>();
   let interceptors = Map.empty<Nat, Text>();
 
   // Generator tier per plot
   let generatorTiers = Map.empty<Nat, GameTypes.GeneratorTier>();
   // Plot rarities for price lookups
-  let plotRarities = Map.empty<Nat, CommonTypes.PlotRarity>();
+  let _plotRarities = Map.empty<Nat, CommonTypes.PlotRarity>();
   // Username registry: principal -> username
   let usernames = Map.empty<Principal, Text>();
-  // Faucet rate-limiter: principal -> last claim time (nanoseconds)
-  let faucetLastClaim = Map.empty<Principal, Int>();
   // Global stats tracking
   let statsState = { var totalFRNTRBurned : Nat = 0; var totalFRNTRMined : Nat = 0; var activePlayers : Nat = 0 };
   // Plot sold counter
@@ -133,9 +140,200 @@ actor {
 
   // Admin state -- wrapped in a record so it can be mutated via reference
   let adminState = { var adminPrincipal : Text = "aaaaa-aa" };
-
   // Treasury canister principal -- update after treasury canister is deployed
   let treasuryState = { var treasuryPrincipal : Text = "aaaaa-aa" };
+
+  // Faucet claims map: principal -> total claim count
+  let faucetClaims = Map.empty<Principal, Nat>();
+  // Simulated ICP balances for testnet (principal -> e8s)
+  let simulatedIcp = Map.empty<Principal, Nat>();
+  // ─── Core stats / tokenomics mixin ───────────────────────────────────────
+  include CoreApiMixin(statsState, plotSoldState, generatorTiers, plots);
+
+
+  // ─── Session / principal display ─────────────────────────────────────────
+
+  /// Returns the caller's principal display info for wallet/identity UI.
+  public query ({ caller }) func getPrincipal() : async SessionTypes.PrincipalDisplay {
+    SessionLib.display(caller);
+  };
+
+  // ─── Testnet faucet (new — 500 FRNTR + 2 ICP per click) ─────────────────
+
+  /// Testnet faucet: grants 500 FRNTR + 2 ICP (simulated) per click.
+  /// No cooldown, no auth check beyond TESTNET_MODE=true.
+  public shared ({ caller }) func testFaucetV2() : async TestnetTypes.FaucetResult {
+    if (not TESTNET_MODE) { return #err("Faucet only available in testnet mode") };
+    if (caller.isAnonymous()) { return #err("Must be authenticated") };
+    let player = switch (players.get(caller)) {
+      case (null) {
+        statsState.activePlayers += 1;
+        let np = emptyPlayerState();
+        players.add(caller, np);
+        np;
+      };
+      case (?p) { p };
+    };
+    let grant = TestnetLib.buildGrant();
+    players.add(caller, { player with frntBalance = player.frntBalance + grant.frntGranted });
+    statsState.totalFRNTRMined += grant.frntGranted;
+    simulatedIcp.add(caller,
+      switch (simulatedIcp.get(caller)) {
+        case (?bal) { bal + grant.icpGranted };
+        case (null)  { grant.icpGranted };
+      }
+    );
+    ignore TestnetLib.recordClaim(faucetClaims, caller, Time.now());
+    #ok(grant);
+  };
+
+  /// Returns total faucet claims for a principal (debug/analytics).
+  public query func getFaucetClaims(principal : Principal) : async TestnetTypes.FaucetClaimSummary {
+    switch (TestnetLib.getClaimCount(faucetClaims, principal)) {
+      case (?summary) { summary };
+      case (null) {
+        { principal = principal.toText(); totalClaims = 0; lastClaim = null };
+      };
+    };
+  };
+
+  // ─── Stress-test endpoints (TESTNET_MODE only) ───────────────────────────
+
+  /// Rapidly mint `count` unowned plots (TESTNET_MODE only).
+  public shared ({ caller }) func stressMintPlots(count : Nat) : async TestnetTypes.StressTestResult {
+    if (not TESTNET_MODE) { return #err("Stress tests only available in testnet mode") };
+    if (caller.isAnonymous()) { return #err("Must be authenticated") };
+    var results : [TestnetTypes.StressActionResult] = [];
+    var i = 0;
+    let startId : Nat = 900_000;
+    while (i < count) {
+      let t0 = Time.now();
+      let plotId = startId + i;
+      let res : TestnetTypes.StressActionResult = try {
+        plots.add(plotId, {
+          plotId; biome = "Temperate"; richness = 85;
+          lat = 0.0; lng = 0.0; owner = null; nftTokenId = null;
+          iron = 0; fuel = 0; crystal = 0;
+          lastTick = t0;
+          defenses = { turrets = 0; shields = 0; walls = 0 };
+          facilities = { electricityPlant = false; blockchainNode = false;
+                         dataCentre = false; aiLab = false };
+          attackCooldown = 0; faction = null; morale = 100;
+          interceptorSystem = null; purchaseTimestamp = null;
+          nexusElectricityLevel = 0;
+        });
+        TestnetLib.passResult("mintPlot", i, t0, Time.now());
+      } catch (e) {
+        TestnetLib.failResult("mintPlot", i, t0, Time.now(), "mint failed");
+      };
+      results := results.concat([res]);
+      i += 1;
+    };
+    #ok(results);
+  };
+
+  /// Buy `count` plots in sequence (TESTNET_MODE only).
+  public shared ({ caller }) func stressBuyPlots(count : Nat) : async TestnetTypes.StressTestResult {
+    if (not TESTNET_MODE) { return #err("Stress tests only available in testnet mode") };
+    if (caller.isAnonymous()) { return #err("Must be authenticated") };
+    var results : [TestnetTypes.StressActionResult] = [];
+    var i = 0;
+    while (i < count) {
+      let t0 = Time.now();
+      let plotId = 900_000 + i;
+      let res : TestnetTypes.StressActionResult = try {
+        let existing = plots.get(plotId);
+        switch (existing) {
+          case (null) {
+            plots.add(plotId, {
+              plotId; biome = "Temperate"; richness = 85;
+              lat = 0.0; lng = 0.0; owner = null; nftTokenId = null;
+              iron = 0; fuel = 0; crystal = 0; lastTick = t0;
+              defenses = { turrets = 0; shields = 0; walls = 0 };
+              facilities = { electricityPlant = false; blockchainNode = false;
+                             dataCentre = false; aiLab = false };
+              attackCooldown = 0; faction = null; morale = 100;
+              interceptorSystem = null; purchaseTimestamp = null;
+              nexusElectricityLevel = 0;
+            });
+          };
+          case (?_) {};
+        };
+        let plot = switch (plots.get(plotId)) {
+          case (?p) { p };
+          case (null) { Runtime.trap("Plot not found") };
+        };
+        if (plot.owner != null) {
+          TestnetLib.failResult("buyPlot", i, t0, Time.now(), "plot already owned");
+        } else {
+          let player = switch (players.get(caller)) {
+            case (?p) { p };
+            case (null) {
+              statsState.activePlayers += 1;
+              let np : PlayerState = { (emptyPlayerState()) with frntBalance = 60_000 };
+              players.add(caller, np);
+              np;
+            };
+          };
+          plots.add(plotId, { plot with owner = ?caller; purchaseTimestamp = ?t0 });
+          players.add(caller, { player with plotsOwned = player.plotsOwned + 1 });
+          plotSoldState.count += 1;
+          TestnetLib.passResult("buyPlot", i, t0, Time.now());
+        };
+      } catch (e) {
+        TestnetLib.failResult("buyPlot", i, t0, Time.now(), "buy failed");
+      };
+      results := results.concat([res]);
+      i += 1;
+    };
+    #ok(results);
+  };
+
+  /// Run `count` upgrade cycles across owned plots (TESTNET_MODE only).
+  public shared ({ caller }) func stressUpgradePlots(count : Nat) : async TestnetTypes.StressTestResult {
+    if (not TESTNET_MODE) { return #err("Stress tests only available in testnet mode") };
+    if (caller.isAnonymous()) { return #err("Must be authenticated") };
+    var results : [TestnetTypes.StressActionResult] = [];
+    var i = 0;
+    while (i < count) {
+      let t0 = Time.now();
+      let plotId = 900_000 + (i % 10);
+      let res : TestnetTypes.StressActionResult = try {
+        let curTier : GameTypes.GeneratorTier = switch (generatorTiers.get(plotId)) {
+          case (?t) { t };
+          case (null) { #None };
+        };
+        let nextTier : GameTypes.GeneratorTier = switch (curTier) {
+          case (#None)    { #TierI };
+          case (#TierI)   { #TierII };
+          case (#TierII)  { #TierIII };
+          case (#TierIII) { #TierIV };
+          case (#TierIV)  { #TierV };
+          case (#TierV)   { #TierVI };
+          case (#TierVI)  { #TierVI };
+        };
+        generatorTiers.add(plotId, nextTier);
+        TestnetLib.passResult("upgradePlot", i, t0, Time.now());
+      } catch (e) {
+        TestnetLib.failResult("upgradePlot", i, t0, Time.now(), "upgrade failed");
+      };
+      results := results.concat([res]);
+      i += 1;
+    };
+    #ok(results);
+  };
+
+  // ─── Admin / test-state reset ────────────────────────────────────────────
+
+  /// Admin: clear all player state for a clean test run (TESTNET_MODE only).
+  public shared ({ caller }) func resetTestState() : async TestnetTypes.ResetResult {
+    if (not TESTNET_MODE) { return #err("Reset only available in testnet mode") };
+    if (caller.isAnonymous()) { return #err("Must be authenticated") };
+    players.remove(caller);
+    faucetClaims.remove(caller);
+    simulatedIcp.remove(caller);
+    #ok("Test state cleared for " # caller.toText());
+  };
 
   func validatePlotExists(plotId : Nat) : PlotState {
     switch (plots.get(plotId)) {
@@ -160,20 +358,32 @@ actor {
   };
 
   // Returns daily FRNTR rate for a plot (base 7 + nexus electricity bonus)
+  // Returns daily FRNTR rate for a plot using canonical formula: base 7 + (tierIndex * 3) + nexus bonus
   func plotDailyRate(plotId : Nat) : Float {
+    let tierIndex : Nat = switch (generatorTiers.get(plotId)) {
+      case (null)      { 0 };
+      case (?#None)    { 0 };
+      case (?#TierI)   { 1 };
+      case (?#TierII)  { 2 };
+      case (?#TierIII) { 3 };
+      case (?#TierIV)  { 4 };
+      case (?#TierV)   { 5 };
+      case (?#TierVI)  { 6 };
+    };
     let base : Float = 7.0;
-    switch (plots.get(plotId)) {
-      case (null) { base };
+    let tier : Float = (tierIndex * 3).toFloat();
+    let nexus : Float = switch (plots.get(plotId)) {
+      case (null) { 0.0 };
       case (?plot) {
-        let bonus : Float = switch (plot.nexusElectricityLevel) {
+        switch (plot.nexusElectricityLevel) {
           case (1) { 8.0 };
           case (2) { 24.0 };
           case (3) { 48.0 };
           case (_) { 0.0 };
         };
-        base + bonus;
       };
     };
+    base + tier + nexus;
   };
 
   func computePassiveIncomePerDay(caller : Principal) : Float {
@@ -222,34 +432,7 @@ actor {
     adminState.adminPrincipal;
   };
 
-  /// Returns the tokenomics snapshot for display in the UNIVERSE menu.
-  public query func getTokenomics() : async {
-    totalSupply           : Nat;
-    preMinted             : Nat;
-    mineableSupply        : Nat;
-    burnedTotal           : Nat;
-    currentCirculating    : Nat;
-    dailyEmission         : Nat;
-    emissionScheduleYears : Nat;
-    plotCount             : Nat;
-    maxPlots              : Nat;
-  } {
-    let total  : Nat = 10_000_000_000;
-    let pre    : Nat = 5_000_000_000;
-    let burned : Nat = statsState.totalFRNTRBurned;
-    let circulating : Nat = if (pre > burned) { pre - burned } else { 0 };
-    {
-      totalSupply           = total;
-      preMinted             = pre;
-      mineableSupply        = 5_000_000_000;
-      burnedTotal           = burned;
-      currentCirculating    = circulating;
-      dailyEmission         = plotSoldState.count * 7;
-      emissionScheduleYears = 5;
-      plotCount             = plotSoldState.count;
-      maxPlots              = 5882;
-    };
-  };
+
 
   /// Returns global leaderboard and economy stats.
   public query func getLeaderboardStats() : async {
@@ -318,28 +501,29 @@ actor {
     #ok({ plotId; resourceYields = yields; frntRate; efficiency = efficiencyFloat });
   };
 
-  /// Testnet faucet: grants 1000 FRNTR, once per principal per 24 hours.
+  /// Testnet faucet: grants exactly 500 FRNTR + 2 ICP (200_000_000 e8s simulated) per click.
+  /// No cooldown, no rate limit.
   public shared ({ caller }) func testFaucet() : async { #ok : Text; #err : Text } {
     if (not TESTNET_MODE) { return #err("Faucet only available in testnet mode") };
     if (caller.isAnonymous()) { return #err("Must be authenticated") };
-    let now = Time.now();
-    let twentyFourHours : Int = 86_400_000_000_000;
-    switch (faucetLastClaim.get(caller)) {
-      case (?lastTime) {
-        if (now - lastTime < twentyFourHours) {
-          let remaining = twentyFourHours - (now - lastTime);
-          return #err("Rate limited. Try again in " # Int.toText(remaining / 3_600_000_000_000) # " hours");
-        };
-      };
-      case (null) {};
-    };
-    faucetLastClaim.add(caller, now);
     let player = switch (players.get(caller)) {
-      case (null) { statsState.activePlayers += 1; emptyPlayerState() };
+      case (null) {
+        statsState.activePlayers += 1;
+        let np = emptyPlayerState();
+        players.add(caller, np);
+        np;
+      };
       case (?p) { p };
     };
-    players.add(caller, { player with frntBalance = player.frntBalance + 1_000 });
-    #ok("Testnet faucet: 1000 FRNTR credited. Test ICP allocation: 10 ICP (simulated).");
+    players.add(caller, { player with frntBalance = player.frntBalance + 500 });
+    statsState.totalFRNTRMined += 500;
+    simulatedIcp.add(caller,
+      switch (simulatedIcp.get(caller)) {
+        case (?bal) { bal + 200_000_000 };
+        case (null)  { 200_000_000 };
+      }
+    );
+    #ok("Testnet faucet: 500 FRNTR and 2 ICP credited.");
   };
 
   /// Set a unique username (3-16 alphanumeric + underscore).
@@ -449,7 +633,7 @@ actor {
       resourceBalances;
       generatorTiersMap   = genList;
       username            = usernames.get(caller);
-      lastFaucetTime      = faucetLastClaim.get(caller);
+      lastFaucetTime      = null;
       iron                = base.iron;
       fuel                = base.fuel;
       crystal             = base.crystal;
@@ -460,7 +644,73 @@ actor {
     };
   };
 
-  func missileStats(missileType : Text) : MissileStats {
+    /// Query the full player state for a given principal.
+  /// Returns a zeroed state if the principal has not played yet.
+  public query func getPlayerStateByPrincipal(principal : Principal) : async {
+    ownedPlots         : [Text];
+    frntBalance        : Nat;
+    resourceBalances   : [(GameTypes.ResourceType, Float)];
+    generatorTiersMap  : [(Text, Nat)];
+    username           : ?Text;
+    lastFaucetTime     : ?Int;
+    iron               : Nat;
+    fuel               : Nat;
+    crystal            : Nat;
+    plotsOwned         : Nat;
+    combatVictories    : Nat;
+    totalFRNTRBurned   : Float;
+    passiveIncomePerDay : Float;
+  } {
+    let base = switch (players.get(principal)) {
+      case (null) { emptyPlayerState() };
+      case (?p)   { p };
+    };
+
+    var ownedList : [Text] = [];
+    var genList : [(Text, Nat)] = [];
+    for ((plotId, plot) in plots.entries()) {
+      if (plot.owner == ?principal) {
+        let idText = plotId.toText();
+        ownedList := ownedList.concat([idText]);
+        let tierNat : Nat = switch (generatorTiers.get(plotId)) {
+          case (null)      { 0 };
+          case (?#None)    { 0 };
+          case (?#TierI)   { 1 };
+          case (?#TierII)  { 2 };
+          case (?#TierIII) { 3 };
+          case (?#TierIV)  { 4 };
+          case (?#TierV)   { 5 };
+          case (?#TierVI)  { 6 };
+        };
+        genList := genList.concat([(idText, tierNat)]);
+      };
+    };
+
+    let resourceBalances : [(GameTypes.ResourceType, Float)] = [
+      (#Iron,      base.iron.toFloat()),
+      (#Fuel,      base.fuel.toFloat()),
+      (#Crystal,   base.crystal.toFloat()),
+      (#RareEarth, 0.0),
+    ];
+
+    {
+      ownedPlots          = ownedList;
+      frntBalance         = base.frntBalance;
+      resourceBalances;
+      generatorTiersMap   = genList;
+      username            = usernames.get(principal);
+      lastFaucetTime      = null;
+      iron                = base.iron;
+      fuel                = base.fuel;
+      crystal             = base.crystal;
+      plotsOwned          = base.plotsOwned;
+      combatVictories     = base.combatVictories;
+      totalFRNTRBurned    = base.totalFRNTRBurned;
+      passiveIncomePerDay = computePassiveIncomePerDay(principal);
+    };
+  };
+
+func missileStats(missileType : Text) : MissileStats {
     switch (missileType) {
       case ("ICBM-P") { return { cost = 200; atkPower = 100 } };
       case ("TOMAHAWK-C") { return { cost = 80; atkPower = 60 } };
@@ -540,7 +790,9 @@ actor {
     let player = switch (players.get(caller)) {
       case (null) {
         statsState.activePlayers += 1;
-        emptyPlayerState();
+        let newPlayer : PlayerState = { (emptyPlayerState()) with frntBalance = 600 };
+        players.add(caller, newPlayer);
+        newPlayer;
       };
       case (?player) { player };
     };
@@ -586,6 +838,43 @@ actor {
     #ok("Purchase successful, congrats!");
   };
 
+  /// Seed plots from the frontend (admin only). Skips plots that already exist.
+  public shared ({ caller }) func initPlots(plotData : [(Nat, Text, Float, Float, Nat)]) : async () {
+    if (caller.toText() != adminState.adminPrincipal) {
+      Runtime.trap("Unauthorized");
+    };
+    for ((id, biome, lat, lng, richness) in plotData.vals()) {
+      if (plots.get(id) == null) {
+        plots.add(id, {
+          plotId = id; biome; richness; lat; lng;
+          owner = null; nftTokenId = null;
+          iron = 0; fuel = 0; crystal = 0;
+          lastTick = Time.now();
+          defenses = { turrets = 0; shields = 0; walls = 0 };
+          facilities = { electricityPlant = false; blockchainNode = false; dataCentre = false; aiLab = false };
+          attackCooldown = 0; faction = null; morale = 100;
+          interceptorSystem = null; purchaseTimestamp = null;
+          nexusElectricityLevel = 0;
+        });
+      };
+    };
+  };
+
+  /// Returns the total number of plots currently stored.
+  public query func getPlotCount() : async Nat { plots.size() };
+
+  /// Returns all plots that have an owner as (plotId, ownerPrincipalText) pairs.
+  public query func getAllPlotOwners() : async [(Nat, Text)] {
+    var result : [(Nat, Text)] = [];
+    for ((id, plot) in plots.entries()) {
+      switch (plot.owner) {
+        case (?_owner) { result := result.concat([(id, _owner.toText())]) };
+        case (null) {};
+      };
+    };
+    result;
+  };
+
   public shared ({ caller }) func launchMissile(
     fromPlotId : Nat,
     toPlotId : Nat,
@@ -614,7 +903,7 @@ actor {
 
     let _ = switch (toPlot.owner) {
       case (null) { toPlot.defenses };
-      case (?owner) { toPlot.defenses };
+      case (?_owner) { toPlot.defenses };
     };
 
     let interceptorChance = switch (interceptors.get(toPlotId)) {
@@ -691,13 +980,13 @@ actor {
     fromPlot : Nat,
     toPlot : Nat,
     missileType : Text,
-    attackerPlot : PlotState,
+    _attackerPlot : PlotState,
     defenderPlot : PlotState,
     missile : MissileStats,
   ) : { #ok : Text; #err : Text } {
     let toPlotDefenses = switch (defenderPlot.owner) {
       case (null) { defenderPlot.defenses };
-      case (?owner) { defenderPlot.defenses };
+      case (?_owner) { defenderPlot.defenses };
     };
     let defPower = toPlotDefenses.turrets * 3 + toPlotDefenses.shields * 5 + toPlotDefenses.walls * 2 + 5;
     let success = missile.atkPower > defPower;

@@ -1,5 +1,6 @@
+import { useInternetIdentity } from "@caffeineai/core-infrastructure";
 import { ChevronDown, ChevronRight, ChevronUp } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useGameStore } from "../store/gameStore";
 
 const CYAN = "#00ffcc";
@@ -44,8 +45,30 @@ interface Props {
 export default function PlayNowOverlay({ onClose, onLogin }: Props) {
   const [icpExpanded, setIcpExpanded] = useState(false);
   const player = useGameStore((s) => s.player);
+  const setAuth = useGameStore((s) => s.setAuth);
+  const { login, isAuthenticated, identity } = useInternetIdentity();
 
-  const isLoggedIn = !!player.principal;
+  const isLoggedIn = isAuthenticated || !!player.principal;
+
+  // When II login completes, sync principal and close overlay
+  useEffect(() => {
+    if (isAuthenticated && identity) {
+      const principal = identity.getPrincipal().toText();
+      setAuth(principal);
+      useGameStore.setState((s) => ({
+        player: { ...s.player, principal },
+      }));
+      onLogin();
+    }
+  }, [isAuthenticated, identity, setAuth, onLogin]);
+
+  const handleLogin = () => {
+    if (isAuthenticated) {
+      onClose();
+    } else {
+      login();
+    }
+  };
 
   return (
     <div
@@ -310,7 +333,7 @@ export default function PlayNowOverlay({ onClose, onLogin }: Props) {
           <button
             type="button"
             data-ocid="playnow.primary_button"
-            onClick={onLogin}
+            onClick={handleLogin}
             style={{
               width: "100%",
               padding: "14px",
