@@ -375,10 +375,10 @@ export default function UniversePanel({ onClose, inline = false }: Props) {
           }}
         >
           {[
-            { label: "IRON", value: player.iron },
-            { label: "FUEL", value: player.fuel },
-            { label: "CRYSTAL", value: player.crystal },
-            { label: "RARE EARTH", value: player.rareEarth },
+            { label: "IRON" },
+            { label: "FUEL" },
+            { label: "CRYSTAL" },
+            { label: "RARE EARTH" },
           ].map((r) => (
             <div key={r.label}>
               <div
@@ -395,11 +395,12 @@ export default function UniversePanel({ onClose, inline = false }: Props) {
                 style={{
                   fontSize: 10,
                   fontWeight: 700,
-                  color: TEXT,
+                  color: "rgba(224,244,255,0.35)",
                   fontFamily: "monospace",
+                  letterSpacing: 0.5,
                 }}
               >
-                {r.value.toFixed(4)}
+                SOON™
               </div>
             </div>
           ))}

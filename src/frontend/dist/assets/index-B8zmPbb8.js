@@ -74629,14 +74629,14 @@ const useGameStore = create((set, get) => ({
   },
   faction: null
 }));
-const CYAN$c = "#00ffcc";
-const GOLD$3 = "#ffd700";
+const CYAN$d = "#00ffcc";
+const GOLD$4 = "#ffd700";
 const AMBER$1 = "#f59e0b";
 const PURPLE = "#a855f7";
-const BORDER$b = "rgba(0,255,204,0.18)";
+const BORDER$c = "rgba(0,255,204,0.18)";
 const PANEL$1 = "rgba(0,20,40,0.70)";
-const TEXT$6 = "#e0f4ff";
-const TEXT_DIM$5 = "rgba(224,244,255,0.45)";
+const TEXT$7 = "#e0f4ff";
+const TEXT_DIM$6 = "rgba(224,244,255,0.45)";
 const TIER_DAILY = {
   0: 7,
   1: 10,
@@ -74702,7 +74702,7 @@ function FRNTRCounter() {
         background: PANEL$1,
         backdropFilter: "blur(16px)",
         WebkitBackdropFilter: "blur(16px)",
-        border: `1px solid ${BORDER$b}`,
+        border: `1px solid ${BORDER$c}`,
         borderRadius: 10,
         padding: "14px 16px",
         marginBottom: 14
@@ -74715,7 +74715,7 @@ function FRNTRCounter() {
               fontSize: 9,
               fontWeight: 700,
               letterSpacing: 3,
-              color: CYAN$c,
+              color: CYAN$d,
               textTransform: "uppercase",
               marginBottom: 8
             },
@@ -74730,15 +74730,15 @@ function FRNTRCounter() {
               fontSize: 26,
               fontWeight: 900,
               fontFamily: "monospace",
-              color: GOLD$3,
-              textShadow: `0 0 16px ${GOLD$3}44`,
+              color: GOLD$4,
+              textShadow: `0 0 16px ${GOLD$4}44`,
               letterSpacing: 1,
               lineHeight: 1
             },
             children: fmtFrntr2(frntrBalance)
           }
         ),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { fontSize: 8, color: TEXT_DIM$5, marginTop: 3 }, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { fontSize: 8, color: TEXT_DIM$6, marginTop: 3 }, children: [
           "FRNTR  ·  ",
           plotCount,
           " PLOT",
@@ -74756,7 +74756,7 @@ function ResourceStockpiles() {
   const resources = [
     { label: "IRON", val: player.iron, color: "#94a3b8", icon: "⚙️" },
     { label: "FUEL", val: player.fuel, color: AMBER$1, icon: "⛽" },
-    { label: "CRYSTAL", val: player.crystal, color: CYAN$c, icon: "💎" },
+    { label: "CRYSTAL", val: player.crystal, color: CYAN$d, icon: "💎" },
     { label: "RARE EARTH", val: player.rareEarth, color: PURPLE, icon: "🔮" }
   ];
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -74766,7 +74766,7 @@ function ResourceStockpiles() {
         background: PANEL$1,
         backdropFilter: "blur(16px)",
         WebkitBackdropFilter: "blur(16px)",
-        border: `1px solid ${BORDER$b}`,
+        border: `1px solid ${BORDER$c}`,
         borderRadius: 10,
         padding: "12px 14px",
         marginBottom: 14
@@ -74779,7 +74779,7 @@ function ResourceStockpiles() {
               fontSize: 9,
               fontWeight: 700,
               letterSpacing: 3,
-              color: CYAN$c,
+              color: CYAN$d,
               textTransform: "uppercase",
               marginBottom: 10
             },
@@ -74820,7 +74820,7 @@ function ResourceStockpiles() {
                       style: {
                         fontSize: 9,
                         fontFamily: "monospace",
-                        color: TEXT_DIM$5
+                        color: TEXT_DIM$6
                       },
                       children: [
                         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: r2.color, fontWeight: 700 }, children: r2.val.toFixed(8) }),
@@ -74876,7 +74876,7 @@ function PlotCard({ plotId, index: index2 }) {
   const tier = generatorTiers[plotId] ?? 0;
   const tierLabel = TIER_LABELS[tier];
   const dailyRate = TIER_DAILY[tier];
-  const biomeColor = BIOME_DOT[plot.biome] ?? CYAN$c;
+  const biomeColor = BIOME_DOT[plot.biome] ?? CYAN$d;
   const h3Short = shortH3(String(plotId));
   const drip = BIOME_DRIP[plot.biome] ?? [1e-3, 1e-3, 1e-3, 1e-3];
   const effFactor = plot.efficiency / 100;
@@ -74903,7 +74903,7 @@ function PlotCard({ plotId, index: index2 }) {
       "data-ocid": `inventory.item.${index2}`,
       style: {
         background: "rgba(0,20,40,0.55)",
-        border: `1px solid ${BORDER$b}`,
+        border: `1px solid ${BORDER$c}`,
         borderRadius: 10,
         padding: "12px 14px",
         position: "relative",
@@ -74919,7 +74919,7 @@ function PlotCard({ plotId, index: index2 }) {
               left: 0,
               width: `${tier / 6 * 100}%`,
               height: 2,
-              background: `linear-gradient(90deg, ${CYAN$c}, ${GOLD$3})`
+              background: `linear-gradient(90deg, ${CYAN$d}, ${GOLD$4})`
             }
           }
         ),
@@ -74953,14 +74953,14 @@ function PlotCard({ plotId, index: index2 }) {
                     style: {
                       fontSize: 11,
                       fontWeight: 700,
-                      color: TEXT$6,
+                      color: TEXT$7,
                       fontFamily: "monospace",
                       letterSpacing: 0.5
                     },
                     children: h3Short
                   }
                 ),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$5, letterSpacing: 0.5 }, children: plot.biome })
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$6, letterSpacing: 0.5 }, children: plot.biome })
               ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs(
                 "div",
@@ -74968,11 +74968,11 @@ function PlotCard({ plotId, index: index2 }) {
                   style: {
                     padding: "3px 8px",
                     background: tier > 0 ? "rgba(0,255,204,0.12)" : "rgba(255,255,255,0.05)",
-                    border: `1px solid ${tier > 0 ? BORDER$b : "rgba(255,255,255,0.08)"}`,
+                    border: `1px solid ${tier > 0 ? BORDER$c : "rgba(255,255,255,0.08)"}`,
                     borderRadius: 4,
                     fontSize: 8,
                     fontWeight: 700,
-                    color: tier > 0 ? CYAN$c : TEXT_DIM$5,
+                    color: tier > 0 ? CYAN$d : TEXT_DIM$6,
                     letterSpacing: 1,
                     whiteSpace: "nowrap"
                   },
@@ -74996,7 +74996,7 @@ function PlotCard({ plotId, index: index2 }) {
                 marginBottom: 3
               },
               children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 8, color: TEXT_DIM$5, letterSpacing: 1 }, children: "EFFICIENCY" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 8, color: TEXT_DIM$6, letterSpacing: 1 }, children: "EFFICIENCY" }),
                 /* @__PURE__ */ jsxRuntimeExports.jsxs(
                   "span",
                   {
@@ -75055,14 +75055,14 @@ function PlotCard({ plotId, index: index2 }) {
             },
             children: [
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$5 }, children: "FRNTR/DAY" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$6 }, children: "FRNTR/DAY" }),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "div",
                   {
                     style: {
                       fontSize: 10,
                       fontWeight: 700,
-                      color: GOLD$3,
+                      color: GOLD$4,
                       fontFamily: "monospace"
                     },
                     children: dailyRate.toFixed(2)
@@ -75070,7 +75070,7 @@ function PlotCard({ plotId, index: index2 }) {
                 )
               ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$5 }, children: "IRON/DAY" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$6 }, children: "IRON/DAY" }),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "div",
                   {
@@ -75085,7 +75085,7 @@ function PlotCard({ plotId, index: index2 }) {
                 )
               ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$5 }, children: "FUEL/DAY" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$6 }, children: "FUEL/DAY" }),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "div",
                   {
@@ -75100,14 +75100,14 @@ function PlotCard({ plotId, index: index2 }) {
                 )
               ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$5 }, children: "CRYSTAL/DAY" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$6 }, children: "CRYSTAL/DAY" }),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "div",
                   {
                     style: {
                       fontSize: 10,
                       fontWeight: 700,
-                      color: CYAN$c,
+                      color: CYAN$d,
                       fontFamily: "monospace"
                     },
                     children: crystalPerDay
@@ -75115,7 +75115,7 @@ function PlotCard({ plotId, index: index2 }) {
                 )
               ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$5 }, children: "RARE/DAY" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$6 }, children: "RARE/DAY" }),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "div",
                   {
@@ -75144,9 +75144,9 @@ function PlotCard({ plotId, index: index2 }) {
                 flex: 1,
                 padding: "8px 0",
                 background: "rgba(0,255,204,0.08)",
-                border: `1px solid ${BORDER$b}`,
+                border: `1px solid ${BORDER$c}`,
                 borderRadius: 6,
-                color: isLoggedIn ? CYAN$c : TEXT_DIM$5,
+                color: isLoggedIn ? CYAN$d : TEXT_DIM$6,
                 fontSize: 9,
                 fontWeight: 700,
                 letterSpacing: 1.5,
@@ -75154,7 +75154,7 @@ function PlotCard({ plotId, index: index2 }) {
                 opacity: isLoggedIn ? 1 : 0.45,
                 textTransform: "uppercase"
               },
-              children: mineFlash ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: GOLD$3, fontSize: 9 }, children: mineFlash }) : "MINE"
+              children: mineFlash ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: GOLD$4, fontSize: 9 }, children: mineFlash }) : "MINE"
             }
           ),
           upgradeCost !== null && /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -75170,7 +75170,7 @@ function PlotCard({ plotId, index: index2 }) {
                 background: canUpgrade && isLoggedIn ? "rgba(255,215,0,0.08)" : "rgba(255,255,255,0.03)",
                 border: `1px solid ${canUpgrade && isLoggedIn ? "rgba(255,215,0,0.3)" : "rgba(255,255,255,0.07)"}`,
                 borderRadius: 6,
-                color: canUpgrade && isLoggedIn ? GOLD$3 : TEXT_DIM$5,
+                color: canUpgrade && isLoggedIn ? GOLD$4 : TEXT_DIM$6,
                 fontSize: 8,
                 fontWeight: 700,
                 letterSpacing: 1,
@@ -75216,7 +75216,7 @@ function Inventory() {
               fontSize: 9,
               fontWeight: 700,
               letterSpacing: 3,
-              color: CYAN$c,
+              color: CYAN$d,
               textTransform: "uppercase",
               marginBottom: 10,
               display: "flex",
@@ -75231,7 +75231,7 @@ function Inventory() {
                   style: {
                     fontSize: 10,
                     fontWeight: 800,
-                    color: TEXT$6,
+                    color: TEXT$7,
                     fontFamily: "monospace"
                   },
                   children: plotsOwned.length
@@ -75252,7 +75252,7 @@ function Inventory() {
               justifyContent: "center",
               padding: "32px 20px",
               textAlign: "center",
-              color: TEXT_DIM$5,
+              color: TEXT_DIM$6,
               gap: 10
             },
             children: [
@@ -75263,7 +75263,7 @@ function Inventory() {
                   style: {
                     fontSize: 11,
                     fontWeight: 700,
-                    color: TEXT$6,
+                    color: TEXT$7,
                     letterSpacing: 1.5
                   },
                   children: "NO PLOTS OWNED YET"
@@ -75274,7 +75274,7 @@ function Inventory() {
                 {
                   style: {
                     fontSize: 9,
-                    color: TEXT_DIM$5,
+                    color: TEXT_DIM$6,
                     lineHeight: 1.6,
                     maxWidth: 260
                   },
@@ -77883,6 +77883,23 @@ const createLucideIcon = (iconName, iconNode) => {
   Component2.displayName = toPascalCase$1(iconName);
   return Component2;
 };
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$l = [
+  ["path", { d: "M12 7v14", key: "1akyts" }],
+  [
+    "path",
+    {
+      d: "M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z",
+      key: "ruj8y"
+    }
+  ]
+];
+const BookOpen = createLucideIcon("book-open", __iconNode$l);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
@@ -88046,13 +88063,13 @@ function createActor(canisterId, _uploadFile, _downloadFile, options = {}) {
   });
   return new Backend(actor, _uploadFile, _downloadFile, options.processError);
 }
-const CYAN$b = "#00ffcc";
-const GOLD$2 = "#ffd700";
+const CYAN$c = "#00ffcc";
+const GOLD$3 = "#ffd700";
 const AMBER = "#f59e0b";
-const BORDER$a = "rgba(0,255,204,0.18)";
+const BORDER$b = "rgba(0,255,204,0.18)";
 const PANEL = "rgba(0,20,40,0.72)";
-const TEXT$5 = "#e0f4ff";
-const TEXT_DIM$4 = "rgba(224,244,255,0.45)";
+const TEXT$6 = "#e0f4ff";
+const TEXT_DIM$5 = "rgba(224,244,255,0.45)";
 function computeScore(plots, frntr, wins) {
   return Math.round(
     (plots ?? 0) * 100 + (frntr ?? 0) * 0.01 + (wins ?? 0) * 50
@@ -88072,7 +88089,7 @@ function RankMedal({ rank }) {
         fontSize: 11,
         fontWeight: 700,
         fontFamily: "monospace",
-        color: TEXT_DIM$4
+        color: TEXT_DIM$5
       },
       children: [
         "#",
@@ -88088,7 +88105,7 @@ function SortIcon({
 }) {
   if (col !== active)
     return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { opacity: 0.2, fontSize: 10 }, children: "↕" });
-  return dir === "asc" ? /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronUp, { size: 11, style: { color: CYAN$b } }) : /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronDown, { size: 11, style: { color: CYAN$b } });
+  return dir === "asc" ? /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronUp, { size: 11, style: { color: CYAN$c } }) : /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronDown, { size: 11, style: { color: CYAN$c } });
 }
 function Leaderboard() {
   const leaderboard = useGameStore((s2) => s2.leaderboard);
@@ -88214,7 +88231,7 @@ function Leaderboard() {
     fontWeight: 700,
     letterSpacing: 2,
     textTransform: "uppercase",
-    color: sortKey === key ? CYAN$b : TEXT_DIM$4,
+    color: sortKey === key ? CYAN$c : TEXT_DIM$5,
     display: "flex",
     alignItems: "center",
     gap: 3,
@@ -88247,12 +88264,12 @@ function Leaderboard() {
                       height: 38,
                       borderRadius: 8,
                       background: "rgba(0,255,204,0.1)",
-                      border: `1px solid ${BORDER$a}`,
+                      border: `1px solid ${BORDER$b}`,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center"
                     },
-                    children: /* @__PURE__ */ jsxRuntimeExports.jsx(Trophy, { size: 18, style: { color: GOLD$2 } })
+                    children: /* @__PURE__ */ jsxRuntimeExports.jsx(Trophy, { size: 18, style: { color: GOLD$3 } })
                   }
                 ),
                 /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
@@ -88263,7 +88280,7 @@ function Leaderboard() {
                         fontSize: 20,
                         fontWeight: 800,
                         letterSpacing: 4,
-                        color: TEXT$5,
+                        color: TEXT$6,
                         textTransform: "uppercase",
                         lineHeight: 1
                       },
@@ -88275,7 +88292,7 @@ function Leaderboard() {
                     {
                       style: {
                         fontSize: 9,
-                        color: TEXT_DIM$4,
+                        color: TEXT_DIM$5,
                         letterSpacing: 2,
                         marginTop: 2
                       },
@@ -88289,7 +88306,7 @@ function Leaderboard() {
                 ] })
               ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 9, color: TEXT_DIM$4, letterSpacing: 1 }, children: refreshing ? "SYNCING..." : `${timeSince}s AGO` }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 9, color: TEXT_DIM$5, letterSpacing: 1 }, children: refreshing ? "SYNCING..." : `${timeSince}s AGO` }),
                 /* @__PURE__ */ jsxRuntimeExports.jsxs(
                   "button",
                   {
@@ -88299,9 +88316,9 @@ function Leaderboard() {
                     disabled: refreshing,
                     style: {
                       background: "rgba(0,255,204,0.07)",
-                      border: `1px solid ${BORDER$a}`,
+                      border: `1px solid ${BORDER$b}`,
                       borderRadius: 6,
-                      color: CYAN$b,
+                      color: CYAN$c,
                       padding: "6px 10px",
                       cursor: refreshing ? "not-allowed" : "pointer",
                       display: "flex",
@@ -88363,8 +88380,8 @@ function Leaderboard() {
               className: "flex items-center gap-1.5 min-h-[44px] px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all rounded-lg",
               style: {
                 background: active ? "rgba(0,255,204,0.15)" : "rgba(0,20,40,0.5)",
-                border: `1px solid ${active ? CYAN$b : BORDER$a}`,
-                color: active ? CYAN$b : TEXT_DIM$4,
+                border: `1px solid ${active ? CYAN$c : BORDER$b}`,
+                color: active ? CYAN$c : TEXT_DIM$5,
                 boxShadow: active ? "0 0 10px rgba(0,255,204,0.15)" : "none"
               },
               children: [
@@ -88383,13 +88400,13 @@ function Leaderboard() {
             className: "mb-4 inline-flex items-center gap-2 rounded-full px-4 py-1.5",
             style: {
               background: "rgba(0,255,204,0.05)",
-              border: `1px solid ${BORDER$a}`,
+              border: `1px solid ${BORDER$b}`,
               fontSize: 9,
-              color: TEXT_DIM$4,
+              color: TEXT_DIM$5,
               letterSpacing: 1.5
             },
             children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$b }, children: "⚡" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$c }, children: "⚡" }),
               "SCORE = (PLOTS × 100) + (FRNTR × 0.01) + (WINS × 50)"
             ]
           }
@@ -88405,7 +88422,7 @@ function Leaderboard() {
               background: PANEL,
               backdropFilter: "blur(16px)",
               WebkitBackdropFilter: "blur(16px)",
-              border: `1px solid ${BORDER$a}`,
+              border: `1px solid ${BORDER$b}`,
               borderRadius: 12,
               overflow: "hidden"
             },
@@ -88416,7 +88433,7 @@ function Leaderboard() {
                   style: {
                     display: "grid",
                     gridTemplateColumns: "42px 48px 1fr 70px 110px 60px 90px",
-                    borderBottom: `1px solid ${BORDER$a}`,
+                    borderBottom: `1px solid ${BORDER$b}`,
                     background: "rgba(0,255,204,0.03)"
                   },
                   children: [
@@ -88428,7 +88445,7 @@ function Leaderboard() {
                           fontSize: 9,
                           fontWeight: 700,
                           letterSpacing: 2,
-                          color: TEXT_DIM$4,
+                          color: TEXT_DIM$5,
                           textTransform: "uppercase"
                         },
                         children: "#"
@@ -88512,7 +88529,7 @@ function Leaderboard() {
                   style: {
                     padding: "40px 20px",
                     textAlign: "center",
-                    color: TEXT_DIM$4,
+                    color: TEXT_DIM$5,
                     fontSize: 12,
                     letterSpacing: 2
                   },
@@ -88525,7 +88542,7 @@ function Leaderboard() {
                 const isTop3 = entry.rank <= 3;
                 const rowBg = entry.isMe ? "rgba(0,255,204,0.08)" : isTop3 ? `rgba(0,255,204,${0.04 - idx * 0.01})` : "transparent";
                 const borderColor = entry.isMe ? "rgba(0,255,204,0.25)" : "rgba(0,255,204,0.06)";
-                const rankColor = entry.rank === 1 ? GOLD$2 : entry.rank === 2 ? "#c0c0c0" : entry.rank === 3 ? AMBER : TEXT_DIM$4;
+                const rankColor = entry.rank === 1 ? GOLD$3 : entry.rank === 2 ? "#c0c0c0" : entry.rank === 3 ? AMBER : TEXT_DIM$5;
                 return /* @__PURE__ */ jsxRuntimeExports.jsxs(
                   motion.div,
                   {
@@ -88595,7 +88612,7 @@ function Leaderboard() {
                                 style: {
                                   fontSize: 11,
                                   fontWeight: entry.isMe ? 800 : 500,
-                                  color: entry.isMe ? CYAN$b : TEXT$5,
+                                  color: entry.isMe ? CYAN$c : TEXT$6,
                                   overflow: "hidden",
                                   textOverflow: "ellipsis",
                                   whiteSpace: "nowrap",
@@ -88610,7 +88627,7 @@ function Leaderboard() {
                                         marginLeft: 6,
                                         fontSize: 7,
                                         fontWeight: 700,
-                                        color: CYAN$b,
+                                        color: CYAN$c,
                                         border: "1px solid rgba(0,255,204,0.4)",
                                         borderRadius: 3,
                                         padding: "1px 4px",
@@ -88634,7 +88651,7 @@ function Leaderboard() {
                             fontSize: 11,
                             fontWeight: 700,
                             fontFamily: "monospace",
-                            color: TEXT$5
+                            color: TEXT$6
                           },
                           children: entry.plots
                         }
@@ -88648,7 +88665,7 @@ function Leaderboard() {
                             fontSize: 11,
                             fontWeight: 700,
                             fontFamily: "monospace",
-                            color: entry.isMe ? CYAN$b : "rgba(0,255,204,0.7)"
+                            color: entry.isMe ? CYAN$c : "rgba(0,255,204,0.7)"
                           },
                           children: entry.frntr.toLocaleString()
                         }
@@ -88676,7 +88693,7 @@ function Leaderboard() {
                             fontSize: 11,
                             fontWeight: 800,
                             fontFamily: "monospace",
-                            color: entry.isMe ? GOLD$2 : AMBER
+                            color: entry.isMe ? GOLD$3 : AMBER
                           },
                           children: entry.score.toLocaleString()
                         }
@@ -88704,7 +88721,7 @@ function Leaderboard() {
             },
             children: [
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(Trophy, { size: 16, style: { color: GOLD$2 } }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(Trophy, { size: 16, style: { color: GOLD$3 } }),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "span",
                   {
@@ -88712,7 +88729,7 @@ function Leaderboard() {
                       fontSize: 10,
                       fontWeight: 700,
                       letterSpacing: 2,
-                      color: TEXT_DIM$4,
+                      color: TEXT_DIM$5,
                       textTransform: "uppercase"
                     },
                     children: "YOUR RANK"
@@ -88726,7 +88743,7 @@ function Leaderboard() {
                     fontSize: 18,
                     fontWeight: 900,
                     fontFamily: "monospace",
-                    color: myRank >= 0 ? CYAN$b : TEXT_DIM$4,
+                    color: myRank >= 0 ? CYAN$c : TEXT_DIM$5,
                     letterSpacing: 1
                   },
                   children: myRank >= 0 ? `#${myRank + 1}` : "UNRANKED"
@@ -88739,7 +88756,7 @@ function Leaderboard() {
           "div",
           {
             className: "mt-3 flex items-center justify-end gap-2",
-            style: { fontSize: 9, color: TEXT_DIM$4, letterSpacing: 1.5 },
+            style: { fontSize: 9, color: TEXT_DIM$5, letterSpacing: 1.5 },
             children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx(
                 "div",
@@ -88748,7 +88765,7 @@ function Leaderboard() {
                     width: 6,
                     height: 6,
                     borderRadius: "50%",
-                    background: CYAN$b,
+                    background: CYAN$c,
                     animation: "pulse 2s infinite",
                     boxShadow: "0 0 6px rgba(0,255,204,0.7)"
                   }
@@ -89271,10 +89288,10 @@ function usePlayerSync() {
     void seed();
   }, [actor, isFetching]);
 }
-const CYAN$a = "#00ffcc";
-const BORDER$9 = "rgba(0,255,204,0.22)";
-const TEXT$4 = "#e0f4ff";
-const TEXT_DIM$3 = "rgba(224,244,255,0.45)";
+const CYAN$b = "#00ffcc";
+const BORDER$a = "rgba(0,255,204,0.22)";
+const TEXT$5 = "#e0f4ff";
+const TEXT_DIM$4 = "rgba(224,244,255,0.45)";
 function AdminButton({
   label,
   icon: Icon2,
@@ -89297,7 +89314,7 @@ function AdminButton({
         borderRadius: 8,
         background: danger ? "rgba(255,68,68,0.10)" : "rgba(0,255,204,0.08)",
         border: `1px solid ${danger ? "rgba(255,68,68,0.35)" : "rgba(0,255,204,0.3)"}`,
-        color: danger ? "#ff6666" : CYAN$a,
+        color: danger ? "#ff6666" : CYAN$b,
         fontSize: 11,
         fontWeight: 700,
         letterSpacing: 1.5,
@@ -89435,8 +89452,8 @@ function AdminPanel() {
             Shield,
             {
               size: 18,
-              color: CYAN$a,
-              style: { filter: `drop-shadow(0 0 6px ${CYAN$a})` }
+              color: CYAN$b,
+              style: { filter: `drop-shadow(0 0 6px ${CYAN$b})` }
             }
           ),
           /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -89445,10 +89462,10 @@ function AdminPanel() {
               style: {
                 fontSize: 13,
                 fontWeight: 900,
-                color: CYAN$a,
+                color: CYAN$b,
                 letterSpacing: 3,
                 textTransform: "uppercase",
-                textShadow: `0 0 10px ${CYAN$a}`
+                textShadow: `0 0 10px ${CYAN$b}`
               },
               children: "ADMIN CONTROL"
             }
@@ -89461,17 +89478,17 @@ function AdminPanel() {
                 padding: "2px 8px",
                 borderRadius: 10,
                 background: "rgba(0,255,204,0.12)",
-                border: `1px solid ${CYAN$a}55`,
+                border: `1px solid ${CYAN$b}55`,
                 fontSize: 7,
                 fontWeight: 700,
-                color: CYAN$a,
+                color: CYAN$b,
                 letterSpacing: 2
               },
               children: "ADMIN"
             }
           )
         ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { height: 1, background: BORDER$9 } }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { height: 1, background: BORDER$a } }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs(
           "div",
           {
@@ -89479,7 +89496,7 @@ function AdminPanel() {
               padding: "8px 12px",
               borderRadius: 8,
               background: "rgba(0,255,204,0.04)",
-              border: `1px solid ${BORDER$9}`
+              border: `1px solid ${BORDER$a}`
             },
             children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -89487,7 +89504,7 @@ function AdminPanel() {
                 {
                   style: {
                     fontSize: 7,
-                    color: TEXT_DIM$3,
+                    color: TEXT_DIM$4,
                     letterSpacing: 1.5,
                     marginBottom: 3
                   },
@@ -89498,7 +89515,7 @@ function AdminPanel() {
                 "div",
                 {
                   className: "font-mono",
-                  style: { fontSize: 9, color: TEXT$4, wordBreak: "break-all" },
+                  style: { fontSize: 9, color: TEXT$5, wordBreak: "break-all" },
                   children: player.principal ?? "—"
                 }
               )
@@ -89511,7 +89528,7 @@ function AdminPanel() {
             {
               style: {
                 fontSize: 8,
-                color: TEXT_DIM$3,
+                color: TEXT_DIM$4,
                 letterSpacing: 2,
                 marginBottom: 2
               },
@@ -89603,8 +89620,8 @@ function AdminPanel() {
                         padding: "8px",
                         borderRadius: 6,
                         background: "rgba(0,255,204,0.06)",
-                        border: `1px solid ${BORDER$9}`,
-                        color: CYAN$a,
+                        border: `1px solid ${BORDER$a}`,
+                        color: CYAN$b,
                         fontSize: 10,
                         fontWeight: 700,
                         cursor: "pointer",
@@ -89625,9 +89642,9 @@ function AdminPanel() {
               padding: "8px 12px",
               borderRadius: 8,
               background: "rgba(0,10,20,0.4)",
-              border: `1px solid ${BORDER$9}`,
+              border: `1px solid ${BORDER$a}`,
               fontSize: 8,
-              color: TEXT_DIM$3,
+              color: TEXT_DIM$4,
               lineHeight: 1.7,
               letterSpacing: 0.3
             },
@@ -89638,7 +89655,7 @@ function AdminPanel() {
     }
   );
 }
-const CYAN$9 = "#00ffcc";
+const CYAN$a = "#00ffcc";
 const CYAN_DIM$7 = "rgba(0,255,204,0.35)";
 const BORDER_TOP = "rgba(0,255,204,0.28)";
 const BASE_NAV_ITEMS = [
@@ -89647,7 +89664,8 @@ const BASE_NAV_ITEMS = [
   { id: "intel", label: "INTEL", Icon: Radio },
   { id: "universe", label: "UNI", Icon: Globe },
   { id: "leaderboard", label: "LEAD", Icon: Trophy },
-  { id: "inventory", label: "INV", Icon: Package }
+  { id: "inventory", label: "INV", Icon: Package },
+  { id: "roadmap", label: "INFO", Icon: BookOpen }
 ];
 const ADMIN_NAV_ITEM = { id: "admin", label: "ADMIN", Icon: Shield };
 const NAV_ITEMS = BASE_NAV_ITEMS;
@@ -89679,7 +89697,7 @@ function BottomNav({ activeTab, onTabClick }) {
             className: "flex-1 flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-all duration-150",
             style: {
               background: isActive ? "rgba(0,255,204,0.07)" : "transparent",
-              borderTop: isActive ? `2px solid ${CYAN$9}` : "2px solid transparent",
+              borderTop: isActive ? `2px solid ${CYAN$a}` : "2px solid transparent",
               position: "relative"
             },
             children: [
@@ -89692,9 +89710,9 @@ function BottomNav({ activeTab, onTabClick }) {
                     left: "20%",
                     right: "20%",
                     height: 2,
-                    background: CYAN$9,
+                    background: CYAN$a,
                     borderRadius: "0 0 2px 2px",
-                    boxShadow: `0 0 8px ${CYAN$9}`,
+                    boxShadow: `0 0 8px ${CYAN$a}`,
                     filter: "blur(1px)"
                   }
                 }
@@ -89703,9 +89721,9 @@ function BottomNav({ activeTab, onTabClick }) {
                 Icon2,
                 {
                   size: 18,
-                  color: isActive ? CYAN$9 : id2 === "admin" ? "rgba(255,100,100,0.6)" : CYAN_DIM$7,
+                  color: isActive ? CYAN$a : id2 === "admin" ? "rgba(255,100,100,0.6)" : CYAN_DIM$7,
                   style: {
-                    filter: isActive ? `drop-shadow(0 0 4px ${CYAN$9})` : "none",
+                    filter: isActive ? `drop-shadow(0 0 4px ${CYAN$a})` : "none",
                     transition: "filter 0.15s"
                   }
                 }
@@ -89716,7 +89734,7 @@ function BottomNav({ activeTab, onTabClick }) {
                   style: {
                     fontSize: 7.5,
                     letterSpacing: 0.5,
-                    color: isActive ? CYAN$9 : CYAN_DIM$7,
+                    color: isActive ? CYAN$a : CYAN_DIM$7,
                     fontWeight: isActive ? 700 : 400
                   },
                   children: label
@@ -89730,8 +89748,8 @@ function BottomNav({ activeTab, onTabClick }) {
     }
   );
 }
-const CYAN$8 = "#00ffcc";
-const BORDER$8 = "rgba(0,255,204,0.22)";
+const CYAN$9 = "#00ffcc";
+const BORDER$9 = "rgba(0,255,204,0.22)";
 const CYAN_DIM$6 = "rgba(0,255,204,0.35)";
 function BottomSheet({
   isOpen,
@@ -89766,9 +89784,9 @@ function BottomSheet({
           bottom: 64,
           height,
           background: "rgba(4,12,24,0.97)",
-          borderTop: `1px solid ${BORDER$8}`,
-          borderLeft: `1px solid ${BORDER$8}`,
-          borderRight: `1px solid ${BORDER$8}`,
+          borderTop: `1px solid ${BORDER$9}`,
+          borderLeft: `1px solid ${BORDER$9}`,
+          borderRight: `1px solid ${BORDER$9}`,
           borderRadius: "16px 16px 0 0",
           backdropFilter: "blur(20px)",
           WebkitBackdropFilter: "blur(20px)",
@@ -89783,7 +89801,7 @@ function BottomSheet({
             {
               className: "flex-shrink-0 flex items-center justify-between px-4 py-2.5",
               style: {
-                borderBottom: `1px solid ${BORDER$8}`,
+                borderBottom: `1px solid ${BORDER$9}`,
                 background: "rgba(0,255,204,0.03)"
               },
               children: [
@@ -89811,9 +89829,9 @@ function BottomSheet({
                     style: {
                       fontSize: 11,
                       fontWeight: 700,
-                      color: CYAN$8,
+                      color: CYAN$9,
                       letterSpacing: 2,
-                      textShadow: `0 0 10px ${CYAN$8}`,
+                      textShadow: `0 0 10px ${CYAN$9}`,
                       paddingTop: 4
                     },
                     children: title
@@ -89846,7 +89864,7 @@ function BottomSheet({
                       className: "cursor-pointer flex items-center justify-center rounded",
                       style: {
                         background: "rgba(0,255,204,0.06)",
-                        border: `1px solid ${BORDER$8}`,
+                        border: `1px solid ${BORDER$9}`,
                         color: CYAN_DIM$6,
                         padding: 4
                       },
@@ -89863,11 +89881,11 @@ function BottomSheet({
     )
   ] });
 }
-const CYAN$7 = "#00ffcc";
+const CYAN$8 = "#00ffcc";
 const CYAN_DIM$5 = "rgba(0,255,204,0.35)";
-const BORDER$7 = "rgba(0,255,204,0.22)";
-const TEXT$3 = "#e0f4ff";
-const TEXT_DIM$2 = "rgba(224,244,255,0.45)";
+const BORDER$8 = "rgba(0,255,204,0.22)";
+const TEXT$4 = "#e0f4ff";
+const TEXT_DIM$3 = "rgba(224,244,255,0.45)";
 const MiniBar = ({
   value,
   max,
@@ -90050,14 +90068,14 @@ function CommandCenter() {
               padding: "7px 0",
               borderRadius: 6,
               background: activeTab === tab ? "rgba(0,255,204,0.12)" : "rgba(0,10,20,0.5)",
-              border: `1px solid ${activeTab === tab ? `${CYAN$7}66` : BORDER$7}`,
-              color: activeTab === tab ? CYAN$7 : TEXT_DIM$2,
+              border: `1px solid ${activeTab === tab ? `${CYAN$8}66` : BORDER$8}`,
+              color: activeTab === tab ? CYAN$8 : TEXT_DIM$3,
               fontSize: 7,
               fontWeight: 700,
               letterSpacing: 1.5,
               cursor: "pointer",
               textTransform: "uppercase",
-              borderBottom: activeTab === tab ? `2px solid ${CYAN$7}` : "1px solid transparent"
+              borderBottom: activeTab === tab ? `2px solid ${CYAN$8}` : "1px solid transparent"
             },
             children: tab === "tokens" ? "TOKEN ECONOMY" : "MISSIONS"
           },
@@ -90069,7 +90087,7 @@ function CommandCenter() {
             {
               style: {
                 background: "rgba(0,20,40,0.55)",
-                border: `1px solid ${BORDER$7}`,
+                border: `1px solid ${BORDER$8}`,
                 borderRadius: 10,
                 padding: "12px 14px"
               },
@@ -90079,7 +90097,7 @@ function CommandCenter() {
                   {
                     style: {
                       fontSize: 8,
-                      color: TEXT_DIM$2,
+                      color: TEXT_DIM$3,
                       letterSpacing: 2,
                       marginBottom: 6
                     },
@@ -90092,9 +90110,9 @@ function CommandCenter() {
                     style: {
                       fontSize: 20,
                       fontWeight: 900,
-                      color: CYAN$7,
+                      color: CYAN$8,
                       fontFamily: "monospace",
-                      textShadow: `0 0 12px ${CYAN$7}`,
+                      textShadow: `0 0 12px ${CYAN$8}`,
                       marginBottom: 4
                     },
                     children: fmtFrntr(displayBalance)
@@ -90120,14 +90138,14 @@ function CommandCenter() {
                       padding: "9px 0",
                       borderRadius: 6,
                       background: accruedFrntSinceSync >= 1e-3 && !isClaiming ? "linear-gradient(135deg, rgba(0,255,204,0.18), rgba(0,255,204,0.07))" : "rgba(255,255,255,0.03)",
-                      border: `1px solid ${accruedFrntSinceSync >= 1e-3 && !isClaiming ? `${CYAN$7}99` : BORDER$7}`,
-                      color: accruedFrntSinceSync >= 1e-3 && !isClaiming ? CYAN$7 : "rgba(0,255,204,0.3)",
+                      border: `1px solid ${accruedFrntSinceSync >= 1e-3 && !isClaiming ? `${CYAN$8}99` : BORDER$8}`,
+                      color: accruedFrntSinceSync >= 1e-3 && !isClaiming ? CYAN$8 : "rgba(0,255,204,0.3)",
                       fontSize: 11,
                       fontWeight: 900,
                       letterSpacing: 2,
                       cursor: accruedFrntSinceSync >= 1e-3 && !isClaiming && actor ? "pointer" : "not-allowed",
                       fontFamily: "monospace",
-                      textShadow: accruedFrntSinceSync >= 1e-3 ? `0 0 8px ${CYAN$7}88` : "none",
+                      textShadow: accruedFrntSinceSync >= 1e-3 ? `0 0 8px ${CYAN$8}88` : "none",
                       transition: "all 0.2s"
                     },
                     children: isClaiming ? "CLAIMING…" : accruedFrntSinceSync < 1e-3 ? "CLAIM (ACCUMULATING…)" : `CLAIM +${fmtFrntr(accruedFrntSinceSync)} FRNTR`
@@ -90145,7 +90163,7 @@ function CommandCenter() {
                   icon: Zap,
                   label: "Plots Owned",
                   value: player.plotsOwned.length,
-                  color: CYAN$7,
+                  color: CYAN$8,
                   sub: `${totalDailyFrntr} F/day`
                 },
                 {
@@ -90174,7 +90192,7 @@ function CommandCenter() {
                 {
                   style: {
                     background: "rgba(0,10,20,0.5)",
-                    border: `1px solid ${BORDER$7}`,
+                    border: `1px solid ${BORDER$8}`,
                     borderRadius: 8,
                     padding: "10px"
                   },
@@ -90193,7 +90211,7 @@ function CommandCenter() {
                           /* @__PURE__ */ jsxRuntimeExports.jsx(
                             "span",
                             {
-                              style: { fontSize: 7, color: TEXT_DIM$2, letterSpacing: 1.5 },
+                              style: { fontSize: 7, color: TEXT_DIM$3, letterSpacing: 1.5 },
                               children: stat.label.toUpperCase()
                             }
                           )
@@ -90212,7 +90230,7 @@ function CommandCenter() {
                         children: stat.value
                       }
                     ),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 7, color: TEXT_DIM$2, marginTop: 2 }, children: stat.sub })
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 7, color: TEXT_DIM$3, marginTop: 2 }, children: stat.sub })
                   ]
                 },
                 stat.label
@@ -90224,7 +90242,7 @@ function CommandCenter() {
             {
               style: {
                 background: "rgba(0,20,40,0.55)",
-                border: `1px solid ${BORDER$7}`,
+                border: `1px solid ${BORDER$8}`,
                 borderRadius: 10,
                 padding: "12px 14px"
               },
@@ -90234,7 +90252,7 @@ function CommandCenter() {
                   {
                     style: {
                       fontSize: 8,
-                      color: TEXT_DIM$2,
+                      color: TEXT_DIM$3,
                       letterSpacing: 2,
                       marginBottom: 8
                     },
@@ -90252,7 +90270,7 @@ function CommandCenter() {
                     label: "Mineable Left",
                     value: 5e9 - totalFRNTRBurned,
                     total: 1e10,
-                    color: CYAN$7
+                    color: CYAN$8
                   }
                 ].map((item) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { marginBottom: 8 }, children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -90264,7 +90282,7 @@ function CommandCenter() {
                         marginBottom: 3
                       },
                       children: [
-                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 8, color: TEXT_DIM$2 }, children: item.label }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 8, color: TEXT_DIM$3 }, children: item.label }),
                         /* @__PURE__ */ jsxRuntimeExports.jsxs(
                           "span",
                           {
@@ -90301,7 +90319,7 @@ function CommandCenter() {
             {
               style: {
                 fontSize: 8,
-                color: TEXT_DIM$2,
+                color: TEXT_DIM$3,
                 letterSpacing: 2,
                 marginBottom: 2
               },
@@ -90320,7 +90338,7 @@ function CommandCenter() {
                 "data-ocid": `command.mission.${m2.id}`,
                 style: {
                   background: isDone ? "rgba(0,255,204,0.07)" : "rgba(0,10,20,0.5)",
-                  border: `1px solid ${isDone ? `${CYAN$7}55` : BORDER$7}`,
+                  border: `1px solid ${isDone ? `${CYAN$8}55` : BORDER$8}`,
                   borderRadius: 10,
                   padding: "12px 14px",
                   display: "flex",
@@ -90328,7 +90346,7 @@ function CommandCenter() {
                   gap: 10
                 },
                 children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { flexShrink: 0, marginTop: 2 }, children: isDone ? /* @__PURE__ */ jsxRuntimeExports.jsx(CircleCheckBig, { size: 16, color: CYAN$7 }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Circle, { size: 16, color: "rgba(255,255,255,0.25)" }) }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { flexShrink: 0, marginTop: 2 }, children: isDone ? /* @__PURE__ */ jsxRuntimeExports.jsx(CircleCheckBig, { size: 16, color: CYAN$8 }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Circle, { size: 16, color: "rgba(255,255,255,0.25)" }) }),
                   /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { flex: 1, minWidth: 0 }, children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsx(
                       "div",
@@ -90336,7 +90354,7 @@ function CommandCenter() {
                         style: {
                           fontSize: 10,
                           fontWeight: 700,
-                          color: isDone ? CYAN$7 : TEXT$3,
+                          color: isDone ? CYAN$8 : TEXT$4,
                           letterSpacing: 0.5,
                           marginBottom: 3
                         },
@@ -90348,7 +90366,7 @@ function CommandCenter() {
                       {
                         style: {
                           fontSize: 8,
-                          color: TEXT_DIM$2,
+                          color: TEXT_DIM$3,
                           letterSpacing: 0.3,
                           marginBottom: 6
                         },
@@ -90464,8 +90482,8 @@ function useIcpBalance() {
   const icpBalanceFormatted = Number(icpBalance) / 1e8;
   return { icpBalance, icpBalanceFormatted, refetch };
 }
-const CYAN$6 = "#00ffcc";
-const BORDER$6 = "rgba(0,255,204,0.22)";
+const CYAN$7 = "#00ffcc";
+const BORDER$7 = "rgba(0,255,204,0.22)";
 function FaucetOverlay() {
   const { isAuthenticated } = useInternetIdentity();
   const { actor, isFetching } = useActor(createActor);
@@ -90542,8 +90560,8 @@ function FaucetOverlay() {
         padding: "6px 12px",
         borderRadius: 6,
         background: loading2 ? "rgba(0,255,204,0.05)" : "rgba(0,255,204,0.1)",
-        border: `1px solid ${BORDER$6}`,
-        color: CYAN$6,
+        border: `1px solid ${BORDER$7}`,
+        color: CYAN$7,
         fontSize: 9,
         fontWeight: 700,
         letterSpacing: 1.5,
@@ -102921,8 +102939,8 @@ const LORE_ENTRIES = [
     content: "Phase I of the Frontier rollout is live: land acquisition, token generation, and plot upgrades. Phase II — sub-plot specialization, factions, and advanced combat — is in development."
   }
 ];
-const CYAN$5 = "#00ffcc";
-const BORDER$5 = "rgba(0,255,204,0.22)";
+const CYAN$6 = "#00ffcc";
+const BORDER$6 = "rgba(0,255,204,0.22)";
 const CATEGORY_COLORS = {
   TRANSMISSION: "#00ffcc",
   INTEL: "#38bdf8",
@@ -102941,8 +102959,8 @@ function GameLoreWindow() {
         height: "100%",
         minHeight: 180,
         background: "rgba(5,10,22,0.85)",
-        border: `1px solid ${BORDER$5}`,
-        borderTop: `2px solid ${CYAN$5}`,
+        border: `1px solid ${BORDER$6}`,
+        borderTop: `2px solid ${CYAN$6}`,
         borderRadius: 8,
         boxShadow: "0 0 18px rgba(0,255,204,0.08), inset 0 0 40px rgba(0,0,0,0.4)",
         overflow: "hidden",
@@ -102967,7 +102985,7 @@ function GameLoreWindow() {
           {
             style: {
               padding: "8px 12px",
-              borderBottom: `1px solid ${BORDER$5}`,
+              borderBottom: `1px solid ${BORDER$6}`,
               background: "rgba(0,255,204,0.04)",
               display: "flex",
               alignItems: "center",
@@ -102984,8 +103002,8 @@ function GameLoreWindow() {
                     width: 6,
                     height: 6,
                     borderRadius: "50%",
-                    background: CYAN$5,
-                    boxShadow: `0 0 8px ${CYAN$5}`,
+                    background: CYAN$6,
+                    boxShadow: `0 0 8px ${CYAN$6}`,
                     animation: "pulse 2s ease-in-out infinite"
                   }
                 }
@@ -102996,7 +103014,7 @@ function GameLoreWindow() {
                   style: {
                     fontSize: 9,
                     fontFamily: "var(--font-mono, monospace)",
-                    color: CYAN$5,
+                    color: CYAN$6,
                     letterSpacing: 3,
                     fontWeight: 700,
                     textTransform: "uppercase"
@@ -103035,7 +103053,7 @@ function GameLoreWindow() {
             },
             children: [
               LORE_ENTRIES.map((entry) => {
-                const catColor = CATEGORY_COLORS[entry.category] ?? CYAN$5;
+                const catColor = CATEGORY_COLORS[entry.category] ?? CYAN$6;
                 const dateStr = new Date(entry.timestamp).toLocaleDateString(
                   void 0,
                   { month: "short", day: "numeric", year: "2-digit" }
@@ -103283,9 +103301,9 @@ function usePurchasePlot() {
   }
   return { purchasePlot, isPurchasing, lastResult };
 }
-const CYAN$4 = "#00ffcc";
+const CYAN$5 = "#00ffcc";
 const CYAN_DIM$4 = "rgba(0,255,204,0.5)";
-const BORDER$4 = "rgba(0,255,204,0.15)";
+const BORDER$5 = "rgba(0,255,204,0.15)";
 const BIOME_BADGE_COLORS = {
   Temperate: "#4a9b5f",
   Desert: "#e8c97a",
@@ -103631,7 +103649,7 @@ function MapBottomSheet({
       nextStep: "Select weapon and FIRE."
     });
   }
-  const biomeBadgeColor = plot ? BIOME_BADGE_COLORS[plot.biome] ?? CYAN$4 : CYAN$4;
+  const biomeBadgeColor = plot ? BIOME_BADGE_COLORS[plot.biome] ?? CYAN$5 : CYAN$5;
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx("style", { children: `
         @keyframes mapGlobePulse {
@@ -103679,7 +103697,7 @@ function MapBottomSheet({
                       {
                         size: 48,
                         style: {
-                          color: CYAN$4,
+                          color: CYAN$5,
                           animation: "mapGlobePulse 2s ease-in-out infinite"
                         }
                       }
@@ -103719,7 +103737,7 @@ function MapBottomSheet({
                             style: {
                               fontSize: 14,
                               fontWeight: 700,
-                              color: CYAN$4,
+                              color: CYAN$5,
                               letterSpacing: 1,
                               fontFamily: "monospace"
                             },
@@ -103787,13 +103805,13 @@ function MapBottomSheet({
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "div",
                   {
-                    style: { height: 1, background: BORDER$4, marginBottom: 12 }
+                    style: { height: 1, background: BORDER$5, marginBottom: 12 }
                   }
                 ),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "div",
                   {
-                    style: { height: 1, background: BORDER$4, marginBottom: 12 }
+                    style: { height: 1, background: BORDER$5, marginBottom: 12 }
                   }
                 ),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(SurveyReport, { plot, isOwnPlot })
@@ -103805,7 +103823,7 @@ function MapBottomSheet({
             {
               style: {
                 padding: "12px 16px",
-                borderTop: `1px solid ${BORDER$4}`,
+                borderTop: `1px solid ${BORDER$5}`,
                 flexShrink: 0
               },
               children: [
@@ -103859,7 +103877,7 @@ function MapBottomSheet({
                                     },
                                     children: [
                                       /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: "rgba(224,244,255,0.45)" }, children: "PLOT ID" }),
-                                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$4, fontWeight: 700 }, children: String(plot.id).slice(0, 8) })
+                                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$5, fontWeight: 700 }, children: String(plot.id).slice(0, 8) })
                                     ]
                                   }
                                 ),
@@ -103881,9 +103899,9 @@ function MapBottomSheet({
                                           style: {
                                             padding: "1px 6px",
                                             borderRadius: 3,
-                                            background: `${BIOME_BADGE_COLORS[plot.biome] ?? CYAN$4}22`,
-                                            border: `1px solid ${BIOME_BADGE_COLORS[plot.biome] ?? CYAN$4}`,
-                                            color: BIOME_BADGE_COLORS[plot.biome] ?? CYAN$4,
+                                            background: `${BIOME_BADGE_COLORS[plot.biome] ?? CYAN$5}22`,
+                                            border: `1px solid ${BIOME_BADGE_COLORS[plot.biome] ?? CYAN$5}`,
+                                            color: BIOME_BADGE_COLORS[plot.biome] ?? CYAN$5,
                                             fontWeight: 700,
                                             letterSpacing: 1
                                           },
@@ -103980,7 +103998,7 @@ function MapBottomSheet({
                                   flex: 1,
                                   padding: "10px 0",
                                   background: "rgba(0,0,0,0.2)",
-                                  border: `1px solid ${BORDER$4}`,
+                                  border: `1px solid ${BORDER$5}`,
                                   borderRadius: 6,
                                   color: CYAN_DIM$4,
                                   fontSize: 10,
@@ -104058,7 +104076,7 @@ function MapBottomSheet({
                             disabled: !canClaim || claimStatus === "claiming",
                             style: {
                               ...actionBtnStyle(
-                                canClaim ? CYAN$4 : "rgba(0,255,204,0.25)",
+                                canClaim ? CYAN$5 : "rgba(0,255,204,0.25)",
                                 canClaim ? "rgba(0,255,204,0.1)" : "rgba(0,0,0,0.2)"
                               ),
                               opacity: canClaim ? 1 : 0.5,
@@ -104091,7 +104109,7 @@ function MapBottomSheet({
                                 "span",
                                 {
                                   style: {
-                                    color: displayBalance >= upgradeCost ? CYAN$4 : "#ef4444"
+                                    color: displayBalance >= upgradeCost ? CYAN$5 : "#ef4444"
                                   },
                                   children: [
                                     "COST: ",
@@ -104111,10 +104129,10 @@ function MapBottomSheet({
                               padding: "10px 0",
                               fontSize: 10,
                               fontWeight: 700,
-                              color: CYAN$4,
+                              color: CYAN$5,
                               letterSpacing: 2,
                               fontFamily: "monospace",
-                              border: `1px solid ${CYAN$4}44`,
+                              border: `1px solid ${CYAN$5}44`,
                               borderRadius: 6
                             },
                             children: "MAX TIER"
@@ -104175,13 +104193,13 @@ function MapBottomSheet({
     )
   ] });
 }
-const CYAN$3 = "#00ffcc";
+const CYAN$4 = "#00ffcc";
 const CYAN_DIM$3 = "rgba(0,255,204,0.35)";
-const BORDER$3 = "rgba(0,255,204,0.22)";
-const TEXT$2 = "#e0f4ff";
-const TEXT_DIM$1 = "rgba(224,244,255,0.55)";
-const GOLD$1 = "#ffd700";
-const PHASES = [
+const BORDER$4 = "rgba(0,255,204,0.22)";
+const TEXT$3 = "#e0f4ff";
+const TEXT_DIM$2 = "rgba(224,244,255,0.55)";
+const GOLD$2 = "#ffd700";
+const PHASES$1 = [
   {
     version: "v1.0",
     label: "Land Ownership & FRNTR",
@@ -104313,13 +104331,13 @@ function PlayNowOverlay({ onClose, onLogin }) {
                     padding: "4px 12px",
                     borderRadius: 20,
                     marginBottom: 14,
-                    border: `1px solid ${CYAN$3}44`,
+                    border: `1px solid ${CYAN$4}44`,
                     fontSize: 8,
                     letterSpacing: 3,
-                    color: CYAN$3,
+                    color: CYAN$4,
                     background: "rgba(0,255,204,0.07)",
                     textTransform: "uppercase",
-                    textShadow: `0 0 8px ${CYAN$3}`
+                    textShadow: `0 0 8px ${CYAN$4}`
                   },
                   children: "v1.0 NOW LIVE ON ICP"
                 }
@@ -104330,17 +104348,17 @@ function PlayNowOverlay({ onClose, onLogin }) {
                   style: {
                     fontSize: 28,
                     fontWeight: 900,
-                    color: CYAN$3,
+                    color: CYAN$4,
                     letterSpacing: 4,
                     textTransform: "uppercase",
-                    textShadow: `0 0 30px ${CYAN$3}, 0 0 60px ${CYAN$3}44`,
+                    textShadow: `0 0 30px ${CYAN$4}, 0 0 60px ${CYAN$4}44`,
                     lineHeight: 1.1,
                     marginBottom: 8
                   },
                   children: [
                     "FRONTIER:",
                     /* @__PURE__ */ jsxRuntimeExports.jsx("br", {}),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: TEXT$2 }, children: "MISSILE HORIZON" })
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: TEXT$3 }, children: "MISSILE HORIZON" })
                   ]
                 }
               ),
@@ -104349,7 +104367,7 @@ function PlayNowOverlay({ onClose, onLogin }) {
                 {
                   style: {
                     fontSize: 11,
-                    color: TEXT_DIM$1,
+                    color: TEXT_DIM$2,
                     marginBottom: 20,
                     lineHeight: 1.7
                   },
@@ -104361,8 +104379,8 @@ function PlayNowOverlay({ onClose, onLogin }) {
                 {
                   style: {
                     background: "rgba(0,20,40,0.55)",
-                    border: `1px solid ${BORDER$3}`,
-                    borderLeft: `3px solid ${CYAN$3}`,
+                    border: `1px solid ${BORDER$4}`,
+                    borderLeft: `3px solid ${CYAN$4}`,
                     borderRadius: 8,
                     padding: "12px 14px",
                     marginBottom: 20
@@ -104373,7 +104391,7 @@ function PlayNowOverlay({ onClose, onLogin }) {
                       {
                         style: {
                           fontSize: 8,
-                          color: CYAN$3,
+                          color: CYAN$4,
                           letterSpacing: 3,
                           marginBottom: 8,
                           fontWeight: 700
@@ -104386,16 +104404,16 @@ function PlayNowOverlay({ onClose, onLogin }) {
                       {
                         style: {
                           fontSize: 10,
-                          color: TEXT_DIM$1,
+                          color: TEXT_DIM$2,
                           lineHeight: 1.8,
                           margin: 0
                         },
                         children: [
                           "The Internet Computer has mapped Earth into",
                           " ",
-                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$3 }, children: "5,882 hex plots" }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$4 }, children: "5,882 hex plots" }),
                           ". Each plot is a sovereign NFT — yours to own, mine, upgrade, and defend. FRNTR is the lifeblood of Frontier:",
-                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: GOLD$1 }, children: " 10 billion tokens" }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: GOLD$2 }, children: " 10 billion tokens" }),
                           ", 5B pre-minted and 5B mineable only by landowners over 3–5 years. No central server. No middleman. Fully on-chain, forever."
                         ]
                       }
@@ -104409,7 +104427,7 @@ function PlayNowOverlay({ onClose, onLogin }) {
                   {
                     style: {
                       fontSize: 8,
-                      color: TEXT_DIM$1,
+                      color: TEXT_DIM$2,
                       letterSpacing: 2,
                       marginBottom: 10,
                       textTransform: "uppercase"
@@ -104417,7 +104435,7 @@ function PlayNowOverlay({ onClose, onLogin }) {
                     children: "Phased Rollout"
                   }
                 ),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "flex", flexDirection: "column", gap: 6 }, children: PHASES.map((phase) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "flex", flexDirection: "column", gap: 6 }, children: PHASES$1.map((phase) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
                   "div",
                   {
                     style: {
@@ -104427,7 +104445,7 @@ function PlayNowOverlay({ onClose, onLogin }) {
                       padding: "8px 10px",
                       borderRadius: 6,
                       background: phase.active ? "rgba(0,255,204,0.07)" : "rgba(255,255,255,0.02)",
-                      border: `1px solid ${phase.active ? `${CYAN$3}44` : BORDER$3}`
+                      border: `1px solid ${phase.active ? `${CYAN$4}44` : BORDER$4}`
                     },
                     children: [
                       /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -104440,8 +104458,8 @@ function PlayNowOverlay({ onClose, onLogin }) {
                             fontWeight: 700,
                             letterSpacing: 1.5,
                             background: phase.active ? "rgba(0,255,204,0.2)" : "rgba(255,255,255,0.04)",
-                            border: `1px solid ${phase.active ? CYAN$3 : BORDER$3}`,
-                            color: phase.active ? CYAN$3 : TEXT_DIM$1,
+                            border: `1px solid ${phase.active ? CYAN$4 : BORDER$4}`,
+                            color: phase.active ? CYAN$4 : TEXT_DIM$2,
                             flexShrink: 0,
                             marginTop: 1
                           },
@@ -104455,19 +104473,19 @@ function PlayNowOverlay({ onClose, onLogin }) {
                             style: {
                               fontSize: 10,
                               fontWeight: 700,
-                              color: phase.active ? TEXT$2 : TEXT_DIM$1,
+                              color: phase.active ? TEXT$3 : TEXT_DIM$2,
                               marginBottom: 2
                             },
                             children: [
                               phase.label,
-                              phase.active && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { marginLeft: 6, fontSize: 7, color: CYAN$3 }, children: "● LIVE" })
+                              phase.active && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { marginLeft: 6, fontSize: 7, color: CYAN$4 }, children: "● LIVE" })
                             ]
                           }
                         ),
                         /* @__PURE__ */ jsxRuntimeExports.jsx(
                           "div",
                           {
-                            style: { fontSize: 8, color: TEXT_DIM$1, lineHeight: 1.5 },
+                            style: { fontSize: 8, color: TEXT_DIM$2, lineHeight: 1.5 },
                             children: phase.desc
                           }
                         )
@@ -104488,16 +104506,16 @@ function PlayNowOverlay({ onClose, onLogin }) {
                     padding: "14px",
                     borderRadius: 10,
                     background: "linear-gradient(135deg, rgba(0,255,204,0.25), rgba(0,255,204,0.12))",
-                    border: `2px solid ${CYAN$3}`,
-                    color: CYAN$3,
+                    border: `2px solid ${CYAN$4}`,
+                    color: CYAN$4,
                     fontSize: 13,
                     fontWeight: 900,
                     letterSpacing: 3,
                     cursor: "pointer",
                     marginBottom: 12,
                     textTransform: "uppercase",
-                    boxShadow: `0 0 24px ${CYAN$3}44`,
-                    textShadow: `0 0 10px ${CYAN$3}`
+                    boxShadow: `0 0 24px ${CYAN$4}44`,
+                    textShadow: `0 0 10px ${CYAN$4}`
                   },
                   children: "ENTER THE FRONTIER →"
                 }
@@ -104512,16 +104530,16 @@ function PlayNowOverlay({ onClose, onLogin }) {
                     padding: "14px",
                     borderRadius: 10,
                     background: "linear-gradient(135deg, rgba(0,255,204,0.25), rgba(0,255,204,0.12))",
-                    border: `2px solid ${CYAN$3}`,
-                    color: CYAN$3,
+                    border: `2px solid ${CYAN$4}`,
+                    color: CYAN$4,
                     fontSize: 13,
                     fontWeight: 900,
                     letterSpacing: 3,
                     cursor: "pointer",
                     marginBottom: 12,
                     textTransform: "uppercase",
-                    boxShadow: `0 0 24px ${CYAN$3}44`,
-                    textShadow: `0 0 10px ${CYAN$3}`
+                    boxShadow: `0 0 24px ${CYAN$4}44`,
+                    textShadow: `0 0 10px ${CYAN$4}`
                   },
                   children: "CONNECT WITH INTERNET IDENTITY"
                 }
@@ -104536,9 +104554,9 @@ function PlayNowOverlay({ onClose, onLogin }) {
                     width: "100%",
                     padding: "10px",
                     background: "transparent",
-                    border: `1px solid ${BORDER$3}`,
+                    border: `1px solid ${BORDER$4}`,
                     borderRadius: 8,
-                    color: TEXT_DIM$1,
+                    color: TEXT_DIM$2,
                     fontSize: 10,
                     cursor: "pointer",
                     letterSpacing: 1,
@@ -104551,7 +104569,7 @@ function PlayNowOverlay({ onClose, onLogin }) {
                 "div",
                 {
                   style: {
-                    border: `1px solid ${BORDER$3}`,
+                    border: `1px solid ${BORDER$4}`,
                     borderRadius: 8,
                     overflow: "hidden"
                   },
@@ -104579,13 +104597,13 @@ function PlayNowOverlay({ onClose, onLogin }) {
                               style: {
                                 fontSize: 9,
                                 fontWeight: 700,
-                                color: CYAN$3,
+                                color: CYAN$4,
                                 letterSpacing: 2
                               },
                               children: "WHAT IS ICP?"
                             }
                           ),
-                          icpExpanded ? /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronUp, { size: 14, color: CYAN$3 }) : /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronDown, { size: 14, color: CYAN_DIM$3 })
+                          icpExpanded ? /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronUp, { size: 14, color: CYAN$4 }) : /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronDown, { size: 14, color: CYAN_DIM$3 })
                         ]
                       }
                     ),
@@ -104595,7 +104613,7 @@ function PlayNowOverlay({ onClose, onLogin }) {
                         style: {
                           padding: "12px 14px",
                           background: "rgba(0,10,20,0.5)",
-                          borderTop: `1px solid ${BORDER$3}`
+                          borderTop: `1px solid ${BORDER$4}`
                         },
                         children: [
                           /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -104603,14 +104621,14 @@ function PlayNowOverlay({ onClose, onLogin }) {
                             {
                               style: {
                                 fontSize: 9,
-                                color: TEXT_DIM$1,
+                                color: TEXT_DIM$2,
                                 lineHeight: 1.8,
                                 margin: 0
                               },
                               children: [
                                 "The",
                                 " ",
-                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$3 }, children: "Internet Computer Protocol (ICP)" }),
+                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$4 }, children: "Internet Computer Protocol (ICP)" }),
                                 " ",
                                 "is a decentralized blockchain that runs at web speed. Unlike traditional blockchains, ICP hosts entire applications on-chain — no AWS, no Google Cloud. Every smart contract (called a canister) is permanently on the network. Frontier uses ICP so that your land, your tokens, and your game data are owned by you, stored on the blockchain, and cannot be taken down by any company or government."
                               ]
@@ -104628,7 +104646,7 @@ function PlayNowOverlay({ onClose, onLogin }) {
                                 gap: 4,
                                 marginTop: 10,
                                 fontSize: 9,
-                                color: CYAN$3,
+                                color: CYAN$4,
                                 textDecoration: "none"
                               },
                               children: [
@@ -104650,9 +104668,9 @@ function PlayNowOverlay({ onClose, onLogin }) {
     }
   );
 }
-const CYAN$2 = "#00ffcc";
+const CYAN$3 = "#00ffcc";
 const CYAN_DIM$2 = "rgba(0,255,204,0.5)";
-const BORDER$2 = "rgba(0,255,204,0.2)";
+const BORDER$3 = "rgba(0,255,204,0.2)";
 function PlotHoverCard({
   plotId,
   owner,
@@ -104667,7 +104685,7 @@ function PlotHoverCard({
   }, []);
   const isTarget = action === "TARGET LOCKED";
   const isOwned = action === "TERRITORY ACQUIRED" || action === "YOU OWN THIS";
-  const actionColor = isTarget ? "#ef4444" : CYAN$2;
+  const actionColor = isTarget ? "#ef4444" : CYAN$3;
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "div",
     {
@@ -104681,7 +104699,7 @@ function PlotHoverCard({
         background: "rgba(4,12,24,0.97)",
         backdropFilter: "blur(16px)",
         WebkitBackdropFilter: "blur(16px)",
-        border: `1px solid ${BORDER$2}`,
+        border: `1px solid ${BORDER$3}`,
         borderTop: `2px solid ${actionColor}`,
         borderRadius: 10,
         padding: "14px 16px",
@@ -104709,9 +104727,9 @@ function PlotHoverCard({
                     style: {
                       fontSize: 9,
                       fontWeight: 700,
-                      color: CYAN$2,
+                      color: CYAN$3,
                       background: "rgba(0,255,204,0.1)",
-                      border: `1px solid ${BORDER$2}`,
+                      border: `1px solid ${BORDER$3}`,
                       borderRadius: 4,
                       padding: "2px 8px",
                       letterSpacing: 1,
@@ -104857,9 +104875,9 @@ function PlotHoverCard({
                     flex: 1,
                     padding: "8px 10px",
                     background: "rgba(0,255,204,0.12)",
-                    border: `1px solid ${CYAN$2}55`,
+                    border: `1px solid ${CYAN$3}55`,
                     borderRadius: 6,
-                    color: CYAN$2,
+                    color: CYAN$3,
                     fontSize: 9,
                     fontWeight: 700,
                     letterSpacing: 1.5,
@@ -104892,6 +104910,818 @@ function PlotHoverCard({
                 }
               )
             ]
+          }
+        )
+      ]
+    }
+  );
+}
+const CYAN$2 = "#00ffcc";
+const BORDER$2 = "rgba(0,255,204,0.22)";
+const TEXT$2 = "#e0f4ff";
+const TEXT_DIM$1 = "rgba(224,244,255,0.45)";
+const GOLD$1 = "#ffd700";
+const CURRENT_YEAR = (/* @__PURE__ */ new Date()).getFullYear();
+const PHASES = [
+  {
+    id: "phase1",
+    label: "PHASE 1",
+    title: "Land Rush",
+    status: "live",
+    eta: `${CURRENT_YEAR} — LIVE NOW`,
+    items: [
+      "10,242 hex plot grid — geodesic frequency 32",
+      "Plot purchase with real ICP via Internet Identity",
+      "FRNTR passive generation (7–55 FRNTR/day)",
+      "6-tier generator upgrade system",
+      "Paid survey reports with time-based unlock",
+      "Global leaderboard (top FRNTR holders)",
+      "25/25/50 treasury split (dev/leaderboard/liquidity)",
+      "ICRC-1 FRNTR token on Internet Computer"
+    ]
+  },
+  {
+    id: "phase2",
+    label: "PHASE 2",
+    title: "Sub-Parcels & Resources",
+    status: "in-progress",
+    eta: `${CURRENT_YEAR + 1} Q1`,
+    items: [
+      "7 sub-parcel system per hex plot",
+      "Resource mining — Iron, Fuel, Crystal, Rare Earth",
+      "Asteroid Impact zones with exotic particle drops",
+      "Resource ICRC-1 tokens tradeable on ICPSwap",
+      "Per-sub-parcel cooldown and building placement",
+      "Live resource accumulation counters"
+    ]
+  },
+  {
+    id: "phase3",
+    label: "PHASE 3",
+    title: "Commander NFTs & Factions",
+    status: "coming-soon",
+    eta: `${CURRENT_YEAR + 1} Q2`,
+    items: [
+      "Commander NFTs — ICRC-7 standard",
+      "Faction system — 4 global factions",
+      "Commander stat boosts per plot tier",
+      "Faction territories and diplomacy events",
+      "Faction treasury and shared resource pools"
+    ]
+  },
+  {
+    id: "phase4",
+    label: "PHASE 4",
+    title: "Weapons & Combat",
+    status: "future",
+    eta: `${CURRENT_YEAR + 1} Q3–Q4`,
+    items: [
+      "Missile and defense weapon systems",
+      "Plot-to-plot attack and defense mechanics",
+      "Battle outcomes recorded fully on-chain",
+      "Territory conquest and resource raiding",
+      "Combat leaderboard with ICP prize pools"
+    ]
+  },
+  {
+    id: "phase5",
+    label: "PHASE 5",
+    title: "Marketplace & DEX",
+    status: "future",
+    eta: `${CURRENT_YEAR + 2}`,
+    items: [
+      "Peer-to-peer plot marketplace",
+      "FRNTR/ICP pool seeded on ICPSwap",
+      "Commander NFT trading",
+      "Resource token trading pairs",
+      "Cross-canister atomic swaps"
+    ]
+  }
+];
+const MAINNET_CHECKLIST = [
+  { item: "Internet Identity authentication", done: true },
+  { item: "Plot purchase with real ICP", done: true },
+  { item: "FRNTR ICRC-1 token deployed", done: true },
+  { item: "Stable memory — data survives upgrades", done: true },
+  { item: "Treasury 25/25/50 split wired", done: true },
+  { item: "Live ICP/USD price feed", done: true },
+  { item: "Globe with biome-accurate hex tiles", done: true },
+  { item: "6-tier generator upgrade system", done: true },
+  { item: "Leaderboard (on-chain, username-gated)", done: true },
+  { item: "Admin panel with mint/reset controls", done: true },
+  { item: "Paid survey reports with timer unlock", done: false },
+  { item: "Real admin principal set for mainnet", done: false },
+  { item: "ICPSwap FRNTR/ICP pool seeded", done: false },
+  { item: "Full mobile optimization", done: false },
+  { item: "Security audit completed", done: false }
+];
+const STATUS_CONFIG = {
+  live: { label: "LIVE", color: "#22c55e", bg: "rgba(34,197,94,0.12)" },
+  "in-progress": { label: "IN DEV", color: GOLD$1, bg: "rgba(255,215,0,0.10)" },
+  "coming-soon": {
+    label: "COMING SOON",
+    color: "#a78bfa",
+    bg: "rgba(167,139,250,0.10)"
+  },
+  future: { label: "PLANNED", color: TEXT_DIM$1, bg: "rgba(255,255,255,0.04)" }
+};
+function SectionTitle$1({ children }) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "div",
+    {
+      style: {
+        fontSize: 9,
+        fontWeight: 700,
+        letterSpacing: 3,
+        color: CYAN$2,
+        textTransform: "uppercase",
+        marginBottom: 12,
+        textShadow: `0 0 8px ${CYAN$2}`,
+        display: "flex",
+        alignItems: "center",
+        gap: 6
+      },
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "div",
+          {
+            style: { width: 2, height: 12, background: CYAN$2, borderRadius: 1 }
+          }
+        ),
+        children
+      ]
+    }
+  );
+}
+function RoadmapTab() {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "div",
+    {
+      "data-ocid": "roadmap.panel",
+      style: {
+        padding: "14px 14px 80px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 20
+      },
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            style: {
+              background: "rgba(0,20,40,0.65)",
+              border: `1px solid ${BORDER$2}`,
+              borderTop: `2px solid ${CYAN$2}`,
+              borderRadius: 10,
+              padding: "14px 16px",
+              position: "relative",
+              overflow: "hidden"
+            },
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "div",
+                {
+                  "aria-hidden": "true",
+                  style: {
+                    position: "absolute",
+                    inset: 0,
+                    pointerEvents: "none",
+                    background: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.04) 2px, rgba(0,0,0,0.04) 4px)"
+                  }
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { position: "relative" }, children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      fontSize: 8,
+                      fontWeight: 700,
+                      letterSpacing: 3,
+                      color: CYAN$2,
+                      marginBottom: 8,
+                      textShadow: `0 0 8px ${CYAN$2}`
+                    },
+                    children: "MISSION BRIEF"
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "p",
+                  {
+                    style: {
+                      fontSize: 11,
+                      color: TEXT$2,
+                      lineHeight: 1.75,
+                      margin: 0,
+                      fontWeight: 600
+                    },
+                    children: [
+                      "Frontier: Missile Horizon is a fully decentralized planetary warfare strategy game built on the",
+                      " ",
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$2 }, children: "Internet Computer Protocol (ICP)" }),
+                      "."
+                    ]
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "p",
+                  {
+                    style: {
+                      fontSize: 10,
+                      color: TEXT_DIM$1,
+                      lineHeight: 1.7,
+                      margin: "10px 0 0"
+                    },
+                    children: "Own land as an NFT plot. Earn FRNTR tokens passively. Upgrade your generators. Every action is fully on-chain — no servers, no databases, no middlemen. Your plots are ICRC-7 NFTs tied to your Internet Identity. No one can take them."
+                  }
+                )
+              ] })
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(SectionTitle$1, { children: "Security Architecture" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "flex", flexDirection: "column", gap: 8 }, children: [
+            {
+              icon: "🔐",
+              title: "Internet Identity",
+              desc: "Login via cryptographic key pairs — no passwords, no emails. Your principal ID is your identity."
+            },
+            {
+              icon: "⛓️",
+              title: "Fully On-Chain",
+              desc: "All game logic, token balances, plot ownership, and treasury math execute inside Motoko canisters on ICP. Zero off-chain servers."
+            },
+            {
+              icon: "🏛️",
+              title: "Atomic Transactions",
+              desc: "Plot purchases verify ICP transfer before assigning ownership. If any step fails, nothing changes. No partial states."
+            },
+            {
+              icon: "🔒",
+              title: "Locked Liquidity",
+              desc: "The liquidity pot can only release to a pre-approved ICPSwap canister. Admin cannot redirect funds elsewhere."
+            },
+            {
+              icon: "📦",
+              title: "Stable Memory",
+              desc: "All player data, plot ownership, and token balances survive canister upgrades. Builds deploy without wiping state."
+            }
+          ].map((item) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              style: {
+                background: "rgba(0,255,204,0.03)",
+                border: `1px solid ${BORDER$2}`,
+                borderLeft: `2px solid ${CYAN$2}`,
+                borderRadius: 6,
+                padding: "10px 12px",
+                display: "flex",
+                gap: 10,
+                alignItems: "flex-start"
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 14, flexShrink: 0, marginTop: 1 }, children: item.icon }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        fontSize: 10,
+                        fontWeight: 700,
+                        color: TEXT$2,
+                        marginBottom: 3
+                      },
+                      children: item.title
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 9, color: TEXT_DIM$1, lineHeight: 1.6 }, children: item.desc })
+                ] })
+              ]
+            },
+            item.title
+          )) })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(SectionTitle$1, { children: "Getting Started" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "flex", flexDirection: "column", gap: 8 }, children: [
+            {
+              step: "1",
+              color: CYAN$2,
+              title: "Connect Wallet",
+              desc: "Click CONNECT WALLET and authenticate with Internet Identity. Your principal ID is your game account."
+            },
+            {
+              step: "2",
+              color: GOLD$1,
+              title: "Get Test Tokens",
+              desc: "Use the TESTNET FAUCET button (upper right) to claim 5,000 FRNTR + 5 ICP. Free, unlimited on testnet."
+            },
+            {
+              step: "3",
+              color: "#22c55e",
+              title: "Buy a Plot",
+              desc: "Tap any hex on the globe. Click PURCHASE. Common plots start at 2–3 ICP. Rare plots: 6–12 ICP. Epic: 20–40 ICP."
+            },
+            {
+              step: "4",
+              color: "#a78bfa",
+              title: "Upgrade & Earn",
+              desc: "Open the MAP tab, select your plot, and upgrade your generator. Higher tiers generate more FRNTR/day. Claim in CMD."
+            }
+          ].map((item) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              style: {
+                background: "rgba(0,10,20,0.5)",
+                border: `1px solid ${BORDER$2}`,
+                borderRadius: 8,
+                padding: "10px 12px",
+                display: "flex",
+                gap: 10,
+                alignItems: "flex-start"
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      width: 22,
+                      height: 22,
+                      borderRadius: 4,
+                      background: `${item.color}18`,
+                      border: `1px solid ${item.color}44`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 10,
+                      fontWeight: 900,
+                      color: item.color,
+                      flexShrink: 0
+                    },
+                    children: item.step
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { flex: 1, minWidth: 0 }, children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        fontSize: 10,
+                        fontWeight: 700,
+                        color: TEXT$2,
+                        marginBottom: 3
+                      },
+                      children: item.title
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 9, color: TEXT_DIM$1, lineHeight: 1.6 }, children: item.desc })
+                ] })
+              ]
+            },
+            item.step
+          )) })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(SectionTitle$1, { children: "How the Treasury Works" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              style: {
+                background: "rgba(0,20,40,0.55)",
+                border: `1px solid ${BORDER$2}`,
+                borderRadius: 10,
+                padding: "14px",
+                marginBottom: 8
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "p",
+                  {
+                    style: {
+                      fontSize: 10,
+                      color: TEXT_DIM$1,
+                      lineHeight: 1.7,
+                      margin: "0 0 12px"
+                    },
+                    children: "Every ICP spent purchasing a plot is automatically split into three pots via the Treasury Canister:"
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "flex", flexDirection: "column", gap: 8 }, children: [
+                  {
+                    pct: "25%",
+                    label: "Developer Treasury",
+                    color: "rgba(255,200,100,0.8)",
+                    desc: "Funds ongoing game development, server costs, and team operations."
+                  },
+                  {
+                    pct: "25%",
+                    label: "Leaderboard Prize Pool",
+                    color: "rgba(100,220,230,0.8)",
+                    desc: "Paid out to top FRNTR holders every 1,500 plot mints. Automated, on-chain."
+                  },
+                  {
+                    pct: "50%",
+                    label: "Liquidity Reserve",
+                    color: CYAN$2,
+                    desc: "Seeds the FRNTR/ICP trading pool on ICPSwap. Locked — can only release to the pre-approved DEX canister."
+                  }
+                ].map((pot) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "div",
+                  {
+                    style: {
+                      display: "flex",
+                      gap: 10,
+                      alignItems: "center"
+                    },
+                    children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "div",
+                        {
+                          style: {
+                            width: 36,
+                            height: 36,
+                            borderRadius: 6,
+                            background: `${pot.color}18`,
+                            border: `2px solid ${pot.color}`,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: 10,
+                            fontWeight: 900,
+                            color: pot.color,
+                            flexShrink: 0,
+                            fontFamily: "monospace"
+                          },
+                          children: pot.pct
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { flex: 1, minWidth: 0 }, children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "div",
+                          {
+                            style: {
+                              fontSize: 10,
+                              fontWeight: 700,
+                              color: TEXT$2,
+                              marginBottom: 2
+                            },
+                            children: pot.label
+                          }
+                        ),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "div",
+                          {
+                            style: { fontSize: 9, color: TEXT_DIM$1, lineHeight: 1.5 },
+                            children: pot.desc
+                          }
+                        )
+                      ] })
+                    ]
+                  },
+                  pot.label
+                )) })
+              ]
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(SectionTitle$1, { children: "Mainnet Launch Status" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              style: {
+                background: "rgba(0,10,20,0.5)",
+                border: `1px solid ${BORDER$2}`,
+                borderRadius: 10,
+                padding: "12px"
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "flex", flexDirection: "column", gap: 6 }, children: MAINNET_CHECKLIST.map((item, idx) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "div",
+                  {
+                    "data-ocid": `roadmap.checklist.${idx + 1}`,
+                    style: {
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      padding: "6px 8px",
+                      borderRadius: 5,
+                      background: item.done ? "rgba(34,197,94,0.05)" : "transparent"
+                    },
+                    children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "div",
+                        {
+                          style: {
+                            width: 14,
+                            height: 14,
+                            borderRadius: "50%",
+                            background: item.done ? "rgba(34,197,94,0.2)" : "rgba(255,255,255,0.06)",
+                            border: `1px solid ${item.done ? "#22c55e" : "rgba(255,255,255,0.15)"}`,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            flexShrink: 0,
+                            fontSize: 7,
+                            color: item.done ? "#22c55e" : "transparent"
+                          },
+                          children: "✓"
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "span",
+                        {
+                          style: {
+                            fontSize: 9,
+                            color: item.done ? TEXT$2 : TEXT_DIM$1,
+                            letterSpacing: 0.3,
+                            textDecoration: item.done ? "none" : "none",
+                            fontWeight: item.done ? 600 : 400
+                          },
+                          children: item.item
+                        }
+                      ),
+                      !item.done && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "span",
+                        {
+                          style: {
+                            marginLeft: "auto",
+                            fontSize: 7,
+                            color: "rgba(245,158,11,0.7)",
+                            letterSpacing: 1,
+                            fontWeight: 700,
+                            flexShrink: 0
+                          },
+                          children: "PENDING"
+                        }
+                      )
+                    ]
+                  },
+                  item.item
+                )) }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "div",
+                  {
+                    style: {
+                      marginTop: 10,
+                      paddingTop: 10,
+                      borderTop: `1px solid ${BORDER$2}`,
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center"
+                    },
+                    children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { style: { fontSize: 8, color: TEXT_DIM$1 }, children: [
+                        MAINNET_CHECKLIST.filter((c2) => c2.done).length,
+                        " of",
+                        " ",
+                        MAINNET_CHECKLIST.length,
+                        " complete"
+                      ] }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "div",
+                        {
+                          style: {
+                            height: 6,
+                            width: 120,
+                            background: "rgba(255,255,255,0.06)",
+                            borderRadius: 3,
+                            overflow: "hidden"
+                          },
+                          children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "div",
+                            {
+                              style: {
+                                height: "100%",
+                                width: `${MAINNET_CHECKLIST.filter((c2) => c2.done).length / MAINNET_CHECKLIST.length * 100}%`,
+                                background: `linear-gradient(90deg, ${CYAN$2}, #22c55e)`,
+                                borderRadius: 3
+                              }
+                            }
+                          )
+                        }
+                      )
+                    ]
+                  }
+                )
+              ]
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(SectionTitle$1, { children: "Development Roadmap" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "flex", flexDirection: "column", gap: 10 }, children: PHASES.map((phase) => {
+            const cfg = STATUS_CONFIG[phase.status];
+            return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "div",
+              {
+                "data-ocid": `roadmap.phase.${phase.id}`,
+                style: {
+                  background: "rgba(0,10,20,0.5)",
+                  border: `1px solid ${BORDER$2}`,
+                  borderLeft: `3px solid ${cfg.color}`,
+                  borderRadius: 8,
+                  padding: "12px"
+                },
+                children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "div",
+                    {
+                      style: {
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        marginBottom: 8
+                      },
+                      children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "span",
+                          {
+                            style: {
+                              fontSize: 7,
+                              fontWeight: 700,
+                              letterSpacing: 2,
+                              color: CYAN$2,
+                              fontFamily: "monospace"
+                            },
+                            children: phase.label
+                          }
+                        ),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "span",
+                          {
+                            style: {
+                              fontSize: 12,
+                              fontWeight: 900,
+                              color: TEXT$2,
+                              letterSpacing: 0.5
+                            },
+                            children: phase.title
+                          }
+                        ),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { flex: 1 } }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "span",
+                          {
+                            style: {
+                              fontSize: 7,
+                              fontWeight: 700,
+                              letterSpacing: 1,
+                              color: cfg.color,
+                              background: cfg.bg,
+                              border: `1px solid ${cfg.color}44`,
+                              borderRadius: 4,
+                              padding: "2px 7px",
+                              fontFamily: "monospace"
+                            },
+                            children: cfg.label
+                          }
+                        )
+                      ]
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        fontSize: 8,
+                        color: "rgba(224,244,255,0.3)",
+                        letterSpacing: 0.5,
+                        marginBottom: 8,
+                        fontFamily: "monospace"
+                      },
+                      children: phase.eta
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "ul",
+                    {
+                      style: {
+                        margin: 0,
+                        padding: 0,
+                        listStyle: "none",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 4
+                      },
+                      children: phase.items.map((item) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                        "li",
+                        {
+                          style: {
+                            display: "flex",
+                            alignItems: "flex-start",
+                            gap: 6,
+                            fontSize: 9,
+                            color: phase.status === "live" ? TEXT$2 : TEXT_DIM$1,
+                            lineHeight: 1.5
+                          },
+                          children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsx(
+                              "span",
+                              {
+                                style: {
+                                  color: phase.status === "live" ? "#22c55e" : cfg.color,
+                                  flexShrink: 0,
+                                  marginTop: 2,
+                                  fontSize: 8
+                                },
+                                children: phase.status === "live" ? "✓" : "◦"
+                              }
+                            ),
+                            item
+                          ]
+                        },
+                        item
+                      ))
+                    }
+                  )
+                ]
+              },
+              phase.id
+            );
+          }) })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(SectionTitle$1, { children: "Expansion Horizon" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              style: {
+                background: "rgba(0,20,40,0.55)",
+                border: `1px solid ${BORDER$2}`,
+                borderRadius: 10,
+                padding: "14px"
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "p",
+                  {
+                    style: {
+                      fontSize: 10,
+                      color: TEXT_DIM$1,
+                      lineHeight: 1.7,
+                      margin: 0
+                    },
+                    children: "Long-term, Frontier: Missile Horizon is designed to expand into a full civilization-layer on ICP. Planned features beyond Phase 5:"
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      marginTop: 10,
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: 8
+                    },
+                    children: [
+                      "Nation-state governance",
+                      "Cross-canister economies",
+                      "Player-run factions with DAOs",
+                      "Orbital satellite plots",
+                      "Seasonal war events",
+                      "On-chain player content",
+                      "Mobile companion app",
+                      "ICP subnet scaling"
+                    ].map((item) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "div",
+                      {
+                        style: {
+                          background: "rgba(0,255,204,0.03)",
+                          border: `1px solid ${BORDER$2}`,
+                          borderRadius: 5,
+                          padding: "6px 8px",
+                          fontSize: 9,
+                          color: TEXT_DIM$1,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 5
+                        },
+                        children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: "rgba(0,255,204,0.3)", fontSize: 7 }, children: "◆" }),
+                          item
+                        ]
+                      },
+                      item
+                    ))
+                  }
+                )
+              ]
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "div",
+          {
+            style: {
+              textAlign: "center",
+              fontSize: 8,
+              color: "rgba(0,255,204,0.25)",
+              letterSpacing: 1,
+              paddingTop: 4
+            },
+            children: "FRONTIER: MISSILE HORIZON · BUILT ON ICP · CAFFEINE.AI"
           }
         )
       ]
@@ -105213,10 +106043,10 @@ function UniversePanel({ onClose, inline = false }) {
                 gap: 8
               },
               children: [
-                { label: "IRON", value: player.iron },
-                { label: "FUEL", value: player.fuel },
-                { label: "CRYSTAL", value: player.crystal },
-                { label: "RARE EARTH", value: player.rareEarth }
+                { label: "IRON" },
+                { label: "FUEL" },
+                { label: "CRYSTAL" },
+                { label: "RARE EARTH" }
               ].map((r2) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "div",
@@ -105236,10 +106066,11 @@ function UniversePanel({ onClose, inline = false }) {
                     style: {
                       fontSize: 10,
                       fontWeight: 700,
-                      color: TEXT$1,
-                      fontFamily: "monospace"
+                      color: "rgba(224,244,255,0.35)",
+                      fontFamily: "monospace",
+                      letterSpacing: 0.5
                     },
-                    children: r2.value.toFixed(4)
+                    children: "SOON™"
                   }
                 )
               ] }, r2.label))
@@ -107523,7 +108354,8 @@ function Play() {
               activeTab === "leaderboard" && /* @__PURE__ */ jsxRuntimeExports.jsx(LeaderboardPanel, {}),
               activeTab === "universe" && /* @__PURE__ */ jsxRuntimeExports.jsx(UniversePanel, { inline: true }),
               activeTab === "intel" && /* @__PURE__ */ jsxRuntimeExports.jsx(IntelTab, {}),
-              activeTab === "admin" && /* @__PURE__ */ jsxRuntimeExports.jsx(AdminPanel, {})
+              activeTab === "admin" && /* @__PURE__ */ jsxRuntimeExports.jsx(AdminPanel, {}),
+              activeTab === "roadmap" && /* @__PURE__ */ jsxRuntimeExports.jsx(RoadmapTab, {})
             ]
           }
         ),
@@ -107671,7 +108503,7 @@ function Play() {
                               lineHeight: 1.8,
                               margin: 0
                             },
-                            children: "5,882 hex plots divided across Earth. Each plot is yours to own, mine, and upgrade. FRNTR: 10 billion tokens, 5B mineable only by landowners over 3–5 years. No central server. No middleman."
+                            children: "10,242 hex plots divided across Earth. Each plot is yours to own, mine, and upgrade. FRNTR: 10 billion tokens, 5B mineable only by landowners over 3–5 years. No central server. No middleman."
                           }
                         )
                       ]

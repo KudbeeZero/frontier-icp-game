@@ -22,6 +22,7 @@ import IntelTab from "../components/IntelTab";
 import MapBottomSheet from "../components/MapBottomSheet";
 import PlayNowOverlay from "../components/PlayNowOverlay";
 import PlotHoverCard from "../components/PlotHoverCard";
+import RoadmapTab from "../components/RoadmapTab";
 import UniversePanel from "../components/UniversePanel";
 import { useIcpBalance } from "../hooks/useIcpBalance";
 import { usePlayerSync } from "../hooks/usePlayerSync";
@@ -1104,6 +1105,7 @@ export default function Play() {
         {activeTab === "universe" && <UniversePanel inline={true} />}
         {activeTab === "intel" && <IntelTab />}
         {activeTab === "admin" && <AdminPanel />}
+        {activeTab === "roadmap" && <RoadmapTab />}
       </BottomSheet>
 
       {/* Plot Action Panel — slides in from right when a plot is selected */}
@@ -1240,9 +1242,10 @@ export default function Play() {
                   margin: 0,
                 }}
               >
-                5,882 hex plots divided across Earth. Each plot is yours to own,
-                mine, and upgrade. FRNTR: 10 billion tokens, 5B mineable only by
-                landowners over 3–5 years. No central server. No middleman.
+                10,242 hex plots divided across Earth. Each plot is yours to
+                own, mine, and upgrade. FRNTR: 10 billion tokens, 5B mineable
+                only by landowners over 3–5 years. No central server. No
+                middleman.
               </p>
             </div>
             <button

@@ -71,7 +71,7 @@ type Nat__1040412405 = Nat__920180692;
 type Nat__920180692 = Nat;
 type Node__1000929467<K, V> =
   {#internal : Internal__41346355<K, V>; #leaf : Leaf__712614010<K, V>};
-type OldPlayerState__9184382 =
+type PlayerState__703694124 =
   {
     combatVictories : Nat;
     commanderAtk : Nat;
@@ -83,6 +83,7 @@ type OldPlayerState__9184382 =
     fuel : Nat;
     icpBalance : Nat;
     iron : Nat;
+    lastClaimTime : Int;
     passiveIncomePerDay : Float;
     plotsOwned : Nat;
     reconTargets : [(Nat, Int)];
@@ -205,7 +206,7 @@ actor ({
     {var root : Node__1000929467<Text, Text>; var size : Nat__1040412405};
   stable var lastPriceTimestamp : Int;
   stable var lastPriceValue : Float;
-  in players : Map__222667396<Principal, OldPlayerState__9184382>;
+  in players : Map__222667396<Principal, PlayerState__703694124>;
   stable plotSoldState : {var count : Nat};
   stable plots :
     {
@@ -220,7 +221,7 @@ actor ({
   stable var stableGeneratorTiers : [(Text, GeneratorTier__319383119)];
   stable var stableInterceptors : [(Text, Text)];
   stable var stableLeaderboard : [(Principal, LeaderEntry__1009553798)];
-  in stablePlayers : [(Principal, OldPlayerState__9184382)];
+  in stablePlayers : [(Principal, PlayerState__703694124)];
   stable var stablePlotRarities : [(Text, PlotRarity__638978278)];
   stable var stablePlotSoldCount : Nat;
   stable var stablePlotSoldState : Nat;

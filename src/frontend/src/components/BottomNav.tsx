@@ -1,4 +1,5 @@
 import {
+  BookOpen,
   Globe,
   LayoutDashboard,
   Map as MapIcon,
@@ -20,6 +21,7 @@ const BASE_NAV_ITEMS = [
   { id: "universe", label: "UNI", Icon: Globe },
   { id: "leaderboard", label: "LEAD", Icon: Trophy },
   { id: "inventory", label: "INV", Icon: Package },
+  { id: "roadmap", label: "INFO", Icon: BookOpen },
 ] as const;
 
 const ADMIN_NAV_ITEM = { id: "admin" as const, label: "ADMIN", Icon: Shield };
