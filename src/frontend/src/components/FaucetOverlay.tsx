@@ -3,6 +3,8 @@ import { FlaskConical } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { createActor } from "../backend";
+import { useIcpBalance } from "../hooks/useIcpBalance";
+import { applyConfirmedFrntrBalance } from "../hooks/usePlayerSync";
 import { useGameStore } from "../store/gameStore";
 
 const CYAN = "#00ffcc";
@@ -16,6 +18,7 @@ export default function FaucetOverlay() {
   const { isAuthenticated } = useInternetIdentity();
   const { actor, isFetching } = useActor(createActor);
   const mintTestTokens = useGameStore((s) => s.mintTestTokens);
+  const { refetch: refetchIcp } = useIcpBalance();
   const [loading, setLoading] = useState(false);
 
   const isReady = isAuthenticated && !!actor && !isFetching;
@@ -31,36 +34,63 @@ export default function FaucetOverlay() {
       if (actor) {
         const result = await actor.testFaucetV2();
         if ("ok" in result) {
-          const _grant = result.ok;
+          // Re-fetch player state immediately and apply via comparison-based updater
           try {
             const state = await actor.getPlayerState();
             if (state) {
+              // Use the authoritative updater so lastKnownFrntrBalance is set
+              applyConfirmedFrntrBalance(BigInt(state.frntBalance));
+
+              // Also update ICP balance from backend state if available
+              const icpFromState =
+                "icpBalance" in state && typeof state.icpBalance !== "undefined"
+                  ? Number(state.icpBalance) / 1e8
+                  : null;
+              if (icpFromState !== null) {
+                useGameStore
+                  .getState()
+                  .setIcpBalance(BigInt(Math.round(icpFromState * 1e8)));
+              }
+
+              // Update minerals too
               useGameStore.setState((s) => ({
                 player: {
                   ...s.player,
-                  frntBalance: Number(state.frntBalance) / 100_000_000,
                   iron: Number(state.iron) / 100_000_000,
                   fuel: Number(state.fuel) / 100_000_000,
                   crystal: Number(state.crystal) / 100_000_000,
-                  // ICP balance is now read from the real ledger via useIcpBalance()
                 },
               }));
             }
           } catch {
+            // Fallback: add 500 locally so display isn't stuck at 0
             mintTestTokens();
           }
-          toast.success("+500 FRNTR + 2 ICP claimed!", { duration: 4000 });
+
+          // Trigger ICP balance refetch from ledger
+          refetchIcp();
+
+          toast.success("5000 FRNTR and 5 ICP added to your wallet", {
+            duration: 4000,
+          });
         } else {
-          mintTestTokens();
-          toast.success("+500 FRNTR + 2 ICP claimed!", { duration: 4000 });
+          const errMsg =
+            "err" in result
+              ? (result as { err: string }).err
+              : "Faucet unavailable";
+          toast.error(`Faucet failed: ${errMsg}`, { duration: 4000 });
         }
       } else {
         mintTestTokens();
-        toast.success("+500 FRNTR + 2 ICP claimed!", { duration: 4000 });
+        toast.success("5000 FRNTR and 5 ICP added to your wallet", {
+          duration: 4000,
+        });
       }
     } catch {
       mintTestTokens();
-      toast.success("+500 FRNTR + 2 ICP claimed!", { duration: 4000 });
+      toast.success("5000 FRNTR and 5 ICP added to your wallet", {
+        duration: 4000,
+      });
     } finally {
       setLoading(false);
     }
@@ -74,7 +104,7 @@ export default function FaucetOverlay() {
       disabled={loading}
       title={
         isReady
-          ? "Claim 500 FRNTR + 2 ICP (testnet, unlimited)"
+          ? "Claim 5000 FRNTR + 5 ICP (testnet, unlimited)"
           : "Claim test tokens"
       }
       style={{
@@ -101,7 +131,7 @@ export default function FaucetOverlay() {
       }}
     >
       <FlaskConical size={11} />
-      {loading ? "CLAIMING..." : "TESTNET FAUCET"}
+      {loading ? "CLAIMING..." : "+5000 FRNTR +5 ICP"}
     </button>
   );
 }

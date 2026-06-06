@@ -7,23 +7,22 @@ import {
   Radio,
   Trophy,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { createActor } from "../backend";
+import AdminPanel from "../components/AdminPanel";
 import BottomNav from "../components/BottomNav";
 import { NAV_ITEMS } from "../components/BottomNav";
 import type { BottomNavTab } from "../components/BottomNav";
 import BottomSheet from "../components/BottomSheet";
+import CommandCenter from "../components/CommandCenter";
 import FaucetOverlay from "../components/FaucetOverlay";
 import GlobeCanvas from "../components/GlobeCanvas";
 import IntelTab from "../components/IntelTab";
 import MapBottomSheet from "../components/MapBottomSheet";
 import PlayNowOverlay from "../components/PlayNowOverlay";
 import PlotHoverCard from "../components/PlotHoverCard";
-import StressTestPanel from "../components/StressTestPanel";
-import SubParcelIntelView from "../components/SubParcelIntelView";
 import UniversePanel from "../components/UniversePanel";
-import { BIOME_MINERAL_RATES } from "../constants/minerals";
 import { useIcpBalance } from "../hooks/useIcpBalance";
 import { usePlayerSync } from "../hooks/usePlayerSync";
 import { usePurchasePlot } from "../hooks/usePurchasePlot";
@@ -34,13 +33,6 @@ const CYAN_DIM = "rgba(0,255,204,0.35)";
 const BORDER = "rgba(0,255,204,0.22)";
 const TEXT = "#e0f4ff";
 
-/* ─── helpers ─── */
-function fmt8(n: number) {
-  return n.toLocaleString(undefined, {
-    minimumFractionDigits: 8,
-    maximumFractionDigits: 8,
-  });
-}
 function fmt2(n: number) {
   return n.toLocaleString(undefined, {
     minimumFractionDigits: 2,
@@ -57,9 +49,32 @@ function TopBar({
   onNavClick: (tab: BottomNavTab) => void;
 }) {
   const player = useGameStore((s) => s.player);
+  const generatorTiers = useGameStore((s) => s.generatorTiers);
+  const plots = useGameStore((s) => s.plots);
   const icpUsdPrice = useGameStore((s) => s.icpUsdPrice);
   const { icpBalanceFormatted } = useIcpBalance();
   const { isAuthenticated, clear } = useInternetIdentity();
+
+  const displayFrntr = useGameStore(
+    (s) => s.confirmedFrntBalance + s.accruedFrntSinceSync,
+  );
+  const frntrStr =
+    displayFrntr >= 1_000_000
+      ? displayFrntr.toFixed(2)
+      : displayFrntr >= 1_000
+        ? displayFrntr.toFixed(4)
+        : displayFrntr.toFixed(8);
+
+  const TIER_BONUS_TB = [0, 2, 5, 10, 18, 30, 48];
+  const _totalDailyFrntr = useMemo(() => {
+    const ownedPlots = plots.filter((p) =>
+      player.plotsOwned.includes(String(p.id)),
+    );
+    return ownedPlots.reduce((sum, plot) => {
+      const tier = (generatorTiers[String(plot.id)] as number) ?? 0;
+      return sum + 7 + (TIER_BONUS_TB[tier] ?? 0);
+    }, 0);
+  }, [plots, player.plotsOwned, generatorTiers]);
 
   const shortPrincipal = player.principal
     ? `${player.principal.slice(0, 6)}…${player.principal.slice(-4)}`
@@ -253,10 +268,7 @@ function TopBar({
             className="font-mono font-bold whitespace-nowrap"
             style={{ fontSize: 11, color: "#F59E0B", letterSpacing: 0.5 }}
           >
-            {player.frntBalance.toLocaleString(undefined, {
-              maximumFractionDigits: 2,
-            })}{" "}
-            FRNTR
+            {frntrStr} FRNTR
           </span>
         </div>
 
@@ -434,202 +446,7 @@ function LeftSidebar({
 /* BottomNav imported from components/BottomNav */
 
 /* ─── Commander Panel ─── */
-function CommanderPanel() {
-  const player = useGameStore((s) => s.player);
-  const totalBurned = useGameStore((s) => s.totalFRNTRBurned);
-  const generatorTiers = useGameStore((s) => s.generatorTiers);
-
-  const ownedPlots = player.plotsOwned;
-  const plotCount = ownedPlots.length;
-
-  let dailyFrntr = 0;
-  for (const pid of ownedPlots) {
-    dailyFrntr += 7;
-    const tier = generatorTiers[pid] ?? 0;
-    const TIER_BONUS: Record<number, number> = {
-      1: 8,
-      2: 24,
-      3: 48,
-      4: 96,
-      5: 192,
-      6: 384,
-    };
-    if (tier > 0) dailyFrntr += TIER_BONUS[tier] ?? 0;
-  }
-
-  return (
-    <div className="flex flex-col gap-3 p-3">
-      <div
-        style={{
-          fontSize: 10,
-          fontWeight: 700,
-          color: CYAN,
-          letterSpacing: 2,
-          textShadow: `0 0 8px ${CYAN}`,
-        }}
-      >
-        COMMANDER PANEL
-      </div>
-
-      <div
-        className="rounded-lg p-2.5"
-        style={{
-          background: "rgba(0,255,204,0.05)",
-          border: `1px solid ${BORDER}`,
-        }}
-      >
-        <div style={{ fontSize: 7, color: CYAN_DIM, letterSpacing: 1 }}>
-          PRINCIPAL
-        </div>
-        <div
-          className="font-mono truncate"
-          style={{ fontSize: 9, color: TEXT, marginTop: 2 }}
-        >
-          {player.principal ?? "Not Connected"}
-        </div>
-      </div>
-
-      <div
-        className="rounded-lg p-2.5"
-        style={{
-          background: "rgba(0,255,204,0.05)",
-          border: `1px solid ${BORDER}`,
-        }}
-      >
-        <div style={{ fontSize: 7, color: CYAN_DIM, letterSpacing: 1 }}>
-          FRNTR BALANCE
-        </div>
-        <div
-          className="font-mono"
-          style={{
-            fontSize: 14,
-            fontWeight: 900,
-            color: CYAN,
-            marginTop: 2,
-            textShadow: `0 0 8px ${CYAN}`,
-          }}
-        >
-          {fmt8(player.frntBalance)}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2">
-        <div
-          className="rounded-lg p-2"
-          style={{
-            background: "rgba(0,255,204,0.05)",
-            border: `1px solid ${BORDER}`,
-          }}
-        >
-          <div style={{ fontSize: 7, color: CYAN_DIM, letterSpacing: 1 }}>
-            PLOTS OWNED
-          </div>
-          <div
-            className="font-mono"
-            style={{ fontSize: 16, fontWeight: 900, color: CYAN, marginTop: 2 }}
-          >
-            {plotCount}
-          </div>
-        </div>
-        <div
-          className="rounded-lg p-2"
-          style={{
-            background: "rgba(0,255,204,0.05)",
-            border: `1px solid ${BORDER}`,
-          }}
-        >
-          <div style={{ fontSize: 7, color: CYAN_DIM, letterSpacing: 1 }}>
-            DAILY FRNTR
-          </div>
-          <div
-            className="font-mono"
-            style={{ fontSize: 16, fontWeight: 900, color: CYAN, marginTop: 2 }}
-          >
-            {dailyFrntr}
-          </div>
-        </div>
-      </div>
-
-      <div
-        className="rounded-lg p-2.5"
-        style={{
-          background: "rgba(0,255,204,0.05)",
-          border: `1px solid ${BORDER}`,
-        }}
-      >
-        <div
-          style={{
-            fontSize: 7,
-            color: CYAN_DIM,
-            letterSpacing: 1,
-            marginBottom: 6,
-          }}
-        >
-          RESOURCES
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          {[
-            { label: "IRON", value: player.iron },
-            { label: "FUEL", value: player.fuel },
-            { label: "CRYSTAL", value: player.crystal },
-            { label: "RARE EARTH", value: player.rareEarth },
-          ].map((r) => (
-            <div key={r.label} className="flex flex-col">
-              <span style={{ fontSize: 7, color: CYAN_DIM }}>{r.label}</span>
-              <span
-                className="font-mono"
-                style={{ fontSize: 10, color: TEXT, fontWeight: 700 }}
-              >
-                {fmt8(r.value)}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div
-        className="rounded-lg p-2"
-        style={{
-          background: "rgba(255,68,68,0.05)",
-          border: "1px solid rgba(255,68,68,0.2)",
-        }}
-      >
-        <div style={{ fontSize: 7, color: "#ff6666", letterSpacing: 1 }}>
-          TOTAL FRNTR BURNED
-        </div>
-        <div
-          className="font-mono"
-          style={{
-            fontSize: 12,
-            fontWeight: 900,
-            color: "#ff6666",
-            marginTop: 2,
-          }}
-        >
-          {fmt8(totalBurned)}
-        </div>
-      </div>
-
-      <div
-        className="rounded-lg p-2"
-        style={{
-          background: "rgba(0,255,204,0.05)",
-          border: `1px solid ${BORDER}`,
-        }}
-      >
-        <div style={{ fontSize: 7, color: CYAN_DIM, letterSpacing: 1 }}>
-          STORAGE CAP
-        </div>
-        <div
-          className="font-mono"
-          style={{ fontSize: 12, fontWeight: 900, color: CYAN, marginTop: 2 }}
-        >
-          {player.resourceStorageCap}
-        </div>
-      </div>
-    </div>
-  );
-}
+// CommanderPanel removed — Commander NFTs deactivated for v1.0
 
 /* ─── Inventory Panel ─── */
 function InventoryPanel() {
@@ -665,15 +482,10 @@ function InventoryPanel() {
       ) : (
         <div className="flex flex-col gap-2">
           {player.plotsOwned.map((plotId, idx) => {
-            const plot = plots.find((p) => p.id === plotId);
-            const tier = generatorTiers[plotId] ?? 0;
+            const plot = plots.find((p) => String(p.id) === String(plotId));
+            const tier = generatorTiers[String(plotId)] ?? 0;
             const dailyRate = 7 + tier * 2;
-            const rates = plot?.biome ? BIOME_MINERAL_RATES[plot.biome] : null;
-            const topMineral = rates
-              ? Object.entries(rates)
-                  .sort((a, b) => b[1] - a[1])[0]?.[0]
-                  ?.toUpperCase()
-              : null;
+
             return (
               <div
                 key={plotId}
@@ -713,8 +525,8 @@ function InventoryPanel() {
                   <div
                     style={{ fontSize: 8, color: CYAN_DIM, letterSpacing: 0.5 }}
                   >
-                    {plot?.biome ?? "Unknown"} · {dailyRate} FRNTR/DAY ·{" "}
-                    {topMineral ?? "IRON"}
+                    {plot?.biome ?? "Unknown"} · {dailyRate} FRNTR/DAY ·
+                    Resource survey: COMING SOON
                   </div>
                 </div>
                 <button
@@ -890,14 +702,14 @@ function PlotActionPanel({
 }) {
   const plots = useGameStore((s) => s.plots);
   const player = useGameStore((s) => s.player);
-  const { actor } = useActor(createActor);
+  const { actor: _actor } = useActor(createActor);
   const { purchasePlot, isPurchasing } = usePurchasePlot();
 
   const plot = plots.find((p) => p.id === plotId);
   if (!plot) return null;
 
   const isOwned = plot.owner !== null;
-  const isMine = plot.isOwnedByMe || player.plotsOwned.includes(plotId);
+  const isMine = plot.isOwnedByMe || player.plotsOwned.includes(String(plotId));
   const eff = plot.efficiency;
   const icpPrice = eff >= 90 ? 30 : eff >= 80 ? 9 : 2.5;
 
@@ -912,24 +724,10 @@ function PlotActionPanel({
       value: isOwned ? "Owned" : "Available",
       highlight: true,
     },
-    { label: "IRON/DAY", value: String(plot.iron || 0) },
-    { label: "FUEL/DAY", value: String(plot.fuel || 0) },
   ];
 
-  async function handleMine() {
-    if (!actor) return;
-    try {
-      await (
-        actor as unknown as { mineResources: (id: bigint) => Promise<unknown> }
-      ).mineResources(BigInt(plotId));
-    } catch {
-      // fire-and-forget
-    }
-    toast("⛏ Mining started!", { duration: 2500 });
-  }
-
   async function handlePurchase() {
-    const result = await purchasePlot(plotId);
+    const result = await purchasePlot(String(plotId));
     if (result.success) {
       toast.success(result.message, { duration: 4000 });
     } else {
@@ -994,7 +792,7 @@ function PlotActionPanel({
           background: "rgba(0,10,20,0.6)",
         }}
       >
-        {<SubParcelIntelView plotId={plotId} />}
+        {/* sub-parcel view deactivated */}
       </div>
 
       {/* Plot title */}
@@ -1085,16 +883,18 @@ function PlotActionPanel({
             </button>
             <button
               type="button"
-              data-ocid="plot_action_panel.mine_button"
-              onClick={handleMine}
+              data-ocid="plot_action_panel.survey_button"
+              onClick={() =>
+                toast("Survey system coming soon!", { duration: 3000 })
+              }
               className="w-full py-2 rounded tracking-wider uppercase text-xs border transition-colors duration-200"
               style={{
-                background: "rgba(34,197,94,0.15)",
-                border: "1px solid rgba(34,197,94,0.35)",
-                color: "#4ade80",
+                background: "rgba(168,85,247,0.15)",
+                border: "1px solid rgba(168,85,247,0.35)",
+                color: "#c084fc",
               }}
             >
-              MINE
+              SURVEY (COMING SOON)
             </button>
             <button
               type="button"
@@ -1163,7 +963,7 @@ export default function Play() {
   const selectedPlotId = useGameStore((s) => s.selectedPlotId);
 
   const [purchaseToast, setPurchaseToast] = useState<{
-    plotId: number;
+    plotId: string;
     rate: number;
   } | null>(null);
   const [windowWidth, setWindowWidth] = useState(
@@ -1271,7 +1071,6 @@ export default function Play() {
         }}
       >
         <FaucetOverlay />
-        <StressTestPanel />
       </div>
 
       {/* Top bar — always on top */}
@@ -1299,11 +1098,12 @@ export default function Play() {
             controlsRef={controlsRef}
           />
         )}
-        {activeTab === "command" && <CommanderPanel />}
+        {activeTab === "command" && <CommandCenter />}
         {activeTab === "inventory" && <InventoryPanel />}
         {activeTab === "leaderboard" && <LeaderboardPanel />}
         {activeTab === "universe" && <UniversePanel inline={true} />}
         {activeTab === "intel" && <IntelTab />}
+        {activeTab === "admin" && <AdminPanel />}
       </BottomSheet>
 
       {/* Plot Action Panel — slides in from right when a plot is selected */}

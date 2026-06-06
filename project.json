@@ -1,12 +1,14 @@
 {
-  "overview": "Frontier: Missile Horizon is a decentralized planetary warfare strategy game on ICP where players purchase hex land plots with ICP, accumulate FRNTR tokens, and upgrade their territory.",
+  "overview": "Frontier: Missile Horizon — a decentralized planetary warfare strategy game on ICP where players purchase land plots, accumulate FRNTR tokens, and compete for territory.",
   "features": [
-    "3D globe with hex plot ownership",
-    "ICP-based land purchases with treasury split",
-    "FRNTR token accumulation and upgrade burn tracking",
-    "Live tokenomics dashboard",
-    "2D sub-parcel tactical view",
-    "Leaderboard with on-chain rankings"
+    "Internet Identity login with principal ID display",
+    "Land purchase with ICP tokens on testnet",
+    "Live FRNTR token accumulation per plot",
+    "6 generator upgrade tiers with burn tracking",
+    "Treasury split (25/25/50) on every purchase",
+    "Admin panel for testnet management",
+    "Global tokenomics dashboard in UNIVERSE panel",
+    "Faucet for test ICP and FRNTR tokens"
   ],
   "category": "game",
   "tags": [
@@ -14,8 +16,7 @@
     "strategy",
     "web3",
     "game",
-    "defi",
-    "tokenomics"
+    "blockchain"
   ],
-  "last_updated": "2026-06-05T14:33:28.647Z"
+  "last_updated": "2026-06-05T18:22:03.948Z"
 }

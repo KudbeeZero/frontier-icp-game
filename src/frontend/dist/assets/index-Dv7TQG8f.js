@@ -32565,15 +32565,6 @@ function getMineralYield(biome, efficiency, regenActive) {
     rareEarth: Math.floor(base.rareEarth * mult)
   };
 }
-function projectedMonthlyYield(biome, efficiency) {
-  const single = getMineralYield(biome, efficiency, false);
-  return {
-    iron: single.iron * 300,
-    fuel: single.fuel * 300,
-    crystal: single.crystal * 300,
-    rareEarth: single.rareEarth * 300
-  };
-}
 /**
  * @license
  * Copyright 2010-2025 Three.js Authors
@@ -73941,33 +73932,73 @@ function findNearestTile(nx, ny, nz, cache) {
 }
 const GEODESIC_TILES = buildGeodesicGrid(32);
 const PLOT_POSITION_CACHE = buildPositionCache(GEODESIC_TILES);
-function isOceanTile(lat, lng) {
+function assignBiomeForTile(lat, lng) {
+  if (lat < -65 || lat > 75) return "Arctic";
+  if (lat < -55 || lat > 65) return "DeepOcean";
   if (lat >= -60 && lat <= 65) {
-    if (lng >= 120 && lng <= 180) return true;
-    if (lng >= -180 && lng <= -70) return true;
+    if (lng >= 120 && lng <= 180) return "Ocean";
+    if (lng >= -180 && lng <= -70) return "Ocean";
   }
-  if (lat >= -60 && lat <= 70 && lng >= -70 && lng <= 20) return true;
-  if (lat >= -60 && lat <= 30 && lng >= 20 && lng <= 120) return true;
-  if (lat > 70) return true;
-  if (lat < -60) return true;
-  return false;
+  if (lat >= -60 && lat <= 70 && lng >= -70 && lng <= 20) return "Ocean";
+  if (lat >= -60 && lat <= 30 && lng >= 20 && lng <= 120) return "Ocean";
+  if (lat > 60) return "Arctic";
+  if (lat >= -10 && lat <= 15) {
+    if (lng >= -80 && lng <= -45 || lng >= 10 && lng <= 50 || lng >= 95 && lng <= 155) {
+      return "Tropical";
+    }
+  }
+  const latRound = Math.round(lat / 5) * 5;
+  const lngRound = Math.round(lng / 5) * 5;
+  const volcHash = Math.abs(latRound * 73 + lngRound * 31) % 100;
+  if (lat >= 60 && lat <= 67 && lng >= -25 && lng <= -13 || // Iceland
+  lat >= 18 && lat <= 22 && lng >= -160 && lng <= -154 || // Hawaii
+  lat >= -10 && lat <= 5 && lng >= 95 && lng <= 112 || // Sumatra
+  lat >= 35 && lat <= 40 && lng >= 138 && lng <= 142 || // Japan
+  volcHash < 4)
+    return "Volcanic";
+  const astHash = Math.abs(Math.round(lat * 13 + lng * 7)) % 10;
+  if (astHash === 0) return "AsteroidImpact";
+  if (lat >= 15 && lat <= 35 && lng >= -18 && lng <= 60) return "Desert";
+  if (lat >= -35 && lat <= -20 && lng >= 115 && lng <= 150) return "Desert";
+  if (lat >= 35 && lat <= 50 && lng >= 60 && lng <= 100) return "Desert";
+  if (lat >= -5 && lat <= 15 && lng >= -18 && lng <= 20) return "Desert";
+  return "Temperate";
 }
 function assignBiome(lat, lng) {
-  if (isOceanTile(lat, lng)) return "Ocean";
-  if (lat > 60) return "Arctic";
-  if (lat > 35) return lat > 45 ? "Mountain" : "Forest";
-  if (lat > 15) return "Grassland";
-  if (lat > -15) return lat > 5 ? "Desert" : "Toxic";
-  if (lat > -35) return "Forest";
-  if (lat > -60) return "Grassland";
-  return "Arctic";
+  return assignBiomeForTile(lat, lng);
 }
-const LS_KEY = "frontier_player_state_v1";
+const LS_KEY = "frontier_player_state_v2";
 function loadFromStorage() {
   try {
     const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw);
+    if (raw) {
+      return JSON.parse(raw);
+    }
+    const rawV1 = localStorage.getItem("frontier_player_state_v1");
+    if (rawV1) {
+      const v1 = JSON.parse(rawV1);
+      const tiers = {};
+      for (const [k2, v2] of Object.entries(v1.generatorTiers ?? {})) {
+        tiers[String(k2)] = v2;
+      }
+      const times = {};
+      for (const [k2, v2] of Object.entries(v1.plotPurchaseTimes ?? {})) {
+        times[String(k2)] = v2;
+      }
+      return {
+        frntBalance: v1.frntBalance ?? 0,
+        iron: v1.iron ?? 0,
+        fuel: v1.fuel ?? 0,
+        crystal: v1.crystal ?? 0,
+        rareEarth: v1.rareEarth ?? 0,
+        plotsOwned: (v1.plotsOwned ?? []).map(String),
+        resourceStorageCap: v1.resourceStorageCap ?? 200,
+        generatorTiers: tiers,
+        plotPurchaseTimes: times,
+        totalFRNTRBurned: v1.totalFRNTRBurned ?? 0
+      };
+    }
+    return null;
   } catch {
     return null;
   }
@@ -74016,10 +74047,11 @@ const BIOME_MAP = [
   "Toxic"
 ];
 function generateSubParcels(plotId) {
+  const numericId = typeof plotId === "string" ? Number.parseInt(plotId, 10) || 0 : plotId;
   return [
     {
       subId: 0,
-      plotId,
+      plotId: numericId,
       unlocked: true,
       purchaseTime: Date.now(),
       buildingType: null,
@@ -74027,7 +74059,7 @@ function generateSubParcels(plotId) {
     },
     {
       subId: 1,
-      plotId,
+      plotId: numericId,
       unlocked: false,
       purchaseTime: Date.now() - 1e3 * 60 * 30,
       buildingType: null,
@@ -74035,7 +74067,7 @@ function generateSubParcels(plotId) {
     },
     {
       subId: 2,
-      plotId,
+      plotId: numericId,
       unlocked: true,
       purchaseTime: Date.now(),
       buildingType: null,
@@ -74043,7 +74075,7 @@ function generateSubParcels(plotId) {
     },
     {
       subId: 3,
-      plotId,
+      plotId: numericId,
       unlocked: true,
       purchaseTime: Date.now(),
       buildingType: null,
@@ -74051,7 +74083,7 @@ function generateSubParcels(plotId) {
     },
     {
       subId: 4,
-      plotId,
+      plotId: numericId,
       unlocked: false,
       purchaseTime: Date.now() - 1e3 * 60 * 10,
       buildingType: null,
@@ -74059,7 +74091,7 @@ function generateSubParcels(plotId) {
     },
     {
       subId: 5,
-      plotId,
+      plotId: numericId,
       unlocked: false,
       purchaseTime: Date.now(),
       buildingType: null,
@@ -74067,7 +74099,7 @@ function generateSubParcels(plotId) {
     },
     {
       subId: 6,
-      plotId,
+      plotId: numericId,
       unlocked: false,
       purchaseTime: Date.now(),
       buildingType: null,
@@ -74126,8 +74158,10 @@ const useGameStore = create((set, get) => ({
     crystal: (_cached == null ? void 0 : _cached.crystal) ?? 0,
     rareEarth: (_cached == null ? void 0 : _cached.rareEarth) ?? 0,
     frntBalance: (_cached == null ? void 0 : _cached.frntBalance) ?? 0,
-    plotsOwned: (_cached == null ? void 0 : _cached.plotsOwned) ?? [],
-    resourceStorageCap: (_cached == null ? void 0 : _cached.resourceStorageCap) ?? 200
+    icpBalance: 0,
+    plotsOwned: ((_cached == null ? void 0 : _cached.plotsOwned) ?? []).map(String),
+    resourceStorageCap: (_cached == null ? void 0 : _cached.resourceStorageCap) ?? 200,
+    isAdmin: false
   },
   selectedPlotId: null,
   selectedWorldPoint: null,
@@ -74146,6 +74180,43 @@ const useGameStore = create((set, get) => ({
   globalStats: null,
   treasuryState: { developer: 0n, leaderboard: 0n, liquidity: 0n },
   icpUsdPrice: null,
+  // Accumulation model
+  confirmedFrntBalance: (_cached == null ? void 0 : _cached.frntBalance) ?? 0,
+  accruedFrntSinceSync: 0,
+  confirmedIcpBalance: 0,
+  accruedIcpSinceSync: 0,
+  setFrntrBalance: (e8s) => set((s2) => {
+    const confirmed = Number(e8s) / 1e8;
+    const prevDisplay = s2.confirmedFrntBalance + s2.accruedFrntSinceSync;
+    const newAccrued = confirmed >= s2.confirmedFrntBalance ? Math.max(0, prevDisplay - confirmed) : 0;
+    const next = {
+      ...s2,
+      confirmedFrntBalance: confirmed,
+      accruedFrntSinceSync: newAccrued,
+      player: { ...s2.player, frntBalance: confirmed + newAccrued }
+    };
+    saveToStorage(next);
+    return {
+      confirmedFrntBalance: confirmed,
+      accruedFrntSinceSync: newAccrued,
+      player: next.player
+    };
+  }),
+  setIcpBalance: (e8s) => set((s2) => {
+    const confirmed = Number(e8s) / 1e8;
+    const next = {
+      ...s2,
+      confirmedIcpBalance: confirmed,
+      accruedIcpSinceSync: 0,
+      player: { ...s2.player, icpBalance: confirmed }
+    };
+    saveToStorage(next);
+    return {
+      confirmedIcpBalance: confirmed,
+      accruedIcpSinceSync: 0,
+      player: next.player
+    };
+  }),
   setGlobalStats: (stats) => set({ globalStats: stats }),
   setTreasuryState: (state2) => set({ treasuryState: state2 }),
   setIcpUsdPrice: (price) => set({ icpUsdPrice: price }),
@@ -74153,13 +74224,47 @@ const useGameStore = create((set, get) => ({
   setPlotOwnership: (owners, myPrincipal) => {
     const ownerMap = /* @__PURE__ */ new Map();
     for (const [id2, principal] of owners) {
-      ownerMap.set(Number(id2), principal);
+      ownerMap.set(String(id2), principal);
     }
     set((s2) => ({
       plots: s2.plots.map((p2) => {
-        const owner = ownerMap.get(p2.id) ?? null;
-        return owner !== void 0 ? { ...p2, owner, isOwnedByMe: !!myPrincipal && owner === myPrincipal } : { ...p2, isOwnedByMe: false };
-      })
+        const owner = ownerMap.get(String(p2.id));
+        if (owner !== void 0) {
+          return {
+            ...p2,
+            owner,
+            isOwnedByMe: !!myPrincipal && owner === myPrincipal
+          };
+        }
+        return { ...p2, owner: null, isOwnedByMe: false };
+      }),
+      player: {
+        ...s2.player,
+        plotsOwned: myPrincipal ? Array.from(ownerMap.entries()).filter(([, principal]) => principal === myPrincipal).map(([id2]) => id2) : s2.player.plotsOwned
+      }
+    }));
+  },
+  setLivePlotOwners: (owners, myPrincipal) => {
+    const ownerMap = /* @__PURE__ */ new Map();
+    for (const [plotId, principal] of owners) {
+      ownerMap.set(plotId, principal);
+    }
+    set((s2) => ({
+      plots: s2.plots.map((p2) => {
+        const owner = ownerMap.get(String(p2.id));
+        if (owner !== void 0) {
+          return {
+            ...p2,
+            owner,
+            isOwnedByMe: !!myPrincipal && owner === myPrincipal
+          };
+        }
+        return { ...p2, owner: null, isOwnedByMe: false };
+      }),
+      player: {
+        ...s2.player,
+        plotsOwned: myPrincipal ? Array.from(ownerMap.entries()).filter(([, principal]) => principal === myPrincipal).map(([id2]) => id2) : s2.player.plotsOwned
+      }
     }));
   },
   fetchSubParcels: async (_plotId) => {
@@ -74172,21 +74277,18 @@ const useGameStore = create((set, get) => ({
   purchasePlot: (id2) => {
     const state2 = get();
     if (state2.player.plotsOwned.includes(id2)) return;
-    const plot = state2.plots.find((p2) => p2.id === id2);
+    const plot = state2.plots.find((p2) => String(p2.id) === id2);
     if (!plot) return;
-    const cost = 100;
-    if (state2.player.frntBalance < cost) return;
     const subParcels = generateSubParcels(id2);
     set((s2) => {
       const next = {
         ...s2,
         player: {
           ...s2.player,
-          frntBalance: s2.player.frntBalance - cost,
           plotsOwned: [...s2.player.plotsOwned, id2]
         },
         plots: s2.plots.map(
-          (p2) => p2.id === id2 ? { ...p2, owner: s2.player.principal ?? "You", isOwnedByMe: true } : p2
+          (p2) => String(p2.id) === id2 ? { ...p2, owner: s2.player.principal ?? "You", isOwnedByMe: true } : p2
         ),
         subParcels: { ...s2.subParcels, [id2]: subParcels },
         plotPurchaseTimes: { ...s2.plotPurchaseTimes, [id2]: Date.now() }
@@ -74209,7 +74311,7 @@ const useGameStore = create((set, get) => ({
         plotsOwned: s2.player.plotsOwned.filter((id2) => id2 !== plotId)
       },
       plots: s2.plots.map(
-        (p2) => p2.id === plotId ? { ...p2, owner: recipient } : p2
+        (p2) => String(p2.id) === plotId ? { ...p2, owner: recipient } : p2
       )
     }));
   },
@@ -74218,7 +74320,7 @@ const useGameStore = create((set, get) => ({
   },
   mineResources: (id2) => {
     const state2 = get();
-    if (!state2.player.plotsOwned.includes(id2)) return null;
+    if (!state2.player.plotsOwned.includes(String(id2))) return null;
     const plot = state2.plots.find((p2) => p2.id === id2);
     if (!plot) return null;
     const regenActive = Date.now() < plot.regenActiveUntil;
@@ -74253,48 +74355,75 @@ const useGameStore = create((set, get) => ({
   },
   activateRegenBoost: (id2) => {
     const state2 = get();
-    if (!state2.player.plotsOwned.includes(id2)) return;
+    if (!state2.player.plotsOwned.includes(String(id2))) return;
     const cost = 50;
-    if (state2.player.frntBalance < cost) return;
+    const displayBal = state2.confirmedFrntBalance + state2.accruedFrntSinceSync;
+    if (displayBal < cost) return;
     const plot = state2.plots.find((p2) => p2.id === id2);
     if (!plot) return;
-    set((s2) => ({
-      player: { ...s2.player, frntBalance: s2.player.frntBalance - cost },
-      plots: s2.plots.map(
-        (p2) => p2.id === id2 ? {
-          ...p2,
-          regenActiveUntil: Date.now() + 4 * 60 * 60 * 1e3,
-          efficiency: Math.min(98, p2.efficiency + 20)
-        } : p2
-      )
-    }));
+    set((s2) => {
+      const nextConfirmed = s2.confirmedFrntBalance - cost;
+      const next = {
+        ...s2,
+        confirmedFrntBalance: nextConfirmed,
+        player: {
+          ...s2.player,
+          frntBalance: nextConfirmed + s2.accruedFrntSinceSync
+        },
+        plots: s2.plots.map(
+          (p2) => p2.id === id2 ? {
+            ...p2,
+            regenActiveUntil: Date.now() + 4 * 60 * 60 * 1e3,
+            efficiency: Math.min(98, p2.efficiency + 20)
+          } : p2
+        )
+      };
+      saveToStorage(next);
+      return {
+        confirmedFrntBalance: nextConfirmed,
+        player: next.player,
+        plots: next.plots
+      };
+    });
   },
   claimAllFrntr: (amount) => set((s2) => {
+    const nextConfirmed = s2.confirmedFrntBalance + amount;
     const next = {
       ...s2,
-      player: { ...s2.player, frntBalance: s2.player.frntBalance + amount }
-    };
-    saveToStorage(next);
-    return { player: next.player };
-  }),
-  addFrntr: (amount) => set((s2) => {
-    const next = {
-      ...s2,
-      player: { ...s2.player, frntBalance: s2.player.frntBalance + amount }
-    };
-    saveToStorage(next);
-    return { player: next.player };
-  }),
-  mintTestTokens: () => set((s2) => {
-    const next = {
-      ...s2,
+      confirmedFrntBalance: nextConfirmed,
       player: {
         ...s2.player,
-        frntBalance: s2.player.frntBalance + 500
+        frntBalance: nextConfirmed + s2.accruedFrntSinceSync
       }
     };
     saveToStorage(next);
-    return { player: next.player };
+    return { confirmedFrntBalance: nextConfirmed, player: next.player };
+  }),
+  addFrntr: (amount) => set((s2) => {
+    const nextConfirmed = s2.confirmedFrntBalance + amount;
+    const next = {
+      ...s2,
+      confirmedFrntBalance: nextConfirmed,
+      player: {
+        ...s2.player,
+        frntBalance: nextConfirmed + s2.accruedFrntSinceSync
+      }
+    };
+    saveToStorage(next);
+    return { confirmedFrntBalance: nextConfirmed, player: next.player };
+  }),
+  mintTestTokens: () => set((s2) => {
+    const nextConfirmed = s2.confirmedFrntBalance + 500;
+    const next = {
+      ...s2,
+      confirmedFrntBalance: nextConfirmed,
+      player: {
+        ...s2.player,
+        frntBalance: nextConfirmed + s2.accruedFrntSinceSync
+      }
+    };
+    saveToStorage(next);
+    return { confirmedFrntBalance: nextConfirmed, player: next.player };
   }),
   upgradeGenerator: (plotId) => {
     const state2 = get();
@@ -74310,14 +74439,30 @@ const useGameStore = create((set, get) => ({
       6: 6e4
     };
     const cost = COSTS[currentTier + 1];
-    if (!cost || state2.player.frntBalance < cost) return;
-    set((s2) => ({
-      player: { ...s2.player, frntBalance: s2.player.frntBalance - cost },
-      generatorTiers: {
-        ...s2.generatorTiers,
-        [plotId]: currentTier + 1
-      }
-    }));
+    if (!cost) return;
+    const displayBal = state2.confirmedFrntBalance + state2.accruedFrntSinceSync;
+    if (displayBal < cost) return;
+    set((s2) => {
+      const nextConfirmed = s2.confirmedFrntBalance - cost;
+      const next = {
+        ...s2,
+        confirmedFrntBalance: nextConfirmed,
+        player: {
+          ...s2.player,
+          frntBalance: nextConfirmed + s2.accruedFrntSinceSync
+        },
+        generatorTiers: {
+          ...s2.generatorTiers,
+          [plotId]: currentTier + 1
+        }
+      };
+      saveToStorage(next);
+      return {
+        confirmedFrntBalance: nextConfirmed,
+        player: next.player,
+        generatorTiers: next.generatorTiers
+      };
+    });
   },
   getSubParcels: (plotId) => {
     const state2 = get();
@@ -74326,15 +74471,30 @@ const useGameStore = create((set, get) => ({
   },
   buildStructure: (plotId, subId, buildingType, cost) => {
     const state2 = get();
-    if (state2.player.frntBalance < cost) return;
+    const displayBal = state2.confirmedFrntBalance + state2.accruedFrntSinceSync;
+    if (displayBal < cost) return;
     const existing = state2.subParcels[plotId] ?? generateSubParcels(plotId);
     const updated = existing.map(
       (sp) => sp.subId === subId ? { ...sp, buildingType, durability: 100 } : sp
     );
-    set((s2) => ({
-      player: { ...s2.player, frntBalance: s2.player.frntBalance - cost },
-      subParcels: { ...s2.subParcels, [plotId]: updated }
-    }));
+    set((s2) => {
+      const nextConfirmed = s2.confirmedFrntBalance - cost;
+      const next = {
+        ...s2,
+        confirmedFrntBalance: nextConfirmed,
+        player: {
+          ...s2.player,
+          frntBalance: nextConfirmed + s2.accruedFrntSinceSync
+        },
+        subParcels: { ...s2.subParcels, [plotId]: updated }
+      };
+      saveToStorage(next);
+      return {
+        confirmedFrntBalance: nextConfirmed,
+        player: next.player,
+        subParcels: next.subParcels
+      };
+    });
   },
   setPlotSpecialization: (plotId, spec) => set((s2) => ({
     plots: s2.plots.map(
@@ -74344,21 +74504,29 @@ const useGameStore = create((set, get) => ({
   upgradeStorage: (plotId) => {
     const state2 = get();
     if (!state2.player.plotsOwned.includes(plotId)) return;
-    if (state2.player.frntBalance < 150) return;
+    const displayBal = state2.confirmedFrntBalance + state2.accruedFrntSinceSync;
+    if (displayBal < 150) return;
     if (state2.player.resourceStorageCap >= 500) return;
-    set((s2) => ({
-      player: {
-        ...s2.player,
-        frntBalance: s2.player.frntBalance - 150,
-        resourceStorageCap: Math.min(500, s2.player.resourceStorageCap + 50)
-      }
-    }));
+    set((s2) => {
+      const nextConfirmed = s2.confirmedFrntBalance - 150;
+      const next = {
+        ...s2,
+        confirmedFrntBalance: nextConfirmed,
+        player: {
+          ...s2.player,
+          frntBalance: nextConfirmed + s2.accruedFrntSinceSync,
+          resourceStorageCap: Math.min(500, s2.player.resourceStorageCap + 50)
+        }
+      };
+      saveToStorage(next);
+      return { confirmedFrntBalance: nextConfirmed, player: next.player };
+    });
   },
   getNetworkBonus: () => {
     const state2 = get();
     const ownedSpecs = new Set(
       state2.plots.filter(
-        (p2) => state2.player.plotsOwned.includes(p2.id) && p2.specialization
+        (p2) => state2.player.plotsOwned.includes(String(p2.id)) && p2.specialization
       ).map((p2) => p2.specialization)
     );
     return ownedSpecs.size >= 4 ? 0.15 : 0;
@@ -74370,39 +74538,40 @@ const useGameStore = create((set, get) => ({
     purchaseDebugLogs: [log2, ...s2.purchaseDebugLogs].slice(0, 10)
   })),
   clearPurchaseDebugLogs: () => set({ purchaseDebugLogs: [] }),
-  // Passive FRNTR drip: uses server-synced rate if available, else local calculation
   tickPassiveIncome: () => {
     const state2 = get();
     if (state2.player.plotsOwned.length === 0) return;
-    const plotCount = state2.player.plotsOwned.length;
     const serverRate = state2.serverPassiveIncomePerDay;
-    const TIER_BONUS = {
-      1: 8 / 86400,
-      2: 24 / 86400,
-      3: 48 / 86400,
-      4: 96 / 86400,
-      5: 192 / 86400,
-      6: 384 / 86400
+    const TIER_RATES = {
+      0: 7,
+      1: 9,
+      2: 12,
+      3: 17,
+      4: 25,
+      5: 37,
+      6: 55
     };
     let totalFrntr = 0;
-    if (serverRate > 0 && plotCount > 0) {
+    if (serverRate > 0) {
       totalFrntr = serverRate / 86400;
     } else {
-      const BASE_PER_PLOT_PER_SEC = 7 / 86400;
       for (const plotId of state2.player.plotsOwned) {
-        const plot = state2.plots.find((p2) => p2.id === plotId);
-        if (!plot) continue;
-        totalFrntr += BASE_PER_PLOT_PER_SEC;
         const tier = state2.generatorTiers[plotId] ?? 0;
-        if (tier > 0) totalFrntr += TIER_BONUS[tier] ?? 0;
+        totalFrntr += (TIER_RATES[tier] ?? 7) / 86400;
       }
     }
     if (totalFrntr === 0) return;
-    set((s2) => ({
-      player: { ...s2.player, frntBalance: s2.player.frntBalance + totalFrntr }
-    }));
+    set((s2) => {
+      const nextAccrued = s2.accruedFrntSinceSync + totalFrntr;
+      return {
+        accruedFrntSinceSync: nextAccrued,
+        player: {
+          ...s2.player,
+          frntBalance: s2.confirmedFrntBalance + nextAccrued
+        }
+      };
+    });
   },
-  // Gradual mineral drip: biome-based per-second accumulation
   tickMineralDrip: () => {
     const state2 = get();
     if (state2.player.plotsOwned.length === 0) return;
@@ -74412,16 +74581,15 @@ const useGameStore = create((set, get) => ({
       let dXtal = 0;
       let dRare = 0;
       for (const plotId of s2.player.plotsOwned) {
-        const plot = s2.plots.find((p2) => p2.id === plotId);
+        const plot = s2.plots.find((p2) => String(p2.id) === plotId);
         if (!plot) continue;
         const rates = BIOME_DRIP$1[plot.biome] ?? [1e-3, 1e-3, 1e-3, 1e-3];
         const eff = (plot.efficiency ?? 90) / 100;
         const regenMult = Date.now() < plot.regenActiveUntil ? 1.2 : 1;
-        const specMult = 1;
-        dIron += rates[0] * eff * regenMult * specMult;
-        dFuel += rates[1] * eff * regenMult * specMult;
-        dXtal += rates[2] * eff * regenMult * specMult;
-        dRare += rates[3] * eff * regenMult * specMult;
+        dIron += rates[0] * eff * regenMult;
+        dFuel += rates[1] * eff * regenMult;
+        dXtal += rates[2] * eff * regenMult;
+        dRare += rates[3] * eff * regenMult;
       }
       const storageCap = s2.player.resourceStorageCap;
       return {
@@ -74435,12 +74603,9 @@ const useGameStore = create((set, get) => ({
       };
     });
   },
-  // v1.0 phased rollout stubs (hidden features)
   compareModeActive: false,
   setComparePlotId: () => {
   },
-  commanderAssignments: {},
-  ownedCommanders: [],
   attack: () => {
   },
   arsenalInventory: {},
@@ -74464,14 +74629,14 @@ const useGameStore = create((set, get) => ({
   },
   faction: null
 }));
-const CYAN$a = "#00ffcc";
+const CYAN$c = "#00ffcc";
 const GOLD$3 = "#ffd700";
 const AMBER$1 = "#f59e0b";
 const PURPLE = "#a855f7";
-const BORDER$9 = "rgba(0,255,204,0.18)";
+const BORDER$b = "rgba(0,255,204,0.18)";
 const PANEL$1 = "rgba(0,20,40,0.70)";
-const TEXT$5 = "#e0f4ff";
-const TEXT_DIM$3 = "rgba(224,244,255,0.45)";
+const TEXT$6 = "#e0f4ff";
+const TEXT_DIM$5 = "rgba(224,244,255,0.45)";
 const TIER_DAILY = {
   0: 7,
   1: 10,
@@ -74522,27 +74687,14 @@ function effColor(eff) {
 }
 function FRNTRCounter() {
   const player = useGameStore((s2) => s2.player);
-  const [displayBal, setDisplayBal] = reactExports.useState(player.frntBalance);
-  const rafRef = reactExports.useRef(null);
-  const lastTickRef = reactExports.useRef(Date.now());
+  const frntrBalance = useGameStore(
+    (s2) => s2.confirmedFrntBalance + s2.accruedFrntSinceSync
+  );
   const plotCount = player.plotsOwned.length;
-  reactExports.useEffect(() => {
-    const perSec = 7 * plotCount / 86400;
-    const tick = () => {
-      const now2 = Date.now();
-      const elapsed = (now2 - lastTickRef.current) / 1e3;
-      lastTickRef.current = now2;
-      setDisplayBal((b2) => b2 + perSec * elapsed);
-      rafRef.current = requestAnimationFrame(tick);
-    };
-    rafRef.current = requestAnimationFrame(tick);
-    return () => {
-      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
-    };
-  }, [plotCount]);
-  reactExports.useEffect(() => {
-    setDisplayBal(player.frntBalance);
-  }, [player.frntBalance]);
+  const fmtFrntr2 = (n) => n.toLocaleString(void 0, {
+    minimumFractionDigits: 8,
+    maximumFractionDigits: 8
+  });
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "div",
     {
@@ -74550,7 +74702,7 @@ function FRNTRCounter() {
         background: PANEL$1,
         backdropFilter: "blur(16px)",
         WebkitBackdropFilter: "blur(16px)",
-        border: `1px solid ${BORDER$9}`,
+        border: `1px solid ${BORDER$b}`,
         borderRadius: 10,
         padding: "14px 16px",
         marginBottom: 14
@@ -74563,7 +74715,7 @@ function FRNTRCounter() {
               fontSize: 9,
               fontWeight: 700,
               letterSpacing: 3,
-              color: CYAN$a,
+              color: CYAN$c,
               textTransform: "uppercase",
               marginBottom: 8
             },
@@ -74583,10 +74735,10 @@ function FRNTRCounter() {
               letterSpacing: 1,
               lineHeight: 1
             },
-            children: displayBal.toFixed(8)
+            children: fmtFrntr2(frntrBalance)
           }
         ),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { fontSize: 8, color: TEXT_DIM$3, marginTop: 3 }, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { fontSize: 8, color: TEXT_DIM$5, marginTop: 3 }, children: [
           "FRNTR  ·  ",
           plotCount,
           " PLOT",
@@ -74604,7 +74756,7 @@ function ResourceStockpiles() {
   const resources = [
     { label: "IRON", val: player.iron, color: "#94a3b8", icon: "⚙️" },
     { label: "FUEL", val: player.fuel, color: AMBER$1, icon: "⛽" },
-    { label: "CRYSTAL", val: player.crystal, color: CYAN$a, icon: "💎" },
+    { label: "CRYSTAL", val: player.crystal, color: CYAN$c, icon: "💎" },
     { label: "RARE EARTH", val: player.rareEarth, color: PURPLE, icon: "🔮" }
   ];
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -74614,7 +74766,7 @@ function ResourceStockpiles() {
         background: PANEL$1,
         backdropFilter: "blur(16px)",
         WebkitBackdropFilter: "blur(16px)",
-        border: `1px solid ${BORDER$9}`,
+        border: `1px solid ${BORDER$b}`,
         borderRadius: 10,
         padding: "12px 14px",
         marginBottom: 14
@@ -74627,7 +74779,7 @@ function ResourceStockpiles() {
               fontSize: 9,
               fontWeight: 700,
               letterSpacing: 3,
-              color: CYAN$a,
+              color: CYAN$c,
               textTransform: "uppercase",
               marginBottom: 10
             },
@@ -74668,7 +74820,7 @@ function ResourceStockpiles() {
                       style: {
                         fontSize: 9,
                         fontFamily: "monospace",
-                        color: TEXT_DIM$3
+                        color: TEXT_DIM$5
                       },
                       children: [
                         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: r2.color, fontWeight: 700 }, children: r2.val.toFixed(8) }),
@@ -74712,7 +74864,9 @@ function ResourceStockpiles() {
   );
 }
 function PlotCard({ plotId, index: index2 }) {
-  const plot = useGameStore((s2) => s2.plots.find((p2) => p2.id === plotId));
+  const plot = useGameStore(
+    (s2) => s2.plots.find((p2) => String(p2.id) === plotId)
+  );
   const generatorTiers = useGameStore((s2) => s2.generatorTiers);
   const upgradeGenerator = useGameStore((s2) => s2.upgradeGenerator);
   const mineResources = useGameStore((s2) => s2.mineResources);
@@ -74722,8 +74876,8 @@ function PlotCard({ plotId, index: index2 }) {
   const tier = generatorTiers[plotId] ?? 0;
   const tierLabel = TIER_LABELS[tier];
   const dailyRate = TIER_DAILY[tier];
-  const biomeColor = BIOME_DOT[plot.biome] ?? CYAN$a;
-  const h3Short = shortH3(plotId);
+  const biomeColor = BIOME_DOT[plot.biome] ?? CYAN$c;
+  const h3Short = shortH3(String(plotId));
   const drip = BIOME_DRIP[plot.biome] ?? [1e-3, 1e-3, 1e-3, 1e-3];
   const effFactor = plot.efficiency / 100;
   const ironPerDay = (drip[0] * 86400 * effFactor).toFixed(2);
@@ -74736,7 +74890,7 @@ function PlotCard({ plotId, index: index2 }) {
   const isLoggedIn = !!player.principal;
   const eff = plot.efficiency;
   const handleMine = () => {
-    const yields = mineResources(plotId);
+    const yields = mineResources(Number(plotId));
     if (yields) {
       const total = Object.values(yields).reduce((a2, b2) => a2 + b2, 0);
       setMineFlash(`+${total.toFixed(4)}`);
@@ -74749,7 +74903,7 @@ function PlotCard({ plotId, index: index2 }) {
       "data-ocid": `inventory.item.${index2}`,
       style: {
         background: "rgba(0,20,40,0.55)",
-        border: `1px solid ${BORDER$9}`,
+        border: `1px solid ${BORDER$b}`,
         borderRadius: 10,
         padding: "12px 14px",
         position: "relative",
@@ -74765,7 +74919,7 @@ function PlotCard({ plotId, index: index2 }) {
               left: 0,
               width: `${tier / 6 * 100}%`,
               height: 2,
-              background: `linear-gradient(90deg, ${CYAN$a}, ${GOLD$3})`
+              background: `linear-gradient(90deg, ${CYAN$c}, ${GOLD$3})`
             }
           }
         ),
@@ -74799,14 +74953,14 @@ function PlotCard({ plotId, index: index2 }) {
                     style: {
                       fontSize: 11,
                       fontWeight: 700,
-                      color: TEXT$5,
+                      color: TEXT$6,
                       fontFamily: "monospace",
                       letterSpacing: 0.5
                     },
                     children: h3Short
                   }
                 ),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$3, letterSpacing: 0.5 }, children: plot.biome })
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$5, letterSpacing: 0.5 }, children: plot.biome })
               ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs(
                 "div",
@@ -74814,11 +74968,11 @@ function PlotCard({ plotId, index: index2 }) {
                   style: {
                     padding: "3px 8px",
                     background: tier > 0 ? "rgba(0,255,204,0.12)" : "rgba(255,255,255,0.05)",
-                    border: `1px solid ${tier > 0 ? BORDER$9 : "rgba(255,255,255,0.08)"}`,
+                    border: `1px solid ${tier > 0 ? BORDER$b : "rgba(255,255,255,0.08)"}`,
                     borderRadius: 4,
                     fontSize: 8,
                     fontWeight: 700,
-                    color: tier > 0 ? CYAN$a : TEXT_DIM$3,
+                    color: tier > 0 ? CYAN$c : TEXT_DIM$5,
                     letterSpacing: 1,
                     whiteSpace: "nowrap"
                   },
@@ -74842,7 +74996,7 @@ function PlotCard({ plotId, index: index2 }) {
                 marginBottom: 3
               },
               children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 8, color: TEXT_DIM$3, letterSpacing: 1 }, children: "EFFICIENCY" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 8, color: TEXT_DIM$5, letterSpacing: 1 }, children: "EFFICIENCY" }),
                 /* @__PURE__ */ jsxRuntimeExports.jsxs(
                   "span",
                   {
@@ -74901,7 +75055,7 @@ function PlotCard({ plotId, index: index2 }) {
             },
             children: [
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$3 }, children: "FRNTR/DAY" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$5 }, children: "FRNTR/DAY" }),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "div",
                   {
@@ -74916,7 +75070,7 @@ function PlotCard({ plotId, index: index2 }) {
                 )
               ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$3 }, children: "IRON/DAY" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$5 }, children: "IRON/DAY" }),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "div",
                   {
@@ -74931,7 +75085,7 @@ function PlotCard({ plotId, index: index2 }) {
                 )
               ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$3 }, children: "FUEL/DAY" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$5 }, children: "FUEL/DAY" }),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "div",
                   {
@@ -74946,14 +75100,14 @@ function PlotCard({ plotId, index: index2 }) {
                 )
               ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$3 }, children: "CRYSTAL/DAY" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$5 }, children: "CRYSTAL/DAY" }),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "div",
                   {
                     style: {
                       fontSize: 10,
                       fontWeight: 700,
-                      color: CYAN$a,
+                      color: CYAN$c,
                       fontFamily: "monospace"
                     },
                     children: crystalPerDay
@@ -74961,7 +75115,7 @@ function PlotCard({ plotId, index: index2 }) {
                 )
               ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$3 }, children: "RARE/DAY" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$5 }, children: "RARE/DAY" }),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "div",
                   {
@@ -74990,9 +75144,9 @@ function PlotCard({ plotId, index: index2 }) {
                 flex: 1,
                 padding: "8px 0",
                 background: "rgba(0,255,204,0.08)",
-                border: `1px solid ${BORDER$9}`,
+                border: `1px solid ${BORDER$b}`,
                 borderRadius: 6,
-                color: isLoggedIn ? CYAN$a : TEXT_DIM$3,
+                color: isLoggedIn ? CYAN$c : TEXT_DIM$5,
                 fontSize: 9,
                 fontWeight: 700,
                 letterSpacing: 1.5,
@@ -75008,7 +75162,7 @@ function PlotCard({ plotId, index: index2 }) {
             {
               type: "button",
               "data-ocid": `inventory.upgrade_button.${index2}`,
-              onClick: () => upgradeGenerator(plotId),
+              onClick: () => upgradeGenerator(String(plotId)),
               disabled: !isLoggedIn || !canUpgrade,
               style: {
                 flex: 1,
@@ -75016,7 +75170,7 @@ function PlotCard({ plotId, index: index2 }) {
                 background: canUpgrade && isLoggedIn ? "rgba(255,215,0,0.08)" : "rgba(255,255,255,0.03)",
                 border: `1px solid ${canUpgrade && isLoggedIn ? "rgba(255,215,0,0.3)" : "rgba(255,255,255,0.07)"}`,
                 borderRadius: 6,
-                color: canUpgrade && isLoggedIn ? GOLD$3 : TEXT_DIM$3,
+                color: canUpgrade && isLoggedIn ? GOLD$3 : TEXT_DIM$5,
                 fontSize: 8,
                 fontWeight: 700,
                 letterSpacing: 1,
@@ -75062,7 +75216,7 @@ function Inventory() {
               fontSize: 9,
               fontWeight: 700,
               letterSpacing: 3,
-              color: CYAN$a,
+              color: CYAN$c,
               textTransform: "uppercase",
               marginBottom: 10,
               display: "flex",
@@ -75077,7 +75231,7 @@ function Inventory() {
                   style: {
                     fontSize: 10,
                     fontWeight: 800,
-                    color: TEXT$5,
+                    color: TEXT$6,
                     fontFamily: "monospace"
                   },
                   children: plotsOwned.length
@@ -75098,7 +75252,7 @@ function Inventory() {
               justifyContent: "center",
               padding: "32px 20px",
               textAlign: "center",
-              color: TEXT_DIM$3,
+              color: TEXT_DIM$5,
               gap: 10
             },
             children: [
@@ -75109,7 +75263,7 @@ function Inventory() {
                   style: {
                     fontSize: 11,
                     fontWeight: 700,
-                    color: TEXT$5,
+                    color: TEXT$6,
                     letterSpacing: 1.5
                   },
                   children: "NO PLOTS OWNED YET"
@@ -75120,7 +75274,7 @@ function Inventory() {
                 {
                   style: {
                     fontSize: 9,
-                    color: TEXT_DIM$3,
+                    color: TEXT_DIM$5,
                     lineHeight: 1.6,
                     maxWidth: 260
                   },
@@ -77735,31 +77889,66 @@ const createLucideIcon = (iconName, iconNode) => {
  * This source code is licensed under the ISC license.
  * See the LICENSE file in the root directory of this source tree.
  */
-const __iconNode$d = [["path", { d: "m6 9 6 6 6-6", key: "qrunsl" }]];
-const ChevronDown = createLucideIcon("chevron-down", __iconNode$d);
+const __iconNode$k = [["path", { d: "m6 9 6 6 6-6", key: "qrunsl" }]];
+const ChevronDown = createLucideIcon("chevron-down", __iconNode$k);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
  * This source code is licensed under the ISC license.
  * See the LICENSE file in the root directory of this source tree.
  */
-const __iconNode$c = [["path", { d: "m9 18 6-6-6-6", key: "mthhwq" }]];
-const ChevronRight = createLucideIcon("chevron-right", __iconNode$c);
+const __iconNode$j = [["path", { d: "m9 18 6-6-6-6", key: "mthhwq" }]];
+const ChevronRight = createLucideIcon("chevron-right", __iconNode$j);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
  * This source code is licensed under the ISC license.
  * See the LICENSE file in the root directory of this source tree.
  */
-const __iconNode$b = [["path", { d: "m18 15-6-6-6 6", key: "153udz" }]];
-const ChevronUp = createLucideIcon("chevron-up", __iconNode$b);
+const __iconNode$i = [["path", { d: "m18 15-6-6-6 6", key: "153udz" }]];
+const ChevronUp = createLucideIcon("chevron-up", __iconNode$i);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
  * This source code is licensed under the ISC license.
  * See the LICENSE file in the root directory of this source tree.
  */
-const __iconNode$a = [
+const __iconNode$h = [
+  ["path", { d: "M21.801 10A10 10 0 1 1 17 3.335", key: "yps3ct" }],
+  ["path", { d: "m9 11 3 3L22 4", key: "1pflzl" }]
+];
+const CircleCheckBig = createLucideIcon("circle-check-big", __iconNode$h);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$g = [["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }]];
+const Circle = createLucideIcon("circle", __iconNode$g);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$f = [
+  [
+    "path",
+    {
+      d: "M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z",
+      key: "96xj49"
+    }
+  ]
+];
+const Flame = createLucideIcon("flame", __iconNode$f);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$e = [
   [
     "path",
     {
@@ -77770,39 +77959,39 @@ const __iconNode$a = [
   ["path", { d: "M6.453 15h11.094", key: "3shlmq" }],
   ["path", { d: "M8.5 2h7", key: "csnxdl" }]
 ];
-const FlaskConical = createLucideIcon("flask-conical", __iconNode$a);
+const FlaskConical = createLucideIcon("flask-conical", __iconNode$e);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
  * This source code is licensed under the ISC license.
  * See the LICENSE file in the root directory of this source tree.
  */
-const __iconNode$9 = [
+const __iconNode$d = [
   ["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }],
   ["path", { d: "M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20", key: "13o1zl" }],
   ["path", { d: "M2 12h20", key: "9i4pu4" }]
 ];
-const Globe = createLucideIcon("globe", __iconNode$9);
+const Globe = createLucideIcon("globe", __iconNode$d);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
  * This source code is licensed under the ISC license.
  * See the LICENSE file in the root directory of this source tree.
  */
-const __iconNode$8 = [
+const __iconNode$c = [
   ["rect", { width: "7", height: "9", x: "3", y: "3", rx: "1", key: "10lvy0" }],
   ["rect", { width: "7", height: "5", x: "14", y: "3", rx: "1", key: "16une8" }],
   ["rect", { width: "7", height: "9", x: "14", y: "12", rx: "1", key: "1hutg5" }],
   ["rect", { width: "7", height: "5", x: "3", y: "16", rx: "1", key: "ldoo1y" }]
 ];
-const LayoutDashboard = createLucideIcon("layout-dashboard", __iconNode$8);
+const LayoutDashboard = createLucideIcon("layout-dashboard", __iconNode$c);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
  * This source code is licensed under the ISC license.
  * See the LICENSE file in the root directory of this source tree.
  */
-const __iconNode$7 = [
+const __iconNode$b = [
   [
     "path",
     {
@@ -77813,14 +78002,14 @@ const __iconNode$7 = [
   ["path", { d: "M15 5.764v15", key: "1pn4in" }],
   ["path", { d: "M9 3.236v15", key: "1uimfh" }]
 ];
-const Map$1 = createLucideIcon("map", __iconNode$7);
+const Map$1 = createLucideIcon("map", __iconNode$b);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
  * This source code is licensed under the ISC license.
  * See the LICENSE file in the root directory of this source tree.
  */
-const __iconNode$6 = [
+const __iconNode$a = [
   [
     "path",
     {
@@ -77832,7 +78021,61 @@ const __iconNode$6 = [
   ["polyline", { points: "3.29 7 12 12 20.71 7", key: "ousv84" }],
   ["path", { d: "m7.5 4.27 9 5.15", key: "1c824w" }]
 ];
-const Package = createLucideIcon("package", __iconNode$6);
+const Package = createLucideIcon("package", __iconNode$a);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$9 = [
+  ["path", { d: "M4.9 19.1C1 15.2 1 8.8 4.9 4.9", key: "1vaf9d" }],
+  ["path", { d: "M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5", key: "u1ii0m" }],
+  ["circle", { cx: "12", cy: "12", r: "2", key: "1c9p78" }],
+  ["path", { d: "M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5", key: "1j5fej" }],
+  ["path", { d: "M19.1 4.9C23 8.8 23 15.1 19.1 19", key: "10b0cb" }]
+];
+const Radio = createLucideIcon("radio", __iconNode$9);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$8 = [
+  ["path", { d: "M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8", key: "v9h5vc" }],
+  ["path", { d: "M21 3v5h-5", key: "1q7to0" }],
+  ["path", { d: "M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16", key: "3uifl3" }],
+  ["path", { d: "M8 16H3v5", key: "1cv678" }]
+];
+const RefreshCw = createLucideIcon("refresh-cw", __iconNode$8);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$7 = [
+  ["path", { d: "M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8", key: "1357e3" }],
+  ["path", { d: "M3 3v5h5", key: "1xhq8a" }]
+];
+const RotateCcw = createLucideIcon("rotate-ccw", __iconNode$7);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$6 = [
+  [
+    "path",
+    {
+      d: "M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z",
+      key: "oel41y"
+    }
+  ]
+];
+const Shield = createLucideIcon("shield", __iconNode$6);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
@@ -77840,13 +78083,12 @@ const Package = createLucideIcon("package", __iconNode$6);
  * See the LICENSE file in the root directory of this source tree.
  */
 const __iconNode$5 = [
-  ["path", { d: "M4.9 19.1C1 15.2 1 8.8 4.9 4.9", key: "1vaf9d" }],
-  ["path", { d: "M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5", key: "u1ii0m" }],
-  ["circle", { cx: "12", cy: "12", r: "2", key: "1c9p78" }],
-  ["path", { d: "M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5", key: "1j5fej" }],
-  ["path", { d: "M19.1 4.9C23 8.8 23 15.1 19.1 19", key: "10b0cb" }]
+  ["polyline", { points: "14.5 17.5 3 6 3 3 6 3 17.5 14.5", key: "1hfsw2" }],
+  ["line", { x1: "13", x2: "19", y1: "19", y2: "13", key: "1vrmhu" }],
+  ["line", { x1: "16", x2: "20", y1: "16", y2: "20", key: "1bron3" }],
+  ["line", { x1: "19", x2: "21", y1: "21", y2: "19", key: "13pww6" }]
 ];
-const Radio = createLucideIcon("radio", __iconNode$5);
+const Sword = createLucideIcon("sword", __iconNode$5);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
@@ -77854,12 +78096,11 @@ const Radio = createLucideIcon("radio", __iconNode$5);
  * See the LICENSE file in the root directory of this source tree.
  */
 const __iconNode$4 = [
-  ["path", { d: "M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8", key: "v9h5vc" }],
-  ["path", { d: "M21 3v5h-5", key: "1q7to0" }],
-  ["path", { d: "M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16", key: "3uifl3" }],
-  ["path", { d: "M8 16H3v5", key: "1cv678" }]
+  ["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }],
+  ["circle", { cx: "12", cy: "12", r: "6", key: "1vlfrh" }],
+  ["circle", { cx: "12", cy: "12", r: "2", key: "1c9p78" }]
 ];
-const RefreshCw = createLucideIcon("refresh-cw", __iconNode$4);
+const Target = createLucideIcon("target", __iconNode$4);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
@@ -77867,12 +78108,10 @@ const RefreshCw = createLucideIcon("refresh-cw", __iconNode$4);
  * See the LICENSE file in the root directory of this source tree.
  */
 const __iconNode$3 = [
-  ["polyline", { points: "14.5 17.5 3 6 3 3 6 3 17.5 14.5", key: "1hfsw2" }],
-  ["line", { x1: "13", x2: "19", y1: "19", y2: "13", key: "1vrmhu" }],
-  ["line", { x1: "16", x2: "20", y1: "16", y2: "20", key: "1bron3" }],
-  ["line", { x1: "19", x2: "21", y1: "21", y2: "19", key: "13pww6" }]
+  ["path", { d: "M16 7h6v6", key: "box55l" }],
+  ["path", { d: "m22 7-8.5 8.5-5-5L2 17", key: "1t1m79" }]
 ];
-const Sword = createLucideIcon("sword", __iconNode$3);
+const TrendingUp = createLucideIcon("trending-up", __iconNode$3);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
@@ -85758,10 +85997,10 @@ const CombatEvent = Record({
   "attacker": Principal2,
   "intercepted": Bool,
   "interceptorType": Opt(Text),
-  "toPlot": Nat,
+  "toPlot": Text,
   "atkPower": Nat,
   "timestamp": Int,
-  "fromPlot": Nat,
+  "fromPlot": Text,
   "success": Bool,
   "missileType": Opt(Text),
   "defPower": Nat
@@ -85792,7 +86031,7 @@ const ResourceType = Variant({
 });
 const PlotProductionRate = Record({
   "totalPerDay": Float64,
-  "plotId": Nat,
+  "plotId": Text,
   "tierBonus": Float64,
   "baseFRNTRPerDay": Float64,
   "generatorTier": Nat,
@@ -85811,12 +86050,41 @@ const SubParcelInfo = Record({
   "cooldownSecondsRemaining": Nat
 });
 const SubParcel = Record({
-  "subParcelId": Nat,
+  "subParcelId": Text,
   "cooldownEnds": Int,
-  "plotId": Nat,
+  "plotId": Text,
   "building": Opt(Text),
   "slotIndex": Nat,
   "specialization": Text
+});
+const Biome = Variant({
+  "Tropical": Null,
+  "AsteroidImpact": Null,
+  "DeepOcean": Null,
+  "Desert": Null,
+  "Volcanic": Null,
+  "Temperate": Null,
+  "Ocean": Null,
+  "Arctic": Null
+});
+const SurveyResult = Record({
+  "resourcePercentage": Nat,
+  "bonusInfo": Opt(Text),
+  "biome": Biome
+});
+const SurveyStatus = Variant({
+  "Locked": Null,
+  "InProgress": Null,
+  "Completed": Null
+});
+const PlotId = Text;
+const SurveyView = Record({
+  "startTime": Int,
+  "status": SurveyStatus,
+  "result": Opt(SurveyResult),
+  "unlockCost": Nat,
+  "secondsRemaining": Nat,
+  "plotId": PlotId
 });
 const Tokenomics = Record({
   "burnRate": Nat,
@@ -85827,7 +86095,6 @@ const Tokenomics = Record({
   "maxSupply": Nat,
   "remainingMineable": Nat
 });
-const PlotId = Nat;
 const MineResult = Record({
   "efficiency": Float64,
   "plotId": PlotId,
@@ -85881,16 +86148,22 @@ const UpgradeError = Variant({
   "InsufficientFRNTR": Null
 });
 Service({
-  "assignInterceptor": Func([Nat, Text], [], []),
-  "getAdjacentPlots": Func([Nat], [Vec(Nat)], ["query"]),
+  "assignInterceptor": Func([Text, Text], [], []),
+  "claimAccumulatedTokens": Func(
+    [],
+    [Variant({ "ok": Nat, "err": Text })],
+    []
+  ),
+  "getAdjacentPlots": Func([Text], [Vec(Text)], ["query"]),
   "getAdminPrincipal": Func([], [Text], ["query"]),
   "getAllPlotOwners": Func(
     [],
-    [Vec(Tuple(Nat, Text))],
+    [Vec(Tuple(Text, Text))],
     ["query"]
   ),
+  "getApprovedLiquidityCanister": Func([], [Opt(Text)], ["query"]),
   "getAssignedInterceptor": Func(
-    [Nat],
+    [Text],
     [Opt(Text)],
     ["query"]
   ),
@@ -85905,7 +86178,7 @@ Service({
     [FaucetClaimSummary],
     ["query"]
   ),
-  "getFirstAvailablePlot": Func([], [Opt(Nat)], ["query"]),
+  "getFirstAvailablePlot": Func([], [Opt(Text)], ["query"]),
   "getFrntrLedger": Func([], [Text], ["query"]),
   "getGameCanisterPrincipal": Func([], [Text], ["query"]),
   "getGameStats": Func(
@@ -85923,9 +86196,24 @@ Service({
     ],
     ["query"]
   ),
+  "getGeneratorTierCatalog": Func(
+    [],
+    [
+      Vec(
+        Record({
+          "cost": Nat,
+          "tierIndex": Nat,
+          "bonusPerDay": Float64
+        })
+      )
+    ],
+    ["query"]
+  ),
   "getGlobalStats": Func([], [GlobalStats], ["query"]),
+  "getIcpBalance": Func([Principal2], [Nat], []),
   "getIcpUsdPrice": Func([], [Float64], []),
   "getIcpUsdPriceCached": Func([], [Float64], ["query"]),
+  "getIsAdmin": Func([], [Bool], ["query"]),
   "getLeaderboard": Func(
     [Nat],
     [
@@ -85955,7 +86243,12 @@ Service({
     ],
     ["query"]
   ),
-  "getPassiveIncome": Func([Nat], [Float64], ["query"]),
+  "getLivePlotOwners": Func(
+    [],
+    [Vec(Tuple(Text, Text))],
+    ["query"]
+  ),
+  "getPassiveIncome": Func([Text], [Float64], ["query"]),
   "getPlayerState": Func(
     [],
     [
@@ -85964,9 +86257,11 @@ Service({
         "username": Opt(Text),
         "fuel": Nat,
         "iron": Nat,
+        "icpBalance": Nat,
         "frntBalance": Nat,
         "totalFRNTRBurned": Float64,
         "plotsOwned": Nat,
+        "plotIds": Vec(Text),
         "lastFaucetTime": Opt(Int),
         "crystal": Nat,
         "ownedPlots": Vec(Text),
@@ -85985,9 +86280,11 @@ Service({
         "username": Opt(Text),
         "fuel": Nat,
         "iron": Nat,
+        "icpBalance": Nat,
         "frntBalance": Nat,
         "totalFRNTRBurned": Float64,
         "plotsOwned": Nat,
+        "plotIds": Vec(Text),
         "lastFaucetTime": Opt(Int),
         "crystal": Nat,
         "ownedPlots": Vec(Text),
@@ -85996,24 +86293,35 @@ Service({
         "passiveIncomePerDay": Float64
       })
     ],
-    ["query"]
+    []
   ),
   "getPlotCount": Func([], [Nat], ["query"]),
   "getPlotPrice": Func([Text], [Nat], ["query"]),
-  "getPlotPriceById": Func([Nat], [Nat], ["query"]),
+  "getPlotPriceById": Func([Text], [Nat], ["query"]),
   "getPlotProductionRate": Func(
-    [Nat],
+    [Text],
     [PlotProductionRate],
     ["query"]
   ),
-  "getPlotsByOwner": Func([Principal2], [Vec(Nat)], ["query"]),
+  "getPlotsByOwner": Func([Principal2], [Vec(Text)], ["query"]),
   "getPrincipal": Func([], [PrincipalDisplay], ["query"]),
   "getSubParcelStatus": Func(
-    [Nat],
+    [Text],
     [Vec(SubParcelInfo)],
     ["query"]
   ),
-  "getSubParcels": Func([Nat], [Vec(SubParcel)], ["query"]),
+  "getSubParcels": Func([Text], [Vec(SubParcel)], ["query"]),
+  "getSurveyCost": Func([Text], [Nat], ["query"]),
+  "getSurveyResult": Func(
+    [Text],
+    [Variant({ "ok": SurveyResult, "err": Text })],
+    []
+  ),
+  "getSurveyStatus": Func(
+    [Text],
+    [Variant({ "ok": SurveyView, "err": Text })],
+    []
+  ),
   "getTokenomics": Func([], [Tokenomics], ["query"]),
   "getTreasuryBalances": Func(
     [],
@@ -86041,25 +86349,25 @@ Service({
   "initPlots": Func(
     [
       Vec(
-        Tuple(Nat, Text, Float64, Float64, Nat)
+        Tuple(Text, Text, Float64, Float64, Nat)
       )
     ],
     [],
     []
   ),
-  "isSubParcelLocked": Func([Nat], [Bool], ["query"]),
+  "isSubParcelLocked": Func([Text], [Bool], ["query"]),
   "launchMissile": Func(
-    [Nat, Nat, Text],
+    [Text, Text, Text],
     [Variant({ "ok": Text, "err": Text })],
     []
   ),
   "mineResources": Func(
-    [Nat],
+    [Text],
     [Variant({ "ok": MineResult, "err": Text })],
     []
   ),
   "purchasePlot": Func(
-    [Nat],
+    [Text],
     [Variant({ "ok": Text, "err": Text })],
     []
   ),
@@ -86080,6 +86388,11 @@ Service({
     [Variant({ "ok": Null, "err": Text })],
     []
   ),
+  "startSurvey": Func(
+    [Text],
+    [Variant({ "ok": SurveyView, "err": Text })],
+    []
+  ),
   "stressBuyPlots": Func([Nat], [StressTestResult], []),
   "stressMintPlots": Func([Nat], [StressTestResult], []),
   "stressUpgradePlots": Func([Nat], [StressTestResult], []),
@@ -86091,7 +86404,7 @@ Service({
   "testFaucetV2": Func([], [FaucetResult], []),
   "updateAdminPrincipalAuth": Func([Text], [], []),
   "upgradeGenerator": Func(
-    [Nat],
+    [Text],
     [Variant({ "ok": PlotUpgradesView, "err": UpgradeError })],
     []
   ),
@@ -86106,10 +86419,10 @@ const idlFactory = ({ IDL: IDL2 }) => {
     "attacker": IDL2.Principal,
     "intercepted": IDL2.Bool,
     "interceptorType": IDL2.Opt(IDL2.Text),
-    "toPlot": IDL2.Nat,
+    "toPlot": IDL2.Text,
     "atkPower": IDL2.Nat,
     "timestamp": IDL2.Int,
-    "fromPlot": IDL2.Nat,
+    "fromPlot": IDL2.Text,
     "success": IDL2.Bool,
     "missileType": IDL2.Opt(IDL2.Text),
     "defPower": IDL2.Nat
@@ -86140,7 +86453,7 @@ const idlFactory = ({ IDL: IDL2 }) => {
   });
   const PlotProductionRate2 = IDL2.Record({
     "totalPerDay": IDL2.Float64,
-    "plotId": IDL2.Nat,
+    "plotId": IDL2.Text,
     "tierBonus": IDL2.Float64,
     "baseFRNTRPerDay": IDL2.Float64,
     "generatorTier": IDL2.Nat,
@@ -86159,12 +86472,41 @@ const idlFactory = ({ IDL: IDL2 }) => {
     "cooldownSecondsRemaining": IDL2.Nat
   });
   const SubParcel2 = IDL2.Record({
-    "subParcelId": IDL2.Nat,
+    "subParcelId": IDL2.Text,
     "cooldownEnds": IDL2.Int,
-    "plotId": IDL2.Nat,
+    "plotId": IDL2.Text,
     "building": IDL2.Opt(IDL2.Text),
     "slotIndex": IDL2.Nat,
     "specialization": IDL2.Text
+  });
+  const Biome2 = IDL2.Variant({
+    "Tropical": IDL2.Null,
+    "AsteroidImpact": IDL2.Null,
+    "DeepOcean": IDL2.Null,
+    "Desert": IDL2.Null,
+    "Volcanic": IDL2.Null,
+    "Temperate": IDL2.Null,
+    "Ocean": IDL2.Null,
+    "Arctic": IDL2.Null
+  });
+  const SurveyResult2 = IDL2.Record({
+    "resourcePercentage": IDL2.Nat,
+    "bonusInfo": IDL2.Opt(IDL2.Text),
+    "biome": Biome2
+  });
+  const SurveyStatus2 = IDL2.Variant({
+    "Locked": IDL2.Null,
+    "InProgress": IDL2.Null,
+    "Completed": IDL2.Null
+  });
+  const PlotId2 = IDL2.Text;
+  const SurveyView2 = IDL2.Record({
+    "startTime": IDL2.Int,
+    "status": SurveyStatus2,
+    "result": IDL2.Opt(SurveyResult2),
+    "unlockCost": IDL2.Nat,
+    "secondsRemaining": IDL2.Nat,
+    "plotId": PlotId2
   });
   const Tokenomics2 = IDL2.Record({
     "burnRate": IDL2.Nat,
@@ -86175,7 +86517,6 @@ const idlFactory = ({ IDL: IDL2 }) => {
     "maxSupply": IDL2.Nat,
     "remainingMineable": IDL2.Nat
   });
-  const PlotId2 = IDL2.Nat;
   const MineResult2 = IDL2.Record({
     "efficiency": IDL2.Float64,
     "plotId": PlotId2,
@@ -86226,16 +86567,26 @@ const idlFactory = ({ IDL: IDL2 }) => {
     "InsufficientFRNTR": IDL2.Null
   });
   return IDL2.Service({
-    "assignInterceptor": IDL2.Func([IDL2.Nat, IDL2.Text], [], []),
-    "getAdjacentPlots": IDL2.Func([IDL2.Nat], [IDL2.Vec(IDL2.Nat)], ["query"]),
+    "assignInterceptor": IDL2.Func([IDL2.Text, IDL2.Text], [], []),
+    "claimAccumulatedTokens": IDL2.Func(
+      [],
+      [IDL2.Variant({ "ok": IDL2.Nat, "err": IDL2.Text })],
+      []
+    ),
+    "getAdjacentPlots": IDL2.Func([IDL2.Text], [IDL2.Vec(IDL2.Text)], ["query"]),
     "getAdminPrincipal": IDL2.Func([], [IDL2.Text], ["query"]),
     "getAllPlotOwners": IDL2.Func(
       [],
-      [IDL2.Vec(IDL2.Tuple(IDL2.Nat, IDL2.Text))],
+      [IDL2.Vec(IDL2.Tuple(IDL2.Text, IDL2.Text))],
+      ["query"]
+    ),
+    "getApprovedLiquidityCanister": IDL2.Func(
+      [],
+      [IDL2.Opt(IDL2.Text)],
       ["query"]
     ),
     "getAssignedInterceptor": IDL2.Func(
-      [IDL2.Nat],
+      [IDL2.Text],
       [IDL2.Opt(IDL2.Text)],
       ["query"]
     ),
@@ -86250,7 +86601,7 @@ const idlFactory = ({ IDL: IDL2 }) => {
       [FaucetClaimSummary2],
       ["query"]
     ),
-    "getFirstAvailablePlot": IDL2.Func([], [IDL2.Opt(IDL2.Nat)], ["query"]),
+    "getFirstAvailablePlot": IDL2.Func([], [IDL2.Opt(IDL2.Text)], ["query"]),
     "getFrntrLedger": IDL2.Func([], [IDL2.Text], ["query"]),
     "getGameCanisterPrincipal": IDL2.Func([], [IDL2.Text], ["query"]),
     "getGameStats": IDL2.Func(
@@ -86268,9 +86619,24 @@ const idlFactory = ({ IDL: IDL2 }) => {
       ],
       ["query"]
     ),
+    "getGeneratorTierCatalog": IDL2.Func(
+      [],
+      [
+        IDL2.Vec(
+          IDL2.Record({
+            "cost": IDL2.Nat,
+            "tierIndex": IDL2.Nat,
+            "bonusPerDay": IDL2.Float64
+          })
+        )
+      ],
+      ["query"]
+    ),
     "getGlobalStats": IDL2.Func([], [GlobalStats2], ["query"]),
+    "getIcpBalance": IDL2.Func([IDL2.Principal], [IDL2.Nat], []),
     "getIcpUsdPrice": IDL2.Func([], [IDL2.Float64], []),
     "getIcpUsdPriceCached": IDL2.Func([], [IDL2.Float64], ["query"]),
+    "getIsAdmin": IDL2.Func([], [IDL2.Bool], ["query"]),
     "getLeaderboard": IDL2.Func(
       [IDL2.Nat],
       [
@@ -86300,7 +86666,12 @@ const idlFactory = ({ IDL: IDL2 }) => {
       ],
       ["query"]
     ),
-    "getPassiveIncome": IDL2.Func([IDL2.Nat], [IDL2.Float64], ["query"]),
+    "getLivePlotOwners": IDL2.Func(
+      [],
+      [IDL2.Vec(IDL2.Tuple(IDL2.Text, IDL2.Text))],
+      ["query"]
+    ),
+    "getPassiveIncome": IDL2.Func([IDL2.Text], [IDL2.Float64], ["query"]),
     "getPlayerState": IDL2.Func(
       [],
       [
@@ -86309,9 +86680,11 @@ const idlFactory = ({ IDL: IDL2 }) => {
           "username": IDL2.Opt(IDL2.Text),
           "fuel": IDL2.Nat,
           "iron": IDL2.Nat,
+          "icpBalance": IDL2.Nat,
           "frntBalance": IDL2.Nat,
           "totalFRNTRBurned": IDL2.Float64,
           "plotsOwned": IDL2.Nat,
+          "plotIds": IDL2.Vec(IDL2.Text),
           "lastFaucetTime": IDL2.Opt(IDL2.Int),
           "crystal": IDL2.Nat,
           "ownedPlots": IDL2.Vec(IDL2.Text),
@@ -86330,9 +86703,11 @@ const idlFactory = ({ IDL: IDL2 }) => {
           "username": IDL2.Opt(IDL2.Text),
           "fuel": IDL2.Nat,
           "iron": IDL2.Nat,
+          "icpBalance": IDL2.Nat,
           "frntBalance": IDL2.Nat,
           "totalFRNTRBurned": IDL2.Float64,
           "plotsOwned": IDL2.Nat,
+          "plotIds": IDL2.Vec(IDL2.Text),
           "lastFaucetTime": IDL2.Opt(IDL2.Int),
           "crystal": IDL2.Nat,
           "ownedPlots": IDL2.Vec(IDL2.Text),
@@ -86341,28 +86716,39 @@ const idlFactory = ({ IDL: IDL2 }) => {
           "passiveIncomePerDay": IDL2.Float64
         })
       ],
-      ["query"]
+      []
     ),
     "getPlotCount": IDL2.Func([], [IDL2.Nat], ["query"]),
     "getPlotPrice": IDL2.Func([IDL2.Text], [IDL2.Nat], ["query"]),
-    "getPlotPriceById": IDL2.Func([IDL2.Nat], [IDL2.Nat], ["query"]),
+    "getPlotPriceById": IDL2.Func([IDL2.Text], [IDL2.Nat], ["query"]),
     "getPlotProductionRate": IDL2.Func(
-      [IDL2.Nat],
+      [IDL2.Text],
       [PlotProductionRate2],
       ["query"]
     ),
     "getPlotsByOwner": IDL2.Func(
       [IDL2.Principal],
-      [IDL2.Vec(IDL2.Nat)],
+      [IDL2.Vec(IDL2.Text)],
       ["query"]
     ),
     "getPrincipal": IDL2.Func([], [PrincipalDisplay2], ["query"]),
     "getSubParcelStatus": IDL2.Func(
-      [IDL2.Nat],
+      [IDL2.Text],
       [IDL2.Vec(SubParcelInfo2)],
       ["query"]
     ),
-    "getSubParcels": IDL2.Func([IDL2.Nat], [IDL2.Vec(SubParcel2)], ["query"]),
+    "getSubParcels": IDL2.Func([IDL2.Text], [IDL2.Vec(SubParcel2)], ["query"]),
+    "getSurveyCost": IDL2.Func([IDL2.Text], [IDL2.Nat], ["query"]),
+    "getSurveyResult": IDL2.Func(
+      [IDL2.Text],
+      [IDL2.Variant({ "ok": SurveyResult2, "err": IDL2.Text })],
+      []
+    ),
+    "getSurveyStatus": IDL2.Func(
+      [IDL2.Text],
+      [IDL2.Variant({ "ok": SurveyView2, "err": IDL2.Text })],
+      []
+    ),
     "getTokenomics": IDL2.Func([], [Tokenomics2], ["query"]),
     "getTreasuryBalances": IDL2.Func(
       [],
@@ -86390,25 +86776,25 @@ const idlFactory = ({ IDL: IDL2 }) => {
     "initPlots": IDL2.Func(
       [
         IDL2.Vec(
-          IDL2.Tuple(IDL2.Nat, IDL2.Text, IDL2.Float64, IDL2.Float64, IDL2.Nat)
+          IDL2.Tuple(IDL2.Text, IDL2.Text, IDL2.Float64, IDL2.Float64, IDL2.Nat)
         )
       ],
       [],
       []
     ),
-    "isSubParcelLocked": IDL2.Func([IDL2.Nat], [IDL2.Bool], ["query"]),
+    "isSubParcelLocked": IDL2.Func([IDL2.Text], [IDL2.Bool], ["query"]),
     "launchMissile": IDL2.Func(
-      [IDL2.Nat, IDL2.Nat, IDL2.Text],
+      [IDL2.Text, IDL2.Text, IDL2.Text],
       [IDL2.Variant({ "ok": IDL2.Text, "err": IDL2.Text })],
       []
     ),
     "mineResources": IDL2.Func(
-      [IDL2.Nat],
+      [IDL2.Text],
       [IDL2.Variant({ "ok": MineResult2, "err": IDL2.Text })],
       []
     ),
     "purchasePlot": IDL2.Func(
-      [IDL2.Nat],
+      [IDL2.Text],
       [IDL2.Variant({ "ok": IDL2.Text, "err": IDL2.Text })],
       []
     ),
@@ -86429,6 +86815,11 @@ const idlFactory = ({ IDL: IDL2 }) => {
       [IDL2.Variant({ "ok": IDL2.Null, "err": IDL2.Text })],
       []
     ),
+    "startSurvey": IDL2.Func(
+      [IDL2.Text],
+      [IDL2.Variant({ "ok": SurveyView2, "err": IDL2.Text })],
+      []
+    ),
     "stressBuyPlots": IDL2.Func([IDL2.Nat], [StressTestResult2], []),
     "stressMintPlots": IDL2.Func([IDL2.Nat], [StressTestResult2], []),
     "stressUpgradePlots": IDL2.Func([IDL2.Nat], [StressTestResult2], []),
@@ -86440,7 +86831,7 @@ const idlFactory = ({ IDL: IDL2 }) => {
     "testFaucetV2": IDL2.Func([], [FaucetResult2], []),
     "updateAdminPrincipalAuth": IDL2.Func([IDL2.Text], [], []),
     "upgradeGenerator": IDL2.Func(
-      [IDL2.Nat],
+      [IDL2.Text],
       [IDL2.Variant({ "ok": PlotUpgradesView2, "err": UpgradeError2 })],
       []
     ),
@@ -86473,6 +86864,20 @@ class Backend {
     } else {
       const result = await this.actor.assignInterceptor(arg0, arg1);
       return result;
+    }
+  }
+  async claimAccumulatedTokens() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.claimAccumulatedTokens();
+        return from_candid_variant_n1(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.claimAccumulatedTokens();
+      return from_candid_variant_n1(this._uploadFile, this._downloadFile, result);
     }
   }
   async getAdjacentPlots(arg0) {
@@ -86517,32 +86922,46 @@ class Backend {
       return result;
     }
   }
+  async getApprovedLiquidityCanister() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getApprovedLiquidityCanister();
+        return from_candid_opt_n2(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getApprovedLiquidityCanister();
+      return from_candid_opt_n2(this._uploadFile, this._downloadFile, result);
+    }
+  }
   async getAssignedInterceptor(arg0) {
     if (this.processError) {
       try {
         const result = await this.actor.getAssignedInterceptor(arg0);
-        return from_candid_opt_n1(this._uploadFile, this._downloadFile, result);
+        return from_candid_opt_n2(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.getAssignedInterceptor(arg0);
-      return from_candid_opt_n1(this._uploadFile, this._downloadFile, result);
+      return from_candid_opt_n2(this._uploadFile, this._downloadFile, result);
     }
   }
   async getCombatLog(arg0) {
     if (this.processError) {
       try {
         const result = await this.actor.getCombatLog(arg0);
-        return from_candid_vec_n2(this._uploadFile, this._downloadFile, result);
+        return from_candid_vec_n3(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.getCombatLog(arg0);
-      return from_candid_vec_n2(this._uploadFile, this._downloadFile, result);
+      return from_candid_vec_n3(this._uploadFile, this._downloadFile, result);
     }
   }
   async getCoreGeneratorTiers() {
@@ -86563,28 +86982,28 @@ class Backend {
     if (this.processError) {
       try {
         const result = await this.actor.getFaucetClaims(arg0);
-        return from_candid_FaucetClaimSummary_n5(this._uploadFile, this._downloadFile, result);
+        return from_candid_FaucetClaimSummary_n6(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.getFaucetClaims(arg0);
-      return from_candid_FaucetClaimSummary_n5(this._uploadFile, this._downloadFile, result);
+      return from_candid_FaucetClaimSummary_n6(this._uploadFile, this._downloadFile, result);
     }
   }
   async getFirstAvailablePlot() {
     if (this.processError) {
       try {
         const result = await this.actor.getFirstAvailablePlot();
-        return from_candid_opt_n8(this._uploadFile, this._downloadFile, result);
+        return from_candid_opt_n2(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.getFirstAvailablePlot();
-      return from_candid_opt_n8(this._uploadFile, this._downloadFile, result);
+      return from_candid_opt_n2(this._uploadFile, this._downloadFile, result);
     }
   }
   async getFrntrLedger() {
@@ -86629,6 +87048,20 @@ class Backend {
       return result;
     }
   }
+  async getGeneratorTierCatalog() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getGeneratorTierCatalog();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getGeneratorTierCatalog();
+      return result;
+    }
+  }
   async getGlobalStats() {
     if (this.processError) {
       try {
@@ -86640,6 +87073,20 @@ class Backend {
       }
     } else {
       const result = await this.actor.getGlobalStats();
+      return result;
+    }
+  }
+  async getIcpBalance(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getIcpBalance(arg0);
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getIcpBalance(arg0);
       return result;
     }
   }
@@ -86671,6 +87118,20 @@ class Backend {
       return result;
     }
   }
+  async getIsAdmin() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getIsAdmin();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getIsAdmin();
+      return result;
+    }
+  }
   async getLeaderboard(arg0) {
     if (this.processError) {
       try {
@@ -86696,6 +87157,20 @@ class Backend {
       }
     } else {
       const result = await this.actor.getLeaderboardStats();
+      return result;
+    }
+  }
+  async getLivePlotOwners() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getLivePlotOwners();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getLivePlotOwners();
       return result;
     }
   }
@@ -86853,6 +87328,48 @@ class Backend {
       return from_candid_vec_n16(this._uploadFile, this._downloadFile, result);
     }
   }
+  async getSurveyCost(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getSurveyCost(arg0);
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getSurveyCost(arg0);
+      return result;
+    }
+  }
+  async getSurveyResult(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getSurveyResult(arg0);
+        return from_candid_variant_n19(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getSurveyResult(arg0);
+      return from_candid_variant_n19(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async getSurveyStatus(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getSurveyStatus(arg0);
+        return from_candid_variant_n24(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getSurveyStatus(arg0);
+      return from_candid_variant_n24(this._uploadFile, this._downloadFile, result);
+    }
+  }
   async getTokenomics() {
     if (this.processError) {
       try {
@@ -86941,42 +87458,42 @@ class Backend {
     if (this.processError) {
       try {
         const result = await this.actor.launchMissile(arg0, arg1, arg2);
-        return from_candid_variant_n19(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n30(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.launchMissile(arg0, arg1, arg2);
-      return from_candid_variant_n19(this._uploadFile, this._downloadFile, result);
+      return from_candid_variant_n30(this._uploadFile, this._downloadFile, result);
     }
   }
   async mineResources(arg0) {
     if (this.processError) {
       try {
         const result = await this.actor.mineResources(arg0);
-        return from_candid_variant_n20(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n31(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.mineResources(arg0);
-      return from_candid_variant_n20(this._uploadFile, this._downloadFile, result);
+      return from_candid_variant_n31(this._uploadFile, this._downloadFile, result);
     }
   }
   async purchasePlot(arg0) {
     if (this.processError) {
       try {
         const result = await this.actor.purchasePlot(arg0);
-        return from_candid_variant_n19(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n30(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.purchasePlot(arg0);
-      return from_candid_variant_n19(this._uploadFile, this._downloadFile, result);
+      return from_candid_variant_n30(this._uploadFile, this._downloadFile, result);
     }
   }
   async resetAllData() {
@@ -86997,14 +87514,14 @@ class Backend {
     if (this.processError) {
       try {
         const result = await this.actor.resetTestState();
-        return from_candid_ResetResult_n23(this._uploadFile, this._downloadFile, result);
+        return from_candid_ResetResult_n34(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.resetTestState();
-      return from_candid_ResetResult_n23(this._uploadFile, this._downloadFile, result);
+      return from_candid_ResetResult_n34(this._uploadFile, this._downloadFile, result);
     }
   }
   async setAdminPrincipal(arg0) {
@@ -87025,14 +87542,14 @@ class Backend {
     if (this.processError) {
       try {
         const result = await this.actor.setApprovedLiquidityCanister(arg0);
-        return from_candid_variant_n24(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n35(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.setApprovedLiquidityCanister(arg0);
-      return from_candid_variant_n24(this._uploadFile, this._downloadFile, result);
+      return from_candid_variant_n35(this._uploadFile, this._downloadFile, result);
     }
   }
   async setFrntrLedger(arg0) {
@@ -87095,13 +87612,27 @@ class Backend {
     if (this.processError) {
       try {
         const result = await this.actor.setUsername(arg0);
-        return from_candid_variant_n24(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n35(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.setUsername(arg0);
+      return from_candid_variant_n35(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async startSurvey(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.startSurvey(arg0);
+        return from_candid_variant_n24(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.startSurvey(arg0);
       return from_candid_variant_n24(this._uploadFile, this._downloadFile, result);
     }
   }
@@ -87109,70 +87640,70 @@ class Backend {
     if (this.processError) {
       try {
         const result = await this.actor.stressBuyPlots(arg0);
-        return from_candid_StressTestResult_n25(this._uploadFile, this._downloadFile, result);
+        return from_candid_StressTestResult_n36(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.stressBuyPlots(arg0);
-      return from_candid_StressTestResult_n25(this._uploadFile, this._downloadFile, result);
+      return from_candid_StressTestResult_n36(this._uploadFile, this._downloadFile, result);
     }
   }
   async stressMintPlots(arg0) {
     if (this.processError) {
       try {
         const result = await this.actor.stressMintPlots(arg0);
-        return from_candid_StressTestResult_n25(this._uploadFile, this._downloadFile, result);
+        return from_candid_StressTestResult_n36(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.stressMintPlots(arg0);
-      return from_candid_StressTestResult_n25(this._uploadFile, this._downloadFile, result);
+      return from_candid_StressTestResult_n36(this._uploadFile, this._downloadFile, result);
     }
   }
   async stressUpgradePlots(arg0) {
     if (this.processError) {
       try {
         const result = await this.actor.stressUpgradePlots(arg0);
-        return from_candid_StressTestResult_n25(this._uploadFile, this._downloadFile, result);
+        return from_candid_StressTestResult_n36(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.stressUpgradePlots(arg0);
-      return from_candid_StressTestResult_n25(this._uploadFile, this._downloadFile, result);
+      return from_candid_StressTestResult_n36(this._uploadFile, this._downloadFile, result);
     }
   }
   async testFaucet() {
     if (this.processError) {
       try {
         const result = await this.actor.testFaucet();
-        return from_candid_variant_n19(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n30(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.testFaucet();
-      return from_candid_variant_n19(this._uploadFile, this._downloadFile, result);
+      return from_candid_variant_n30(this._uploadFile, this._downloadFile, result);
     }
   }
   async testFaucetV2() {
     if (this.processError) {
       try {
         const result = await this.actor.testFaucetV2();
-        return from_candid_FaucetResult_n30(this._uploadFile, this._downloadFile, result);
+        return from_candid_FaucetResult_n41(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.testFaucetV2();
-      return from_candid_FaucetResult_n30(this._uploadFile, this._downloadFile, result);
+      return from_candid_FaucetResult_n41(this._uploadFile, this._downloadFile, result);
     }
   }
   async updateAdminPrincipalAuth(arg0) {
@@ -87193,74 +87724,89 @@ class Backend {
     if (this.processError) {
       try {
         const result = await this.actor.upgradeGenerator(arg0);
-        return from_candid_variant_n32(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n43(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.upgradeGenerator(arg0);
-      return from_candid_variant_n32(this._uploadFile, this._downloadFile, result);
+      return from_candid_variant_n43(this._uploadFile, this._downloadFile, result);
     }
   }
   async withdrawLiquidityPot(arg0, arg1) {
     if (this.processError) {
       try {
         const result = await this.actor.withdrawLiquidityPot(arg0, arg1);
-        return from_candid_variant_n24(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n35(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.withdrawLiquidityPot(arg0, arg1);
-      return from_candid_variant_n24(this._uploadFile, this._downloadFile, result);
+      return from_candid_variant_n35(this._uploadFile, this._downloadFile, result);
     }
   }
 }
-function from_candid_CombatEvent_n3(_uploadFile, _downloadFile, value) {
-  return from_candid_record_n4(_uploadFile, _downloadFile, value);
+function from_candid_Biome_n22(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n23(_uploadFile, _downloadFile, value);
 }
-function from_candid_FaucetClaimSummary_n5(_uploadFile, _downloadFile, value) {
-  return from_candid_record_n6(_uploadFile, _downloadFile, value);
+function from_candid_CombatEvent_n4(_uploadFile, _downloadFile, value) {
+  return from_candid_record_n5(_uploadFile, _downloadFile, value);
 }
-function from_candid_FaucetResult_n30(_uploadFile, _downloadFile, value) {
-  return from_candid_variant_n31(_uploadFile, _downloadFile, value);
+function from_candid_FaucetClaimSummary_n6(_uploadFile, _downloadFile, value) {
+  return from_candid_record_n7(_uploadFile, _downloadFile, value);
 }
-function from_candid_GeneratorTier_n36(_uploadFile, _downloadFile, value) {
-  return from_candid_variant_n37(_uploadFile, _downloadFile, value);
+function from_candid_FaucetResult_n41(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n42(_uploadFile, _downloadFile, value);
 }
-function from_candid_MineResult_n21(_uploadFile, _downloadFile, value) {
-  return from_candid_record_n22(_uploadFile, _downloadFile, value);
+function from_candid_GeneratorTier_n48(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n49(_uploadFile, _downloadFile, value);
 }
-function from_candid_PlotUpgradesView_n33(_uploadFile, _downloadFile, value) {
-  return from_candid_record_n34(_uploadFile, _downloadFile, value);
+function from_candid_MineResult_n32(_uploadFile, _downloadFile, value) {
+  return from_candid_record_n33(_uploadFile, _downloadFile, value);
 }
-function from_candid_ResetResult_n23(_uploadFile, _downloadFile, value) {
-  return from_candid_variant_n19(_uploadFile, _downloadFile, value);
+function from_candid_PlotUpgradesView_n44(_uploadFile, _downloadFile, value) {
+  return from_candid_record_n45(_uploadFile, _downloadFile, value);
+}
+function from_candid_ResetResult_n34(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n30(_uploadFile, _downloadFile, value);
 }
 function from_candid_ResourceType_n14(_uploadFile, _downloadFile, value) {
   return from_candid_variant_n15(_uploadFile, _downloadFile, value);
 }
-function from_candid_StressActionResult_n28(_uploadFile, _downloadFile, value) {
-  return from_candid_record_n29(_uploadFile, _downloadFile, value);
+function from_candid_StressActionResult_n39(_uploadFile, _downloadFile, value) {
+  return from_candid_record_n40(_uploadFile, _downloadFile, value);
 }
-function from_candid_StressTestResult_n25(_uploadFile, _downloadFile, value) {
-  return from_candid_variant_n26(_uploadFile, _downloadFile, value);
+function from_candid_StressTestResult_n36(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n37(_uploadFile, _downloadFile, value);
 }
 function from_candid_SubParcel_n17(_uploadFile, _downloadFile, value) {
   return from_candid_record_n18(_uploadFile, _downloadFile, value);
 }
-function from_candid_UpgradeError_n38(_uploadFile, _downloadFile, value) {
-  return from_candid_variant_n39(_uploadFile, _downloadFile, value);
+function from_candid_SurveyResult_n20(_uploadFile, _downloadFile, value) {
+  return from_candid_record_n21(_uploadFile, _downloadFile, value);
 }
-function from_candid_opt_n1(_uploadFile, _downloadFile, value) {
+function from_candid_SurveyStatus_n27(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n28(_uploadFile, _downloadFile, value);
+}
+function from_candid_SurveyView_n25(_uploadFile, _downloadFile, value) {
+  return from_candid_record_n26(_uploadFile, _downloadFile, value);
+}
+function from_candid_UpgradeError_n50(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n51(_uploadFile, _downloadFile, value);
+}
+function from_candid_opt_n2(_uploadFile, _downloadFile, value) {
   return value.length === 0 ? null : value[0];
 }
-function from_candid_opt_n35(_uploadFile, _downloadFile, value) {
+function from_candid_opt_n29(_uploadFile, _downloadFile, value) {
+  return value.length === 0 ? null : from_candid_SurveyResult_n20(_uploadFile, _downloadFile, value[0]);
+}
+function from_candid_opt_n46(_uploadFile, _downloadFile, value) {
   return value.length === 0 ? null : value[0];
 }
-function from_candid_opt_n7(_uploadFile, _downloadFile, value) {
+function from_candid_opt_n47(_uploadFile, _downloadFile, value) {
   return value.length === 0 ? null : value[0];
 }
 function from_candid_opt_n8(_uploadFile, _downloadFile, value) {
@@ -87269,7 +87815,7 @@ function from_candid_opt_n8(_uploadFile, _downloadFile, value) {
 function from_candid_record_n10(_uploadFile, _downloadFile, value) {
   return {
     principal: value.principal,
-    username: record_opt_to_undefined(from_candid_opt_n1(_uploadFile, _downloadFile, value.username)),
+    username: record_opt_to_undefined(from_candid_opt_n2(_uploadFile, _downloadFile, value.username)),
     rank: value.rank,
     frntBalance: value.frntBalance,
     plotsOwned: value.plotsOwned
@@ -87278,13 +87824,15 @@ function from_candid_record_n10(_uploadFile, _downloadFile, value) {
 function from_candid_record_n11(_uploadFile, _downloadFile, value) {
   return {
     resourceBalances: from_candid_vec_n12(_uploadFile, _downloadFile, value.resourceBalances),
-    username: record_opt_to_undefined(from_candid_opt_n1(_uploadFile, _downloadFile, value.username)),
+    username: record_opt_to_undefined(from_candid_opt_n2(_uploadFile, _downloadFile, value.username)),
     fuel: value.fuel,
     iron: value.iron,
+    icpBalance: value.icpBalance,
     frntBalance: value.frntBalance,
     totalFRNTRBurned: value.totalFRNTRBurned,
     plotsOwned: value.plotsOwned,
-    lastFaucetTime: record_opt_to_undefined(from_candid_opt_n7(_uploadFile, _downloadFile, value.lastFaucetTime)),
+    plotIds: value.plotIds,
+    lastFaucetTime: record_opt_to_undefined(from_candid_opt_n8(_uploadFile, _downloadFile, value.lastFaucetTime)),
     crystal: value.crystal,
     ownedPlots: value.ownedPlots,
     combatVictories: value.combatVictories,
@@ -87297,12 +87845,29 @@ function from_candid_record_n18(_uploadFile, _downloadFile, value) {
     subParcelId: value.subParcelId,
     cooldownEnds: value.cooldownEnds,
     plotId: value.plotId,
-    building: record_opt_to_undefined(from_candid_opt_n1(_uploadFile, _downloadFile, value.building)),
+    building: record_opt_to_undefined(from_candid_opt_n2(_uploadFile, _downloadFile, value.building)),
     slotIndex: value.slotIndex,
     specialization: value.specialization
   };
 }
-function from_candid_record_n22(_uploadFile, _downloadFile, value) {
+function from_candid_record_n21(_uploadFile, _downloadFile, value) {
+  return {
+    resourcePercentage: value.resourcePercentage,
+    bonusInfo: record_opt_to_undefined(from_candid_opt_n2(_uploadFile, _downloadFile, value.bonusInfo)),
+    biome: from_candid_Biome_n22(_uploadFile, _downloadFile, value.biome)
+  };
+}
+function from_candid_record_n26(_uploadFile, _downloadFile, value) {
+  return {
+    startTime: value.startTime,
+    status: from_candid_SurveyStatus_n27(_uploadFile, _downloadFile, value.status),
+    result: record_opt_to_undefined(from_candid_opt_n29(_uploadFile, _downloadFile, value.result)),
+    unlockCost: value.unlockCost,
+    secondsRemaining: value.secondsRemaining,
+    plotId: value.plotId
+  };
+}
+function from_candid_record_n33(_uploadFile, _downloadFile, value) {
   return {
     efficiency: value.efficiency,
     plotId: value.plotId,
@@ -87310,43 +87875,43 @@ function from_candid_record_n22(_uploadFile, _downloadFile, value) {
     frntRate: value.frntRate
   };
 }
-function from_candid_record_n29(_uploadFile, _downloadFile, value) {
+function from_candid_record_n40(_uploadFile, _downloadFile, value) {
   return {
     ok: value.ok,
     action: value.action,
     index: value.index,
-    errorMsg: record_opt_to_undefined(from_candid_opt_n1(_uploadFile, _downloadFile, value.errorMsg)),
+    errorMsg: record_opt_to_undefined(from_candid_opt_n2(_uploadFile, _downloadFile, value.errorMsg)),
     durationMs: value.durationMs
   };
 }
-function from_candid_record_n34(_uploadFile, _downloadFile, value) {
+function from_candid_record_n45(_uploadFile, _downloadFile, value) {
   return {
     tierName: value.tierName,
     plotId: value.plotId,
-    installedAt: record_opt_to_undefined(from_candid_opt_n35(_uploadFile, _downloadFile, value.installedAt)),
+    installedAt: record_opt_to_undefined(from_candid_opt_n46(_uploadFile, _downloadFile, value.installedAt)),
     bonusPerDay: value.bonusPerDay,
-    nextTierCost: record_opt_to_undefined(from_candid_opt_n8(_uploadFile, _downloadFile, value.nextTierCost)),
-    generatorTier: from_candid_GeneratorTier_n36(_uploadFile, _downloadFile, value.generatorTier)
+    nextTierCost: record_opt_to_undefined(from_candid_opt_n47(_uploadFile, _downloadFile, value.nextTierCost)),
+    generatorTier: from_candid_GeneratorTier_n48(_uploadFile, _downloadFile, value.generatorTier)
   };
 }
-function from_candid_record_n4(_uploadFile, _downloadFile, value) {
+function from_candid_record_n5(_uploadFile, _downloadFile, value) {
   return {
     attacker: value.attacker,
     intercepted: value.intercepted,
-    interceptorType: record_opt_to_undefined(from_candid_opt_n1(_uploadFile, _downloadFile, value.interceptorType)),
+    interceptorType: record_opt_to_undefined(from_candid_opt_n2(_uploadFile, _downloadFile, value.interceptorType)),
     toPlot: value.toPlot,
     atkPower: value.atkPower,
     timestamp: value.timestamp,
     fromPlot: value.fromPlot,
     success: value.success,
-    missileType: record_opt_to_undefined(from_candid_opt_n1(_uploadFile, _downloadFile, value.missileType)),
+    missileType: record_opt_to_undefined(from_candid_opt_n2(_uploadFile, _downloadFile, value.missileType)),
     defPower: value.defPower
   };
 }
-function from_candid_record_n6(_uploadFile, _downloadFile, value) {
+function from_candid_record_n7(_uploadFile, _downloadFile, value) {
   return {
     principal: value.principal,
-    lastClaim: record_opt_to_undefined(from_candid_opt_n7(_uploadFile, _downloadFile, value.lastClaim)),
+    lastClaim: record_opt_to_undefined(from_candid_opt_n8(_uploadFile, _downloadFile, value.lastClaim)),
     totalClaims: value.totalClaims
   };
 }
@@ -87356,40 +87921,46 @@ function from_candid_tuple_n13(_uploadFile, _downloadFile, value) {
     value[1]
   ];
 }
+function from_candid_variant_n1(_uploadFile, _downloadFile, value) {
+  return "ok" in value ? {
+    __kind__: "ok",
+    ok: value.ok
+  } : "err" in value ? {
+    __kind__: "err",
+    err: value.err
+  } : value;
+}
 function from_candid_variant_n15(_uploadFile, _downloadFile, value) {
   return "RareEarth" in value ? "RareEarth" : "Fuel" in value ? "Fuel" : "Iron" in value ? "Iron" : "Crystal" in value ? "Crystal" : value;
 }
 function from_candid_variant_n19(_uploadFile, _downloadFile, value) {
   return "ok" in value ? {
     __kind__: "ok",
-    ok: value.ok
+    ok: from_candid_SurveyResult_n20(_uploadFile, _downloadFile, value.ok)
   } : "err" in value ? {
     __kind__: "err",
     err: value.err
   } : value;
 }
-function from_candid_variant_n20(_uploadFile, _downloadFile, value) {
-  return "ok" in value ? {
-    __kind__: "ok",
-    ok: from_candid_MineResult_n21(_uploadFile, _downloadFile, value.ok)
-  } : "err" in value ? {
-    __kind__: "err",
-    err: value.err
-  } : value;
+function from_candid_variant_n23(_uploadFile, _downloadFile, value) {
+  return "Tropical" in value ? "Tropical" : "AsteroidImpact" in value ? "AsteroidImpact" : "DeepOcean" in value ? "DeepOcean" : "Desert" in value ? "Desert" : "Volcanic" in value ? "Volcanic" : "Temperate" in value ? "Temperate" : "Ocean" in value ? "Ocean" : "Arctic" in value ? "Arctic" : value;
 }
 function from_candid_variant_n24(_uploadFile, _downloadFile, value) {
   return "ok" in value ? {
     __kind__: "ok",
-    ok: value.ok
+    ok: from_candid_SurveyView_n25(_uploadFile, _downloadFile, value.ok)
   } : "err" in value ? {
     __kind__: "err",
     err: value.err
   } : value;
 }
-function from_candid_variant_n26(_uploadFile, _downloadFile, value) {
+function from_candid_variant_n28(_uploadFile, _downloadFile, value) {
+  return "Locked" in value ? "Locked" : "InProgress" in value ? "InProgress" : "Completed" in value ? "Completed" : value;
+}
+function from_candid_variant_n30(_uploadFile, _downloadFile, value) {
   return "ok" in value ? {
     __kind__: "ok",
-    ok: from_candid_vec_n27(_uploadFile, _downloadFile, value.ok)
+    ok: value.ok
   } : "err" in value ? {
     __kind__: "err",
     err: value.err
@@ -87398,25 +87969,52 @@ function from_candid_variant_n26(_uploadFile, _downloadFile, value) {
 function from_candid_variant_n31(_uploadFile, _downloadFile, value) {
   return "ok" in value ? {
     __kind__: "ok",
+    ok: from_candid_MineResult_n32(_uploadFile, _downloadFile, value.ok)
+  } : "err" in value ? {
+    __kind__: "err",
+    err: value.err
+  } : value;
+}
+function from_candid_variant_n35(_uploadFile, _downloadFile, value) {
+  return "ok" in value ? {
+    __kind__: "ok",
     ok: value.ok
   } : "err" in value ? {
     __kind__: "err",
     err: value.err
   } : value;
 }
-function from_candid_variant_n32(_uploadFile, _downloadFile, value) {
+function from_candid_variant_n37(_uploadFile, _downloadFile, value) {
   return "ok" in value ? {
     __kind__: "ok",
-    ok: from_candid_PlotUpgradesView_n33(_uploadFile, _downloadFile, value.ok)
+    ok: from_candid_vec_n38(_uploadFile, _downloadFile, value.ok)
   } : "err" in value ? {
     __kind__: "err",
-    err: from_candid_UpgradeError_n38(_uploadFile, _downloadFile, value.err)
+    err: value.err
   } : value;
 }
-function from_candid_variant_n37(_uploadFile, _downloadFile, value) {
+function from_candid_variant_n42(_uploadFile, _downloadFile, value) {
+  return "ok" in value ? {
+    __kind__: "ok",
+    ok: value.ok
+  } : "err" in value ? {
+    __kind__: "err",
+    err: value.err
+  } : value;
+}
+function from_candid_variant_n43(_uploadFile, _downloadFile, value) {
+  return "ok" in value ? {
+    __kind__: "ok",
+    ok: from_candid_PlotUpgradesView_n44(_uploadFile, _downloadFile, value.ok)
+  } : "err" in value ? {
+    __kind__: "err",
+    err: from_candid_UpgradeError_n50(_uploadFile, _downloadFile, value.err)
+  } : value;
+}
+function from_candid_variant_n49(_uploadFile, _downloadFile, value) {
   return "TierIII" in value ? "TierIII" : "None" in value ? "None" : "TierII" in value ? "TierII" : "TierIV" in value ? "TierIV" : "TierVI" in value ? "TierVI" : "TierI" in value ? "TierI" : "TierV" in value ? "TierV" : value;
 }
-function from_candid_variant_n39(_uploadFile, _downloadFile, value) {
+function from_candid_variant_n51(_uploadFile, _downloadFile, value) {
   return "SubParcelLocked" in value ? "SubParcelLocked" : "PlotNotFound" in value ? "PlotNotFound" : "InvalidTier" in value ? "InvalidTier" : "NotOwner" in value ? "NotOwner" : "AlreadyMaxTier" in value ? "AlreadyMaxTier" : "InsufficientFRNTR" in value ? "InsufficientFRNTR" : value;
 }
 function from_candid_vec_n12(_uploadFile, _downloadFile, value) {
@@ -87425,11 +88023,11 @@ function from_candid_vec_n12(_uploadFile, _downloadFile, value) {
 function from_candid_vec_n16(_uploadFile, _downloadFile, value) {
   return value.map((x3) => from_candid_SubParcel_n17(_uploadFile, _downloadFile, x3));
 }
-function from_candid_vec_n2(_uploadFile, _downloadFile, value) {
-  return value.map((x3) => from_candid_CombatEvent_n3(_uploadFile, _downloadFile, x3));
+function from_candid_vec_n3(_uploadFile, _downloadFile, value) {
+  return value.map((x3) => from_candid_CombatEvent_n4(_uploadFile, _downloadFile, x3));
 }
-function from_candid_vec_n27(_uploadFile, _downloadFile, value) {
-  return value.map((x3) => from_candid_StressActionResult_n28(_uploadFile, _downloadFile, x3));
+function from_candid_vec_n38(_uploadFile, _downloadFile, value) {
+  return value.map((x3) => from_candid_StressActionResult_n39(_uploadFile, _downloadFile, x3));
 }
 function from_candid_vec_n9(_uploadFile, _downloadFile, value) {
   return value.map((x3) => from_candid_record_n10(_uploadFile, _downloadFile, x3));
@@ -87448,13 +88046,13 @@ function createActor(canisterId, _uploadFile, _downloadFile, options = {}) {
   });
   return new Backend(actor, _uploadFile, _downloadFile, options.processError);
 }
-const CYAN$9 = "#00ffcc";
+const CYAN$b = "#00ffcc";
 const GOLD$2 = "#ffd700";
 const AMBER = "#f59e0b";
-const BORDER$8 = "rgba(0,255,204,0.18)";
+const BORDER$a = "rgba(0,255,204,0.18)";
 const PANEL = "rgba(0,20,40,0.72)";
-const TEXT$4 = "#e0f4ff";
-const TEXT_DIM$2 = "rgba(224,244,255,0.45)";
+const TEXT$5 = "#e0f4ff";
+const TEXT_DIM$4 = "rgba(224,244,255,0.45)";
 function computeScore(plots, frntr, wins) {
   return Math.round(
     (plots ?? 0) * 100 + (frntr ?? 0) * 0.01 + (wins ?? 0) * 50
@@ -87474,7 +88072,7 @@ function RankMedal({ rank }) {
         fontSize: 11,
         fontWeight: 700,
         fontFamily: "monospace",
-        color: TEXT_DIM$2
+        color: TEXT_DIM$4
       },
       children: [
         "#",
@@ -87490,7 +88088,7 @@ function SortIcon({
 }) {
   if (col !== active)
     return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { opacity: 0.2, fontSize: 10 }, children: "↕" });
-  return dir === "asc" ? /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronUp, { size: 11, style: { color: CYAN$9 } }) : /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronDown, { size: 11, style: { color: CYAN$9 } });
+  return dir === "asc" ? /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronUp, { size: 11, style: { color: CYAN$b } }) : /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronDown, { size: 11, style: { color: CYAN$b } });
 }
 function Leaderboard() {
   const leaderboard = useGameStore((s2) => s2.leaderboard);
@@ -87577,17 +88175,17 @@ function Leaderboard() {
         va = a2.name.toLowerCase();
         vb = b2.name.toLowerCase();
       } else if (sortKey === "plots") {
-        va = a2.plots;
-        vb = b2.plots;
+        va = a2.plots ?? 0;
+        vb = b2.plots ?? 0;
       } else if (sortKey === "frntr") {
-        va = a2.frntr;
-        vb = b2.frntr;
+        va = a2.frntr ?? 0;
+        vb = b2.frntr ?? 0;
       } else if (sortKey === "wins") {
-        va = a2.wins;
-        vb = b2.wins;
+        va = a2.wins ?? 0;
+        vb = b2.wins ?? 0;
       } else {
-        va = a2.score;
-        vb = b2.score;
+        va = a2.score ?? 0;
+        vb = b2.score ?? 0;
       }
       if (typeof va === "string" && typeof vb === "string") {
         return sortDir === "asc" ? va.localeCompare(vb) : vb.localeCompare(va);
@@ -87616,7 +88214,7 @@ function Leaderboard() {
     fontWeight: 700,
     letterSpacing: 2,
     textTransform: "uppercase",
-    color: sortKey === key ? CYAN$9 : TEXT_DIM$2,
+    color: sortKey === key ? CYAN$b : TEXT_DIM$4,
     display: "flex",
     alignItems: "center",
     gap: 3,
@@ -87649,7 +88247,7 @@ function Leaderboard() {
                       height: 38,
                       borderRadius: 8,
                       background: "rgba(0,255,204,0.1)",
-                      border: `1px solid ${BORDER$8}`,
+                      border: `1px solid ${BORDER$a}`,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center"
@@ -87665,7 +88263,7 @@ function Leaderboard() {
                         fontSize: 20,
                         fontWeight: 800,
                         letterSpacing: 4,
-                        color: TEXT$4,
+                        color: TEXT$5,
                         textTransform: "uppercase",
                         lineHeight: 1
                       },
@@ -87677,7 +88275,7 @@ function Leaderboard() {
                     {
                       style: {
                         fontSize: 9,
-                        color: TEXT_DIM$2,
+                        color: TEXT_DIM$4,
                         letterSpacing: 2,
                         marginTop: 2
                       },
@@ -87691,7 +88289,7 @@ function Leaderboard() {
                 ] })
               ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 9, color: TEXT_DIM$2, letterSpacing: 1 }, children: refreshing ? "SYNCING..." : `${timeSince}s AGO` }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 9, color: TEXT_DIM$4, letterSpacing: 1 }, children: refreshing ? "SYNCING..." : `${timeSince}s AGO` }),
                 /* @__PURE__ */ jsxRuntimeExports.jsxs(
                   "button",
                   {
@@ -87701,9 +88299,9 @@ function Leaderboard() {
                     disabled: refreshing,
                     style: {
                       background: "rgba(0,255,204,0.07)",
-                      border: `1px solid ${BORDER$8}`,
+                      border: `1px solid ${BORDER$a}`,
                       borderRadius: 6,
-                      color: CYAN$9,
+                      color: CYAN$b,
                       padding: "6px 10px",
                       cursor: refreshing ? "not-allowed" : "pointer",
                       display: "flex",
@@ -87765,8 +88363,8 @@ function Leaderboard() {
               className: "flex items-center gap-1.5 min-h-[44px] px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all rounded-lg",
               style: {
                 background: active ? "rgba(0,255,204,0.15)" : "rgba(0,20,40,0.5)",
-                border: `1px solid ${active ? CYAN$9 : BORDER$8}`,
-                color: active ? CYAN$9 : TEXT_DIM$2,
+                border: `1px solid ${active ? CYAN$b : BORDER$a}`,
+                color: active ? CYAN$b : TEXT_DIM$4,
                 boxShadow: active ? "0 0 10px rgba(0,255,204,0.15)" : "none"
               },
               children: [
@@ -87785,13 +88383,13 @@ function Leaderboard() {
             className: "mb-4 inline-flex items-center gap-2 rounded-full px-4 py-1.5",
             style: {
               background: "rgba(0,255,204,0.05)",
-              border: `1px solid ${BORDER$8}`,
+              border: `1px solid ${BORDER$a}`,
               fontSize: 9,
-              color: TEXT_DIM$2,
+              color: TEXT_DIM$4,
               letterSpacing: 1.5
             },
             children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$9 }, children: "⚡" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$b }, children: "⚡" }),
               "SCORE = (PLOTS × 100) + (FRNTR × 0.01) + (WINS × 50)"
             ]
           }
@@ -87807,7 +88405,7 @@ function Leaderboard() {
               background: PANEL,
               backdropFilter: "blur(16px)",
               WebkitBackdropFilter: "blur(16px)",
-              border: `1px solid ${BORDER$8}`,
+              border: `1px solid ${BORDER$a}`,
               borderRadius: 12,
               overflow: "hidden"
             },
@@ -87818,7 +88416,7 @@ function Leaderboard() {
                   style: {
                     display: "grid",
                     gridTemplateColumns: "42px 48px 1fr 70px 110px 60px 90px",
-                    borderBottom: `1px solid ${BORDER$8}`,
+                    borderBottom: `1px solid ${BORDER$a}`,
                     background: "rgba(0,255,204,0.03)"
                   },
                   children: [
@@ -87830,7 +88428,7 @@ function Leaderboard() {
                           fontSize: 9,
                           fontWeight: 700,
                           letterSpacing: 2,
-                          color: TEXT_DIM$2,
+                          color: TEXT_DIM$4,
                           textTransform: "uppercase"
                         },
                         children: "#"
@@ -87914,7 +88512,7 @@ function Leaderboard() {
                   style: {
                     padding: "40px 20px",
                     textAlign: "center",
-                    color: TEXT_DIM$2,
+                    color: TEXT_DIM$4,
                     fontSize: 12,
                     letterSpacing: 2
                   },
@@ -87927,7 +88525,7 @@ function Leaderboard() {
                 const isTop3 = entry.rank <= 3;
                 const rowBg = entry.isMe ? "rgba(0,255,204,0.08)" : isTop3 ? `rgba(0,255,204,${0.04 - idx * 0.01})` : "transparent";
                 const borderColor = entry.isMe ? "rgba(0,255,204,0.25)" : "rgba(0,255,204,0.06)";
-                const rankColor = entry.rank === 1 ? GOLD$2 : entry.rank === 2 ? "#c0c0c0" : entry.rank === 3 ? AMBER : TEXT_DIM$2;
+                const rankColor = entry.rank === 1 ? GOLD$2 : entry.rank === 2 ? "#c0c0c0" : entry.rank === 3 ? AMBER : TEXT_DIM$4;
                 return /* @__PURE__ */ jsxRuntimeExports.jsxs(
                   motion.div,
                   {
@@ -87997,7 +88595,7 @@ function Leaderboard() {
                                 style: {
                                   fontSize: 11,
                                   fontWeight: entry.isMe ? 800 : 500,
-                                  color: entry.isMe ? CYAN$9 : TEXT$4,
+                                  color: entry.isMe ? CYAN$b : TEXT$5,
                                   overflow: "hidden",
                                   textOverflow: "ellipsis",
                                   whiteSpace: "nowrap",
@@ -88012,7 +88610,7 @@ function Leaderboard() {
                                         marginLeft: 6,
                                         fontSize: 7,
                                         fontWeight: 700,
-                                        color: CYAN$9,
+                                        color: CYAN$b,
                                         border: "1px solid rgba(0,255,204,0.4)",
                                         borderRadius: 3,
                                         padding: "1px 4px",
@@ -88036,7 +88634,7 @@ function Leaderboard() {
                             fontSize: 11,
                             fontWeight: 700,
                             fontFamily: "monospace",
-                            color: TEXT$4
+                            color: TEXT$5
                           },
                           children: entry.plots
                         }
@@ -88050,7 +88648,7 @@ function Leaderboard() {
                             fontSize: 11,
                             fontWeight: 700,
                             fontFamily: "monospace",
-                            color: entry.isMe ? CYAN$9 : "rgba(0,255,204,0.7)"
+                            color: entry.isMe ? CYAN$b : "rgba(0,255,204,0.7)"
                           },
                           children: entry.frntr.toLocaleString()
                         }
@@ -88114,7 +88712,7 @@ function Leaderboard() {
                       fontSize: 10,
                       fontWeight: 700,
                       letterSpacing: 2,
-                      color: TEXT_DIM$2,
+                      color: TEXT_DIM$4,
                       textTransform: "uppercase"
                     },
                     children: "YOUR RANK"
@@ -88128,7 +88726,7 @@ function Leaderboard() {
                     fontSize: 18,
                     fontWeight: 900,
                     fontFamily: "monospace",
-                    color: myRank >= 0 ? CYAN$9 : TEXT_DIM$2,
+                    color: myRank >= 0 ? CYAN$b : TEXT_DIM$4,
                     letterSpacing: 1
                   },
                   children: myRank >= 0 ? `#${myRank + 1}` : "UNRANKED"
@@ -88141,7 +88739,7 @@ function Leaderboard() {
           "div",
           {
             className: "mt-3 flex items-center justify-end gap-2",
-            style: { fontSize: 9, color: TEXT_DIM$2, letterSpacing: 1.5 },
+            style: { fontSize: 9, color: TEXT_DIM$4, letterSpacing: 1.5 },
             children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx(
                 "div",
@@ -88150,7 +88748,7 @@ function Leaderboard() {
                     width: 6,
                     height: 6,
                     borderRadius: "50%",
-                    background: CYAN$9,
+                    background: CYAN$b,
                     animation: "pulse 2s infinite",
                     boxShadow: "0 0 6px rgba(0,255,204,0.7)"
                   }
@@ -88440,10 +89038,610 @@ reactExports.forwardRef(function(e, t) {
     })) : null;
   }));
 });
-const CYAN$8 = "#00ffcc";
+function applyConfirmedFrntrBalance(rawE8s) {
+  useGameStore.getState().setFrntrBalance(rawE8s);
+}
+function setLastFaucetClaim() {
+}
+function usePlayerSync() {
+  const { actor, isFetching } = useActor(createActor);
+  reactExports.useEffect(() => {
+    if (!actor || isFetching) return;
+    const syncPrincipal = async () => {
+      try {
+        const data = await actor.getPrincipal();
+        if (data.isAuthed && data.full) {
+          useGameStore.setState((s2) => ({
+            player: { ...s2.player, principal: data.full }
+          }));
+        }
+      } catch {
+      }
+    };
+    const syncLeaderboard = async () => {
+      try {
+        const data = await actor.getLeaderboard(50n);
+        const mapped = data.map((e) => ({
+          rank: Number(e.rank),
+          name: e.username ?? `${e.principal.slice(0, 8)}...${e.principal.slice(-4)}`,
+          principal: e.principal,
+          plotsOwned: Number(e.plotsOwned),
+          frntEarned: Number(e.frntBalance),
+          victories: 0
+        }));
+        useGameStore.setState({ leaderboard: mapped });
+      } catch {
+      }
+    };
+    const syncPlotOwners = async () => {
+      var _a3, _b3;
+      try {
+        if (useGameStore.getState().plots.length === 0) {
+          useGameStore.getState().setPlots(
+            GEODESIC_TILES.map((tile, i2) => ({
+              id: i2,
+              lat: tile.lat,
+              lng: tile.lng,
+              biome: assignBiome(tile.lat, tile.lng),
+              efficiency: Math.floor(78 + (i2 * 2654435761 >>> 0) % 21),
+              mineCount: 0,
+              regenActiveUntil: 0,
+              owner: null,
+              isOwnedByMe: false,
+              iron: 0,
+              fuel: 0,
+              crystal: 0,
+              rareEarth: 0,
+              defenses: { turrets: 0, shields: 0, walls: 0 },
+              specialization: null,
+              generatorTier: 0
+            }))
+          );
+        }
+        const owners = await actor.getLivePlotOwners();
+        const myPrincipal = useGameStore.getState().player.principal ?? "";
+        useGameStore.getState().setLivePlotOwners(owners, myPrincipal);
+        const ownedSet = new Set(owners.map(([id2]) => id2));
+        const firstAvailable = owners.length > 0 ? await actor.getFirstAvailablePlot() : ((_b3 = (_a3 = useGameStore.getState().plots.find((p2) => !ownedSet.has(String(p2.id)))) == null ? void 0 : _a3.id) == null ? void 0 : _b3.toString()) ?? null;
+        useGameStore.setState({ firstAvailablePlotId: firstAvailable });
+      } catch {
+      }
+    };
+    const syncPlayer = async () => {
+      try {
+        const state2 = await actor.getPlayerState();
+        if (!state2) return;
+        const newRawFrnt = BigInt(state2.frntBalance);
+        useGameStore.getState().setFrntrBalance(newRawFrnt);
+        const icpFromState = "icpBalance" in state2 && typeof state2.icpBalance !== "undefined" ? Number(state2.icpBalance) / 1e8 : null;
+        const plotIds = Array.isArray(state2.plotIds) ? state2.plotIds : [];
+        useGameStore.setState((s2) => ({
+          player: {
+            ...s2.player,
+            // Use backend icpBalance as fallback when live ledger has no value
+            icpBalance: icpFromState !== null && s2.player.icpBalance === 0 ? icpFromState : s2.player.icpBalance,
+            iron: Number(state2.iron) / 1e8,
+            fuel: Number(state2.fuel) / 1e8,
+            crystal: Number(state2.crystal) / 1e8,
+            // Update plotsOwned from backend if it has data
+            plotsOwned: plotIds.length > 0 ? plotIds : s2.player.plotsOwned
+          },
+          rankStats: {
+            ...s2.rankStats ?? {},
+            combatWins: Number(state2.combatVictories)
+          },
+          serverPassiveIncomePerDay: Number(state2.passiveIncomePerDay),
+          totalFRNTRBurned: Number(state2.totalFRNTRBurned)
+        }));
+      } catch {
+      }
+    };
+    const syncGlobalStats = async () => {
+      try {
+        const [g2, t, treasury] = await Promise.all([
+          actor.getGlobalStats(),
+          actor.getTokenomics(),
+          actor.getTreasuryBalances().catch(() => ({
+            devPot: 0n,
+            leaderboardPot: 0n,
+            liquidityPot: 0n
+          }))
+        ]);
+        const stats = {
+          totalPlotsOwned: Number(g2.totalPlotsOwned),
+          totalFRNTRInCirculation: Number(g2.circulatingSupply),
+          totalFRNTRBurned: Number(g2.totalBurned),
+          totalFRNTRMined: 0,
+          activePlayerCount: Number(g2.activePlayers),
+          currentDailyEmissionRate: Number(t.emissionRate),
+          leaderboardPrizePool: 0,
+          nextPayoutAt: 0,
+          totalSupply: Number(t.maxSupply),
+          preMinted: 5e9,
+          mineableSupply: Number(t.remainingMineable),
+          maxSupply: Number(t.maxSupply),
+          remainingMineable: Number(t.remainingMineable),
+          daysUntilMilestone: Number(t.daysUntilMilestone),
+          burnRate: Number(t.burnRate),
+          emissionRate: Number(t.emissionRate),
+          devPotICP: Number(treasury.devPot) / 1e8,
+          leaderboardPotICP: Number(treasury.leaderboardPot) / 1e8,
+          liquidityPotICP: Number(treasury.liquidityPot) / 1e8
+        };
+        useGameStore.getState().setGlobalStats(stats);
+        useGameStore.getState().setTreasuryState({
+          developer: BigInt(Math.floor(Number(treasury.devPot))),
+          leaderboard: BigInt(Math.floor(Number(treasury.leaderboardPot))),
+          liquidity: BigInt(Math.floor(Number(treasury.liquidityPot)))
+        });
+      } catch {
+      }
+    };
+    void syncPrincipal();
+    void syncPlayer();
+    void syncLeaderboard();
+    void syncPlotOwners();
+    void syncGlobalStats();
+    void (async () => {
+      try {
+        const adminPrincipal = await actor.getAdminPrincipal();
+        const myPrincipal = useGameStore.getState().player.principal;
+        const isAdmin = !!myPrincipal && myPrincipal === adminPrincipal;
+        useGameStore.setState((s2) => ({
+          player: { ...s2.player, isAdmin }
+        }));
+      } catch {
+      }
+    })();
+    const interval = setInterval(() => {
+      void syncPrincipal();
+      void syncPlayer();
+      void syncLeaderboard();
+      void syncPlotOwners();
+    }, 1e4);
+    const globalInterval = setInterval(() => {
+      void syncGlobalStats();
+    }, 3e4);
+    return () => {
+      clearInterval(interval);
+      clearInterval(globalInterval);
+    };
+  }, [actor, isFetching]);
+  reactExports.useEffect(() => {
+    if (!actor || isFetching) return;
+    const fetchIcpPrice = async () => {
+      try {
+        const price = await actor.getIcpUsdPrice();
+        useGameStore.getState().setIcpUsdPrice(price);
+      } catch {
+      }
+    };
+    void fetchIcpPrice();
+    const priceInterval = setInterval(() => {
+      void fetchIcpPrice();
+    }, 6e4);
+    return () => clearInterval(priceInterval);
+  }, [actor, isFetching]);
+  const hasSeeded = reactExports.useRef(false);
+  reactExports.useEffect(() => {
+    if (!actor || isFetching) return;
+    if (hasSeeded.current) return;
+    const seed = async () => {
+      var _a3, _b3;
+      hasSeeded.current = true;
+      try {
+        const count = await actor.getPlotCount();
+        if (count === 0n || count === 0) {
+          const BATCH = 500;
+          for (let start = 0; start < GEODESIC_TILES.length; start += BATCH) {
+            const batch2 = GEODESIC_TILES.slice(start, start + BATCH);
+            const tuples = batch2.map(
+              (tile) => [
+                String(tile.id),
+                assignBiome(tile.lat, tile.lng),
+                tile.lat,
+                tile.lng,
+                BigInt(Math.floor(78 + (tile.id * 2654435761 >>> 0) % 21))
+              ]
+            );
+            await actor.initPlots(tuples);
+          }
+        }
+        const owners = await actor.getLivePlotOwners();
+        const myPrincipal = useGameStore.getState().player.principal ?? "";
+        const storeState = useGameStore.getState();
+        const ownedSet = new Set(owners.map(([id2]) => id2));
+        const updatedPlots = storeState.plots.map((plot) => {
+          const ownerEntry = owners.find(([id2]) => id2 === String(plot.id));
+          if (ownerEntry) {
+            const isOwnedByMe = !!myPrincipal && ownerEntry[1] === myPrincipal;
+            return { ...plot, owner: ownerEntry[1], isOwnedByMe };
+          }
+          return { ...plot, owner: null, isOwnedByMe: false };
+        });
+        const firstAvailable = ((_b3 = (_a3 = updatedPlots.find((p2) => !ownedSet.has(String(p2.id)))) == null ? void 0 : _a3.id) == null ? void 0 : _b3.toString()) ?? null;
+        useGameStore.setState({
+          plots: updatedPlots,
+          firstAvailablePlotId: firstAvailable
+        });
+      } catch {
+        hasSeeded.current = false;
+      }
+    };
+    void seed();
+  }, [actor, isFetching]);
+}
+const CYAN$a = "#00ffcc";
+const BORDER$9 = "rgba(0,255,204,0.22)";
+const TEXT$4 = "#e0f4ff";
+const TEXT_DIM$3 = "rgba(224,244,255,0.45)";
+function AdminButton({
+  label,
+  icon: Icon2,
+  onClick,
+  loading: loading2,
+  danger
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "button",
+    {
+      type: "button",
+      onClick,
+      disabled: loading2,
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        width: "100%",
+        padding: "11px 14px",
+        borderRadius: 8,
+        background: danger ? "rgba(255,68,68,0.10)" : "rgba(0,255,204,0.08)",
+        border: `1px solid ${danger ? "rgba(255,68,68,0.35)" : "rgba(0,255,204,0.3)"}`,
+        color: danger ? "#ff6666" : CYAN$a,
+        fontSize: 11,
+        fontWeight: 700,
+        letterSpacing: 1.5,
+        textTransform: "uppercase",
+        cursor: loading2 ? "not-allowed" : "pointer",
+        opacity: loading2 ? 0.6 : 1,
+        transition: "background 0.15s, border-color 0.15s"
+      },
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Icon2, { size: 14, style: {} }),
+        loading2 ? "WORKING..." : label
+      ]
+    }
+  );
+}
+function AdminPanel() {
+  const player = useGameStore((s2) => s2.player);
+  const { actor } = useActor(createActor);
+  const [mintLoading, setMintLoading] = reactExports.useState(false);
+  const [resetLoading, setResetLoading] = reactExports.useState(false);
+  const [reseedLoading, setReseedLoading] = reactExports.useState(false);
+  const [showConfirm, setShowConfirm] = reactExports.useState(false);
+  if (!player.isAdmin) return null;
+  async function handleMintToSelf() {
+    if (!actor) {
+      ue.error("Actor not ready");
+      return;
+    }
+    setMintLoading(true);
+    try {
+      const result = await actor.testFaucetV2();
+      if ("ok" in result) {
+        const grant = result.ok;
+        const frntr = Number(grant.frntGranted) / 1e8;
+        const icp = Number(grant.icpGranted) / 1e8;
+        setLastFaucetClaim();
+        ue.success(
+          `+${frntr.toFixed(4)} FRNTR & +${icp.toFixed(4)} ICP minted`,
+          {
+            duration: 4e3
+          }
+        );
+        setTimeout(() => {
+          useGameStore.setState((s2) => ({
+            player: {
+              ...s2.player,
+              frntBalance: s2.player.frntBalance + frntr
+            }
+          }));
+        }, 3e3);
+      } else {
+        ue.error(`Faucet failed: ${result.err}`);
+      }
+    } catch (e) {
+      ue.error(`Error: ${String(e)}`);
+    } finally {
+      setMintLoading(false);
+    }
+  }
+  async function handleResetAll() {
+    if (!actor) {
+      ue.error("Actor not ready");
+      return;
+    }
+    setResetLoading(true);
+    setShowConfirm(false);
+    try {
+      await actor.resetAllData();
+      useGameStore.setState((s2) => ({
+        player: {
+          ...s2.player,
+          frntBalance: 0,
+          plotsOwned: [],
+          iron: 0,
+          fuel: 0,
+          crystal: 0,
+          rareEarth: 0
+        },
+        leaderboard: [],
+        totalFRNTRBurned: 0
+      }));
+      ue.success("All state reset", { duration: 4e3 });
+    } catch (e) {
+      ue.error(`Reset failed: ${String(e)}`);
+    } finally {
+      setResetLoading(false);
+    }
+  }
+  async function handleReseedPlots() {
+    if (!actor) {
+      ue.error("Actor not ready");
+      return;
+    }
+    setReseedLoading(true);
+    try {
+      const count = await actor.getPlotCount();
+      if (count >= 100n) {
+        ue(`Plots already seeded — canister has ${count} plots`, {
+          duration: 3e3
+        });
+        setReseedLoading(false);
+        return;
+      }
+      const tiles = GEODESIC_TILES.slice(0, 500);
+      const plotData = tiles.map(
+        (tile, i2) => [
+          String(i2),
+          assignBiome(tile.lat, tile.lng),
+          tile.lat,
+          tile.lng,
+          BigInt(Math.floor(78 + (i2 * 2654435761 >>> 0) % 21))
+        ]
+      );
+      await actor.initPlots(plotData);
+      ue.success(`Seeded ${tiles.length} plots`, { duration: 4e3 });
+    } catch (e) {
+      ue.error(`Reseed failed: ${String(e)}`);
+    } finally {
+      setReseedLoading(false);
+    }
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "div",
+    {
+      "data-ocid": "admin.panel",
+      style: {
+        padding: "14px 16px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 14
+      },
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 10 }, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            Shield,
+            {
+              size: 18,
+              color: CYAN$a,
+              style: { filter: `drop-shadow(0 0 6px ${CYAN$a})` }
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "span",
+            {
+              style: {
+                fontSize: 13,
+                fontWeight: 900,
+                color: CYAN$a,
+                letterSpacing: 3,
+                textTransform: "uppercase",
+                textShadow: `0 0 10px ${CYAN$a}`
+              },
+              children: "ADMIN CONTROL"
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "span",
+            {
+              style: {
+                marginLeft: "auto",
+                padding: "2px 8px",
+                borderRadius: 10,
+                background: "rgba(0,255,204,0.12)",
+                border: `1px solid ${CYAN$a}55`,
+                fontSize: 7,
+                fontWeight: 700,
+                color: CYAN$a,
+                letterSpacing: 2
+              },
+              children: "ADMIN"
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { height: 1, background: BORDER$9 } }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            style: {
+              padding: "8px 12px",
+              borderRadius: 8,
+              background: "rgba(0,255,204,0.04)",
+              border: `1px solid ${BORDER$9}`
+            },
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "div",
+                {
+                  style: {
+                    fontSize: 7,
+                    color: TEXT_DIM$3,
+                    letterSpacing: 1.5,
+                    marginBottom: 3
+                  },
+                  children: "ADMIN PRINCIPAL"
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "div",
+                {
+                  className: "font-mono",
+                  style: { fontSize: 9, color: TEXT$4, wordBreak: "break-all" },
+                  children: player.principal ?? "—"
+                }
+              )
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 8 }, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
+            {
+              style: {
+                fontSize: 8,
+                color: TEXT_DIM$3,
+                letterSpacing: 2,
+                marginBottom: 2
+              },
+              children: "ACTIONS"
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { "data-ocid": "admin.mint_button", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+            AdminButton,
+            {
+              label: "Mint to Self (Faucet)",
+              icon: Zap,
+              onClick: handleMintToSelf,
+              loading: mintLoading
+            }
+          ) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            AdminButton,
+            {
+              label: "Reseed Plots",
+              icon: RefreshCw,
+              onClick: handleReseedPlots,
+              loading: reseedLoading
+            }
+          ),
+          !showConfirm ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+            AdminButton,
+            {
+              label: "Reset All State",
+              icon: RotateCcw,
+              onClick: () => setShowConfirm(true),
+              danger: true
+            }
+          ) : /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              style: {
+                borderRadius: 8,
+                border: "1px solid rgba(255,68,68,0.4)",
+                background: "rgba(255,68,68,0.07)",
+                padding: "10px 12px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 8
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      fontSize: 9,
+                      color: "#ff6666",
+                      fontWeight: 700,
+                      letterSpacing: 0.5
+                    },
+                    children: "This wipes ALL player data and plots. Confirm?"
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", gap: 6 }, children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "button",
+                    {
+                      type: "button",
+                      "data-ocid": "admin.confirm_button",
+                      onClick: handleResetAll,
+                      disabled: resetLoading,
+                      style: {
+                        flex: 1,
+                        padding: "8px",
+                        borderRadius: 6,
+                        background: "rgba(255,68,68,0.2)",
+                        border: "1px solid rgba(255,68,68,0.5)",
+                        color: "#ff6666",
+                        fontSize: 10,
+                        fontWeight: 700,
+                        cursor: resetLoading ? "not-allowed" : "pointer",
+                        letterSpacing: 1
+                      },
+                      children: resetLoading ? "RESETTING..." : "CONFIRM"
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "button",
+                    {
+                      type: "button",
+                      "data-ocid": "admin.cancel_button",
+                      onClick: () => setShowConfirm(false),
+                      style: {
+                        flex: 1,
+                        padding: "8px",
+                        borderRadius: 6,
+                        background: "rgba(0,255,204,0.06)",
+                        border: `1px solid ${BORDER$9}`,
+                        color: CYAN$a,
+                        fontSize: 10,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        letterSpacing: 1
+                      },
+                      children: "CANCEL"
+                    }
+                  )
+                ] })
+              ]
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "div",
+          {
+            style: {
+              padding: "8px 12px",
+              borderRadius: 8,
+              background: "rgba(0,10,20,0.4)",
+              border: `1px solid ${BORDER$9}`,
+              fontSize: 8,
+              color: TEXT_DIM$3,
+              lineHeight: 1.7,
+              letterSpacing: 0.3
+            },
+            children: "⚡ Admin panel is only visible to the registered admin principal. Reset All State is irreversible — use before mainnet migration only."
+          }
+        )
+      ]
+    }
+  );
+}
+const CYAN$9 = "#00ffcc";
 const CYAN_DIM$7 = "rgba(0,255,204,0.35)";
 const BORDER_TOP = "rgba(0,255,204,0.28)";
-const NAV_ITEMS = [
+const BASE_NAV_ITEMS = [
   { id: "map", label: "MAP", Icon: Map$1 },
   { id: "command", label: "CMD", Icon: LayoutDashboard },
   { id: "intel", label: "INTEL", Icon: Radio },
@@ -88451,7 +89649,11 @@ const NAV_ITEMS = [
   { id: "leaderboard", label: "LEAD", Icon: Trophy },
   { id: "inventory", label: "INV", Icon: Package }
 ];
+const ADMIN_NAV_ITEM = { id: "admin", label: "ADMIN", Icon: Shield };
+const NAV_ITEMS = BASE_NAV_ITEMS;
 function BottomNav({ activeTab, onTabClick }) {
+  const isAdmin = useGameStore((s2) => s2.player.isAdmin);
+  const visibleItems = [...BASE_NAV_ITEMS, ...isAdmin ? [ADMIN_NAV_ITEM] : []];
   return /* @__PURE__ */ jsxRuntimeExports.jsx(
     "div",
     {
@@ -88466,7 +89668,7 @@ function BottomNav({ activeTab, onTabClick }) {
         WebkitBackdropFilter: "blur(12px)",
         paddingBottom: "env(safe-area-inset-bottom)"
       },
-      children: NAV_ITEMS.map(({ id: id2, label, Icon: Icon2 }) => {
+      children: visibleItems.map(({ id: id2, label, Icon: Icon2 }) => {
         const isActive = activeTab === id2;
         return /* @__PURE__ */ jsxRuntimeExports.jsxs(
           "button",
@@ -88477,7 +89679,7 @@ function BottomNav({ activeTab, onTabClick }) {
             className: "flex-1 flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-all duration-150",
             style: {
               background: isActive ? "rgba(0,255,204,0.07)" : "transparent",
-              borderTop: isActive ? `2px solid ${CYAN$8}` : "2px solid transparent",
+              borderTop: isActive ? `2px solid ${CYAN$9}` : "2px solid transparent",
               position: "relative"
             },
             children: [
@@ -88490,9 +89692,9 @@ function BottomNav({ activeTab, onTabClick }) {
                     left: "20%",
                     right: "20%",
                     height: 2,
-                    background: CYAN$8,
+                    background: CYAN$9,
                     borderRadius: "0 0 2px 2px",
-                    boxShadow: `0 0 8px ${CYAN$8}`,
+                    boxShadow: `0 0 8px ${CYAN$9}`,
                     filter: "blur(1px)"
                   }
                 }
@@ -88501,9 +89703,9 @@ function BottomNav({ activeTab, onTabClick }) {
                 Icon2,
                 {
                   size: 18,
-                  color: isActive ? CYAN$8 : CYAN_DIM$7,
+                  color: isActive ? CYAN$9 : id2 === "admin" ? "rgba(255,100,100,0.6)" : CYAN_DIM$7,
                   style: {
-                    filter: isActive ? `drop-shadow(0 0 4px ${CYAN$8})` : "none",
+                    filter: isActive ? `drop-shadow(0 0 4px ${CYAN$9})` : "none",
                     transition: "filter 0.15s"
                   }
                 }
@@ -88514,7 +89716,7 @@ function BottomNav({ activeTab, onTabClick }) {
                   style: {
                     fontSize: 7.5,
                     letterSpacing: 0.5,
-                    color: isActive ? CYAN$8 : CYAN_DIM$7,
+                    color: isActive ? CYAN$9 : CYAN_DIM$7,
                     fontWeight: isActive ? 700 : 400
                   },
                   children: label
@@ -88528,8 +89730,8 @@ function BottomNav({ activeTab, onTabClick }) {
     }
   );
 }
-const CYAN$7 = "#00ffcc";
-const BORDER$7 = "rgba(0,255,204,0.22)";
+const CYAN$8 = "#00ffcc";
+const BORDER$8 = "rgba(0,255,204,0.22)";
 const CYAN_DIM$6 = "rgba(0,255,204,0.35)";
 function BottomSheet({
   isOpen,
@@ -88564,9 +89766,9 @@ function BottomSheet({
           bottom: 64,
           height,
           background: "rgba(4,12,24,0.97)",
-          borderTop: `1px solid ${BORDER$7}`,
-          borderLeft: `1px solid ${BORDER$7}`,
-          borderRight: `1px solid ${BORDER$7}`,
+          borderTop: `1px solid ${BORDER$8}`,
+          borderLeft: `1px solid ${BORDER$8}`,
+          borderRight: `1px solid ${BORDER$8}`,
           borderRadius: "16px 16px 0 0",
           backdropFilter: "blur(20px)",
           WebkitBackdropFilter: "blur(20px)",
@@ -88581,7 +89783,7 @@ function BottomSheet({
             {
               className: "flex-shrink-0 flex items-center justify-between px-4 py-2.5",
               style: {
-                borderBottom: `1px solid ${BORDER$7}`,
+                borderBottom: `1px solid ${BORDER$8}`,
                 background: "rgba(0,255,204,0.03)"
               },
               children: [
@@ -88609,9 +89811,9 @@ function BottomSheet({
                     style: {
                       fontSize: 11,
                       fontWeight: 700,
-                      color: CYAN$7,
+                      color: CYAN$8,
                       letterSpacing: 2,
-                      textShadow: `0 0 10px ${CYAN$7}`,
+                      textShadow: `0 0 10px ${CYAN$8}`,
                       paddingTop: 4
                     },
                     children: title
@@ -88644,7 +89846,7 @@ function BottomSheet({
                       className: "cursor-pointer flex items-center justify-center rounded",
                       style: {
                         background: "rgba(0,255,204,0.06)",
-                        border: `1px solid ${BORDER$7}`,
+                        border: `1px solid ${BORDER$8}`,
                         color: CYAN_DIM$6,
                         padding: 4
                       },
@@ -88661,12 +89863,614 @@ function BottomSheet({
     )
   ] });
 }
+const CYAN$7 = "#00ffcc";
+const CYAN_DIM$5 = "rgba(0,255,204,0.35)";
+const BORDER$7 = "rgba(0,255,204,0.22)";
+const TEXT$3 = "#e0f4ff";
+const TEXT_DIM$2 = "rgba(224,244,255,0.45)";
+const MiniBar = ({
+  value,
+  max,
+  color: color2
+}) => /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-full h-2 bg-slate-700 rounded overflow-hidden", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+  "div",
+  {
+    className: "h-full rounded",
+    style: {
+      width: `${Math.min(100, value / max * 100)}%`,
+      backgroundColor: color2
+    }
+  }
+) });
+function fmtFrntr(n) {
+  if (Number.isNaN(n) || n === void 0) return "0.00000000";
+  if (n >= 1e6) return n.toFixed(2);
+  if (n >= 1e3) return n.toFixed(4);
+  return n.toFixed(8);
+}
+function CommandCenter() {
+  const player = useGameStore((s2) => s2.player);
+  const generatorTiers = useGameStore((s2) => s2.generatorTiers);
+  const totalFRNTRBurned = useGameStore((s2) => s2.totalFRNTRBurned);
+  const plots = useGameStore((s2) => s2.plots);
+  const accruedFrntSinceSync = useGameStore((s2) => s2.accruedFrntSinceSync);
+  const setFrntrBalance = useGameStore((s2) => s2.setFrntrBalance);
+  const addFrntr = useGameStore((s2) => s2.addFrntr);
+  const { actor } = useActor(createActor);
+  const [isClaiming, setIsClaiming] = reactExports.useState(false);
+  const [activeTab, setActiveTab] = reactExports.useState("tokens");
+  const MISSIONS_LS_KEY = "frontier_missions_v1";
+  const loadMissions = () => {
+    try {
+      const raw = localStorage.getItem(MISSIONS_LS_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  };
+  const saveMissions = reactExports.useCallback((m2) => {
+    try {
+      localStorage.setItem(MISSIONS_LS_KEY, JSON.stringify(m2));
+    } catch {
+    }
+  }, []);
+  const [missions, setMissions] = reactExports.useState(loadMissions);
+  const MISSION_DEFS = reactExports.useMemo(
+    () => [
+      {
+        id: "first_plot",
+        title: "Purchase your first plot",
+        desc: "Buy any hex territory on the globe",
+        reward: 200,
+        check: () => player.plotsOwned.length >= 1
+      },
+      {
+        id: "tier3_upgrade",
+        title: "Upgrade a plot to tier 3",
+        desc: "Reach Generator tier 3 on any plot",
+        reward: 500,
+        check: () => Object.values(generatorTiers).some((t) => t >= 3)
+      },
+      {
+        id: "acc_1000",
+        title: "Accumulate 1000 FRNTR",
+        desc: "Hold at least 1,000 FRNTR in your balance",
+        reward: 300,
+        check: () => player.frntBalance >= 1e3
+      }
+    ],
+    [player.plotsOwned, player.frntBalance, generatorTiers]
+  );
+  reactExports.useEffect(() => {
+    const interval = setInterval(() => {
+      setMissions((prev) => {
+        const next = { ...prev };
+        let changed = false;
+        for (const m2 of MISSION_DEFS) {
+          const current = next[m2.id] ?? { completed: false, claimed: false };
+          if (!current.claimed && !current.completed && m2.check()) {
+            next[m2.id] = { completed: true, claimed: false };
+            changed = true;
+          }
+          if (current.completed && !current.claimed) {
+            addFrntr(m2.reward);
+            ue.success(`Mission complete! +${m2.reward} FRNTR`, {
+              duration: 4e3
+            });
+            next[m2.id] = { completed: true, claimed: true };
+            changed = true;
+          }
+        }
+        if (changed) saveMissions(next);
+        return changed ? next : prev;
+      });
+    }, 2e3);
+    return () => clearInterval(interval);
+  }, [MISSION_DEFS, addFrntr, saveMissions]);
+  const ownedPlotData = reactExports.useMemo(
+    () => plots.filter((p2) => player.plotsOwned.includes(String(p2.id))),
+    [plots, player.plotsOwned]
+  );
+  const TIER_DAILY2 = {
+    0: 7,
+    1: 9,
+    2: 12,
+    3: 17,
+    4: 25,
+    5: 37,
+    6: 55
+  };
+  const totalDailyFrntr = reactExports.useMemo(() => {
+    return ownedPlotData.reduce((sum, plot) => {
+      const tier = generatorTiers[String(plot.id)] ?? 0;
+      return sum + (TIER_DAILY2[tier] ?? 7);
+    }, 0);
+  }, [ownedPlotData, generatorTiers]);
+  reactExports.useEffect(() => {
+    const interval = setInterval(() => {
+      useGameStore.getState().tickPassiveIncome();
+    }, 1e3);
+    return () => clearInterval(interval);
+  }, []);
+  const displayBalance = useGameStore(
+    (s2) => s2.confirmedFrntBalance + s2.accruedFrntSinceSync
+  );
+  const perSecRate = totalDailyFrntr / 86400;
+  const displayBurned = totalFRNTRBurned;
+  const handleClaim = async () => {
+    if (!actor || isClaiming || accruedFrntSinceSync < 1e-3) return;
+    setIsClaiming(true);
+    try {
+      const res = await actor.claimAccumulatedTokens();
+      if ("ok" in res) {
+        const claimed = Number(res.ok) / 1e8;
+        ue.success(`Claimed ${claimed.toFixed(4)} FRNTR!`, {
+          duration: 4e3
+        });
+        try {
+          const state2 = await actor.getPlayerState();
+          if (state2) {
+            setFrntrBalance(state2.frntBalance);
+          }
+        } catch {
+          addFrntr(accruedFrntSinceSync);
+        }
+      } else {
+        const errMsg = res.err;
+        ue.error(`Claim failed: ${errMsg}`, { duration: 4e3 });
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Claim failed";
+      ue.error(msg, { duration: 4e3 });
+    } finally {
+      setIsClaiming(false);
+    }
+  };
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "div",
+    {
+      "data-ocid": "command.panel",
+      style: {
+        padding: "12px 14px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
+        height: "100%",
+        overflowY: "auto"
+      },
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "flex", gap: 6 }, children: ["tokens", "missions"].map((tab) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            type: "button",
+            "data-ocid": `command.${tab}.tab`,
+            onClick: () => setActiveTab(tab),
+            style: {
+              flex: 1,
+              padding: "7px 0",
+              borderRadius: 6,
+              background: activeTab === tab ? "rgba(0,255,204,0.12)" : "rgba(0,10,20,0.5)",
+              border: `1px solid ${activeTab === tab ? `${CYAN$7}66` : BORDER$7}`,
+              color: activeTab === tab ? CYAN$7 : TEXT_DIM$2,
+              fontSize: 7,
+              fontWeight: 700,
+              letterSpacing: 1.5,
+              cursor: "pointer",
+              textTransform: "uppercase",
+              borderBottom: activeTab === tab ? `2px solid ${CYAN$7}` : "1px solid transparent"
+            },
+            children: tab === "tokens" ? "TOKEN ECONOMY" : "MISSIONS"
+          },
+          tab
+        )) }),
+        activeTab === "tokens" && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              style: {
+                background: "rgba(0,20,40,0.55)",
+                border: `1px solid ${BORDER$7}`,
+                borderRadius: 10,
+                padding: "12px 14px"
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      fontSize: 8,
+                      color: TEXT_DIM$2,
+                      letterSpacing: 2,
+                      marginBottom: 6
+                    },
+                    children: "FRNTR BALANCE"
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      fontSize: 20,
+                      fontWeight: 900,
+                      color: CYAN$7,
+                      fontFamily: "monospace",
+                      textShadow: `0 0 12px ${CYAN$7}`,
+                      marginBottom: 4
+                    },
+                    children: fmtFrntr(displayBalance)
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { fontSize: 9, color: CYAN_DIM$5, marginBottom: 10 }, children: [
+                  "+",
+                  totalDailyFrntr.toLocaleString(),
+                  " FRNTR/DAY ·",
+                  " ",
+                  perSecRate.toFixed(8),
+                  " FRNTR/SEC"
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "button",
+                  {
+                    type: "button",
+                    "data-ocid": "command.claim_button",
+                    onClick: handleClaim,
+                    disabled: isClaiming || accruedFrntSinceSync < 1e-3 || !actor,
+                    style: {
+                      width: "100%",
+                      padding: "9px 0",
+                      borderRadius: 6,
+                      background: accruedFrntSinceSync >= 1e-3 && !isClaiming ? "linear-gradient(135deg, rgba(0,255,204,0.18), rgba(0,255,204,0.07))" : "rgba(255,255,255,0.03)",
+                      border: `1px solid ${accruedFrntSinceSync >= 1e-3 && !isClaiming ? `${CYAN$7}99` : BORDER$7}`,
+                      color: accruedFrntSinceSync >= 1e-3 && !isClaiming ? CYAN$7 : "rgba(0,255,204,0.3)",
+                      fontSize: 11,
+                      fontWeight: 900,
+                      letterSpacing: 2,
+                      cursor: accruedFrntSinceSync >= 1e-3 && !isClaiming && actor ? "pointer" : "not-allowed",
+                      fontFamily: "monospace",
+                      textShadow: accruedFrntSinceSync >= 1e-3 ? `0 0 8px ${CYAN$7}88` : "none",
+                      transition: "all 0.2s"
+                    },
+                    children: isClaiming ? "CLAIMING…" : accruedFrntSinceSync < 1e-3 ? "CLAIM (ACCUMULATING…)" : `CLAIM +${fmtFrntr(accruedFrntSinceSync)} FRNTR`
+                  }
+                )
+              ]
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
+            {
+              style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 },
+              children: [
+                {
+                  icon: Zap,
+                  label: "Plots Owned",
+                  value: player.plotsOwned.length,
+                  color: CYAN$7,
+                  sub: `${totalDailyFrntr} F/day`
+                },
+                {
+                  icon: Flame,
+                  label: "FRNTR Burned",
+                  value: fmtFrntr(displayBurned),
+                  color: "#ef4444",
+                  sub: "out of circulation"
+                },
+                {
+                  icon: TrendingUp,
+                  label: "Daily Yield",
+                  value: `${totalDailyFrntr}`,
+                  color: "#ffd700",
+                  sub: "FRNTR total"
+                },
+                {
+                  icon: Zap,
+                  label: "Rank Points",
+                  value: player.plotsOwned.length * 100,
+                  color: "#a855f7",
+                  sub: "global score"
+                }
+              ].map((stat) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "div",
+                {
+                  style: {
+                    background: "rgba(0,10,20,0.5)",
+                    border: `1px solid ${BORDER$7}`,
+                    borderRadius: 8,
+                    padding: "10px"
+                  },
+                  children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "div",
+                      {
+                        style: {
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 5,
+                          marginBottom: 4
+                        },
+                        children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(stat.icon, { size: 11, color: stat.color }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "span",
+                            {
+                              style: { fontSize: 7, color: TEXT_DIM$2, letterSpacing: 1.5 },
+                              children: stat.label.toUpperCase()
+                            }
+                          )
+                        ]
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "div",
+                      {
+                        style: {
+                          fontSize: 14,
+                          fontWeight: 900,
+                          color: stat.color,
+                          fontFamily: "monospace"
+                        },
+                        children: stat.value
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 7, color: TEXT_DIM$2, marginTop: 2 }, children: stat.sub })
+                  ]
+                },
+                stat.label
+              ))
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              style: {
+                background: "rgba(0,20,40,0.55)",
+                border: `1px solid ${BORDER$7}`,
+                borderRadius: 10,
+                padding: "12px 14px"
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      fontSize: 8,
+                      color: TEXT_DIM$2,
+                      letterSpacing: 2,
+                      marginBottom: 8
+                    },
+                    children: "TOKEN SUPPLY OVERVIEW"
+                  }
+                ),
+                [
+                  {
+                    label: "Pre-Minted",
+                    value: 5e9,
+                    total: 1e10,
+                    color: "#ffd700"
+                  },
+                  {
+                    label: "Mineable Left",
+                    value: 5e9 - totalFRNTRBurned,
+                    total: 1e10,
+                    color: CYAN$7
+                  }
+                ].map((item) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { marginBottom: 8 }, children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "div",
+                    {
+                      style: {
+                        display: "flex",
+                        justifyContent: "space-between",
+                        marginBottom: 3
+                      },
+                      children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 8, color: TEXT_DIM$2 }, children: item.label }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                          "span",
+                          {
+                            style: {
+                              fontSize: 8,
+                              color: item.color,
+                              fontFamily: "monospace"
+                            },
+                            children: [
+                              (item.value / 1e9).toFixed(2),
+                              "B"
+                            ]
+                          }
+                        )
+                      ]
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    MiniBar,
+                    {
+                      value: item.value,
+                      max: item.total,
+                      color: item.color
+                    }
+                  )
+                ] }, item.label))
+              ]
+            }
+          )
+        ] }),
+        activeTab === "missions" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 10 }, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
+            {
+              style: {
+                fontSize: 8,
+                color: TEXT_DIM$2,
+                letterSpacing: 2,
+                marginBottom: 2
+              },
+              children: "ACTIVE MISSIONS"
+            }
+          ),
+          MISSION_DEFS.map((m2) => {
+            const state2 = missions[m2.id] ?? {
+              completed: false,
+              claimed: false
+            };
+            const isDone = state2.completed;
+            return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "div",
+              {
+                "data-ocid": `command.mission.${m2.id}`,
+                style: {
+                  background: isDone ? "rgba(0,255,204,0.07)" : "rgba(0,10,20,0.5)",
+                  border: `1px solid ${isDone ? `${CYAN$7}55` : BORDER$7}`,
+                  borderRadius: 10,
+                  padding: "12px 14px",
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 10
+                },
+                children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { flexShrink: 0, marginTop: 2 }, children: isDone ? /* @__PURE__ */ jsxRuntimeExports.jsx(CircleCheckBig, { size: 16, color: CYAN$7 }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Circle, { size: 16, color: "rgba(255,255,255,0.25)" }) }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { flex: 1, minWidth: 0 }, children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "div",
+                      {
+                        style: {
+                          fontSize: 10,
+                          fontWeight: 700,
+                          color: isDone ? CYAN$7 : TEXT$3,
+                          letterSpacing: 0.5,
+                          marginBottom: 3
+                        },
+                        children: m2.title
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "div",
+                      {
+                        style: {
+                          fontSize: 8,
+                          color: TEXT_DIM$2,
+                          letterSpacing: 0.3,
+                          marginBottom: 6
+                        },
+                        children: m2.desc
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "div",
+                      {
+                        style: {
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 4,
+                          padding: "3px 8px",
+                          borderRadius: 4,
+                          background: isDone ? "rgba(255,215,0,0.12)" : "rgba(255,215,0,0.06)",
+                          border: "1px solid rgba(255,215,0,0.3)"
+                        },
+                        children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(Target, { size: 9, color: "#ffd700" }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                            "span",
+                            {
+                              style: {
+                                fontSize: 8,
+                                color: "#ffd700",
+                                fontWeight: 700,
+                                letterSpacing: 1
+                              },
+                              children: [
+                                "+",
+                                m2.reward,
+                                " FRNTR"
+                              ]
+                            }
+                          )
+                        ]
+                      }
+                    ),
+                    state2.claimed && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "span",
+                      {
+                        style: {
+                          marginLeft: 6,
+                          fontSize: 7,
+                          color: CYAN_DIM$5,
+                          letterSpacing: 1
+                        },
+                        children: "CLAIMED"
+                      }
+                    )
+                  ] })
+                ]
+              },
+              m2.id
+            );
+          })
+        ] })
+      ]
+    }
+  );
+}
+const ICP_LEDGER_CANISTER_ID$1 = "ryjl3-tyaaa-aaaaa-aaaba-cai";
+const POLL_INTERVAL_MS = 3e4;
+const icpLedgerIdlFactory = ({ IDL: IDL2 }) => {
+  const AccountType = IDL2.Record({
+    owner: IDL2.Principal,
+    subaccount: IDL2.Opt(IDL2.Vec(IDL2.Nat8))
+  });
+  return IDL2.Service({
+    icrc1_balance_of: IDL2.Func([AccountType], [IDL2.Nat], ["query"])
+  });
+};
+function useIcpBalance() {
+  const { identity: identity2, isAuthenticated } = useInternetIdentity();
+  const [icpBalance, setIcpBalanceState] = reactExports.useState(0n);
+  const [_tick, setTick] = reactExports.useState(0);
+  const setIcpBalance = useGameStore((s2) => s2.setIcpBalance);
+  const refetch = reactExports.useCallback(() => setTick((t) => t + 1), []);
+  reactExports.useEffect(() => {
+    if (!identity2 || !isAuthenticated) {
+      setIcpBalanceState(0n);
+      return;
+    }
+    let cancelled = false;
+    const fetchBalance = async () => {
+      try {
+        const agent = new HttpAgent({ identity: identity2 });
+        const actor = Actor.createActor(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          icpLedgerIdlFactory,
+          { agent, canisterId: ICP_LEDGER_CANISTER_ID$1 }
+        );
+        const principal = identity2.getPrincipal();
+        const raw = await actor.icrc1_balance_of({
+          owner: principal,
+          subaccount: []
+        });
+        if (!cancelled) {
+          setIcpBalanceState(raw);
+          setIcpBalance(raw);
+        }
+      } catch {
+      }
+    };
+    void fetchBalance();
+    const interval = setInterval(() => void fetchBalance(), POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [identity2, isAuthenticated, setIcpBalance]);
+  const icpBalanceFormatted = Number(icpBalance) / 1e8;
+  return { icpBalance, icpBalanceFormatted, refetch };
+}
 const CYAN$6 = "#00ffcc";
 const BORDER$6 = "rgba(0,255,204,0.22)";
 function FaucetOverlay() {
   const { isAuthenticated } = useInternetIdentity();
   const { actor, isFetching } = useActor(createActor);
   const mintTestTokens = useGameStore((s2) => s2.mintTestTokens);
+  const { refetch: refetchIcp } = useIcpBalance();
   const [loading2, setLoading] = reactExports.useState(false);
   const isReady = isAuthenticated && !!actor && !isFetching;
   const handleFaucet = async () => {
@@ -88680,36 +90484,45 @@ function FaucetOverlay() {
       if (actor) {
         const result = await actor.testFaucetV2();
         if ("ok" in result) {
-          const _grant = result.ok;
           try {
             const state2 = await actor.getPlayerState();
             if (state2) {
+              applyConfirmedFrntrBalance(BigInt(state2.frntBalance));
+              const icpFromState = "icpBalance" in state2 && typeof state2.icpBalance !== "undefined" ? Number(state2.icpBalance) / 1e8 : null;
+              if (icpFromState !== null) {
+                useGameStore.getState().setIcpBalance(BigInt(Math.round(icpFromState * 1e8)));
+              }
               useGameStore.setState((s2) => ({
                 player: {
                   ...s2.player,
-                  frntBalance: Number(state2.frntBalance) / 1e8,
                   iron: Number(state2.iron) / 1e8,
                   fuel: Number(state2.fuel) / 1e8,
                   crystal: Number(state2.crystal) / 1e8
-                  // ICP balance is now read from the real ledger via useIcpBalance()
                 }
               }));
             }
           } catch {
             mintTestTokens();
           }
-          ue.success("+500 FRNTR + 2 ICP claimed!", { duration: 4e3 });
+          refetchIcp();
+          ue.success("5000 FRNTR and 5 ICP added to your wallet", {
+            duration: 4e3
+          });
         } else {
-          mintTestTokens();
-          ue.success("+500 FRNTR + 2 ICP claimed!", { duration: 4e3 });
+          const errMsg = "err" in result ? result.err : "Faucet unavailable";
+          ue.error(`Faucet failed: ${errMsg}`, { duration: 4e3 });
         }
       } else {
         mintTestTokens();
-        ue.success("+500 FRNTR + 2 ICP claimed!", { duration: 4e3 });
+        ue.success("5000 FRNTR and 5 ICP added to your wallet", {
+          duration: 4e3
+        });
       }
     } catch {
       mintTestTokens();
-      ue.success("+500 FRNTR + 2 ICP claimed!", { duration: 4e3 });
+      ue.success("5000 FRNTR and 5 ICP added to your wallet", {
+        duration: 4e3
+      });
     } finally {
       setLoading(false);
     }
@@ -88721,7 +90534,7 @@ function FaucetOverlay() {
       "data-ocid": "faucet.button",
       onClick: handleFaucet,
       disabled: loading2,
-      title: isReady ? "Claim 500 FRNTR + 2 ICP (testnet, unlimited)" : "Claim test tokens",
+      title: isReady ? "Claim 5000 FRNTR + 5 ICP (testnet, unlimited)" : "Claim test tokens",
       style: {
         display: "flex",
         alignItems: "center",
@@ -88746,7 +90559,7 @@ function FaucetOverlay() {
       },
       children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(FlaskConical, { size: 11 }),
-        loading2 ? "CLAIMING..." : "TESTNET FAUCET"
+        loading2 ? "CLAIMING..." : "+5000 FRNTR +5 ICP"
       ]
     }
   );
@@ -99841,6 +101654,21 @@ const _mat4 = new Matrix4();
 const _quat = new Quaternion();
 const _pos = new Vector3();
 const _Y = new Vector3(0, 1, 0);
+const BIOME_TILE_COLORS = {
+  Temperate: new Color("#4a7c59"),
+  Desert: new Color("#c8a96e"),
+  Arctic: new Color("#a8d8ea"),
+  Tropical: new Color("#2d6a4f"),
+  Ocean: new Color("#1a4a6e"),
+  DeepOcean: new Color("#0d2d45"),
+  Volcanic: new Color("#6b3a3a"),
+  AsteroidImpact: new Color("#7b5ea7"),
+  // Legacy mappings for backward compat
+  Forest: new Color("#4a7c59"),
+  Grassland: new Color("#4a7c59"),
+  Mountain: new Color("#a8d8ea"),
+  Toxic: new Color("#2d6a4f")
+};
 const COL_BASE = new Color(0.05, 0.07, 0.07);
 const COL_OWNED = new Color(62975);
 const COL_OTHERS_OWNED = new Color(16747520);
@@ -99878,17 +101706,23 @@ function GlobeHexGrid() {
   reactExports.useEffect(() => {
     const mesh = meshRef.current;
     if (!mesh) return;
-    for (let i2 = 0; i2 < count; i2++) mesh.setColorAt(i2, COL_BASE);
+    for (let i2 = 0; i2 < count; i2++) {
+      const tile = GEODESIC_TILES[i2];
+      const biome = tile ? assignBiomeForTile(tile.lat, tile.lng) : "Ocean";
+      const biomeCol = BIOME_TILE_COLORS[biome] ?? COL_BASE;
+      mesh.setColorAt(i2, biomeCol);
+    }
     for (const p2 of plots) {
       if (p2.owner && !p2.isOwnedByMe && p2.id >= 0 && p2.id < count)
-        mesh.setColorAt(p2.id, COL_OTHERS_OWNED);
+        mesh.setColorAt(Number(p2.id), COL_OTHERS_OWNED);
     }
     for (const p2 of plots) {
       if (p2.isOwnedByMe && p2.id >= 0 && p2.id < count)
-        mesh.setColorAt(p2.id, COL_OWNED);
+        mesh.setColorAt(Number(p2.id), COL_OWNED);
     }
     for (const pid of ownedPlots) {
-      if (pid >= 0 && pid < count) mesh.setColorAt(pid, COL_OWNED);
+      if (Number(pid) >= 0 && Number(pid) < count)
+        mesh.setColorAt(Number(pid), COL_OWNED);
     }
     if (hoveredId !== null && hoveredId >= 0 && hoveredId < count) {
       mesh.setColorAt(hoveredId, COL_HOVER);
@@ -99905,9 +101739,9 @@ function GlobeHexGrid() {
     const dist = camera.position.length();
     const mat = mesh.material;
     mat.opacity = MathUtils.clamp(
-      MathUtils.mapLinear(dist, 1.4, 2.5, 0.35, 0.06),
-      0.04,
-      0.38
+      MathUtils.mapLinear(dist, 1.4, 2.5, 0.55, 0.18),
+      0.12,
+      0.6
     );
   });
   return /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -100997,329 +102831,151 @@ function GlobeCanvas({
   missileConfig,
   onPlotSelect
 }) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(
-    Canvas,
+  const hoveredPlotId = useGameStore((s2) => s2.hoveredPlotId);
+  const [mousePos, setMousePos] = reactExports.useState(
+    null
+  );
+  const handlePointerMoveOverlay = (e) => {
+    setMousePos({ x: e.clientX, y: e.clientY });
+  };
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "div",
     {
-      camera: { fov: 60, position: [0, 0, 2.8], near: 0.1, far: 200 },
-      gl: { antialias: true, alpha: false },
-      style: { background: "#020509", touchAction: "none" },
-      children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-        GlobeScene,
-        {
-          controlsRef,
-          missileActive,
-          onMissileComplete,
-          missileConfig,
-          onPlotSelect
-        }
-      )
+      className: "relative w-full h-full",
+      onPointerMove: handlePointerMoveOverlay,
+      children: [
+        hoveredPlotId !== null && mousePos && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            className: "absolute z-50 pointer-events-none px-2 py-1 rounded-md text-xs font-mono text-white bg-black/60 backdrop-blur-sm border border-white/10 shadow-lg",
+            style: { left: mousePos.x + 12, top: mousePos.y - 28 },
+            children: [
+              "Plot #",
+              hoveredPlotId
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          Canvas,
+          {
+            camera: { fov: 60, position: [0, 0, 2.8], near: 0.1, far: 200 },
+            gl: { antialias: true, alpha: false },
+            style: { background: "#020509", touchAction: "none" },
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+              GlobeScene,
+              {
+                controlsRef,
+                missileActive,
+                onMissileComplete,
+                missileConfig,
+                onPlotSelect
+              }
+            )
+          }
+        )
+      ]
     }
   );
 }
-const COOLDOWN_MS = 144e5;
-function formatCountdown(seconds) {
-  const h2 = Math.floor(seconds / 3600);
-  const m2 = Math.floor(seconds % 3600 / 60);
-  const s2 = seconds % 60;
-  if (h2 > 0) return `${h2}h ${String(m2).padStart(2, "0")}m`;
-  return `${String(m2).padStart(2, "0")}:${String(s2).padStart(2, "0")}`;
-}
-function buildSlots(plotId, purchaseTime) {
-  const now2 = Date.now();
-  const elapsed = purchaseTime ? now2 - purchaseTime : COOLDOWN_MS;
-  return Array.from({ length: 7 }, (_2, i2) => {
-    const subId = plotId * 10 + i2;
-    const label = i2 === 0 ? "NEXUS" : `SLOT ${i2}`;
-    let status;
-    let secondsRemaining = 0;
-    if (i2 === 0) {
-      status = "ACTIVE";
-    } else if (elapsed < COOLDOWN_MS) {
-      status = "COOLDOWN";
-      secondsRemaining = Math.ceil((COOLDOWN_MS - elapsed) / 1e3);
-    } else {
-      status = "EMPTY";
-    }
-    return {
-      slotIndex: i2,
-      subId,
-      label,
-      status,
-      secondsRemaining,
-      buildingType: ""
-    };
-  });
-}
-function SubParcelIntelView({ plotId, plotsOwned }) {
-  const plotPurchaseTimes = useGameStore((s2) => s2.plotPurchaseTimes);
-  const storePlotsOwned = useGameStore((s2) => s2.player.plotsOwned);
-  const [now2, setNow] = reactExports.useState(Date.now());
-  const timerRef = reactExports.useRef(null);
-  const ownedList = plotsOwned ?? storePlotsOwned;
-  const isOwned = ownedList.includes(plotId);
-  const purchaseTime = plotPurchaseTimes[plotId];
-  reactExports.useEffect(() => {
-    if (!isOwned) return;
-    timerRef.current = setInterval(() => setNow(Date.now()), 1e3);
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [isOwned]);
-  if (!plotId || !isOwned) {
-    return /* @__PURE__ */ jsxRuntimeExports.jsx(
-      "div",
-      {
-        style: {
-          padding: "20px 16px",
-          textAlign: "center",
-          color: "#585b70",
-          fontSize: "11px",
-          fontFamily: "monospace",
-          letterSpacing: "0.05em"
-        },
-        children: "Select an owned plot on the globe to view sub-parcels."
-      }
-    );
+const LORE_ENTRIES = [
+  {
+    id: 1,
+    timestamp: "2047-03-15T04:22:00Z",
+    category: "TRANSMISSION",
+    content: "Welcome to Frontier: Missile Horizon. The war for Earth's remaining resources has begun. Secure your territory before others do."
+  },
+  {
+    id: 2,
+    timestamp: "2047-03-16T09:14:00Z",
+    category: "INTEL",
+    content: "The FRNTR token is the lifeblood of the Frontier economy. Landowners generate FRNTR passively — those who upgrade their generators gain decisive advantages."
+  },
+  {
+    id: 3,
+    timestamp: "2047-03-17T18:05:00Z",
+    category: "DIRECTIVE",
+    content: "10,242 hex plots divide the surface of Earth. Each plot is an NFT on the Internet Computer — fully on-chain, fully yours. No central server. No middleman."
+  },
+  {
+    id: 4,
+    timestamp: "2047-03-18T22:31:00Z",
+    category: "FIELD REPORT",
+    content: "Asteroid Impact zones carry exotic particles from an ancient orbital collision. These regions are rare — fewer than 10% of all plots. Their resource potential remains classified."
+  },
+  {
+    id: 5,
+    timestamp: "2047-03-19T07:48:00Z",
+    category: "TREASURY BRIEF",
+    content: "Every ICP spent on land is split automatically: 25% funds the developer team, 25% builds the leaderboard prize pool, and 50% seeds the FRNTR/ICP liquidity pool on ICPSwap."
+  },
+  {
+    id: 6,
+    timestamp: "2047-03-20T13:00:00Z",
+    category: "TRANSMISSION",
+    content: "Survey your plots to unlock strategic intelligence. Detailed resource data and efficiency ratings are available after a paid survey unlock. Knowledge is power."
+  },
+  {
+    id: 7,
+    timestamp: "2047-03-21T02:17:00Z",
+    category: "SYSTEM ALERT",
+    content: "Phase I of the Frontier rollout is live: land acquisition, token generation, and plot upgrades. Phase II — sub-plot specialization, factions, and advanced combat — is in development."
   }
-  const slots = buildSlots(plotId, purchaseTime);
-  const nexus = slots[0];
-  const surrounding = slots.slice(1);
-  const angles = [-90, -30, 30, 90, 150, 210];
-  function slotColor(status) {
-    if (status === "ACTIVE") return "#00ffcc";
-    if (status === "COOLDOWN") return "#f59e0b";
-    return "#4b5563";
-  }
-  function slotBg(status) {
-    if (status === "ACTIVE") return "rgba(0,255,204,0.08)";
-    if (status === "COOLDOWN") return "rgba(245,158,11,0.08)";
-    return "rgba(20,24,40,0.6)";
-  }
-  function slotBorder(status) {
-    if (status === "ACTIVE") return "1px solid rgba(0,255,204,0.4)";
-    if (status === "COOLDOWN") return "1px solid rgba(245,158,11,0.5)";
-    return "1px solid #374151";
-  }
-  const containerSize = 220;
-  const centerX = containerSize / 2;
-  const centerY = containerSize / 2;
-  const radius = 76;
-  const nexusR = 36;
-  const slotR = 28;
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { padding: "12px 10px" }, children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs(
-      "div",
-      {
-        style: {
-          fontSize: "9px",
-          color: "#7f849c",
-          fontFamily: "monospace",
-          letterSpacing: "0.12em",
-          marginBottom: "8px",
-          textTransform: "uppercase"
-        },
-        children: [
-          "PLOT #",
-          plotId,
-          " · 7 SUB-PARCELS"
-        ]
-      }
-    ),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs(
-      "div",
-      {
-        style: {
-          position: "relative",
-          width: containerSize,
-          height: containerSize,
-          margin: "0 auto"
-        },
-        children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "svg",
-            {
-              role: "img",
-              "aria-label": "Sub-parcel connector lines",
-              width: containerSize,
-              height: containerSize,
-              style: { position: "absolute", top: 0, left: 0 },
-              children: angles.map((angle, i2) => {
-                const rad = angle * Math.PI / 180;
-                const x22 = centerX + Math.cos(rad) * radius;
-                const y2 = centerY + Math.sin(rad) * radius;
-                return /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "line",
-                  {
-                    x1: centerX,
-                    y1: centerY,
-                    x2: x22,
-                    y2,
-                    stroke: slotColor(surrounding[i2].status),
-                    strokeWidth: 0.5,
-                    strokeOpacity: 0.25
-                  },
-                  angle
-                );
-              })
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "div",
-            {
-              "data-ocid": "subparcel.slot.0",
-              style: {
-                position: "absolute",
-                left: centerX - nexusR,
-                top: centerY - nexusR,
-                width: nexusR * 2,
-                height: nexusR * 2,
-                borderRadius: "50%",
-                background: slotBg(nexus.status),
-                border: `2px solid ${slotColor(nexus.status)}`,
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "1px",
-                backdropFilter: "blur(8px)"
-              },
-              children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "div",
-                  {
-                    style: {
-                      fontSize: "7px",
-                      color: slotColor(nexus.status),
-                      fontFamily: "monospace",
-                      letterSpacing: "0.08em",
-                      fontWeight: 700
-                    },
-                    children: "NEXUS"
-                  }
-                ),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                  "div",
-                  {
-                    style: {
-                      fontSize: "6px",
-                      color: "rgba(0,255,204,0.5)",
-                      fontFamily: "monospace"
-                    },
-                    children: [
-                      "#",
-                      nexus.subId
-                    ]
-                  }
-                ),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "div",
-                  {
-                    style: {
-                      fontSize: "6px",
-                      color: slotColor(nexus.status),
-                      fontFamily: "monospace"
-                    },
-                    children: "ACTIVE"
-                  }
-                )
-              ]
-            }
-          ),
-          surrounding.map((slot, i2) => {
-            const angle = angles[i2];
-            const rad = angle * Math.PI / 180;
-            const cx = centerX + Math.cos(rad) * radius;
-            const cy = centerY + Math.sin(rad) * radius;
-            return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-              "div",
-              {
-                "data-ocid": `subparcel.slot.${slot.slotIndex}`,
-                style: {
-                  position: "absolute",
-                  left: cx - slotR,
-                  top: cy - slotR,
-                  width: slotR * 2,
-                  height: slotR * 2,
-                  borderRadius: "6px",
-                  background: slotBg(slot.status),
-                  border: slotBorder(slot.status),
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "1px",
-                  backdropFilter: "blur(6px)"
-                },
-                children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "div",
-                    {
-                      style: {
-                        fontSize: "7px",
-                        color: slotColor(slot.status),
-                        fontFamily: "monospace",
-                        letterSpacing: "0.06em",
-                        fontWeight: 700
-                      },
-                      children: slot.label
-                    }
-                  ),
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                    "div",
-                    {
-                      style: {
-                        fontSize: "6px",
-                        color: "rgba(255,255,255,0.3)",
-                        fontFamily: "monospace"
-                      },
-                      children: [
-                        "#",
-                        slot.subId
-                      ]
-                    }
-                  ),
-                  slot.status === "COOLDOWN" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "div",
-                    {
-                      style: {
-                        fontSize: "6px",
-                        color: "#f59e0b",
-                        fontFamily: "monospace"
-                      },
-                      children: formatCountdown(slot.secondsRemaining)
-                    }
-                  ) : /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "div",
-                    {
-                      style: {
-                        fontSize: "6px",
-                        color: slotColor(slot.status),
-                        fontFamily: "monospace"
-                      },
-                      children: slot.status
-                    }
-                  )
-                ]
-              },
-              slot.slotIndex
-            );
-          })
-        ]
-      }
-    ),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(
-      "div",
-      {
-        style: {
-          display: "flex",
-          gap: "12px",
-          justifyContent: "center",
-          marginTop: "8px"
-        },
-        children: ["ACTIVE", "COOLDOWN", "EMPTY"].map((s2) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+];
+const CYAN$5 = "#00ffcc";
+const BORDER$5 = "rgba(0,255,204,0.22)";
+const CATEGORY_COLORS = {
+  TRANSMISSION: "#00ffcc",
+  INTEL: "#38bdf8",
+  DIRECTIVE: "#f59e0b",
+  "FIELD REPORT": "#a78bfa",
+  "TREASURY BRIEF": "#34d399",
+  "SYSTEM ALERT": "#f87171"
+};
+function GameLoreWindow() {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "div",
+    {
+      style: {
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        minHeight: 180,
+        background: "rgba(5,10,22,0.85)",
+        border: `1px solid ${BORDER$5}`,
+        borderTop: `2px solid ${CYAN$5}`,
+        borderRadius: 8,
+        boxShadow: "0 0 18px rgba(0,255,204,0.08), inset 0 0 40px rgba(0,0,0,0.4)",
+        overflow: "hidden",
+        position: "relative"
+      },
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
           "div",
           {
-            style: { display: "flex", alignItems: "center", gap: "4px" },
+            "aria-hidden": "true",
+            style: {
+              position: "absolute",
+              inset: 0,
+              pointerEvents: "none",
+              background: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.06) 2px, rgba(0,0,0,0.06) 4px)",
+              zIndex: 1
+            }
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            style: {
+              padding: "8px 12px",
+              borderBottom: `1px solid ${BORDER$5}`,
+              background: "rgba(0,255,204,0.04)",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              flexShrink: 0,
+              zIndex: 2,
+              position: "relative"
+            },
             children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx(
                 "div",
@@ -101328,7 +102984,9 @@ function SubParcelIntelView({ plotId, plotsOwned }) {
                     width: 6,
                     height: 6,
                     borderRadius: "50%",
-                    background: slotColor(s2)
+                    background: CYAN$5,
+                    boxShadow: `0 0 8px ${CYAN$5}`,
+                    animation: "pulse 2s ease-in-out infinite"
                   }
                 }
               ),
@@ -101336,83 +102994,178 @@ function SubParcelIntelView({ plotId, plotsOwned }) {
                 "span",
                 {
                   style: {
-                    fontSize: "7px",
-                    color: "#7f849c",
-                    fontFamily: "monospace",
-                    letterSpacing: "0.08em"
+                    fontSize: 9,
+                    fontFamily: "var(--font-mono, monospace)",
+                    color: CYAN$5,
+                    letterSpacing: 3,
+                    fontWeight: 700,
+                    textTransform: "uppercase"
                   },
-                  children: s2
+                  children: "FRONTIER LORE FEED"
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { flex: 1 } }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "span",
+                {
+                  style: {
+                    fontSize: 7,
+                    color: "rgba(0,255,204,0.4)",
+                    fontFamily: "var(--font-mono, monospace)",
+                    letterSpacing: 1
+                  },
+                  children: "LIVE · ICP MAINNET"
                 }
               )
             ]
-          },
-          s2
-        ))
-      }
-    )
-  ] });
-}
-function IntelTab() {
-  const selectedPlotId = useGameStore((s2) => s2.selectedPlotId);
-  const plotsOwned = useGameStore((s2) => s2.player.plotsOwned);
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-    "div",
-    {
-      style: {
-        padding: "12px",
-        color: "#cdd6f4",
-        fontFamily: "var(--font-body, sans-serif)"
-      },
-      children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "h2",
-          {
-            style: {
-              fontSize: "12px",
-              letterSpacing: "0.15em",
-              color: "#00ffcc",
-              fontFamily: "var(--font-mono, monospace)",
-              textTransform: "uppercase",
-              margin: "0 0 12px 0"
-            },
-            children: "INTEL"
           }
         ),
         /* @__PURE__ */ jsxRuntimeExports.jsxs(
           "div",
           {
             style: {
-              background: "rgba(17,17,27,0.7)",
-              border: "1px solid #313244",
-              borderRadius: "6px",
-              marginBottom: "8px"
+              flex: 1,
+              overflowY: "auto",
+              padding: "10px 12px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+              zIndex: 2,
+              position: "relative"
             },
             children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
+              LORE_ENTRIES.map((entry) => {
+                const catColor = CATEGORY_COLORS[entry.category] ?? CYAN$5;
+                const dateStr = new Date(entry.timestamp).toLocaleDateString(
+                  void 0,
+                  { month: "short", day: "numeric", year: "2-digit" }
+                );
+                return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "div",
+                  {
+                    "data-ocid": `lore.item.${entry.id}`,
+                    style: {
+                      background: "rgba(0,255,204,0.02)",
+                      border: "1px solid rgba(0,255,204,0.1)",
+                      borderLeft: `2px solid ${catColor}`,
+                      borderRadius: 6,
+                      padding: "8px 10px"
+                    },
+                    children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                        "div",
+                        {
+                          style: {
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                            marginBottom: 4
+                          },
+                          children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsx(
+                              "span",
+                              {
+                                style: {
+                                  fontSize: 7,
+                                  fontFamily: "var(--font-mono, monospace)",
+                                  color: catColor,
+                                  letterSpacing: 2,
+                                  fontWeight: 700,
+                                  textTransform: "uppercase"
+                                },
+                                children: entry.category
+                              }
+                            ),
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { flex: 1 } }),
+                            /* @__PURE__ */ jsxRuntimeExports.jsx(
+                              "span",
+                              {
+                                style: {
+                                  fontSize: 7,
+                                  color: "rgba(224,244,255,0.3)",
+                                  fontFamily: "var(--font-mono, monospace)"
+                                },
+                                children: dateStr
+                              }
+                            )
+                          ]
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "p",
+                        {
+                          style: {
+                            fontSize: 10,
+                            color: "rgba(224,244,255,0.75)",
+                            lineHeight: 1.65,
+                            margin: 0,
+                            fontFamily: "var(--font-mono, monospace)"
+                          },
+                          children: entry.content
+                        }
+                      )
+                    ]
+                  },
+                  entry.id
+                );
+              }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs(
                 "div",
                 {
                   style: {
-                    padding: "6px 10px",
-                    borderBottom: "1px solid #313244",
-                    fontSize: "10px",
-                    letterSpacing: "0.12em",
-                    color: "#7f849c",
-                    fontFamily: "var(--font-mono, monospace)"
+                    background: "rgba(0,0,0,0.3)",
+                    border: "1px dashed rgba(0,255,204,0.15)",
+                    borderRadius: 6,
+                    padding: "14px",
+                    textAlign: "center"
                   },
-                  children: "SUB-PARCEL LAYOUT"
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                SubParcelIntelView,
-                {
-                  plotId: selectedPlotId ?? 0,
-                  plotsOwned
+                  children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "div",
+                      {
+                        style: {
+                          fontSize: 9,
+                          color: "rgba(0,255,204,0.3)",
+                          fontFamily: "var(--font-mono, monospace)",
+                          letterSpacing: 2
+                        },
+                        children: "VIDEO DISPATCHES · COMING SOON"
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "div",
+                      {
+                        style: {
+                          fontSize: 8,
+                          color: "rgba(224,244,255,0.2)",
+                          marginTop: 4
+                        },
+                        children: "Player-generated field reports will appear here"
+                      }
+                    )
+                  ]
                 }
               )
             ]
           }
         )
       ]
+    }
+  );
+}
+function IntelTab() {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "div",
+    {
+      style: {
+        padding: "12px",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+        pointerEvents: "none"
+      },
+      children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { pointerEvents: "auto", flex: 1 }, children: /* @__PURE__ */ jsxRuntimeExports.jsx(GameLoreWindow, {}) })
     }
   );
 }
@@ -101423,7 +103176,7 @@ function formatPlotPrice(priceE8s, icpUsdPrice) {
   const usd = (icp * icpUsdPrice).toFixed(2);
   return `${icpStr} ICP (~${usd})`;
 }
-const ICP_LEDGER_CANISTER_ID$1 = "ryjl3-tyaaa-aaaaa-aaaba-cai";
+const ICP_LEDGER_CANISTER_ID = "ryjl3-tyaaa-aaaaa-aaaba-cai";
 const icrc2IdlFactory = ({ IDL: IDL2 }) => {
   const Principal3 = IDL2.Principal;
   const ApproveArgs = IDL2.Record({
@@ -101463,7 +103216,7 @@ function usePurchasePlot() {
       setIsPurchasing(false);
       const result = {
         success: true,
-        message: `[OFFLINE] PLOT #${plotId} ACQUIRED`
+        message: `[OFFLINE] PLOT ${plotId} ACQUIRED`
       };
       setLastResult(result);
       return result;
@@ -101472,27 +103225,38 @@ function usePurchasePlot() {
       const gamePrincipalText = void 0;
       let priceDisplay = null;
       if (gamePrincipalText) ;
-      const res = await actor.purchasePlot(BigInt(plotId));
+      const res = await actor.purchasePlot(plotId);
       const success = "ok" in res;
-      const message = success ? res.ok ?? `PLOT #${plotId} ACQUIRED` : res.err ?? `PLOT #${plotId} PURCHASE FAILED`;
+      const message = success ? res.ok ?? `PLOT ${plotId} ACQUIRED` : res.err ?? `PLOT ${plotId} PURCHASE FAILED`;
       const displayMessage = success && priceDisplay ? `${message} · ${priceDisplay}` : message;
       if (success) {
         const unlockTs = Date.now() + 4 * 60 * 60 * 1e3;
         useGameStore.setState((s2) => ({
           subParcelCooldowns: {
-            ...s2.subParcelCooldowns,
-            [String(plotId)]: unlockTs
+            ...s2.subParcelCooldowns ?? {},
+            [plotId]: unlockTs
           }
         }));
+        try {
+          const [playerState, owners] = await Promise.all([
+            actor.getPlayerState(),
+            actor.getLivePlotOwners()
+          ]);
+          if (playerState) {
+            applyConfirmedFrntrBalance(BigInt(playerState.frntBalance));
+          }
+          const myPrincipal = useGameStore.getState().player.principal ?? "";
+          useGameStore.getState().setLivePlotOwners(owners, myPrincipal);
+        } catch {
+        }
       } else {
         useGameStore.setState((s2) => ({
           player: {
             ...s2.player,
-            plotsOwned: s2.player.plotsOwned.filter((id2) => id2 !== plotId),
-            frntBalance: s2.player.frntBalance + 100
+            plotsOwned: s2.player.plotsOwned.filter((id2) => id2 !== plotId)
           },
           plots: s2.plots.map(
-            (p2) => p2.id === plotId ? { ...p2, owner: null } : p2
+            (p2) => String(p2.id) === plotId ? { ...p2, owner: null, isOwnedByMe: false } : p2
           )
         }));
       }
@@ -101504,11 +103268,10 @@ function usePurchasePlot() {
       useGameStore.setState((s2) => ({
         player: {
           ...s2.player,
-          plotsOwned: s2.player.plotsOwned.filter((id2) => id2 !== plotId),
-          frntBalance: s2.player.frntBalance + 100
+          plotsOwned: s2.player.plotsOwned.filter((id2) => id2 !== plotId)
         },
         plots: s2.plots.map(
-          (p2) => p2.id === plotId ? { ...p2, owner: null } : p2
+          (p2) => String(p2.id) === plotId ? { ...p2, owner: null, isOwnedByMe: false } : p2
         )
       }));
       const result = { success: false, message };
@@ -101520,25 +103283,43 @@ function usePurchasePlot() {
   }
   return { purchasePlot, isPurchasing, lastResult };
 }
-const CYAN$5 = "#00ffcc";
-const CYAN_DIM$5 = "rgba(0,255,204,0.5)";
-const BORDER$5 = "rgba(0,255,204,0.15)";
+const CYAN$4 = "#00ffcc";
+const CYAN_DIM$4 = "rgba(0,255,204,0.5)";
+const BORDER$4 = "rgba(0,255,204,0.15)";
 const BIOME_BADGE_COLORS = {
-  Arctic: "#a8d8ea",
+  Temperate: "#4a9b5f",
   Desert: "#e8c97a",
-  Forest: "#4a9b5f",
+  Arctic: "#a8d8ea",
+  Tropical: "#22c55e",
   Ocean: "#1a6b9e",
-  Mountain: "#7a6b5a",
+  DeepOcean: "#0f3460",
   Volcanic: "#c0392b",
+  AsteroidImpact: "#9333ea",
+  // Legacy biomes for backward compat
+  Forest: "#4a9b5f",
+  Mountain: "#7a6b5a",
   Grassland: "#5aab4a",
   Toxic: "#7dba3a"
 };
-const COMMANDER_IMAGES = {
-  "NOVA PRIME": "/assets/generated/commander-nova-prime-transparent.dim_300x300.png",
-  "IRON CLAW": "/assets/generated/commander-iron-claw-transparent.dim_300x300.png",
-  "PHANTOM OPS": "/assets/generated/commander-phantom-ops-transparent.dim_300x300.png",
-  "VOID HUNTER": "/assets/generated/commander-void-hunter-transparent.dim_300x300.png"
+const RARITY_CONFIG = {
+  AsteroidImpact: {
+    label: "RARE",
+    color: "#9333ea",
+    bg: "rgba(147,51,234,0.18)"
+  },
+  Volcanic: {
+    label: "UNCOMMON",
+    color: "#f97316",
+    bg: "rgba(249,115,22,0.15)"
+  }
 };
+function getRarity(biome) {
+  return RARITY_CONFIG[biome] ?? {
+    label: "COMMON",
+    color: "rgba(148,163,184,0.8)",
+    bg: "rgba(148,163,184,0.12)"
+  };
+}
 function focusOnPlot(lat, lng, controlsRef) {
   var _a3, _b3, _c2;
   if (!(controlsRef == null ? void 0 : controlsRef.current)) return;
@@ -101574,39 +103355,16 @@ function actionBtnStyle(color2, bg) {
     fontFamily: "monospace"
   };
 }
-function SurveyReport({
-  plot,
-  isOwnPlot,
-  playerFrntr,
-  mineYield,
-  regenError,
-  onMine,
-  onRegen
-}) {
-  const [now2, setNow] = reactExports.useState(Date.now());
-  reactExports.useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1e4);
-    return () => clearInterval(t);
-  }, []);
-  const regenActive = now2 < plot.regenActiveUntil;
-  const regenRemaining = plot.regenActiveUntil - now2;
-  const regenHours = Math.floor(regenRemaining / 36e5);
-  const regenMins = Math.floor(regenRemaining % 36e5 / 6e4);
-  const monthly = projectedMonthlyYield(plot.biome, plot.efficiency);
+function SurveyReport({ plot, isOwnPlot: _isOwnPlot }) {
   const effPct = plot.efficiency;
   const effColor2 = effPct > 80 ? "#22c55e" : effPct >= 60 ? "#f59e0b" : "#ef4444";
-  const previewYield = getMineralYield(
-    plot.biome,
-    plot.efficiency,
-    regenActive
-  );
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { marginBottom: 14 }, children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx(
       "div",
       {
         style: {
           fontSize: 9,
-          color: CYAN_DIM$5,
+          color: CYAN_DIM$4,
           letterSpacing: 2,
           fontFamily: "monospace",
           marginBottom: 8
@@ -101679,258 +103437,6 @@ function SurveyReport({
             }
           )
         }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(
-        "div",
-        {
-          style: {
-            marginTop: 3,
-            fontSize: 7,
-            color: "rgba(224,244,255,0.3)",
-            fontFamily: "monospace",
-            letterSpacing: 0.5
-          },
-          children: [
-            "Extracted: ",
-            plot.mineCount,
-            "x · Degrades 1% per 2 mines"
-          ]
-        }
-      )
-    ] }),
-    regenActive && /* @__PURE__ */ jsxRuntimeExports.jsxs(
-      "div",
-      {
-        "data-ocid": "map.success_state",
-        style: {
-          marginBottom: 8,
-          fontSize: 8,
-          color: CYAN$5,
-          fontFamily: "monospace",
-          letterSpacing: 1,
-          padding: "3px 6px",
-          background: "rgba(0,255,204,0.07)",
-          border: "1px solid rgba(0,255,204,0.2)",
-          borderRadius: 3
-        },
-        children: [
-          "⚡ REGEN ACTIVE: ",
-          regenHours,
-          "h ",
-          regenMins,
-          "m remaining"
-        ]
-      }
-    ),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs(
-      "div",
-      {
-        style: {
-          marginBottom: 10,
-          padding: "7px 8px",
-          background: "rgba(0,0,0,0.25)",
-          border: "1px solid rgba(0,255,204,0.12)",
-          borderRadius: 4
-        },
-        children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "div",
-            {
-              style: {
-                fontSize: 7,
-                color: CYAN_DIM$5,
-                letterSpacing: 2,
-                fontFamily: "monospace",
-                marginBottom: 5
-              },
-              children: "PROJECTED MONTHLY YIELD"
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "div",
-            {
-              style: {
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: "3px 10px"
-              },
-              children: [
-                { label: "IRON", val: monthly.iron, color: "#94a3b8" },
-                { label: "FUEL", val: monthly.fuel, color: "#f97316" },
-                { label: "CRYSTAL", val: monthly.crystal, color: "#3b82f6" },
-                { label: "RARE EARTH", val: monthly.rareEarth, color: "#c084fc" }
-              ].map(({ label, val, color: color2 }) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                "div",
-                {
-                  style: {
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center"
-                  },
-                  children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsx(
-                      "span",
-                      {
-                        style: {
-                          fontSize: 7,
-                          color: "rgba(224,244,255,0.45)",
-                          letterSpacing: 0.5,
-                          fontFamily: "monospace"
-                        },
-                        children: label
-                      }
-                    ),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx(
-                      "span",
-                      {
-                        style: {
-                          fontSize: 8,
-                          fontWeight: 700,
-                          color: color2,
-                          fontFamily: "monospace"
-                        },
-                        children: val >= 1e3 ? `${(val / 1e3).toFixed(1)}K` : val
-                      }
-                    )
-                  ]
-                },
-                label
-              ))
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "div",
-            {
-              style: {
-                marginTop: 4,
-                fontSize: 7,
-                color: "rgba(224,244,255,0.25)",
-                fontFamily: "monospace"
-              },
-              children: [
-                "Based on 10 mines/day · Biome: ",
-                plot.biome
-              ]
-            }
-          )
-        ]
-      }
-    ),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs(
-      "div",
-      {
-        style: {
-          marginBottom: isOwnPlot ? 10 : 0,
-          fontSize: 7,
-          color: "rgba(224,244,255,0.35)",
-          fontFamily: "monospace",
-          letterSpacing: 0.5
-        },
-        children: [
-          "Per mine:",
-          " ",
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { style: { color: "#94a3b8" }, children: [
-            "+",
-            previewYield.iron,
-            " Fe"
-          ] }),
-          " ",
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { style: { color: "#f97316" }, children: [
-            "+",
-            previewYield.fuel,
-            " Fuel"
-          ] }),
-          " ",
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { style: { color: "#3b82f6" }, children: [
-            "+",
-            previewYield.crystal,
-            " Xtal"
-          ] }),
-          " ",
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { style: { color: "#c084fc" }, children: [
-            "+",
-            previewYield.rareEarth,
-            " Rare"
-          ] })
-        ]
-      }
-    ),
-    mineYield && /* @__PURE__ */ jsxRuntimeExports.jsxs(
-      "div",
-      {
-        "data-ocid": "map.success_state",
-        style: {
-          marginBottom: 8,
-          padding: "5px 8px",
-          background: "rgba(34,197,94,0.12)",
-          border: "1px solid rgba(34,197,94,0.3)",
-          borderRadius: 4,
-          fontSize: 9,
-          color: "#22c55e",
-          fontFamily: "monospace",
-          letterSpacing: 0.5,
-          fontWeight: 700
-        },
-        children: [
-          "+",
-          mineYield.iron,
-          " IRON +",
-          mineYield.fuel,
-          " FUEL +",
-          mineYield.crystal,
-          " ",
-          "XTAL +",
-          mineYield.rareEarth,
-          " RARE"
-        ]
-      }
-    ),
-    isOwnPlot && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 6 }, children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "button",
-        {
-          type: "button",
-          "data-ocid": "map.primary_button",
-          onClick: onMine,
-          style: {
-            ...actionBtnStyle("#00ffcc", "rgba(0,255,204,0.1)"),
-            fontSize: 10
-          },
-          children: "⛏ MINE RESOURCES"
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "button",
-        {
-          type: "button",
-          "data-ocid": "map.secondary_button",
-          onClick: onRegen,
-          disabled: regenActive || playerFrntr < 50,
-          style: {
-            ...actionBtnStyle(
-              regenActive ? "rgba(0,255,204,0.3)" : playerFrntr < 50 ? "rgba(245,158,11,0.3)" : "#f59e0b",
-              regenActive ? "rgba(0,0,0,0.2)" : "rgba(245,158,11,0.08)"
-            ),
-            opacity: regenActive || playerFrntr < 50 ? 0.55 : 1,
-            cursor: regenActive || playerFrntr < 50 ? "not-allowed" : "pointer",
-            fontSize: 10
-          },
-          children: "⚡ REGEN BOOST — 50 FRNTR"
-        }
-      ),
-      regenError && /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "div",
-        {
-          "data-ocid": "map.error_state",
-          style: {
-            fontSize: 9,
-            color: "#ef4444",
-            textAlign: "center",
-            letterSpacing: 1,
-            fontFamily: "monospace"
-          },
-          children: regenError
-        }
       )
     ] })
   ] });
@@ -101947,18 +103453,19 @@ const TIER_COSTS = {
   0: 500,
   1: 1500,
   2: 4e3,
-  3: 8e3,
-  4: 15e3
+  3: 1e4,
+  4: 25e3,
+  5: 6e4
 };
 function MapBottomSheet({
   onClose,
   controlsRef
 }) {
   const [purchaseError, setPurchaseError] = reactExports.useState(null);
-  const [mineYield, setMineYield] = reactExports.useState(null);
-  const [regenError, setRegenError] = reactExports.useState(null);
+  const [showPurchaseConfirm, setShowPurchaseConfirm] = reactExports.useState(false);
   const [upgradeStatus, setUpgradeStatus] = reactExports.useState("idle");
   const [upgradeError, setUpgradeError] = reactExports.useState(null);
+  const [claimStatus, setClaimStatus] = reactExports.useState("idle");
   const { actor } = useActor(createActor);
   const selectedPlotId = useGameStore((s2) => s2.selectedPlotId);
   const plots = useGameStore((s2) => s2.plots);
@@ -101967,27 +103474,47 @@ function MapBottomSheet({
   useGameStore((s2) => s2.getSubParcels);
   const setTargetPlotId = useGameStore((s2) => s2.setTargetPlotId);
   const setPlotHoverCard = useGameStore((s2) => s2.setPlotHoverCard);
-  const commanderAssignments = useGameStore((s2) => s2.commanderAssignments);
   const icpUsdPrice = useGameStore((s2) => s2.icpUsdPrice);
-  const mineResources = useGameStore((s2) => s2.mineResources);
-  const activateRegenBoost = useGameStore((s2) => s2.activateRegenBoost);
+  const accruedSinceSync = useGameStore((s2) => s2.accruedFrntSinceSync);
+  const confirmedFrntBalance = useGameStore((s2) => s2.confirmedFrntBalance);
+  const [fetchedPriceE8s, setFetchedPriceE8s] = reactExports.useState(null);
   const { purchasePlot, isPurchasing } = usePurchasePlot();
   const plot = selectedPlotId !== null ? plots.find((p2) => p2.id === selectedPlotId) ?? null : null;
+  const localPriceE8s = plot ? BigInt(
+    (plot.efficiency ?? 0) >= 90 ? 3e9 : (plot.efficiency ?? 0) >= 80 ? 9e8 : 25e7
+  ) : null;
+  reactExports.useEffect(() => {
+    setFetchedPriceE8s(null);
+    if (!actor || selectedPlotId === null) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const price = await actor.getPlotPrice(BigInt(selectedPlotId));
+        if (!cancelled) setFetchedPriceE8s(BigInt(price));
+      } catch {
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [actor, selectedPlotId]);
   const handleUpgrade = reactExports.useCallback(async () => {
     if (!plot || !actor || upgradeStatus === "upgrading") return;
     setUpgradeStatus("upgrading");
     setUpgradeError(null);
     try {
-      const res = await actor.upgradeGenerator(BigInt(plot.id));
-      if ("ok" in res) {
-        const newTier = res.ok.generatorTier;
+      const res = await actor.upgradeGenerator(String(plot.id));
+      if (res.__kind__ === "ok") {
+        const view = res.ok;
+        const newTier = view.generatorTier;
         const tierMap = {
           None: 0,
           TierI: 1,
           TierII: 2,
           TierIII: 3,
           TierIV: 4,
-          TierV: 5
+          TierV: 5,
+          TierVI: 6
         };
         const numericTier = tierMap[newTier] ?? 1;
         const burnCost = TIER_COSTS[numericTier - 1] ?? 0;
@@ -102013,8 +103540,8 @@ function MapBottomSheet({
         setUpgradeStatus("success");
         setTimeout(() => setUpgradeStatus("idle"), 2500);
       } else {
-        const errStr = String(res.err);
-        setUpgradeError(errStr);
+        const errKind = res.err;
+        setUpgradeError(String(errKind));
         setUpgradeStatus("error");
         setTimeout(() => setUpgradeStatus("idle"), 3e3);
       }
@@ -102027,26 +103554,69 @@ function MapBottomSheet({
   }, [actor, plot, upgradeStatus]);
   const playerPrincipal = player.principal ?? "You";
   const isOwned = (plot == null ? void 0 : plot.owner) !== null && (plot == null ? void 0 : plot.owner) !== void 0;
-  const isOwnPlot = isOwned && ((plot == null ? void 0 : plot.owner) === playerPrincipal || selectedPlotId !== null && player.plotsOwned.includes(selectedPlotId));
+  const isOwnPlot = isOwned && ((plot == null ? void 0 : plot.owner) === playerPrincipal || selectedPlotId !== null && player.plotsOwned.includes(String(selectedPlotId)));
   const isEnemyPlot = isOwned && !isOwnPlot;
-  const icpPriceE8s = ((plot == null ? void 0 : plot.efficiency) ?? 0) >= 90 ? 3e9 : ((plot == null ? void 0 : plot.efficiency) ?? 0) >= 80 ? 9e8 : 25e7;
-  const icpFloat = icpPriceE8s / 1e8;
+  const activePriceE8s = fetchedPriceE8s ?? localPriceE8s ?? 200000000n;
+  const icpFloat = Number(activePriceE8s) / 1e8;
   const icpPriceDisplay = icpUsdPrice ? `${icpFloat.toFixed(4)} ICP (~${(icpFloat * icpUsdPrice).toFixed(2)})` : `${icpFloat.toFixed(4)} ICP ($ unavailable)`;
   async function handlePurchase() {
     if (!plot || isPurchasing) return;
     setPurchaseError(null);
-    const result = await purchasePlot(plot.id);
+    setShowPurchaseConfirm(true);
+  }
+  async function handleConfirmPurchase() {
+    if (!plot || isPurchasing) return;
+    setShowPurchaseConfirm(false);
+    setPurchaseError(null);
+    const shortId = String(plot.id).slice(0, 8);
+    const result = await purchasePlot(String(plot.id));
     if (result.success) {
       onClose();
       focusOnPlot(plot.lat, plot.lng, controlsRef);
       setPlotHoverCard({
         plotId: plot.id,
         owner: player.principal ?? "You",
-        action: "TERRITORY ACQUIRED",
-        nextStep: "Open Command Center to track FRNTR generation. Build a Silo to attack."
+        action: `Plot acquired! ${plot.biome} plot ${shortId}`,
+        nextStep: "Open Command Center to track FRNTR generation."
       });
     } else {
       setPurchaseError(result.message);
+    }
+  }
+  async function handleClaimFrntr() {
+    if (claimStatus === "claiming" || accruedSinceSync < 1e-3) return;
+    setClaimStatus("claiming");
+    try {
+      if (actor) {
+        const res = await actor.claimAccumulatedTokens();
+        if (res.__kind__ === "ok") {
+          try {
+            const state2 = await actor.getPlayerState();
+            if (state2) {
+              useGameStore.setState(() => ({
+                confirmedFrntBalance: Number(state2.frntBalance) / 1e8,
+                accruedFrntSinceSync: 0,
+                player: {
+                  ...useGameStore.getState().player,
+                  frntBalance: Number(state2.frntBalance) / 1e8
+                }
+              }));
+            }
+          } catch {
+          }
+          setClaimStatus("success");
+          setTimeout(() => setClaimStatus("idle"), 2500);
+        } else {
+          setClaimStatus("error");
+          setTimeout(() => setClaimStatus("idle"), 3e3);
+        }
+      } else {
+        setClaimStatus("error");
+        setTimeout(() => setClaimStatus("idle"), 3e3);
+      }
+    } catch {
+      setClaimStatus("error");
+      setTimeout(() => setClaimStatus("idle"), 3e3);
     }
   }
   function handleSetTarget() {
@@ -102061,7 +103631,7 @@ function MapBottomSheet({
       nextStep: "Select weapon and FIRE."
     });
   }
-  const biomeBadgeColor = plot ? BIOME_BADGE_COLORS[plot.biome] ?? CYAN$5 : CYAN$5;
+  const biomeBadgeColor = plot ? BIOME_BADGE_COLORS[plot.biome] ?? CYAN$4 : CYAN$4;
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx("style", { children: `
         @keyframes mapGlobePulse {
@@ -102109,7 +103679,7 @@ function MapBottomSheet({
                       {
                         size: 48,
                         style: {
-                          color: CYAN$5,
+                          color: CYAN$4,
                           animation: "mapGlobePulse 2s ease-in-out infinite"
                         }
                       }
@@ -102119,7 +103689,7 @@ function MapBottomSheet({
                       {
                         style: {
                           fontSize: 10,
-                          color: CYAN_DIM$5,
+                          color: CYAN_DIM$4,
                           letterSpacing: 2,
                           textAlign: "center",
                           maxWidth: 200,
@@ -102149,7 +103719,7 @@ function MapBottomSheet({
                             style: {
                               fontSize: 14,
                               fontWeight: 700,
-                              color: CYAN$5,
+                              color: CYAN$4,
                               letterSpacing: 1,
                               fontFamily: "monospace"
                             },
@@ -102184,7 +103754,7 @@ function MapBottomSheet({
                     {
                       style: {
                         fontSize: 10,
-                        color: CYAN_DIM$5,
+                        color: CYAN_DIM$4,
                         letterSpacing: 1,
                         marginBottom: 3,
                         fontFamily: "monospace"
@@ -102212,98 +103782,21 @@ function MapBottomSheet({
                         "°E"
                       ]
                     }
-                  ),
-                  (commanderAssignments == null ? void 0 : commanderAssignments[plot.id]) && /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                    "div",
-                    {
-                      style: {
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 6,
-                        marginTop: 5
-                      },
-                      children: [
-                        /* @__PURE__ */ jsxRuntimeExports.jsx(
-                          "div",
-                          {
-                            style: {
-                              width: 24,
-                              height: 24,
-                              clipPath: "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)",
-                              overflow: "hidden",
-                              flexShrink: 0,
-                              border: "1px solid rgba(0,255,204,0.4)"
-                            },
-                            children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-                              "img",
-                              {
-                                src: COMMANDER_IMAGES[commanderAssignments[plot.id]] ?? "",
-                                alt: commanderAssignments[plot.id],
-                                style: {
-                                  width: "100%",
-                                  height: "100%",
-                                  objectFit: "cover"
-                                }
-                              }
-                            )
-                          }
-                        ),
-                        /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                          "span",
-                          {
-                            style: {
-                              fontSize: 9,
-                              color: "#00ffcc",
-                              letterSpacing: 1,
-                              fontFamily: "monospace"
-                            },
-                            children: [
-                              "CMD: ",
-                              commanderAssignments[plot.id]
-                            ]
-                          }
-                        )
-                      ]
-                    }
                   )
                 ] }),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "div",
                   {
-                    style: { height: 1, background: BORDER$5, marginBottom: 12 }
+                    style: { height: 1, background: BORDER$4, marginBottom: 12 }
                   }
                 ),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "div",
                   {
-                    style: { height: 1, background: BORDER$5, marginBottom: 12 }
+                    style: { height: 1, background: BORDER$4, marginBottom: 12 }
                   }
                 ),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  SurveyReport,
-                  {
-                    plot,
-                    isOwnPlot,
-                    playerFrntr: player.frntBalance,
-                    mineYield,
-                    regenError,
-                    onMine: () => {
-                      const yld = mineResources(plot.id);
-                      if (yld) {
-                        setMineYield(yld);
-                        setTimeout(() => setMineYield(null), 3e3);
-                      }
-                    },
-                    onRegen: () => {
-                      setRegenError(null);
-                      if (player.frntBalance < 50) {
-                        setRegenError("INSUFFICIENT FRNTR");
-                        return;
-                      }
-                      activateRegenBoost(plot.id);
-                    }
-                  }
-                )
+                /* @__PURE__ */ jsxRuntimeExports.jsx(SurveyReport, { plot, isOwnPlot })
               ] })
             }
           ),
@@ -102312,12 +103805,198 @@ function MapBottomSheet({
             {
               style: {
                 padding: "12px 16px",
-                borderTop: `1px solid ${BORDER$5}`,
+                borderTop: `1px solid ${BORDER$4}`,
                 flexShrink: 0
               },
               children: [
                 !isOwned && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  showPurchaseConfirm && plot ? (
+                    /* NFT PURCHASE CONFIRMATION CARD */
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "div",
+                      {
+                        "data-ocid": "map.dialog",
+                        style: {
+                          background: "rgba(0,10,20,0.85)",
+                          border: "1px solid rgba(0,255,204,0.25)",
+                          borderRadius: 8,
+                          padding: "14px 14px 10px",
+                          backdropFilter: "blur(14px)",
+                          WebkitBackdropFilter: "blur(14px)"
+                        },
+                        children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "div",
+                            {
+                              style: {
+                                fontSize: 9,
+                                color: CYAN_DIM$4,
+                                letterSpacing: 2,
+                                fontFamily: "monospace",
+                                marginBottom: 10
+                              },
+                              children: "CONFIRM PURCHASE"
+                            }
+                          ),
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                            "div",
+                            {
+                              style: {
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: 5,
+                                marginBottom: 12
+                              },
+                              children: [
+                                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                                  "div",
+                                  {
+                                    style: {
+                                      display: "flex",
+                                      justifyContent: "space-between",
+                                      fontSize: 9,
+                                      fontFamily: "monospace"
+                                    },
+                                    children: [
+                                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: "rgba(224,244,255,0.45)" }, children: "PLOT ID" }),
+                                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$4, fontWeight: 700 }, children: String(plot.id).slice(0, 8) })
+                                    ]
+                                  }
+                                ),
+                                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                                  "div",
+                                  {
+                                    style: {
+                                      display: "flex",
+                                      justifyContent: "space-between",
+                                      alignItems: "center",
+                                      fontSize: 9,
+                                      fontFamily: "monospace"
+                                    },
+                                    children: [
+                                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: "rgba(224,244,255,0.45)" }, children: "BIOME" }),
+                                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                        "span",
+                                        {
+                                          style: {
+                                            padding: "1px 6px",
+                                            borderRadius: 3,
+                                            background: `${BIOME_BADGE_COLORS[plot.biome] ?? CYAN$4}22`,
+                                            border: `1px solid ${BIOME_BADGE_COLORS[plot.biome] ?? CYAN$4}`,
+                                            color: BIOME_BADGE_COLORS[plot.biome] ?? CYAN$4,
+                                            fontWeight: 700,
+                                            letterSpacing: 1
+                                          },
+                                          children: plot.biome.toUpperCase()
+                                        }
+                                      )
+                                    ]
+                                  }
+                                ),
+                                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                                  "div",
+                                  {
+                                    style: {
+                                      display: "flex",
+                                      justifyContent: "space-between",
+                                      alignItems: "center",
+                                      fontSize: 9,
+                                      fontFamily: "monospace"
+                                    },
+                                    children: [
+                                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: "rgba(224,244,255,0.45)" }, children: "RARITY" }),
+                                      (() => {
+                                        const r2 = getRarity(plot.biome);
+                                        return /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                          "span",
+                                          {
+                                            style: {
+                                              padding: "1px 6px",
+                                              borderRadius: 3,
+                                              background: r2.bg,
+                                              border: `1px solid ${r2.color}`,
+                                              color: r2.color,
+                                              fontWeight: 700,
+                                              letterSpacing: 1
+                                            },
+                                            children: r2.label
+                                          }
+                                        );
+                                      })()
+                                    ]
+                                  }
+                                ),
+                                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                                  "div",
+                                  {
+                                    style: {
+                                      display: "flex",
+                                      justifyContent: "space-between",
+                                      fontSize: 9,
+                                      fontFamily: "monospace"
+                                    },
+                                    children: [
+                                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: "rgba(224,244,255,0.45)" }, children: "PRICE" }),
+                                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: "#ffd700", fontWeight: 700 }, children: icpPriceDisplay })
+                                    ]
+                                  }
+                                )
+                              ]
+                            }
+                          ),
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", gap: 8 }, children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsx(
+                              "button",
+                              {
+                                type: "button",
+                                "data-ocid": "map.confirm_button",
+                                onClick: handleConfirmPurchase,
+                                disabled: isPurchasing,
+                                style: {
+                                  flex: 1,
+                                  padding: "10px 0",
+                                  background: isPurchasing ? "rgba(34,197,94,0.06)" : "rgba(34,197,94,0.15)",
+                                  border: "1px solid #22c55e",
+                                  borderRadius: 6,
+                                  color: "#22c55e",
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                  letterSpacing: 2,
+                                  cursor: isPurchasing ? "not-allowed" : "pointer",
+                                  fontFamily: "monospace",
+                                  textShadow: "0 0 8px #22c55e80",
+                                  opacity: isPurchasing ? 0.6 : 1
+                                },
+                                children: isPurchasing ? "PROCESSING…" : "CONFIRM"
+                              }
+                            ),
+                            /* @__PURE__ */ jsxRuntimeExports.jsx(
+                              "button",
+                              {
+                                type: "button",
+                                "data-ocid": "map.cancel_button",
+                                onClick: () => setShowPurchaseConfirm(false),
+                                style: {
+                                  flex: 1,
+                                  padding: "10px 0",
+                                  background: "rgba(0,0,0,0.2)",
+                                  border: `1px solid ${BORDER$4}`,
+                                  borderRadius: 6,
+                                  color: CYAN_DIM$4,
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                  letterSpacing: 2,
+                                  cursor: "pointer",
+                                  fontFamily: "monospace"
+                                },
+                                children: "CANCEL"
+                              }
+                            )
+                          ] })
+                        ]
+                      }
+                    )
+                  ) : /* @__PURE__ */ jsxRuntimeExports.jsx(
                     "button",
                     {
                       type: "button",
@@ -102352,99 +104031,131 @@ function MapBottomSheet({
                   )
                 ] }),
                 isOwnPlot && (() => {
-                  const currentTier = generatorTiers[plot.id] ?? 0;
+                  const currentTier = generatorTiers[String(plot.id)] ?? 0;
                   const dailyRate = TIER_DAILY_RATES[currentTier] ?? 7;
                   const upgradeCost = TIER_COSTS[currentTier] ?? null;
-                  const canUpgrade = upgradeCost !== null && player.frntBalance >= upgradeCost && currentTier < 5;
-                  const isMaxTier = currentTier >= 5;
-                  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { marginTop: 8 }, children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                      "div",
-                      {
-                        style: {
-                          display: "flex",
-                          justifyContent: "space-between",
-                          marginBottom: 6,
-                          fontSize: 9,
-                          color: CYAN_DIM$5,
-                          fontFamily: "monospace",
-                          letterSpacing: 1
-                        },
-                        children: [
-                          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-                            "GEN TIER ",
-                            currentTier,
-                            " · ",
-                            dailyRate,
-                            " FRNTR/DAY"
-                          ] }),
-                          !isMaxTier && upgradeCost !== null && /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                            "span",
-                            {
-                              style: {
-                                color: player.frntBalance >= upgradeCost ? CYAN$5 : "#ef4444"
-                              },
-                              children: [
-                                "COST: ",
-                                upgradeCost.toLocaleString(),
-                                " FRNTR"
-                              ]
-                            }
-                          )
-                        ]
-                      }
-                    ),
-                    isMaxTier ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-                      "div",
-                      {
-                        style: {
-                          textAlign: "center",
-                          padding: "10px 0",
-                          fontSize: 10,
-                          fontWeight: 700,
-                          color: CYAN$5,
-                          letterSpacing: 2,
-                          fontFamily: "monospace",
-                          border: `1px solid ${CYAN$5}44`,
-                          borderRadius: 6
-                        },
-                        children: "MAX TIER"
-                      }
-                    ) : /* @__PURE__ */ jsxRuntimeExports.jsx(
-                      "button",
-                      {
-                        type: "button",
-                        "data-ocid": "map.upgrade_button",
-                        onClick: handleUpgrade,
-                        disabled: !canUpgrade || upgradeStatus === "upgrading",
-                        style: {
-                          ...actionBtnStyle(
-                            canUpgrade ? "#ffd700" : CYAN_DIM$5,
-                            canUpgrade ? "rgba(255,215,0,0.08)" : "rgba(0,0,0,0.2)"
-                          ),
-                          opacity: canUpgrade ? 1 : 0.5,
-                          cursor: canUpgrade ? "pointer" : "not-allowed",
-                          fontSize: 10
-                        },
-                        children: upgradeStatus === "upgrading" ? "UPGRADING…" : upgradeStatus === "success" ? "✓ UPGRADED" : `UPGRADE TO TIER ${currentTier + 1}`
-                      }
-                    ),
-                    upgradeError && /* @__PURE__ */ jsxRuntimeExports.jsx(
-                      "div",
-                      {
-                        "data-ocid": "map.error_state",
-                        style: {
-                          marginTop: 4,
-                          fontSize: 9,
-                          color: "#ef4444",
-                          textAlign: "center",
-                          letterSpacing: 1,
-                          fontFamily: "monospace"
-                        },
-                        children: upgradeError
-                      }
-                    )
-                  ] });
+                  const displayBalance = confirmedFrntBalance + accruedSinceSync;
+                  const canUpgrade = upgradeCost !== null && displayBalance >= upgradeCost && currentTier < 6;
+                  const isMaxTier = currentTier >= 6;
+                  const claimableAmount = accruedSinceSync;
+                  const canClaim = claimableAmount >= 1e-3;
+                  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "div",
+                    {
+                      style: {
+                        marginTop: 8,
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 6
+                      },
+                      children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "button",
+                          {
+                            type: "button",
+                            "data-ocid": "map.claim_button",
+                            onClick: handleClaimFrntr,
+                            disabled: !canClaim || claimStatus === "claiming",
+                            style: {
+                              ...actionBtnStyle(
+                                canClaim ? CYAN$4 : "rgba(0,255,204,0.25)",
+                                canClaim ? "rgba(0,255,204,0.1)" : "rgba(0,0,0,0.2)"
+                              ),
+                              opacity: canClaim ? 1 : 0.5,
+                              cursor: canClaim ? "pointer" : "not-allowed",
+                              fontSize: 10
+                            },
+                            children: claimStatus === "claiming" ? "CLAIMING…" : claimStatus === "success" ? "✓ CLAIMED" : `⚡ CLAIM — ${claimableAmount >= 1e-3 ? claimableAmount.toFixed(4) : "0.0000"} FRNTR`
+                          }
+                        ),
+                        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                          "div",
+                          {
+                            style: {
+                              display: "flex",
+                              justifyContent: "space-between",
+                              fontSize: 9,
+                              color: CYAN_DIM$4,
+                              fontFamily: "monospace",
+                              letterSpacing: 1
+                            },
+                            children: [
+                              /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
+                                "TIER ",
+                                currentTier,
+                                "/6 · ",
+                                dailyRate,
+                                " FRNTR/DAY"
+                              ] }),
+                              !isMaxTier && upgradeCost !== null && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                                "span",
+                                {
+                                  style: {
+                                    color: displayBalance >= upgradeCost ? CYAN$4 : "#ef4444"
+                                  },
+                                  children: [
+                                    "COST: ",
+                                    upgradeCost.toLocaleString(),
+                                    " FRNTR"
+                                  ]
+                                }
+                              )
+                            ]
+                          }
+                        ),
+                        isMaxTier ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "div",
+                          {
+                            style: {
+                              textAlign: "center",
+                              padding: "10px 0",
+                              fontSize: 10,
+                              fontWeight: 700,
+                              color: CYAN$4,
+                              letterSpacing: 2,
+                              fontFamily: "monospace",
+                              border: `1px solid ${CYAN$4}44`,
+                              borderRadius: 6
+                            },
+                            children: "MAX TIER"
+                          }
+                        ) : /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "button",
+                          {
+                            type: "button",
+                            "data-ocid": "map.upgrade_button",
+                            onClick: handleUpgrade,
+                            disabled: !canUpgrade || upgradeStatus === "upgrading",
+                            style: {
+                              ...actionBtnStyle(
+                                canUpgrade ? "#ffd700" : CYAN_DIM$4,
+                                canUpgrade ? "rgba(255,215,0,0.08)" : "rgba(0,0,0,0.2)"
+                              ),
+                              opacity: canUpgrade ? 1 : 0.5,
+                              cursor: canUpgrade ? "pointer" : "not-allowed",
+                              fontSize: 10
+                            },
+                            children: upgradeStatus === "upgrading" ? "UPGRADING…" : upgradeStatus === "success" ? "✓ UPGRADED" : `UPGRADE TIER ${currentTier} → ${currentTier + 1}`
+                          }
+                        ),
+                        upgradeError && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "div",
+                          {
+                            "data-ocid": "map.error_state",
+                            style: {
+                              marginTop: 4,
+                              fontSize: 9,
+                              color: "#ef4444",
+                              textAlign: "center",
+                              letterSpacing: 1,
+                              fontFamily: "monospace"
+                            },
+                            children: upgradeError
+                          }
+                        )
+                      ]
+                    }
+                  );
                 })(),
                 isEnemyPlot && /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "button",
@@ -102464,10 +104175,10 @@ function MapBottomSheet({
     )
   ] });
 }
-const CYAN$4 = "#00ffcc";
-const CYAN_DIM$4 = "rgba(0,255,204,0.35)";
-const BORDER$4 = "rgba(0,255,204,0.22)";
-const TEXT$3 = "#e0f4ff";
+const CYAN$3 = "#00ffcc";
+const CYAN_DIM$3 = "rgba(0,255,204,0.35)";
+const BORDER$3 = "rgba(0,255,204,0.22)";
+const TEXT$2 = "#e0f4ff";
 const TEXT_DIM$1 = "rgba(224,244,255,0.55)";
 const GOLD$1 = "#ffd700";
 const PHASES = [
@@ -102602,13 +104313,13 @@ function PlayNowOverlay({ onClose, onLogin }) {
                     padding: "4px 12px",
                     borderRadius: 20,
                     marginBottom: 14,
-                    border: `1px solid ${CYAN$4}44`,
+                    border: `1px solid ${CYAN$3}44`,
                     fontSize: 8,
                     letterSpacing: 3,
-                    color: CYAN$4,
+                    color: CYAN$3,
                     background: "rgba(0,255,204,0.07)",
                     textTransform: "uppercase",
-                    textShadow: `0 0 8px ${CYAN$4}`
+                    textShadow: `0 0 8px ${CYAN$3}`
                   },
                   children: "v1.0 NOW LIVE ON ICP"
                 }
@@ -102619,17 +104330,17 @@ function PlayNowOverlay({ onClose, onLogin }) {
                   style: {
                     fontSize: 28,
                     fontWeight: 900,
-                    color: CYAN$4,
+                    color: CYAN$3,
                     letterSpacing: 4,
                     textTransform: "uppercase",
-                    textShadow: `0 0 30px ${CYAN$4}, 0 0 60px ${CYAN$4}44`,
+                    textShadow: `0 0 30px ${CYAN$3}, 0 0 60px ${CYAN$3}44`,
                     lineHeight: 1.1,
                     marginBottom: 8
                   },
                   children: [
                     "FRONTIER:",
                     /* @__PURE__ */ jsxRuntimeExports.jsx("br", {}),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: TEXT$3 }, children: "MISSILE HORIZON" })
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: TEXT$2 }, children: "MISSILE HORIZON" })
                   ]
                 }
               ),
@@ -102650,8 +104361,8 @@ function PlayNowOverlay({ onClose, onLogin }) {
                 {
                   style: {
                     background: "rgba(0,20,40,0.55)",
-                    border: `1px solid ${BORDER$4}`,
-                    borderLeft: `3px solid ${CYAN$4}`,
+                    border: `1px solid ${BORDER$3}`,
+                    borderLeft: `3px solid ${CYAN$3}`,
                     borderRadius: 8,
                     padding: "12px 14px",
                     marginBottom: 20
@@ -102662,7 +104373,7 @@ function PlayNowOverlay({ onClose, onLogin }) {
                       {
                         style: {
                           fontSize: 8,
-                          color: CYAN$4,
+                          color: CYAN$3,
                           letterSpacing: 3,
                           marginBottom: 8,
                           fontWeight: 700
@@ -102682,7 +104393,7 @@ function PlayNowOverlay({ onClose, onLogin }) {
                         children: [
                           "The Internet Computer has mapped Earth into",
                           " ",
-                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$4 }, children: "5,882 hex plots" }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$3 }, children: "5,882 hex plots" }),
                           ". Each plot is a sovereign NFT — yours to own, mine, upgrade, and defend. FRNTR is the lifeblood of Frontier:",
                           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: GOLD$1 }, children: " 10 billion tokens" }),
                           ", 5B pre-minted and 5B mineable only by landowners over 3–5 years. No central server. No middleman. Fully on-chain, forever."
@@ -102716,7 +104427,7 @@ function PlayNowOverlay({ onClose, onLogin }) {
                       padding: "8px 10px",
                       borderRadius: 6,
                       background: phase.active ? "rgba(0,255,204,0.07)" : "rgba(255,255,255,0.02)",
-                      border: `1px solid ${phase.active ? `${CYAN$4}44` : BORDER$4}`
+                      border: `1px solid ${phase.active ? `${CYAN$3}44` : BORDER$3}`
                     },
                     children: [
                       /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -102729,8 +104440,8 @@ function PlayNowOverlay({ onClose, onLogin }) {
                             fontWeight: 700,
                             letterSpacing: 1.5,
                             background: phase.active ? "rgba(0,255,204,0.2)" : "rgba(255,255,255,0.04)",
-                            border: `1px solid ${phase.active ? CYAN$4 : BORDER$4}`,
-                            color: phase.active ? CYAN$4 : TEXT_DIM$1,
+                            border: `1px solid ${phase.active ? CYAN$3 : BORDER$3}`,
+                            color: phase.active ? CYAN$3 : TEXT_DIM$1,
                             flexShrink: 0,
                             marginTop: 1
                           },
@@ -102744,12 +104455,12 @@ function PlayNowOverlay({ onClose, onLogin }) {
                             style: {
                               fontSize: 10,
                               fontWeight: 700,
-                              color: phase.active ? TEXT$3 : TEXT_DIM$1,
+                              color: phase.active ? TEXT$2 : TEXT_DIM$1,
                               marginBottom: 2
                             },
                             children: [
                               phase.label,
-                              phase.active && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { marginLeft: 6, fontSize: 7, color: CYAN$4 }, children: "● LIVE" })
+                              phase.active && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { marginLeft: 6, fontSize: 7, color: CYAN$3 }, children: "● LIVE" })
                             ]
                           }
                         ),
@@ -102777,16 +104488,16 @@ function PlayNowOverlay({ onClose, onLogin }) {
                     padding: "14px",
                     borderRadius: 10,
                     background: "linear-gradient(135deg, rgba(0,255,204,0.25), rgba(0,255,204,0.12))",
-                    border: `2px solid ${CYAN$4}`,
-                    color: CYAN$4,
+                    border: `2px solid ${CYAN$3}`,
+                    color: CYAN$3,
                     fontSize: 13,
                     fontWeight: 900,
                     letterSpacing: 3,
                     cursor: "pointer",
                     marginBottom: 12,
                     textTransform: "uppercase",
-                    boxShadow: `0 0 24px ${CYAN$4}44`,
-                    textShadow: `0 0 10px ${CYAN$4}`
+                    boxShadow: `0 0 24px ${CYAN$3}44`,
+                    textShadow: `0 0 10px ${CYAN$3}`
                   },
                   children: "ENTER THE FRONTIER →"
                 }
@@ -102801,16 +104512,16 @@ function PlayNowOverlay({ onClose, onLogin }) {
                     padding: "14px",
                     borderRadius: 10,
                     background: "linear-gradient(135deg, rgba(0,255,204,0.25), rgba(0,255,204,0.12))",
-                    border: `2px solid ${CYAN$4}`,
-                    color: CYAN$4,
+                    border: `2px solid ${CYAN$3}`,
+                    color: CYAN$3,
                     fontSize: 13,
                     fontWeight: 900,
                     letterSpacing: 3,
                     cursor: "pointer",
                     marginBottom: 12,
                     textTransform: "uppercase",
-                    boxShadow: `0 0 24px ${CYAN$4}44`,
-                    textShadow: `0 0 10px ${CYAN$4}`
+                    boxShadow: `0 0 24px ${CYAN$3}44`,
+                    textShadow: `0 0 10px ${CYAN$3}`
                   },
                   children: "CONNECT WITH INTERNET IDENTITY"
                 }
@@ -102825,7 +104536,7 @@ function PlayNowOverlay({ onClose, onLogin }) {
                     width: "100%",
                     padding: "10px",
                     background: "transparent",
-                    border: `1px solid ${BORDER$4}`,
+                    border: `1px solid ${BORDER$3}`,
                     borderRadius: 8,
                     color: TEXT_DIM$1,
                     fontSize: 10,
@@ -102840,7 +104551,7 @@ function PlayNowOverlay({ onClose, onLogin }) {
                 "div",
                 {
                   style: {
-                    border: `1px solid ${BORDER$4}`,
+                    border: `1px solid ${BORDER$3}`,
                     borderRadius: 8,
                     overflow: "hidden"
                   },
@@ -102868,13 +104579,13 @@ function PlayNowOverlay({ onClose, onLogin }) {
                               style: {
                                 fontSize: 9,
                                 fontWeight: 700,
-                                color: CYAN$4,
+                                color: CYAN$3,
                                 letterSpacing: 2
                               },
                               children: "WHAT IS ICP?"
                             }
                           ),
-                          icpExpanded ? /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronUp, { size: 14, color: CYAN$4 }) : /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronDown, { size: 14, color: CYAN_DIM$4 })
+                          icpExpanded ? /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronUp, { size: 14, color: CYAN$3 }) : /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronDown, { size: 14, color: CYAN_DIM$3 })
                         ]
                       }
                     ),
@@ -102884,7 +104595,7 @@ function PlayNowOverlay({ onClose, onLogin }) {
                         style: {
                           padding: "12px 14px",
                           background: "rgba(0,10,20,0.5)",
-                          borderTop: `1px solid ${BORDER$4}`
+                          borderTop: `1px solid ${BORDER$3}`
                         },
                         children: [
                           /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -102899,7 +104610,7 @@ function PlayNowOverlay({ onClose, onLogin }) {
                               children: [
                                 "The",
                                 " ",
-                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$4 }, children: "Internet Computer Protocol (ICP)" }),
+                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$3 }, children: "Internet Computer Protocol (ICP)" }),
                                 " ",
                                 "is a decentralized blockchain that runs at web speed. Unlike traditional blockchains, ICP hosts entire applications on-chain — no AWS, no Google Cloud. Every smart contract (called a canister) is permanently on the network. Frontier uses ICP so that your land, your tokens, and your game data are owned by you, stored on the blockchain, and cannot be taken down by any company or government."
                               ]
@@ -102917,7 +104628,7 @@ function PlayNowOverlay({ onClose, onLogin }) {
                                 gap: 4,
                                 marginTop: 10,
                                 fontSize: 9,
-                                color: CYAN$4,
+                                color: CYAN$3,
                                 textDecoration: "none"
                               },
                               children: [
@@ -102939,565 +104650,9 @@ function PlayNowOverlay({ onClose, onLogin }) {
     }
   );
 }
-function baseStats(payGrade) {
-  if (payGrade.startsWith("E")) {
-    const n = Number.parseInt(payGrade.split("-")[1]);
-    if (n <= 4) {
-      const t2 = (n - 1) / 3;
-      return { atk: Math.round(10 + t2 * 10), def: Math.round(10 + t2 * 10) };
-    }
-    const t = (n - 5) / 4;
-    return { atk: Math.round(25 + t * 20), def: Math.round(25 + t * 20) };
-  }
-  if (payGrade.startsWith("W")) {
-    const n = Number.parseInt(payGrade.split("-")[1]);
-    const t = (n - 1) / 4;
-    return { atk: Math.round(25 + t * 20), def: Math.round(25 + t * 20) };
-  }
-  if (payGrade.startsWith("O")) {
-    const n = Number.parseInt(payGrade.split("-")[1]);
-    if (n <= 3) {
-      const t2 = (n - 1) / 2;
-      return { atk: Math.round(50 + t2 * 15), def: Math.round(50 + t2 * 15) };
-    }
-    if (n <= 6) {
-      const t2 = (n - 4) / 2;
-      return { atk: Math.round(70 + t2 * 15), def: Math.round(70 + t2 * 15) };
-    }
-    const t = (n - 7) / 3;
-    return { atk: Math.round(90 + t * 10), def: Math.round(90 + t * 10) };
-  }
-  return { atk: 10, def: 10 };
-}
-const ARMY_PROMO_COSTS = [
-  0,
-  100,
-  150,
-  200,
-  300,
-  500,
-  750,
-  1e3,
-  1500,
-  2e3,
-  2500,
-  3e3,
-  5e3,
-  7500,
-  1e4,
-  15e3,
-  2e4,
-  3e4,
-  5e4
-];
-const WO_PROMO_COSTS = [0, 500, 1e3, 2e3, 5e3];
-function ri(name) {
-  return `/assets/generated/${name}.dim_200x200.png`;
-}
-function armyRankImage(payGrade) {
-  if (payGrade.startsWith("E")) {
-    const n = Number.parseInt(payGrade.split("-")[1]);
-    return n <= 4 ? ri("rank-army-enlisted-lower") : ri("rank-army-nco");
-  }
-  if (payGrade.startsWith("O")) {
-    const n = Number.parseInt(payGrade.split("-")[1]);
-    if (n <= 3) return ri("rank-army-officer-junior");
-    if (n <= 6) return ri("rank-army-officer-field");
-    return ri("rank-army-general");
-  }
-  return ri("rank-army-enlisted-lower");
-}
-function afRankImage(payGrade, hasWings) {
-  if (hasWings) {
-    if (payGrade.startsWith("O")) {
-      const n = Number.parseInt(payGrade.split("-")[1]);
-      if (n >= 6) return ri("rank-af-command-pilot");
-    }
-    return ri("rank-af-wings");
-  }
-  return ri("rank-af-enlisted");
-}
-const ARMY_INFANTRY_RANKS = [
-  {
-    id: "pvt",
-    name: "Private",
-    abbreviation: "PVT",
-    payGrade: "E-1",
-    ...baseStats("E-1"),
-    image: armyRankImage("E-1"),
-    promotionCost: ARMY_PROMO_COSTS[0]
-  },
-  {
-    id: "pfc",
-    name: "Private First Class",
-    abbreviation: "PFC",
-    payGrade: "E-2",
-    ...baseStats("E-2"),
-    image: armyRankImage("E-2"),
-    promotionCost: ARMY_PROMO_COSTS[1]
-  },
-  {
-    id: "spc",
-    name: "Specialist",
-    abbreviation: "SPC",
-    payGrade: "E-3",
-    ...baseStats("E-3"),
-    image: armyRankImage("E-3"),
-    promotionCost: ARMY_PROMO_COSTS[2]
-  },
-  {
-    id: "cpl",
-    name: "Corporal",
-    abbreviation: "CPL",
-    payGrade: "E-4",
-    ...baseStats("E-4"),
-    image: armyRankImage("E-4"),
-    promotionCost: ARMY_PROMO_COSTS[3]
-  },
-  {
-    id: "sgt",
-    name: "Sergeant",
-    abbreviation: "SGT",
-    payGrade: "E-5",
-    ...baseStats("E-5"),
-    image: armyRankImage("E-5"),
-    promotionCost: ARMY_PROMO_COSTS[4]
-  },
-  {
-    id: "ssg",
-    name: "Staff Sergeant",
-    abbreviation: "SSG",
-    payGrade: "E-6",
-    ...baseStats("E-6"),
-    image: armyRankImage("E-6"),
-    promotionCost: ARMY_PROMO_COSTS[5]
-  },
-  {
-    id: "sfc",
-    name: "Sergeant First Class",
-    abbreviation: "SFC",
-    payGrade: "E-7",
-    ...baseStats("E-7"),
-    image: armyRankImage("E-7"),
-    promotionCost: ARMY_PROMO_COSTS[6]
-  },
-  {
-    id: "msg",
-    name: "Master Sergeant",
-    abbreviation: "MSG",
-    payGrade: "E-8",
-    ...baseStats("E-8"),
-    image: armyRankImage("E-8"),
-    promotionCost: ARMY_PROMO_COSTS[7]
-  },
-  {
-    id: "sgm",
-    name: "Sergeant Major",
-    abbreviation: "SGM",
-    payGrade: "E-9",
-    ...baseStats("E-9"),
-    image: armyRankImage("E-9"),
-    promotionCost: ARMY_PROMO_COSTS[8]
-  },
-  {
-    id: "2lt",
-    name: "Second Lieutenant",
-    abbreviation: "2LT",
-    payGrade: "O-1",
-    ...baseStats("O-1"),
-    image: armyRankImage("O-1"),
-    promotionCost: ARMY_PROMO_COSTS[9]
-  },
-  {
-    id: "1lt",
-    name: "First Lieutenant",
-    abbreviation: "1LT",
-    payGrade: "O-2",
-    ...baseStats("O-2"),
-    image: armyRankImage("O-2"),
-    promotionCost: ARMY_PROMO_COSTS[10]
-  },
-  {
-    id: "cpt",
-    name: "Captain",
-    abbreviation: "CPT",
-    payGrade: "O-3",
-    ...baseStats("O-3"),
-    image: armyRankImage("O-3"),
-    promotionCost: ARMY_PROMO_COSTS[11]
-  },
-  {
-    id: "maj",
-    name: "Major",
-    abbreviation: "MAJ",
-    payGrade: "O-4",
-    ...baseStats("O-4"),
-    image: armyRankImage("O-4"),
-    promotionCost: ARMY_PROMO_COSTS[12]
-  },
-  {
-    id: "ltc",
-    name: "Lieutenant Colonel",
-    abbreviation: "LTC",
-    payGrade: "O-5",
-    ...baseStats("O-5"),
-    image: armyRankImage("O-5"),
-    promotionCost: ARMY_PROMO_COSTS[13]
-  },
-  {
-    id: "col",
-    name: "Colonel",
-    abbreviation: "COL",
-    payGrade: "O-6",
-    ...baseStats("O-6"),
-    image: armyRankImage("O-6"),
-    promotionCost: ARMY_PROMO_COSTS[14]
-  },
-  {
-    id: "bg",
-    name: "Brigadier General",
-    abbreviation: "BG",
-    payGrade: "O-7",
-    ...baseStats("O-7"),
-    image: armyRankImage("O-7"),
-    promotionCost: ARMY_PROMO_COSTS[15]
-  },
-  {
-    id: "mg",
-    name: "Major General",
-    abbreviation: "MG",
-    payGrade: "O-8",
-    ...baseStats("O-8"),
-    image: armyRankImage("O-8"),
-    promotionCost: ARMY_PROMO_COSTS[16]
-  },
-  {
-    id: "ltg",
-    name: "Lieutenant General",
-    abbreviation: "LTG",
-    payGrade: "O-9",
-    ...baseStats("O-9"),
-    image: armyRankImage("O-9"),
-    promotionCost: ARMY_PROMO_COSTS[17]
-  },
-  {
-    id: "gen",
-    name: "General",
-    abbreviation: "GEN",
-    payGrade: "O-10",
-    ...baseStats("O-10"),
-    image: armyRankImage("O-10"),
-    promotionCost: ARMY_PROMO_COSTS[18]
-  }
-];
-const ARMY_RANGER_RANKS = ARMY_INFANTRY_RANKS.map((r2) => ({
-  ...r2,
-  id: `ranger-${r2.id}`,
-  atk: Math.round(r2.atk * 1.25)
-}));
-const MARINE_RANK_NAMES = [
-  { name: "Private", abbr: "PVT", payGrade: "E-1" },
-  { name: "Private First Class", abbr: "PFC", payGrade: "E-2" },
-  { name: "Lance Corporal", abbr: "LCpl", payGrade: "E-3" },
-  { name: "Corporal", abbr: "Cpl", payGrade: "E-4" },
-  { name: "Sergeant", abbr: "Sgt", payGrade: "E-5" },
-  { name: "Staff Sergeant", abbr: "SSgt", payGrade: "E-6" },
-  { name: "Gunnery Sergeant", abbr: "GySgt", payGrade: "E-7" },
-  { name: "Master Sergeant", abbr: "MSgt", payGrade: "E-8" },
-  { name: "Sergeant Major", abbr: "SgtMaj", payGrade: "E-9" },
-  { name: "Second Lieutenant", abbr: "2ndLt", payGrade: "O-1" },
-  { name: "First Lieutenant", abbr: "1stLt", payGrade: "O-2" },
-  { name: "Captain", abbr: "Capt", payGrade: "O-3" },
-  { name: "Major", abbr: "Maj", payGrade: "O-4" },
-  { name: "Lieutenant Colonel", abbr: "LtCol", payGrade: "O-5" },
-  { name: "Colonel", abbr: "Col", payGrade: "O-6" },
-  { name: "Brigadier General", abbr: "BGen", payGrade: "O-7" },
-  { name: "Major General", abbr: "MajGen", payGrade: "O-8" },
-  { name: "Lieutenant General", abbr: "LtGen", payGrade: "O-9" },
-  { name: "General", abbr: "Gen", payGrade: "O-10" }
-];
-const MARINE_RANKS = MARINE_RANK_NAMES.map((r2, i2) => {
-  const base = baseStats(r2.payGrade);
-  return {
-    id: `marine-${r2.abbr.toLowerCase()}`,
-    name: r2.name,
-    abbreviation: r2.abbr,
-    payGrade: r2.payGrade,
-    atk: base.atk,
-    def: Math.round(base.def * 1.3),
-    image: ri("rank-marine"),
-    promotionCost: r2.payGrade.startsWith("E") ? ARMY_PROMO_COSTS[i2] : ARMY_PROMO_COSTS[i2]
-  };
-});
-const MILITARY_POLICE_RANKS = ARMY_INFANTRY_RANKS.map((r2) => ({
-  ...r2,
-  id: `mp-${r2.id}`,
-  name: `${r2.name} (MP)`,
-  image: ri("rank-mp")
-}));
-const WARRANT_OFFICER_RANKS = [
-  {
-    id: "wo1",
-    name: "Warrant Officer 1",
-    abbreviation: "WO1",
-    payGrade: "W-1",
-    ...baseStats("W-1"),
-    image: ri("rank-warrant-officer"),
-    promotionCost: WO_PROMO_COSTS[0]
-  },
-  {
-    id: "cw2",
-    name: "Chief Warrant Officer 2",
-    abbreviation: "CW2",
-    payGrade: "W-2",
-    ...baseStats("W-2"),
-    image: ri("rank-warrant-officer"),
-    promotionCost: WO_PROMO_COSTS[1]
-  },
-  {
-    id: "cw3",
-    name: "Chief Warrant Officer 3",
-    abbreviation: "CW3",
-    payGrade: "W-3",
-    ...baseStats("W-3"),
-    image: ri("rank-warrant-officer"),
-    promotionCost: WO_PROMO_COSTS[2]
-  },
-  {
-    id: "cw4",
-    name: "Chief Warrant Officer 4",
-    abbreviation: "CW4",
-    payGrade: "W-4",
-    ...baseStats("W-4"),
-    image: ri("rank-warrant-officer"),
-    promotionCost: WO_PROMO_COSTS[3]
-  },
-  {
-    id: "cw5",
-    name: "Chief Warrant Officer 5",
-    abbreviation: "CW5",
-    payGrade: "W-5",
-    ...baseStats("W-5"),
-    image: ri("rank-warrant-officer"),
-    promotionCost: WO_PROMO_COSTS[4]
-  }
-];
-const AF_RANK_DEFS = [
-  { name: "Airman Basic", abbr: "AB", payGrade: "E-1" },
-  { name: "Airman", abbr: "Amn", payGrade: "E-2" },
-  { name: "Airman First Class", abbr: "A1C", payGrade: "E-3" },
-  { name: "Senior Airman", abbr: "SrA", payGrade: "E-4" },
-  { name: "Staff Sergeant", abbr: "SSgt", payGrade: "E-5" },
-  {
-    name: "Technical Sergeant",
-    abbr: "TSgt",
-    payGrade: "E-6",
-    wingsEarned: true
-  },
-  { name: "Master Sergeant", abbr: "MSgt", payGrade: "E-7", wingsEarned: true },
-  {
-    name: "Senior Master Sgt",
-    abbr: "SMSgt",
-    payGrade: "E-8",
-    wingsEarned: true
-  },
-  {
-    name: "Chief Master Sgt",
-    abbr: "CMSgt",
-    payGrade: "E-9",
-    wingsEarned: true
-  },
-  {
-    name: "Second Lieutenant",
-    abbr: "2Lt",
-    payGrade: "O-1",
-    wingsEarned: true
-  },
-  { name: "First Lieutenant", abbr: "1Lt", payGrade: "O-2", wingsEarned: true },
-  { name: "Captain", abbr: "Capt", payGrade: "O-3", wingsEarned: true },
-  { name: "Major", abbr: "Maj", payGrade: "O-4", wingsEarned: true },
-  {
-    name: "Lieutenant Colonel",
-    abbr: "LtCol",
-    payGrade: "O-5",
-    wingsEarned: true
-  },
-  { name: "Colonel", abbr: "Col", payGrade: "O-6", wingsEarned: true },
-  {
-    name: "Brigadier General",
-    abbr: "BGen",
-    payGrade: "O-7",
-    wingsEarned: true
-  },
-  { name: "Major General", abbr: "MajGen", payGrade: "O-8", wingsEarned: true },
-  {
-    name: "Lieutenant General",
-    abbr: "LtGen",
-    payGrade: "O-9",
-    wingsEarned: true
-  },
-  {
-    name: "General of the AF",
-    abbr: "GAF",
-    payGrade: "O-10",
-    wingsEarned: true
-  }
-];
-const AF_RANKS = AF_RANK_DEFS.map((r2, i2) => {
-  const base = baseStats(r2.payGrade);
-  const hasWings = r2.wingsEarned ?? false;
-  const atk = hasWings ? Math.round(base.atk * 1.15) : base.atk;
-  return {
-    id: `af-${r2.abbr.toLowerCase()}`,
-    name: r2.name,
-    abbreviation: r2.abbr,
-    payGrade: r2.payGrade,
-    atk,
-    def: base.def,
-    image: afRankImage(r2.payGrade, hasWings),
-    promotionCost: ARMY_PROMO_COSTS[Math.min(i2, ARMY_PROMO_COSTS.length - 1)],
-    hasWings
-  };
-});
-const COMMANDER_ARCHETYPES = [
-  {
-    id: "ARMY_INFANTRY",
-    name: "Army Infantry",
-    description: "Balanced ground forces commander. Reliable in all combat roles with strong FRNTR generation bonuses.",
-    startingICP: 0.1,
-    archetypeBonus: "+10% FRNTR generation per owned plot",
-    frntrBonusPct: 0.1,
-    atkMultiplier: 1,
-    defMultiplier: 1,
-    badgeImage: ri("rank-army-enlisted-lower"),
-    rankProgression: ARMY_INFANTRY_RANKS
-  },
-  {
-    id: "ARMY_RANGER",
-    name: "Army Ranger",
-    description: "Elite strike specialist. Unlocks Ranger Strike ability and excels at offensive operations.",
-    startingICP: 0.3,
-    archetypeBonus: "+25% missile damage, unlocks Ranger Strike",
-    frntrBonusPct: 0.05,
-    atkMultiplier: 1.25,
-    defMultiplier: 1,
-    badgeImage: ri("rank-ranger-tab"),
-    rankProgression: ARMY_RANGER_RANKS
-  },
-  {
-    id: "MARINE",
-    name: "Marine Corps",
-    description: "Defensive specialist. Superior plot fortification and amphibious assault capabilities.",
-    startingICP: 0.3,
-    archetypeBonus: "+30% plot defense, amphibious assault bonus",
-    frntrBonusPct: 0.05,
-    atkMultiplier: 1,
-    defMultiplier: 1.3,
-    badgeImage: ri("rank-marine"),
-    rankProgression: MARINE_RANKS
-  },
-  {
-    id: "MILITARY_POLICE",
-    name: "Military Police",
-    description: "Territory control specialist. Can lock down enemy plots and protect mineral resources.",
-    startingICP: 0.25,
-    archetypeBonus: "Flag enemy plots for 1hr lockout, +15% mineral protection",
-    frntrBonusPct: 0.07,
-    atkMultiplier: 1,
-    defMultiplier: 1,
-    badgeImage: ri("rank-mp"),
-    rankProgression: MILITARY_POLICE_RANKS
-  },
-  {
-    id: "WARRANT_OFFICER",
-    name: "Warrant Officer",
-    description: "Technical specialist. Maximizes building efficiency and mineral extraction rates.",
-    startingICP: 0.4,
-    archetypeBonus: "+20% building efficiency, +15% mineral drip rate",
-    frntrBonusPct: 0.08,
-    atkMultiplier: 1.2,
-    defMultiplier: 1.2,
-    badgeImage: ri("rank-warrant-officer"),
-    rankProgression: WARRANT_OFFICER_RANKS
-  },
-  {
-    id: "AIR_FORCE",
-    name: "Air Force Pilot",
-    description: "Air superiority commander. Earns wings at TSgt, unlocking fighter plane assignment on plots with an Airbase.",
-    startingICP: 0.5,
-    archetypeBonus: "Earns wings at TSgt+ — unlocks F-16 assignment on Airbase plots",
-    frntrBonusPct: 0.06,
-    atkMultiplier: 1.15,
-    defMultiplier: 1,
-    badgeImage: ri("rank-af-enlisted"),
-    rankProgression: AF_RANKS,
-    hasWings: false
-  }
-];
-function getArchetype(id2) {
-  return COMMANDER_ARCHETYPES.find((a2) => a2.id === id2);
-}
-function getCurrentRank(commander) {
-  const arch = getArchetype(commander.archetypeId);
-  return arch == null ? void 0 : arch.rankProgression[commander.currentRankIndex];
-}
-function commanderHasWings(commander) {
-  const rank = getCurrentRank(commander);
-  return (rank == null ? void 0 : rank.hasWings) ?? false;
-}
-function commanderEffectiveAtk(commander) {
-  const arch = getArchetype(commander.archetypeId);
-  const rank = getCurrentRank(commander);
-  if (!arch || !rank) return 0;
-  return Math.round(rank.atk * arch.atkMultiplier);
-}
-function commanderEffectiveDef(commander) {
-  const arch = getArchetype(commander.archetypeId);
-  const rank = getCurrentRank(commander);
-  if (!arch || !rank) return 0;
-  return Math.round(rank.def * arch.defMultiplier);
-}
-const TIER_COLORS = {
-  COMMON: "#6b7280",
-  UNCOMMON: "#22c55e",
-  RARE: "#3b82f6",
-  EPIC: "#a855f7",
-  LEGENDARY: "#f59e0b",
-  ARMY_INFANTRY: "#22c55e",
-  ARMY_RANGER: "#ef4444",
-  MARINE: "#3b82f6",
-  MILITARY_POLICE: "#f59e0b",
-  WARRANT_OFFICER: "#a855f7",
-  AIR_FORCE: "#00ffcc"
-};
-function getCommander(instanceId) {
-  const parts = instanceId.split(":");
-  if (parts.length < 2) return void 0;
-  const archetypeId = parts[0];
-  const rankIndex = Number.parseInt(parts[1] ?? "0", 10);
-  const arch = getArchetype(archetypeId);
-  if (!arch) return void 0;
-  const rank = arch.rankProgression[rankIndex];
-  if (!rank) return void 0;
-  const owned = {
-    archetypeId,
-    currentRankIndex: rankIndex
-  };
-  return {
-    id: instanceId,
-    name: `${rank.abbreviation} — ${arch.name}`,
-    atk: commanderEffectiveAtk(owned),
-    def: commanderEffectiveDef(owned),
-    tier: archetypeId,
-    rarityBonus: arch.frntrBonusPct,
-    icpPrice: arch.startingICP,
-    badge: rank.image,
-    image: rank.image
-  };
-}
-const CYAN$3 = "#00ffcc";
-const CYAN_DIM$3 = "rgba(0,255,204,0.5)";
-const BORDER$3 = "rgba(0,255,204,0.2)";
+const CYAN$2 = "#00ffcc";
+const CYAN_DIM$2 = "rgba(0,255,204,0.5)";
+const BORDER$2 = "rgba(0,255,204,0.2)";
 function PlotHoverCard({
   plotId,
   owner,
@@ -103505,25 +104660,14 @@ function PlotHoverCard({
   nextStep,
   onDismiss
 }) {
-  var _a3, _b3;
   const [visible, setVisible] = reactExports.useState(false);
-  const commanderAssignments = useGameStore((s2) => s2.commanderAssignments);
-  const ownedCommanders = useGameStore((s2) => s2.ownedCommanders) ?? [];
   reactExports.useEffect(() => {
     const t = setTimeout(() => setVisible(true), 20);
     return () => clearTimeout(t);
   }, []);
   const isTarget = action === "TARGET LOCKED";
   const isOwned = action === "TERRITORY ACQUIRED" || action === "YOU OWN THIS";
-  const actionColor = isTarget ? "#ef4444" : CYAN$3;
-  const assignedInstanceId = commanderAssignments == null ? void 0 : commanderAssignments[plotId];
-  const commander = assignedInstanceId ? getCommander(assignedInstanceId) : null;
-  const ownedInstance = ownedCommanders == null ? void 0 : ownedCommanders.find(
-    (c2) => c2.instanceId === assignedInstanceId
-  );
-  const hasWings = ownedInstance ? commanderHasWings(ownedInstance) : false;
-  const rankImage = ownedInstance ? ((_b3 = (_a3 = getArchetype(ownedInstance.archetypeId)) == null ? void 0 : _a3.rankProgression[ownedInstance.currentRankIndex]) == null ? void 0 : _b3.image) ?? null : null;
-  const tierColor = commander ? TIER_COLORS[commander.tier] ?? CYAN$3 : CYAN$3;
+  const actionColor = isTarget ? "#ef4444" : CYAN$2;
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "div",
     {
@@ -103537,7 +104681,7 @@ function PlotHoverCard({
         background: "rgba(4,12,24,0.97)",
         backdropFilter: "blur(16px)",
         WebkitBackdropFilter: "blur(16px)",
-        border: `1px solid ${BORDER$3}`,
+        border: `1px solid ${BORDER$2}`,
         borderTop: `2px solid ${actionColor}`,
         borderRadius: 10,
         padding: "14px 16px",
@@ -103565,9 +104709,9 @@ function PlotHoverCard({
                     style: {
                       fontSize: 9,
                       fontWeight: 700,
-                      color: CYAN$3,
+                      color: CYAN$2,
                       background: "rgba(0,255,204,0.1)",
-                      border: `1px solid ${BORDER$3}`,
+                      border: `1px solid ${BORDER$2}`,
                       borderRadius: 4,
                       padding: "2px 8px",
                       letterSpacing: 1,
@@ -103604,7 +104748,7 @@ function PlotHoverCard({
                     background: "none",
                     border: "none",
                     cursor: "pointer",
-                    color: CYAN_DIM$3,
+                    color: CYAN_DIM$2,
                     padding: 4,
                     display: "flex",
                     alignItems: "center"
@@ -103641,7 +104785,7 @@ function PlotHoverCard({
                 {
                   style: {
                     fontSize: 8,
-                    color: CYAN_DIM$3,
+                    color: CYAN_DIM$2,
                     letterSpacing: 1,
                     fontFamily: "monospace"
                   },
@@ -103661,173 +104805,6 @@ function PlotHoverCard({
                 }
               )
             ]
-          }
-        ),
-        commander ? /* @__PURE__ */ jsxRuntimeExports.jsxs(
-          "div",
-          {
-            style: {
-              background: `${tierColor}06`,
-              border: `1px solid ${tierColor}28`,
-              borderRadius: 7,
-              padding: "8px 10px",
-              marginBottom: 8,
-              display: "flex",
-              flexDirection: "column",
-              gap: 6
-            },
-            children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 10 }, children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "div",
-                  {
-                    style: {
-                      width: 44,
-                      height: 44,
-                      flexShrink: 0,
-                      borderRadius: 6,
-                      overflow: "hidden",
-                      background: "rgba(0,0,0,0.6)",
-                      boxShadow: `0 0 8px ${tierColor}55`,
-                      border: `1px solid ${tierColor}44`
-                    },
-                    children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-                      "img",
-                      {
-                        src: rankImage ?? commander.badge,
-                        alt: commander.name,
-                        style: { width: "100%", height: "100%", objectFit: "contain" },
-                        onError: (e) => {
-                          e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' fill='%23112233' rx='6'/%3E%3Ctext x='24' y='32' text-anchor='middle' fill='%2300ffcc' font-size='20'%3E%E2%98%85%3C/text%3E%3C/svg%3E";
-                        }
-                      }
-                    )
-                  }
-                ),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { flex: 1, minWidth: 0 }, children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                    "div",
-                    {
-                      style: {
-                        fontSize: 9,
-                        fontWeight: 700,
-                        color: "#e0f4ff",
-                        fontFamily: "monospace",
-                        letterSpacing: 1,
-                        marginBottom: 3,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 5
-                      },
-                      children: [
-                        commander.name,
-                        hasWings && /* @__PURE__ */ jsxRuntimeExports.jsx(
-                          "span",
-                          {
-                            style: { fontSize: 10 },
-                            title: "Wings Earned — F-16 Eligible",
-                            children: "✈"
-                          }
-                        )
-                      ]
-                    }
-                  ),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "span",
-                    {
-                      style: {
-                        fontSize: 8,
-                        fontWeight: 700,
-                        color: tierColor,
-                        background: `${tierColor}18`,
-                        border: `1px solid ${tierColor}44`,
-                        borderRadius: 3,
-                        padding: "1px 5px",
-                        letterSpacing: 1,
-                        fontFamily: "monospace"
-                      },
-                      children: commander.tier.replace(/_/g, " ")
-                    }
-                  )
-                ] })
-              ] }),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", gap: 6 }, children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                  "span",
-                  {
-                    style: {
-                      fontSize: 8,
-                      fontWeight: 700,
-                      color: "#ef4444",
-                      background: "rgba(239,68,68,0.12)",
-                      border: "1px solid rgba(239,68,68,0.3)",
-                      borderRadius: 4,
-                      padding: "2px 7px",
-                      fontFamily: "monospace",
-                      letterSpacing: 0.5
-                    },
-                    children: [
-                      "ATK +",
-                      commander.atk
-                    ]
-                  }
-                ),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                  "span",
-                  {
-                    style: {
-                      fontSize: 8,
-                      fontWeight: 700,
-                      color: "#3b82f6",
-                      background: "rgba(59,130,246,0.12)",
-                      border: "1px solid rgba(59,130,246,0.3)",
-                      borderRadius: 4,
-                      padding: "2px 7px",
-                      fontFamily: "monospace",
-                      letterSpacing: 0.5
-                    },
-                    children: [
-                      "DEF +",
-                      commander.def
-                    ]
-                  }
-                )
-              ] }),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                "div",
-                {
-                  style: {
-                    fontSize: 8,
-                    color: CYAN$3,
-                    fontFamily: "monospace",
-                    letterSpacing: 0.5,
-                    opacity: 0.85
-                  },
-                  children: [
-                    "+",
-                    (commander.rarityBonus * 100).toFixed(0),
-                    "% FRNTR/DAY BONUS"
-                  ]
-                }
-              )
-            ]
-          }
-        ) : /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "div",
-          {
-            style: {
-              background: "rgba(255,255,255,0.02)",
-              border: "1px solid rgba(255,255,255,0.06)",
-              borderRadius: 7,
-              padding: "7px 10px",
-              marginBottom: 8,
-              fontSize: 8,
-              color: "rgba(200,220,255,0.3)",
-              fontFamily: "monospace",
-              letterSpacing: 1,
-              textAlign: "center"
-            },
-            children: "NO COMMANDER ASSIGNED"
           }
         ),
         /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -103880,9 +104857,9 @@ function PlotHoverCard({
                     flex: 1,
                     padding: "8px 10px",
                     background: "rgba(0,255,204,0.12)",
-                    border: `1px solid ${CYAN$3}55`,
+                    border: `1px solid ${CYAN$2}55`,
                     borderRadius: 6,
-                    color: CYAN$3,
+                    color: CYAN$2,
                     fontSize: 9,
                     fontWeight: 700,
                     letterSpacing: 1.5,
@@ -103906,467 +104883,12 @@ function PlotHoverCard({
                     whiteSpace: "nowrap"
                   },
                   children: [
-                    "⚡",
-                    " ",
-                    commander ? `${(50 * (1 + commander.rarityBonus)).toFixed(1)}` : "50",
-                    " ",
-                    "FRNTR/DAY",
+                    "⚡ ",
+                    "50",
+                    " FRNTR/DAY",
                     /* @__PURE__ */ jsxRuntimeExports.jsx("br", {}),
                     "GENERATING"
                   ]
-                }
-              )
-            ]
-          }
-        )
-      ]
-    }
-  );
-}
-const CYAN$2 = "#00ffcc";
-const CYAN_DIM$2 = "rgba(0,255,204,0.35)";
-const BORDER$2 = "rgba(0,255,204,0.22)";
-const TEXT$2 = "#e0f4ff";
-const INITIAL_CHECKS = [
-  {
-    label: "1. Auth — get principal",
-    status: "idle",
-    detail: "",
-    durationMs: 0
-  },
-  {
-    label: "2. Faucet — claim tokens",
-    status: "idle",
-    detail: "",
-    durationMs: 0
-  },
-  {
-    label: "3. Player state — fetch balances",
-    status: "idle",
-    detail: "",
-    durationMs: 0
-  },
-  {
-    label: "4. Plot count — canister seeded",
-    status: "idle",
-    detail: "",
-    durationMs: 0
-  },
-  {
-    label: "5. Plot owners — sync ownership",
-    status: "idle",
-    detail: "",
-    durationMs: 0
-  },
-  {
-    label: "6. Purchase plot — buy first available",
-    status: "idle",
-    detail: "",
-    durationMs: 0
-  },
-  {
-    label: "7. FRNTR accrual — passive income > 0",
-    status: "idle",
-    detail: "",
-    durationMs: 0
-  },
-  {
-    label: "8. Generator tiers — fetch tiers",
-    status: "idle",
-    detail: "",
-    durationMs: 0
-  },
-  {
-    label: "9. Global stats — fetch stats",
-    status: "idle",
-    detail: "",
-    durationMs: 0
-  },
-  {
-    label: "10. Leaderboard — fetch entries",
-    status: "idle",
-    detail: "",
-    durationMs: 0
-  }
-];
-function StressTestPanel() {
-  const [open, setOpen] = reactExports.useState(false);
-  const [checks, setChecks] = reactExports.useState(INITIAL_CHECKS);
-  const [running2, setRunning] = reactExports.useState(false);
-  const { actor } = useActor(createActor);
-  const { isAuthenticated } = useInternetIdentity();
-  const purchasedPlotIdRef = reactExports.useRef(null);
-  function updateCheck(index2, patch) {
-    setChecks(
-      (prev) => prev.map((c2, i2) => i2 === index2 ? { ...c2, ...patch } : c2)
-    );
-  }
-  async function runCheck(index2, fn, validate) {
-    updateCheck(index2, {
-      status: "running",
-      detail: "running…",
-      durationMs: 0
-    });
-    const t0 = performance.now();
-    try {
-      const result = await fn();
-      const detail = validate(result);
-      updateCheck(index2, {
-        status: "pass",
-        detail,
-        durationMs: Math.round(performance.now() - t0)
-      });
-      return result;
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      updateCheck(index2, {
-        status: "fail",
-        detail: msg,
-        durationMs: Math.round(performance.now() - t0)
-      });
-      return null;
-    }
-  }
-  const handleRunAll = async () => {
-    if (!actor || running2) return;
-    setRunning(true);
-    setChecks(
-      INITIAL_CHECKS.map((c2) => ({ ...c2, status: "idle" }))
-    );
-    await runCheck(
-      0,
-      () => actor.getPrincipal(),
-      (r2) => `${r2.full.slice(0, 12)}… authed=${r2.isAuthed}`
-    );
-    await runCheck(
-      1,
-      async () => {
-        const r2 = await actor.testFaucetV2();
-        if (r2.__kind__ !== "ok") throw new Error(r2.err);
-        return r2.ok;
-      },
-      (r2) => `+${Number(r2.frntGranted)} FRNTR +${Number(r2.icpGranted)} ICP`
-    );
-    const playerState = await runCheck(
-      2,
-      () => actor.getPlayerState(),
-      (r2) => `FRNTR=${Number(r2.frntBalance)} plots=${Number(r2.plotsOwned)}`
-    );
-    await runCheck(
-      3,
-      () => actor.getPlotCount(),
-      (r2) => {
-        const n = Number(r2);
-        if (n === 0) throw new Error("No plots seeded — call initPlots first");
-        return `${n} plots on-chain`;
-      }
-    );
-    await runCheck(
-      4,
-      () => actor.getAllPlotOwners(),
-      (r2) => `${r2.length} owned plots`
-    );
-    const purchaseRes = await runCheck(
-      5,
-      async () => {
-        const firstAvailable = await actor.getFirstAvailablePlot();
-        if (firstAvailable === null)
-          throw new Error("No available plots found");
-        const result = await actor.purchasePlot(firstAvailable);
-        if (!("ok" in result)) {
-          throw new Error(result.err ?? "Purchase failed");
-        }
-        purchasedPlotIdRef.current = firstAvailable;
-        return result;
-      },
-      (r2) => `Purchased plot — ${r2.ok}`
-    );
-    await runCheck(
-      6,
-      async () => {
-        const balanceBefore = playerState ? Number(playerState.frntBalance) : 0;
-        await new Promise((resolve2) => setTimeout(resolve2, 2e3));
-        const updated = await actor.getPlayerState();
-        const balanceAfter = Number(updated.frntBalance);
-        const plots = Number(updated.plotsOwned);
-        if (purchaseRes === null) {
-          throw new Error("Purchase prerequisite failed");
-        }
-        if (balanceAfter < balanceBefore) {
-          throw new Error(
-            `Balance decreased: before=${balanceBefore} after=${balanceAfter}`
-          );
-        }
-        return { income: updated.passiveIncomePerDay, plots, balanceAfter };
-      },
-      (r2) => `passiveIncome=${r2.income}/day plots=${r2.plots} balance=${r2.balanceAfter} ✓`
-    );
-    await runCheck(
-      7,
-      () => actor.getCoreGeneratorTiers(),
-      (r2) => `${r2.length} tiers, tier1 cost=${r2[0] ? Number(r2[0].costFRNTR) : "?"} FRNTR`
-    );
-    await runCheck(
-      8,
-      () => actor.getGlobalStats(),
-      (r2) => `supply=${Number(r2.circulatingSupply)} plots=${Number(r2.totalPlotsOwned)} players=${Number(r2.activePlayers)}`
-    );
-    await runCheck(
-      9,
-      () => actor.getLeaderboard(10n),
-      (r2) => `${r2.length} entries`
-    );
-    setRunning(false);
-  };
-  const handleReset = async () => {
-    if (!actor || running2) return;
-    setRunning(true);
-    try {
-      const res = await actor.resetTestState();
-      const detail = res.__kind__ === "ok" ? res.ok : res.err;
-      setChecks(
-        INITIAL_CHECKS.map(
-          (c2, i2) => i2 === 0 ? { ...c2, status: res.__kind__ === "ok" ? "pass" : "fail", detail } : { ...c2, status: "idle", detail: "" }
-        )
-      );
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setChecks(
-        INITIAL_CHECKS.map(
-          (c2, i2) => i2 === 0 ? { ...c2, status: "fail", detail: msg } : { ...c2, status: "idle", detail: "" }
-        )
-      );
-    } finally {
-      setRunning(false);
-    }
-  };
-  const passCount = checks.filter((c2) => c2.status === "pass").length;
-  const failCount = checks.filter((c2) => c2.status === "fail").length;
-  const doneCount = passCount + failCount;
-  const allDone = doneCount === 10;
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-    "div",
-    {
-      "data-ocid": "stress_test.panel",
-      style: {
-        minWidth: 160
-      },
-      children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs(
-          "button",
-          {
-            type: "button",
-            "data-ocid": "stress_test.toggle",
-            onClick: () => setOpen((v2) => !v2),
-            style: {
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "6px 10px",
-              borderRadius: 6,
-              background: open ? "rgba(0,255,204,0.12)" : "rgba(0,255,204,0.06)",
-              border: `1px solid ${open ? CYAN$2 : BORDER$2}`,
-              color: CYAN$2,
-              fontSize: 9,
-              fontWeight: 700,
-              letterSpacing: 1.5,
-              cursor: "pointer",
-              textTransform: "uppercase",
-              whiteSpace: "nowrap",
-              backdropFilter: "blur(10px)",
-              WebkitBackdropFilter: "blur(10px)",
-              width: "100%",
-              height: 32,
-              justifyContent: "space-between"
-            },
-            children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "STRESS TEST" }),
-              open ? /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronUp, { size: 12 }) : /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronDown, { size: 12 })
-            ]
-          }
-        ),
-        open && /* @__PURE__ */ jsxRuntimeExports.jsxs(
-          "div",
-          {
-            style: {
-              marginTop: 4,
-              borderRadius: 8,
-              background: "rgba(2,10,20,0.94)",
-              border: `1px solid ${BORDER$2}`,
-              backdropFilter: "blur(16px)",
-              WebkitBackdropFilter: "blur(16px)",
-              padding: "10px 10px 8px",
-              display: "flex",
-              flexDirection: "column",
-              gap: 6
-            },
-            children: [
-              !isAuthenticated && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 9, color: "#ff6666", textAlign: "center" }, children: "Login required" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", gap: 5 }, children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "button",
-                  {
-                    type: "button",
-                    "data-ocid": "stress_test.run_all_button",
-                    disabled: running2 || !isAuthenticated,
-                    onClick: handleRunAll,
-                    style: {
-                      flex: 1,
-                      padding: "5px 8px",
-                      borderRadius: 5,
-                      background: running2 ? "rgba(0,255,204,0.15)" : "rgba(0,255,204,0.06)",
-                      border: `1px solid ${BORDER$2}`,
-                      color: running2 || !isAuthenticated ? CYAN_DIM$2 : CYAN$2,
-                      fontSize: 8,
-                      fontWeight: 700,
-                      letterSpacing: 1,
-                      cursor: running2 || !isAuthenticated ? "not-allowed" : "pointer",
-                      opacity: running2 || !isAuthenticated ? 0.5 : 1,
-                      textTransform: "uppercase",
-                      whiteSpace: "nowrap"
-                    },
-                    children: running2 ? "RUNNING…" : "RUN ALL"
-                  }
-                ),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "button",
-                  {
-                    type: "button",
-                    "data-ocid": "stress_test.reset_button",
-                    disabled: running2,
-                    onClick: handleReset,
-                    style: {
-                      padding: "5px 8px",
-                      borderRadius: 5,
-                      background: "rgba(255,68,68,0.08)",
-                      border: "1px solid rgba(255,68,68,0.3)",
-                      color: "#ff6666",
-                      fontSize: 8,
-                      fontWeight: 700,
-                      letterSpacing: 1,
-                      cursor: running2 ? "not-allowed" : "pointer",
-                      opacity: running2 ? 0.5 : 1,
-                      textTransform: "uppercase",
-                      whiteSpace: "nowrap"
-                    },
-                    children: "RESET"
-                  }
-                )
-              ] }),
-              doneCount > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 4 }, children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                  "div",
-                  {
-                    style: {
-                      display: "flex",
-                      gap: 8,
-                      fontSize: 8,
-                      fontWeight: 700
-                    },
-                    children: [
-                      /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { style: { color: "#00ff88" }, children: [
-                        "✓ ",
-                        passCount,
-                        " PASS"
-                      ] }),
-                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: failCount > 0 ? "#ff4444" : CYAN_DIM$2 }, children: failCount > 0 ? `✗ ${failCount} FAIL` : "✗ 0" })
-                    ]
-                  }
-                ),
-                allDone && /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                  "div",
-                  {
-                    style: {
-                      fontSize: 9,
-                      fontWeight: 700,
-                      letterSpacing: "0.1em",
-                      color: passCount === 10 ? "#00ff88" : "#ff4444",
-                      fontFamily: "monospace",
-                      textAlign: "center",
-                      padding: "4px 0",
-                      borderTop: `1px solid ${passCount === 10 ? "rgba(0,255,136,0.2)" : "rgba(255,68,68,0.2)"}`
-                    },
-                    children: [
-                      passCount,
-                      " / 10 PASSED"
-                    ]
-                  }
-                )
-              ] }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "div",
-                {
-                  style: {
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 3,
-                    maxHeight: 220,
-                    overflowY: "auto"
-                  },
-                  children: checks.map((c2, i2) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                    "div",
-                    {
-                      "data-ocid": `stress_test.check.${i2 + 1}`,
-                      style: {
-                        display: "flex",
-                        alignItems: "flex-start",
-                        gap: 5,
-                        padding: "4px 6px",
-                        borderRadius: 4,
-                        background: c2.status === "pass" ? "rgba(0,255,136,0.04)" : c2.status === "fail" ? "rgba(255,68,68,0.06)" : c2.status === "running" ? "rgba(0,255,204,0.06)" : "rgba(255,255,255,0.02)",
-                        border: `1px solid ${c2.status === "pass" ? "rgba(0,255,136,0.15)" : c2.status === "fail" ? "rgba(255,68,68,0.2)" : c2.status === "running" ? BORDER$2 : "rgba(255,255,255,0.06)"}`
-                      },
-                      children: [
-                        /* @__PURE__ */ jsxRuntimeExports.jsx(
-                          "span",
-                          {
-                            style: {
-                              fontSize: 8,
-                              color: c2.status === "pass" ? "#00ff88" : c2.status === "fail" ? "#ff4444" : c2.status === "running" ? CYAN$2 : CYAN_DIM$2,
-                              flexShrink: 0,
-                              minWidth: 10
-                            },
-                            children: c2.status === "pass" ? "✓" : c2.status === "fail" ? "✗" : c2.status === "running" ? "▶" : "·"
-                          }
-                        ),
-                        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { flex: 1, minWidth: 0 }, children: [
-                          /* @__PURE__ */ jsxRuntimeExports.jsx(
-                            "div",
-                            {
-                              style: {
-                                fontSize: 8,
-                                color: c2.status === "idle" ? CYAN_DIM$2 : TEXT$2,
-                                fontWeight: 600,
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                whiteSpace: "nowrap"
-                              },
-                              children: c2.label
-                            }
-                          ),
-                          c2.detail && /* @__PURE__ */ jsxRuntimeExports.jsx(
-                            "div",
-                            {
-                              style: {
-                                fontSize: 7,
-                                color: c2.status === "fail" ? "#ff8888" : CYAN_DIM$2,
-                                marginTop: 1,
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                whiteSpace: "nowrap"
-                              },
-                              children: c2.detail
-                            }
-                          )
-                        ] }),
-                        c2.durationMs > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { style: { fontSize: 7, color: CYAN_DIM$2, flexShrink: 0 }, children: [
-                          c2.durationMs,
-                          "ms"
-                        ] })
-                      ]
-                    },
-                    c2.label
-                  ))
                 }
               )
             ]
@@ -104385,39 +104907,6 @@ const GOLD = "#ffd700";
 const TOTAL_SUPPLY = 1e10;
 const PRE_MINTED = 5e9;
 const MINEABLE = 5e9;
-const GENERATOR_TIERS = [
-  { tier: "I", production: "7 FRNTR/day", cost: "500 FRNTR", color: "#94a3b8" },
-  {
-    tier: "II",
-    production: "15 FRNTR/day",
-    cost: "1,500 FRNTR",
-    color: "#22c55e"
-  },
-  {
-    tier: "III",
-    production: "31 FRNTR/day",
-    cost: "4,000 FRNTR",
-    color: "#3b82f6"
-  },
-  {
-    tier: "IV",
-    production: "63 FRNTR/day",
-    cost: "10,000 FRNTR",
-    color: "#8b5cf6"
-  },
-  {
-    tier: "V",
-    production: "127 FRNTR/day",
-    cost: "25,000 FRNTR",
-    color: "#f59e0b"
-  },
-  {
-    tier: "VI",
-    production: "255 FRNTR/day",
-    cost: "60,000 FRNTR",
-    color: CYAN$1
-  }
-];
 function fmtBig(n) {
   if (n >= 1e9) return `${(n / 1e9).toFixed(2)}B`;
   if (n >= 1e6) return `${(n / 1e6).toFixed(2)}M`;
@@ -104486,6 +104975,14 @@ function AnimatedCounter({ value }) {
   }, [value]);
   return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontFamily: "monospace" }, children: fmtBig(display) });
 }
+const TIER_COLORS = [
+  "#94a3b8",
+  "#22c55e",
+  "#3b82f6",
+  "#8b5cf6",
+  "#f59e0b",
+  CYAN$1
+];
 function UniversePanel({ onClose, inline = false }) {
   const { actor } = useActor(createActor);
   const player = useGameStore((s2) => s2.player);
@@ -104494,6 +104991,63 @@ function UniversePanel({ onClose, inline = false }) {
   const icpUsdPrice = useGameStore((s2) => s2.icpUsdPrice);
   const setTreasuryState = useGameStore((s2) => s2.setTreasuryState);
   const [frntrIcpPrice, _setFrntrIcpPrice] = reactExports.useState(null);
+  const [liveTiers, setLiveTiers] = reactExports.useState(null);
+  reactExports.useEffect(() => {
+    if (!actor) return;
+    actor.getGeneratorTierCatalog().then((catalog) => {
+      const TIER_NAMES = ["I", "II", "III", "IV", "V", "VI"];
+      const sorted = [...catalog].sort(
+        (a2, b2) => Number(a2.tierIndex) - Number(b2.tierIndex)
+      );
+      setLiveTiers(
+        sorted.map((t, i2) => ({
+          tier: TIER_NAMES[i2] ?? String(Number(t.tierIndex)),
+          production: `${t.bonusPerDay.toFixed(0)} FRNTR/day`,
+          cost: `${(Number(t.cost) / 1e8).toLocaleString(void 0, { maximumFractionDigits: 0 })} FRNTR`,
+          color: TIER_COLORS[i2] ?? CYAN$1
+        }))
+      );
+    }).catch(() => {
+      setLiveTiers([
+        {
+          tier: "I",
+          production: "9 FRNTR/day",
+          cost: "500 FRNTR",
+          color: TIER_COLORS[0]
+        },
+        {
+          tier: "II",
+          production: "12 FRNTR/day",
+          cost: "1,500 FRNTR",
+          color: TIER_COLORS[1]
+        },
+        {
+          tier: "III",
+          production: "17 FRNTR/day",
+          cost: "4,000 FRNTR",
+          color: TIER_COLORS[2]
+        },
+        {
+          tier: "IV",
+          production: "25 FRNTR/day",
+          cost: "10,000 FRNTR",
+          color: TIER_COLORS[3]
+        },
+        {
+          tier: "V",
+          production: "37 FRNTR/day",
+          cost: "25,000 FRNTR",
+          color: TIER_COLORS[4]
+        },
+        {
+          tier: "VI",
+          production: "55 FRNTR/day",
+          cost: "60,000 FRNTR",
+          color: TIER_COLORS[5]
+        }
+      ]);
+    });
+  }, [actor]);
   const [potBalances, setPotBalances] = reactExports.useState({ dev: 0, leaderboard: 0, liquidity: 0 });
   reactExports.useEffect(() => {
     if (!actor) return;
@@ -104538,25 +105092,24 @@ function UniversePanel({ onClose, inline = false }) {
   const TOTAL_SUPPLY_VAL = (globalStats == null ? void 0 : globalStats.totalSupply) ?? TOTAL_SUPPLY;
   const PRE_MINTED_VAL = (globalStats == null ? void 0 : globalStats.preMinted) ?? PRE_MINTED;
   const MINEABLE_VAL = (globalStats == null ? void 0 : globalStats.mineableSupply) ?? MINEABLE;
-  const TIER_BONUS = {
-    1: 8,
-    2: 24,
-    3: 48,
-    4: 96,
-    5: 192,
-    6: 384
+  const TIER_RATES = {
+    0: 7,
+    1: 9,
+    2: 12,
+    3: 17,
+    4: 25,
+    5: 37,
+    6: 55
   };
   let playerDailyFrntr = 0;
   for (const pid of player.plotsOwned) {
-    playerDailyFrntr += 7;
     const tier = generatorTiers[pid] ?? 0;
-    if (tier > 0) playerDailyFrntr += TIER_BONUS[tier] ?? 0;
+    playerDailyFrntr += TIER_RATES[tier] ?? 7;
   }
   let localDailyEmission = 0;
   for (const plot of globalOwnedPlots) {
-    localDailyEmission += 7;
-    const tier = generatorTiers[plot.id] ?? plot.generatorTier ?? 0;
-    if (tier > 0) localDailyEmission += TIER_BONUS[tier] ?? 0;
+    const tier = generatorTiers[String(plot.id)] ?? plot.generatorTier ?? 0;
+    localDailyEmission += TIER_RATES[tier] ?? 7;
   }
   const globalDailyEmission = (globalStats == null ? void 0 : globalStats.currentDailyEmissionRate) ?? localDailyEmission;
   const networkBurned = (globalStats == null ? void 0 : globalStats.totalFRNTRBurned) ?? totalFRNTRBurned;
@@ -104771,7 +105324,7 @@ function UniversePanel({ onClose, inline = false }) {
                   label: "TOTAL PLOTS OWNED",
                   value: totalPlotsOwned.toLocaleString(),
                   color: CYAN$1,
-                  sub: "of 5,882 max"
+                  sub: "of 10,242 max"
                 },
                 {
                   label: "ACTIVE PLAYERS",
@@ -105080,7 +105633,7 @@ function UniversePanel({ onClose, inline = false }) {
                       color: "rgba(34,197,94,0.5)",
                       marginTop: 2
                     },
-                    children: "of 5,882 total"
+                    children: "of 10,242 total"
                   }
                 )
               ] })
@@ -105101,7 +105654,18 @@ function UniversePanel({ onClose, inline = false }) {
               children: "5-year mining curve · 6 generator upgrade tiers"
             }
           ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "flex", flexDirection: "column", gap: 8 }, children: GENERATOR_TIERS.map((g2) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "flex", flexDirection: "column", gap: 8 }, children: liveTiers === null ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
+            {
+              style: {
+                fontSize: 9,
+                color: TEXT_DIM,
+                textAlign: "center",
+                padding: "8px 0"
+              },
+              children: "Loading tier data…"
+            }
+          ) : liveTiers.map((g2, idx) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
             "div",
             {
               style: { display: "flex", alignItems: "center", gap: 10 },
@@ -105167,7 +105731,7 @@ function UniversePanel({ onClose, inline = false }) {
                         {
                           style: {
                             height: "100%",
-                            width: `${(GENERATOR_TIERS.indexOf(g2) + 1) / 6 * 100}%`,
+                            width: `${(idx + 1) / liveTiers.length * 100}%`,
                             background: g2.color,
                             borderRadius: 2,
                             boxShadow: `0 0 6px ${g2.color}`
@@ -105880,287 +106444,10 @@ function UniversePanel({ onClose, inline = false }) {
     }
   );
 }
-const ICP_LEDGER_CANISTER_ID = "ryjl3-tyaaa-aaaaa-aaaba-cai";
-const POLL_INTERVAL_MS = 3e4;
-const icpLedgerIdlFactory = ({ IDL: IDL2 }) => {
-  const AccountType = IDL2.Record({
-    owner: IDL2.Principal,
-    subaccount: IDL2.Opt(IDL2.Vec(IDL2.Nat8))
-  });
-  return IDL2.Service({
-    icrc1_balance_of: IDL2.Func([AccountType], [IDL2.Nat], ["query"])
-  });
-};
-function useIcpBalance() {
-  const { identity: identity2, isAuthenticated } = useInternetIdentity();
-  const [icpBalance, setIcpBalance] = reactExports.useState(0n);
-  const [_tick, setTick] = reactExports.useState(0);
-  const refetch = reactExports.useCallback(() => setTick((t) => t + 1), []);
-  reactExports.useEffect(() => {
-    if (!identity2 || !isAuthenticated) {
-      setIcpBalance(0n);
-      return;
-    }
-    let cancelled = false;
-    const fetchBalance = async () => {
-      try {
-        const agent = new HttpAgent({ identity: identity2 });
-        const actor = Actor.createActor(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          icpLedgerIdlFactory,
-          { agent, canisterId: ICP_LEDGER_CANISTER_ID }
-        );
-        const principal = identity2.getPrincipal();
-        const raw = await actor.icrc1_balance_of({
-          owner: principal,
-          subaccount: []
-        });
-        if (!cancelled) {
-          setIcpBalance(raw);
-        }
-      } catch {
-      }
-    };
-    void fetchBalance();
-    const interval = setInterval(() => void fetchBalance(), POLL_INTERVAL_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [identity2, isAuthenticated]);
-  const icpBalanceFormatted = Number(icpBalance) / 1e8;
-  return { icpBalance, icpBalanceFormatted, refetch };
-}
-function usePlayerSync() {
-  const { actor, isFetching } = useActor(createActor);
-  reactExports.useEffect(() => {
-    if (!actor || isFetching) return;
-    const syncPrincipal = async () => {
-      try {
-        const data = await actor.getPrincipal();
-        if (data.isAuthed && data.full) {
-          useGameStore.setState((s2) => ({
-            player: { ...s2.player, principal: data.full }
-          }));
-        }
-      } catch {
-      }
-    };
-    const syncLeaderboard = async () => {
-      try {
-        const data = await actor.getLeaderboard(50n);
-        const mapped = data.map((e) => ({
-          rank: Number(e.rank),
-          name: e.username ?? `${e.principal.slice(0, 8)}...${e.principal.slice(-4)}`,
-          principal: e.principal,
-          plotsOwned: Number(e.plotsOwned),
-          frntEarned: Number(e.frntBalance),
-          victories: 0
-        }));
-        useGameStore.setState({ leaderboard: mapped });
-      } catch {
-      }
-    };
-    const syncPlotOwners = async () => {
-      var _a3;
-      try {
-        if (useGameStore.getState().plots.length === 0) {
-          useGameStore.getState().setPlots(
-            GEODESIC_TILES.map((tile, i2) => ({
-              id: i2,
-              lat: tile.lat,
-              lng: tile.lng,
-              biome: assignBiome(tile.lat, tile.lng),
-              efficiency: Math.floor(78 + (i2 * 2654435761 >>> 0) % 21),
-              mineCount: 0,
-              regenActiveUntil: 0,
-              owner: null,
-              isOwnedByMe: false,
-              iron: 0,
-              fuel: 0,
-              crystal: 0,
-              rareEarth: 0,
-              defenses: { turrets: 0, shields: 0, walls: 0 },
-              specialization: null,
-              generatorTier: 0
-            }))
-          );
-        }
-        const owners = await actor.getAllPlotOwners();
-        const myPrincipal = useGameStore.getState().player.principal ?? "";
-        useGameStore.getState().setPlotOwnership(owners, myPrincipal);
-        const ownedIds = new Set(owners.map(([id2]) => Number(id2)));
-        const firstAvailable = ((_a3 = useGameStore.getState().plots.find((p2) => !ownedIds.has(p2.id))) == null ? void 0 : _a3.id) ?? null;
-        useGameStore.setState({ firstAvailablePlotId: firstAvailable });
-      } catch (err) {
-        console.warn("syncPlotOwners error:", err);
-      }
-    };
-    const syncPlayer = async () => {
-      try {
-        const state2 = await actor.getPlayerState();
-        if (!state2) return;
-        useGameStore.setState((s2) => ({
-          player: {
-            ...s2.player,
-            frntBalance: Number(state2.frntBalance) / 1e8,
-            iron: Number(state2.iron) / 1e8,
-            fuel: Number(state2.fuel) / 1e8,
-            crystal: Number(state2.crystal) / 1e8
-            // plotsOwned is local array; backend returns bigint count, not array
-          },
-          rankStats: {
-            ...s2.rankStats,
-            combatWins: Number(state2.combatVictories)
-          },
-          serverPassiveIncomePerDay: Number(state2.passiveIncomePerDay),
-          totalFRNTRBurned: Number(state2.totalFRNTRBurned)
-        }));
-      } catch {
-      }
-    };
-    const syncGlobalStats = async () => {
-      try {
-        const [g2, t, treasury] = await Promise.all([
-          actor.getGlobalStats(),
-          actor.getTokenomics(),
-          actor.getTreasuryBalances().catch(() => ({
-            devPot: 0n,
-            leaderboardPot: 0n,
-            liquidityPot: 0n
-          }))
-        ]);
-        const stats = {
-          totalPlotsOwned: Number(g2.totalPlotsOwned),
-          totalFRNTRInCirculation: Number(g2.circulatingSupply),
-          totalFRNTRBurned: Number(g2.totalBurned),
-          totalFRNTRMined: 0,
-          activePlayerCount: Number(g2.activePlayers),
-          currentDailyEmissionRate: Number(t.emissionRate),
-          leaderboardPrizePool: 0,
-          nextPayoutAt: 0,
-          totalSupply: Number(t.maxSupply),
-          preMinted: 5e9,
-          mineableSupply: Number(t.remainingMineable),
-          maxSupply: Number(t.maxSupply),
-          remainingMineable: Number(t.remainingMineable),
-          daysUntilMilestone: Number(t.daysUntilMilestone),
-          burnRate: Number(t.burnRate),
-          emissionRate: Number(t.emissionRate),
-          devPotICP: Number(treasury.devPot) / 1e8,
-          leaderboardPotICP: Number(treasury.leaderboardPot) / 1e8,
-          liquidityPotICP: Number(treasury.liquidityPot) / 1e8
-        };
-        useGameStore.getState().setGlobalStats(stats);
-        useGameStore.getState().setTreasuryState({
-          developer: BigInt(Math.floor(Number(treasury.devPot))),
-          leaderboard: BigInt(Math.floor(Number(treasury.leaderboardPot))),
-          liquidity: BigInt(Math.floor(Number(treasury.liquidityPot)))
-        });
-      } catch {
-      }
-    };
-    void syncPrincipal();
-    void syncPlayer();
-    void syncLeaderboard();
-    void syncPlotOwners();
-    void syncGlobalStats();
-    const interval = setInterval(() => {
-      void syncPrincipal();
-      void syncPlayer();
-      void syncLeaderboard();
-      void syncPlotOwners();
-    }, 1e4);
-    const globalInterval = setInterval(() => {
-      void syncGlobalStats();
-    }, 3e4);
-    return () => {
-      clearInterval(interval);
-      clearInterval(globalInterval);
-    };
-  }, [actor, isFetching]);
-  reactExports.useEffect(() => {
-    if (!actor || isFetching) return;
-    const fetchIcpPrice = async () => {
-      try {
-        const price = await actor.getIcpUsdPrice();
-        useGameStore.getState().setIcpUsdPrice(price);
-      } catch {
-      }
-    };
-    void fetchIcpPrice();
-    const priceInterval = setInterval(() => {
-      void fetchIcpPrice();
-    }, 6e4);
-    return () => clearInterval(priceInterval);
-  }, [actor, isFetching]);
-  reactExports.useEffect(() => {
-    if (actor) {
-      const seed = async () => {
-        var _a3;
-        try {
-          const count = await actor.getPlotCount();
-          if (count === 0n || count === 0) {
-            try {
-              await actor.resetAllData();
-            } catch {
-            }
-            const BATCH = 200;
-            for (let start = 0; start < GEODESIC_TILES.length; start += BATCH) {
-              const batch2 = GEODESIC_TILES.slice(start, start + BATCH);
-              const tuples = batch2.map(
-                (tile) => [
-                  BigInt(tile.id),
-                  assignBiome(tile.lat, tile.lng),
-                  tile.lat,
-                  tile.lng,
-                  BigInt(
-                    Math.floor(78 + (tile.id * 2654435761 >>> 0) % 21)
-                  )
-                ]
-              );
-              await actor.initPlots(tuples);
-            }
-          }
-          const owners = await actor.getAllPlotOwners();
-          const myPrincipal = useGameStore.getState().player.principal;
-          const state2 = useGameStore.getState();
-          const ownedIds = new Set(
-            owners.map(([id2]) => Number(id2))
-          );
-          const updatedPlots = state2.plots.map((plot) => {
-            const ownerEntry = owners.find(
-              ([id2]) => Number(id2) === plot.id
-            );
-            if (ownerEntry) {
-              const isOwnedByMe = !!myPrincipal && ownerEntry[1] === myPrincipal;
-              return { ...plot, owner: ownerEntry[1], isOwnedByMe };
-            }
-            return { ...plot, isOwnedByMe: false };
-          });
-          const firstAvailable = ((_a3 = updatedPlots.find((p2) => !ownedIds.has(p2.id))) == null ? void 0 : _a3.id) ?? null;
-          useGameStore.setState({
-            plots: updatedPlots,
-            firstAvailablePlotId: firstAvailable
-          });
-        } catch (err) {
-          console.warn("seedPlotsIfEmpty error:", err);
-        }
-      };
-      void seed();
-    }
-  }, [actor]);
-}
 const CYAN = "#00ffcc";
 const CYAN_DIM = "rgba(0,255,204,0.35)";
 const BORDER = "rgba(0,255,204,0.22)";
 const TEXT = "#e0f4ff";
-function fmt8(n) {
-  return n.toLocaleString(void 0, {
-    minimumFractionDigits: 8,
-    maximumFractionDigits: 8
-  });
-}
 function fmt2(n) {
   return n.toLocaleString(void 0, {
     minimumFractionDigits: 2,
@@ -106172,9 +106459,25 @@ function TopBar({
   onNavClick
 }) {
   const player = useGameStore((s2) => s2.player);
+  const generatorTiers = useGameStore((s2) => s2.generatorTiers);
+  const plots = useGameStore((s2) => s2.plots);
   const icpUsdPrice = useGameStore((s2) => s2.icpUsdPrice);
   const { icpBalanceFormatted } = useIcpBalance();
   const { isAuthenticated, clear } = useInternetIdentity();
+  const displayFrntr = useGameStore(
+    (s2) => s2.confirmedFrntBalance + s2.accruedFrntSinceSync
+  );
+  const frntrStr = displayFrntr >= 1e6 ? displayFrntr.toFixed(2) : displayFrntr >= 1e3 ? displayFrntr.toFixed(4) : displayFrntr.toFixed(8);
+  const TIER_BONUS_TB = [0, 2, 5, 10, 18, 30, 48];
+  reactExports.useMemo(() => {
+    const ownedPlots = plots.filter(
+      (p2) => player.plotsOwned.includes(String(p2.id))
+    );
+    return ownedPlots.reduce((sum, plot) => {
+      const tier = generatorTiers[String(plot.id)] ?? 0;
+      return sum + 7 + (TIER_BONUS_TB[tier] ?? 0);
+    }, 0);
+  }, [plots, player.plotsOwned, generatorTiers]);
   const shortPrincipal = player.principal ? `${player.principal.slice(0, 6)}…${player.principal.slice(-4)}` : null;
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "div",
@@ -106383,11 +106686,8 @@ function TopBar({
                     className: "font-mono font-bold whitespace-nowrap",
                     style: { fontSize: 11, color: "#F59E0B", letterSpacing: 0.5 },
                     children: [
-                      player.frntBalance.toLocaleString(void 0, {
-                        maximumFractionDigits: 2
-                      }),
-                      " ",
-                      "FRNTR"
+                      frntrStr,
+                      " FRNTR"
                     ]
                   }
                 )
@@ -106579,221 +106879,6 @@ function LeftSidebar({
     }
   );
 }
-function CommanderPanel() {
-  const player = useGameStore((s2) => s2.player);
-  const totalBurned = useGameStore((s2) => s2.totalFRNTRBurned);
-  const generatorTiers = useGameStore((s2) => s2.generatorTiers);
-  const ownedPlots = player.plotsOwned;
-  const plotCount = ownedPlots.length;
-  let dailyFrntr = 0;
-  for (const pid of ownedPlots) {
-    dailyFrntr += 7;
-    const tier = generatorTiers[pid] ?? 0;
-    const TIER_BONUS = {
-      1: 8,
-      2: 24,
-      3: 48,
-      4: 96,
-      5: 192,
-      6: 384
-    };
-    if (tier > 0) dailyFrntr += TIER_BONUS[tier] ?? 0;
-  }
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col gap-3 p-3", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx(
-      "div",
-      {
-        style: {
-          fontSize: 10,
-          fontWeight: 700,
-          color: CYAN,
-          letterSpacing: 2,
-          textShadow: `0 0 8px ${CYAN}`
-        },
-        children: "COMMANDER PANEL"
-      }
-    ),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs(
-      "div",
-      {
-        className: "rounded-lg p-2.5",
-        style: {
-          background: "rgba(0,255,204,0.05)",
-          border: `1px solid ${BORDER}`
-        },
-        children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 7, color: CYAN_DIM, letterSpacing: 1 }, children: "PRINCIPAL" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "div",
-            {
-              className: "font-mono truncate",
-              style: { fontSize: 9, color: TEXT, marginTop: 2 },
-              children: player.principal ?? "Not Connected"
-            }
-          )
-        ]
-      }
-    ),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs(
-      "div",
-      {
-        className: "rounded-lg p-2.5",
-        style: {
-          background: "rgba(0,255,204,0.05)",
-          border: `1px solid ${BORDER}`
-        },
-        children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 7, color: CYAN_DIM, letterSpacing: 1 }, children: "FRNTR BALANCE" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "div",
-            {
-              className: "font-mono",
-              style: {
-                fontSize: 14,
-                fontWeight: 900,
-                color: CYAN,
-                marginTop: 2,
-                textShadow: `0 0 8px ${CYAN}`
-              },
-              children: fmt8(player.frntBalance)
-            }
-          )
-        ]
-      }
-    ),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-2 gap-2", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(
-        "div",
-        {
-          className: "rounded-lg p-2",
-          style: {
-            background: "rgba(0,255,204,0.05)",
-            border: `1px solid ${BORDER}`
-          },
-          children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 7, color: CYAN_DIM, letterSpacing: 1 }, children: "PLOTS OWNED" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "div",
-              {
-                className: "font-mono",
-                style: { fontSize: 16, fontWeight: 900, color: CYAN, marginTop: 2 },
-                children: plotCount
-              }
-            )
-          ]
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(
-        "div",
-        {
-          className: "rounded-lg p-2",
-          style: {
-            background: "rgba(0,255,204,0.05)",
-            border: `1px solid ${BORDER}`
-          },
-          children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 7, color: CYAN_DIM, letterSpacing: 1 }, children: "DAILY FRNTR" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "div",
-              {
-                className: "font-mono",
-                style: { fontSize: 16, fontWeight: 900, color: CYAN, marginTop: 2 },
-                children: dailyFrntr
-              }
-            )
-          ]
-        }
-      )
-    ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs(
-      "div",
-      {
-        className: "rounded-lg p-2.5",
-        style: {
-          background: "rgba(0,255,204,0.05)",
-          border: `1px solid ${BORDER}`
-        },
-        children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "div",
-            {
-              style: {
-                fontSize: 7,
-                color: CYAN_DIM,
-                letterSpacing: 1,
-                marginBottom: 6
-              },
-              children: "RESOURCES"
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-2 gap-2", children: [
-            { label: "IRON", value: player.iron },
-            { label: "FUEL", value: player.fuel },
-            { label: "CRYSTAL", value: player.crystal },
-            { label: "RARE EARTH", value: player.rareEarth }
-          ].map((r2) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 7, color: CYAN_DIM }, children: r2.label }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "span",
-              {
-                className: "font-mono",
-                style: { fontSize: 10, color: TEXT, fontWeight: 700 },
-                children: fmt8(r2.value)
-              }
-            )
-          ] }, r2.label)) })
-        ]
-      }
-    ),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs(
-      "div",
-      {
-        className: "rounded-lg p-2",
-        style: {
-          background: "rgba(255,68,68,0.05)",
-          border: "1px solid rgba(255,68,68,0.2)"
-        },
-        children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 7, color: "#ff6666", letterSpacing: 1 }, children: "TOTAL FRNTR BURNED" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "div",
-            {
-              className: "font-mono",
-              style: {
-                fontSize: 12,
-                fontWeight: 900,
-                color: "#ff6666",
-                marginTop: 2
-              },
-              children: fmt8(totalBurned)
-            }
-          )
-        ]
-      }
-    ),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs(
-      "div",
-      {
-        className: "rounded-lg p-2",
-        style: {
-          background: "rgba(0,255,204,0.05)",
-          border: `1px solid ${BORDER}`
-        },
-        children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 7, color: CYAN_DIM, letterSpacing: 1 }, children: "STORAGE CAP" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "div",
-            {
-              className: "font-mono",
-              style: { fontSize: 12, fontWeight: 900, color: CYAN, marginTop: 2 },
-              children: player.resourceStorageCap
-            }
-          )
-        ]
-      }
-    )
-  ] });
-}
 function InventoryPanel() {
   const player = useGameStore((s2) => s2.player);
   const plots = useGameStore((s2) => s2.plots);
@@ -106825,12 +106910,9 @@ function InventoryPanel() {
         ]
       }
     ) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-col gap-2", children: player.plotsOwned.map((plotId, idx) => {
-      var _a3, _b3;
-      const plot = plots.find((p2) => p2.id === plotId);
-      const tier = generatorTiers[plotId] ?? 0;
+      const plot = plots.find((p2) => String(p2.id) === String(plotId));
+      const tier = generatorTiers[String(plotId)] ?? 0;
       const dailyRate = 7 + tier * 2;
-      const rates = (plot == null ? void 0 : plot.biome) ? BIOME_MINERAL_RATES[plot.biome] : null;
-      const topMineral = rates ? (_b3 = (_a3 = Object.entries(rates).sort((a2, b2) => b2[1] - a2[1])[0]) == null ? void 0 : _a3[0]) == null ? void 0 : _b3.toUpperCase() : null;
       return /* @__PURE__ */ jsxRuntimeExports.jsxs(
         "div",
         {
@@ -106885,9 +106967,7 @@ function InventoryPanel() {
                     (plot == null ? void 0 : plot.biome) ?? "Unknown",
                     " · ",
                     dailyRate,
-                    " FRNTR/DAY ·",
-                    " ",
-                    topMineral ?? "IRON"
+                    " FRNTR/DAY · Resource survey: COMING SOON"
                   ]
                 }
               )
@@ -107061,12 +107141,12 @@ function PlotActionPanel({
 }) {
   const plots = useGameStore((s2) => s2.plots);
   const player = useGameStore((s2) => s2.player);
-  const { actor } = useActor(createActor);
+  useActor(createActor);
   const { purchasePlot, isPurchasing } = usePurchasePlot();
   const plot = plots.find((p2) => p2.id === plotId);
   if (!plot) return null;
   const isOwned = plot.owner !== null;
-  const isMine = plot.isOwnedByMe || player.plotsOwned.includes(plotId);
+  const isMine = plot.isOwnedByMe || player.plotsOwned.includes(String(plotId));
   const eff = plot.efficiency;
   const icpPrice = eff >= 90 ? 30 : eff >= 80 ? 9 : 2.5;
   const shortOwner = plot.owner ? `${plot.owner.slice(0, 6)}...` : "Unowned";
@@ -107078,20 +107158,10 @@ function PlotActionPanel({
       label: "STATUS",
       value: isOwned ? "Owned" : "Available",
       highlight: true
-    },
-    { label: "IRON/DAY", value: String(plot.iron || 0) },
-    { label: "FUEL/DAY", value: String(plot.fuel || 0) }
-  ];
-  async function handleMine() {
-    if (!actor) return;
-    try {
-      await actor.mineResources(BigInt(plotId));
-    } catch {
     }
-    ue("⛏ Mining started!", { duration: 2500 });
-  }
+  ];
   async function handlePurchase() {
-    const result = await purchasePlot(plotId);
+    const result = await purchasePlot(String(plotId));
     if (result.success) {
       ue.success(result.message, { duration: 4e3 });
     } else {
@@ -107155,8 +107225,7 @@ function PlotActionPanel({
               borderRadius: 8,
               border: "1px solid rgba(0,212,255,0.2)",
               background: "rgba(0,10,20,0.6)"
-            },
-            children: /* @__PURE__ */ jsxRuntimeExports.jsx(SubParcelIntelView, { plotId })
+            }
           }
         ),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
@@ -107251,15 +107320,15 @@ function PlotActionPanel({
             "button",
             {
               type: "button",
-              "data-ocid": "plot_action_panel.mine_button",
-              onClick: handleMine,
+              "data-ocid": "plot_action_panel.survey_button",
+              onClick: () => ue("Survey system coming soon!", { duration: 3e3 }),
               className: "w-full py-2 rounded tracking-wider uppercase text-xs border transition-colors duration-200",
               style: {
-                background: "rgba(34,197,94,0.15)",
-                border: "1px solid rgba(34,197,94,0.35)",
-                color: "#4ade80"
+                background: "rgba(168,85,247,0.15)",
+                border: "1px solid rgba(168,85,247,0.35)",
+                color: "#c084fc"
               },
-              children: "MINE"
+              children: "SURVEY (COMING SOON)"
             }
           ),
           /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -107409,7 +107478,7 @@ function Play() {
             )
           }
         ),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
           "div",
           {
             style: {
@@ -107422,10 +107491,7 @@ function Play() {
               alignItems: "flex-end",
               gap: 6
             },
-            children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(FaucetOverlay, {}),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(StressTestPanel, {})
-            ]
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(FaucetOverlay, {})
           }
         ),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -107452,11 +107518,12 @@ function Play() {
                   controlsRef
                 }
               ),
-              activeTab === "command" && /* @__PURE__ */ jsxRuntimeExports.jsx(CommanderPanel, {}),
+              activeTab === "command" && /* @__PURE__ */ jsxRuntimeExports.jsx(CommandCenter, {}),
               activeTab === "inventory" && /* @__PURE__ */ jsxRuntimeExports.jsx(InventoryPanel, {}),
               activeTab === "leaderboard" && /* @__PURE__ */ jsxRuntimeExports.jsx(LeaderboardPanel, {}),
               activeTab === "universe" && /* @__PURE__ */ jsxRuntimeExports.jsx(UniversePanel, { inline: true }),
-              activeTab === "intel" && /* @__PURE__ */ jsxRuntimeExports.jsx(IntelTab, {})
+              activeTab === "intel" && /* @__PURE__ */ jsxRuntimeExports.jsx(IntelTab, {}),
+              activeTab === "admin" && /* @__PURE__ */ jsxRuntimeExports.jsx(AdminPanel, {})
             ]
           }
         ),

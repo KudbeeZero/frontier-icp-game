@@ -256,17 +256,68 @@ export function isOceanTile(lat: number, lng: number): boolean {
 }
 
 /**
- * Assign a biome based on latitude and longitude.
- * Oceans are detected first via isOceanTile; land biomes fall back to
- * latitude-based classification for now.
+ * Assign one of the 8 canonical biomes based on lat/lng.
+ * Biomes: Temperate, Desert, Arctic, Tropical, Ocean, DeepOcean, Volcanic, AsteroidImpact
+ * AsteroidImpact is rare (~10% of land tiles) — assigned deterministically from tile position.
+ */
+export function assignBiomeForTile(lat: number, lng: number): string {
+  // Deep ocean: poles and far Pacific
+  if (lat < -65 || lat > 75) return "Arctic";
+  if (lat < -55 || lat > 65) return "DeepOcean";
+
+  // Ocean regions
+  if (lat >= -60 && lat <= 65) {
+    if (lng >= 120 && lng <= 180) return "Ocean";
+    if (lng >= -180 && lng <= -70) return "Ocean";
+  }
+  if (lat >= -60 && lat <= 70 && lng >= -70 && lng <= 20) return "Ocean";
+  if (lat >= -60 && lat <= 30 && lng >= 20 && lng <= 120) return "Ocean";
+
+  // Arctic band
+  if (lat > 60) return "Arctic";
+
+  // Tropical band (equatorial)
+  if (lat >= -10 && lat <= 15) {
+    // Amazon / Congo / SE Asia
+    if (
+      (lng >= -80 && lng <= -45) ||
+      (lng >= 10 && lng <= 50) ||
+      (lng >= 95 && lng <= 155)
+    ) {
+      return "Tropical";
+    }
+  }
+
+  // Volcanic hotspots: Iceland, Hawaii band, Ring of Fire edges
+  const latRound = Math.round(lat / 5) * 5;
+  const lngRound = Math.round(lng / 5) * 5;
+  const volcHash = Math.abs(latRound * 73 + lngRound * 31) % 100;
+  if (
+    (lat >= 60 && lat <= 67 && lng >= -25 && lng <= -13) || // Iceland
+    (lat >= 18 && lat <= 22 && lng >= -160 && lng <= -154) || // Hawaii
+    (lat >= -10 && lat <= 5 && lng >= 95 && lng <= 112) || // Sumatra
+    (lat >= 35 && lat <= 40 && lng >= 138 && lng <= 142) || // Japan
+    volcHash < 4 // ~4% random volcanic
+  )
+    return "Volcanic";
+
+  // Asteroid impact: ~10% of remaining land tiles, deterministic
+  const astHash = Math.abs(Math.round(lat * 13 + lng * 7)) % 10;
+  if (astHash === 0) return "AsteroidImpact";
+
+  // Desert: Sahara, Middle East, central Asia, Australia interior
+  if (lat >= 15 && lat <= 35 && lng >= -18 && lng <= 60) return "Desert";
+  if (lat >= -35 && lat <= -20 && lng >= 115 && lng <= 150) return "Desert";
+  if (lat >= 35 && lat <= 50 && lng >= 60 && lng <= 100) return "Desert";
+  if (lat >= -5 && lat <= 15 && lng >= -18 && lng <= 20) return "Desert";
+
+  // Temperate: everything else
+  return "Temperate";
+}
+
+/**
+ * Assign a biome based on latitude and longitude (legacy alias).
  */
 export function assignBiome(lat: number, lng: number): string {
-  if (isOceanTile(lat, lng)) return "Ocean";
-  if (lat > 60) return "Arctic";
-  if (lat > 35) return lat > 45 ? "Mountain" : "Forest";
-  if (lat > 15) return "Grassland";
-  if (lat > -15) return lat > 5 ? "Desert" : "Toxic";
-  if (lat > -35) return "Forest";
-  if (lat > -60) return "Grassland";
-  return "Arctic";
+  return assignBiomeForTile(lat, lng);
 }

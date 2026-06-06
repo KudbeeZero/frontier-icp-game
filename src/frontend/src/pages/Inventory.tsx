@@ -56,7 +56,7 @@ const BIOME_DRIP: Record<string, [number, number, number, number]> = {
   Jungle: [0.0025, 0.0008, 0.0005, 0.0002],
 };
 
-function shortH3(plotId: number): string {
+function shortH3(plotId: number | string): string {
   return String(plotId).padStart(8, "0").toUpperCase();
 }
 
@@ -69,29 +69,15 @@ function effColor(eff: number): string {
 // Live FRNTR counter
 function FRNTRCounter() {
   const player = useGameStore((s) => s.player);
-  const [displayBal, setDisplayBal] = useState(player.frntBalance);
-  const rafRef = useRef<number | null>(null);
-  const lastTickRef = useRef(Date.now());
+  const frntrBalance = useGameStore(
+    (s) => s.confirmedFrntBalance + s.accruedFrntSinceSync,
+  );
   const plotCount = player.plotsOwned.length;
-
-  useEffect(() => {
-    const perSec = (7 * plotCount) / 86400;
-    const tick = () => {
-      const now = Date.now();
-      const elapsed = (now - lastTickRef.current) / 1000;
-      lastTickRef.current = now;
-      setDisplayBal((b) => b + perSec * elapsed);
-      rafRef.current = requestAnimationFrame(tick);
-    };
-    rafRef.current = requestAnimationFrame(tick);
-    return () => {
-      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
-    };
-  }, [plotCount]);
-
-  useEffect(() => {
-    setDisplayBal(player.frntBalance);
-  }, [player.frntBalance]);
+  const fmtFrntr = (n: number) =>
+    n.toLocaleString(undefined, {
+      minimumFractionDigits: 8,
+      maximumFractionDigits: 8,
+    });
 
   return (
     <div
@@ -129,7 +115,7 @@ function FRNTRCounter() {
           lineHeight: 1,
         }}
       >
-        {displayBal.toFixed(8)}
+        {fmtFrntr(frntrBalance)}
       </div>
       <div style={{ fontSize: 8, color: TEXT_DIM, marginTop: 3 }}>
         FRNTR &nbsp;&middot;&nbsp; {plotCount} PLOT{plotCount !== 1 ? "S" : ""}{" "}
@@ -240,8 +226,10 @@ function ResourceStockpiles() {
 }
 
 // Plot card
-function PlotCard({ plotId, index }: { plotId: number; index: number }) {
-  const plot = useGameStore((s) => s.plots.find((p) => p.id === plotId));
+function PlotCard({ plotId, index }: { plotId: string; index: number }) {
+  const plot = useGameStore((s) =>
+    s.plots.find((p) => String(p.id) === plotId),
+  );
   const generatorTiers = useGameStore((s) => s.generatorTiers);
   const upgradeGenerator = useGameStore((s) => s.upgradeGenerator);
   const mineResources = useGameStore((s) => s.mineResources);
@@ -254,7 +242,7 @@ function PlotCard({ plotId, index }: { plotId: number; index: number }) {
   const tierLabel = TIER_LABELS[tier];
   const dailyRate = TIER_DAILY[tier];
   const biomeColor = BIOME_DOT[plot.biome] ?? CYAN;
-  const h3Short = shortH3(plotId);
+  const h3Short = shortH3(String(plotId));
   const drip = BIOME_DRIP[plot.biome] ?? [0.001, 0.001, 0.001, 0.001];
   const effFactor = plot.efficiency / 100;
   const ironPerDay = (drip[0] * 86400 * effFactor).toFixed(2);
@@ -268,7 +256,7 @@ function PlotCard({ plotId, index }: { plotId: number; index: number }) {
   const eff = plot.efficiency;
 
   const handleMine = () => {
-    const yields = mineResources(plotId);
+    const yields = mineResources(Number(plotId));
     if (yields) {
       const total = Object.values(yields).reduce((a, b) => a + b, 0);
       setMineFlash(`+${total.toFixed(4)}`);
@@ -503,7 +491,7 @@ function PlotCard({ plotId, index }: { plotId: number; index: number }) {
           <button
             type="button"
             data-ocid={`inventory.upgrade_button.${index}`}
-            onClick={() => upgradeGenerator(plotId)}
+            onClick={() => upgradeGenerator(String(plotId))}
             disabled={!isLoggedIn || !canUpgrade}
             style={{
               flex: 1,

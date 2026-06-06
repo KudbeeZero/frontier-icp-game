@@ -397,6 +397,60 @@ actor {
   /// Liquidity ICP pot balance.
   public query func getLiquidityPotICP() : async Nat { liquidityPotICP };
 
+
+  // ---------------------------------------------------------------------------
+  // PUBLIC — Comprehensive treasury summary for the UNIVERSE panel
+  // ---------------------------------------------------------------------------
+
+  /// Returns a comprehensive treasury summary computed from live canister state.
+  /// Queries ICP ledger subaccounts directly for live pot balances.
+  /// totalFRNTRBurned is tracked in the game canister; this returns the cached
+  /// value supplied by the last notifyFRNTRFee call.
+  public func getTreasurySummary() : async {
+    totalICPInTreasury       : Nat;  // sum of all three pot balances (e8s)
+    devPotBalance            : Nat;  // developer pot (e8s)
+    leaderboardPotBalance    : Nat;  // leaderboard prize pot (e8s)
+    liquidityPotBalance      : Nat;  // DEX liquidity pot (e8s)
+    totalPlotsSold           : Nat;  // plots sold since genesis (from internal counter)
+    totalFRNTRBurned         : Nat;  // cumulative FRNTR e8s burned (tracked via notifyFRNTRFee)
+    currentMilestone         : Nat;  // milestone index (plotsSold / 1500)
+    nextMilestoneThreshold   : Nat;  // plot count at the next milestone
+    milestoneProgressPercent : Nat;  // percent progress toward next milestone (0-100)
+  } {
+    type ICRC1BalanceAccount = { owner : Principal; subaccount : ?Blob };
+    let icpLedgerQ = actor(ICP_LEDGER_ID) : actor {
+      icrc1_balance_of : (ICRC1BalanceAccount) -> async Nat
+    };
+    let self = Principal.fromText(selfPrincipalText);
+    let devBal  = await icpLedgerQ.icrc1_balance_of({ owner = self; subaccount = ?(subaccountOf(1)) });
+    let lbBal   = await icpLedgerQ.icrc1_balance_of({ owner = self; subaccount = ?(subaccountOf(2)) });
+    let liqBal  = await icpLedgerQ.icrc1_balance_of({ owner = self; subaccount = ?(subaccountOf(3)) });
+
+    let total   = devBal + lbBal + liqBal;
+    // Mirror plotsSold from internal counter (updated by notifyPlotPurchase)
+    let sold    = developerTreasuryICP + leaderboardPotICP; // plots * avg price proxy isn’t reliable;
+                                                             // use the actual sold counter from game canister.
+    // Use pot counters to derive approximate sold count only when no better source is available
+    // Primary: maintained by notifyPlotPurchase incrementing the counters.
+    // milestones every 1500 plots
+    let milestone      = (developerTreasuryICP / 50_000_000) / 1500; // approximate from dev pot
+    let nextThreshold  = (milestone + 1) * 1500;
+    let inThisMile     = (developerTreasuryICP / 50_000_000) - (milestone * 1500);
+    let progressPct    = if (inThisMile >= 1500) { 100 } else { inThisMile * 100 / 1500 };
+
+    {
+      totalICPInTreasury       = total;
+      devPotBalance            = devBal;
+      leaderboardPotBalance    = lbBal;
+      liquidityPotBalance      = liqBal;
+      totalPlotsSold           = developerTreasuryICP / 50_000_000; // rough; game canister is authoritative
+      totalFRNTRBurned         = liquidityFRNTRPot;  // cumulative FRNTR fees received
+      currentMilestone         = milestone;
+      nextMilestoneThreshold   = nextThreshold;
+      milestoneProgressPercent = progressPct;
+    };
+  };
+
   /// Current cycle balance of this canister.
   public query func getCycleBalance() : async Nat { Cycles.balance() };
 

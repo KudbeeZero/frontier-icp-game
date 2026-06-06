@@ -213,7 +213,7 @@ mixin (
     leaderboardPotICP.value -= distributed;
 
     let event = TLib.buildPayoutEvent(
-      payoutHistory.size() + 1,
+      payoutHistory.size() + 100,
       distributed,
       plotsSold.value,
       count,

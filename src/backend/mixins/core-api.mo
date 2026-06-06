@@ -10,8 +10,8 @@ import CoreLib "../lib/core";
 mixin (
   statsState  : { var totalFRNTRBurned : Nat; var totalFRNTRMined : Nat; var activePlayers : Nat },
   plotSoldState : { var count : Nat },
-  generatorTiers : Map.Map<Nat, GameTypes.GeneratorTier>,
-  plots : Map.Map<Nat, { plotId : Nat; owner : ?Principal; nexusElectricityLevel : Nat; biome : Text; richness : Nat; lat : Float; lng : Float; iron : Nat; fuel : Nat; crystal : Nat; lastTick : Int; defenses : { turrets : Nat; shields : Nat; walls : Nat }; facilities : { electricityPlant : Bool; blockchainNode : Bool; dataCentre : Bool; aiLab : Bool }; attackCooldown : Int; faction : ?Text; morale : Nat; interceptorSystem : ?Text; purchaseTimestamp : ?Int; nftTokenId : ?Nat }>,
+  generatorTiers : Map.Map<Text, GameTypes.GeneratorTier>,
+  plots : Map.Map<Text, { plotId : Text; owner : ?Principal; nexusElectricityLevel : Nat; biome : Text; richness : Nat; lat : Float; lng : Float; iron : Nat; fuel : Nat; crystal : Nat; lastTick : Int; defenses : { turrets : Nat; shields : Nat; walls : Nat }; facilities : { electricityPlant : Bool; blockchainNode : Bool; dataCentre : Bool; aiLab : Bool }; attackCooldown : Int; faction : ?Text; morale : Nat; interceptorSystem : ?Text; purchaseTimestamp : ?Int; nftTokenId : ?Nat }>,
 ) {
 
   // ---------------------------------------------------------------------------
@@ -52,13 +52,14 @@ mixin (
   // ---------------------------------------------------------------------------
 
   /// Returns the current FRNTR/day breakdown for a single plot.
-  /// Uses the canonical formula: base 7 + (tier * 3) + nexus bonus.
-  public query func getPlotProductionRate(plotId : Nat) : async CoreTypes.PlotProductionRate {
+  /// Uses the canonical lookup table: base 7 + tier bonus [2,5,10,18,30,48] + nexus bonus.
+  public query func getPlotProductionRate(plotId : Text) : async CoreTypes.PlotProductionRate {
     let tierIndex : Nat = switch (generatorTiers.get(plotId)) {
       case (null)      { 0 };
       case (?tier)     { CoreLib.tierToIndex(tier) };
     };
-    let tierBonus  : Float = CoreLib.dailyRateFromTierIndex(tierIndex) - 7.0;
+    let rateTotal  : Float = CoreLib.dailyRateFromTierIndex(tierIndex);
+    let tierBonus  : Float = rateTotal - CoreLib.BASE_FRNTR_PER_DAY;
     let nexusLevel : Nat   = switch (plots.get(plotId)) {
       case (null)    { 0 };
       case (?plot)   { plot.nexusElectricityLevel };
@@ -66,10 +67,10 @@ mixin (
     let nexusBonusVal : Float = CoreLib.nexusBonus(nexusLevel);
     {
       plotId         = plotId;
-      baseFRNTRPerDay = 7.0;
+      baseFRNTRPerDay = CoreLib.BASE_FRNTR_PER_DAY;
       tierBonus      = tierBonus;
       nexusBonus     = nexusBonusVal;
-      totalPerDay    = 7.0 + tierBonus + nexusBonusVal;
+      totalPerDay    = rateTotal + nexusBonusVal;
       generatorTier  = tierIndex;
     };
   };
@@ -79,15 +80,17 @@ mixin (
   // ---------------------------------------------------------------------------
 
   /// Returns the full ordered list of generator tier infos (6 tiers).
+  /// Values match the canonical lookup table in lib/core.mo:
+  /// tier 0=None(7/day), I=9, II=12, III=17, IV=25, V=37, VI=55 FRNTR/day.
   public query func getCoreGeneratorTiers() : async [CoreTypes.GeneratorTierInfo] {
     [
       { tierIndex = 0; name = "None";          bonusPerDay = 0.0;  costFRNTR = 0 },
-      { tierIndex = 1; name = "Generator I";   bonusPerDay = 3.0;  costFRNTR = 500 },
-      { tierIndex = 2; name = "Generator II";  bonusPerDay = 6.0;  costFRNTR = 1_500 },
-      { tierIndex = 3; name = "Generator III"; bonusPerDay = 9.0;  costFRNTR = 4_000 },
-      { tierIndex = 4; name = "Generator IV";  bonusPerDay = 12.0; costFRNTR = 10_000 },
-      { tierIndex = 5; name = "Generator V";   bonusPerDay = 15.0; costFRNTR = 25_000 },
-      { tierIndex = 6; name = "Generator VI";  bonusPerDay = 18.0; costFRNTR = 60_000 },
+      { tierIndex = 1; name = "Generator I";   bonusPerDay = 2.0;  costFRNTR = 500 },
+      { tierIndex = 2; name = "Generator II";  bonusPerDay = 5.0;  costFRNTR = 1_500 },
+      { tierIndex = 3; name = "Generator III"; bonusPerDay = 10.0; costFRNTR = 4_000 },
+      { tierIndex = 4; name = "Generator IV";  bonusPerDay = 18.0; costFRNTR = 10_000 },
+      { tierIndex = 5; name = "Generator V";   bonusPerDay = 30.0; costFRNTR = 25_000 },
+      { tierIndex = 6; name = "Generator VI";  bonusPerDay = 48.0; costFRNTR = 60_000 },
     ];
   };
 };

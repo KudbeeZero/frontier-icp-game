@@ -15,8 +15,8 @@ interface SlotData {
 }
 
 interface Props {
-  plotId: number;
-  plotsOwned?: number[];
+  plotId: number | string;
+  plotsOwned?: (number | string)[];
 }
 
 function formatCountdown(seconds: number): string {
@@ -65,8 +65,8 @@ export function SubParcelIntelView({ plotId, plotsOwned }: Props) {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const ownedList = plotsOwned ?? storePlotsOwned;
-  const isOwned = ownedList.includes(plotId);
-  const purchaseTime = plotPurchaseTimes[plotId];
+  const isOwned = ownedList.map(String).includes(String(plotId));
+  const purchaseTime = plotPurchaseTimes[Number(plotId)];
 
   useEffect(() => {
     if (!isOwned) return;
@@ -79,7 +79,8 @@ export function SubParcelIntelView({ plotId, plotsOwned }: Props) {
   // suppress unused 'now' warning — used to trigger re-render for countdown
   void now;
 
-  if (!plotId || !isOwned) {
+  if (!plotId && plotId !== 0) return null;
+  if (!isOwned) {
     return (
       <div
         style={{
@@ -96,7 +97,7 @@ export function SubParcelIntelView({ plotId, plotsOwned }: Props) {
     );
   }
 
-  const slots = buildSlots(plotId, purchaseTime);
+  const slots = buildSlots(Number(plotId), purchaseTime);
   const nexus = slots[0];
   // surrounding slots at 60° intervals: top-right, right, bottom-right, bottom-left, left, top-left
   const surrounding = slots.slice(1);

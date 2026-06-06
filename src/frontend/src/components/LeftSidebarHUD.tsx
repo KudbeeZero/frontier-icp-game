@@ -154,7 +154,7 @@ export default function LeftSidebarHUD() {
   const initials = player.principal
     ? player.principal.slice(0, 2).toUpperCase()
     : "CM";
-  const commanderName = `Commander ${player.principal ? player.principal.slice(0, 6) : "Axion"}`;
+  const playerName = `Player ${player.principal ? player.principal.slice(0, 6) : "Axion"}`;
 
   const sectionHeader = (label: string) => (
     <div
@@ -262,7 +262,7 @@ export default function LeftSidebarHUD() {
                   textOverflow: "ellipsis",
                 }}
               >
-                {commanderName}
+                {playerName}
               </div>
               <div
                 style={{

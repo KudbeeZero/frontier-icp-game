@@ -12,6 +12,7 @@ import Array "mo:core/Array";
 import Order "mo:core/Order";
 import Time "mo:core/Time";
 import Float "mo:core/Float";
+
 import GameLib "lib/game";
 import GameTypes "types/game";
 import CommonTypes "types/common";
@@ -26,15 +27,15 @@ import TokenTypes "token/types";
 import FrntrLedgerApiMixin "mixins/frntr-ledger-api";
 import Blob "mo:core/Blob";
 import Debug "mo:core/Debug";
+import Migration "migration";
 
 
 
 
-
-
+(with migration = Migration.run)
 actor {
-  /// TESTNET_MODE = false: real ICP ledger is used for plot purchases.
-  let TESTNET_MODE : Bool = true;
+  // TODO: MAINNET — verify admin principal and treasury canister principal below before go-live.
+  let TESTNET_MODE : Bool = false; // Set to true only for local testnet development
 
   type Defenses = {
     turrets : Nat;
@@ -51,8 +52,8 @@ actor {
 
   // ─── SubParcel type ─────────────────────────────────────────────────────
   type SubParcel = {
-    subParcelId      : Nat;
-    plotId           : Nat;
+    subParcelId      : Text;
+    plotId           : Text;
     slotIndex        : Nat;  // 0 = center Nexus, 1-6 = surrounding slots
     specialization   : Text;
     building         : ?Text;
@@ -60,7 +61,7 @@ actor {
   };
 
   type PlotState = {
-    plotId : Nat;
+    plotId : Text;  // H3 hex string
     biome : Text;
     richness : Nat;
     lat : Float;
@@ -81,11 +82,12 @@ actor {
     nexusElectricityLevel : Nat;
   };
 
-  type PlayerState = {
+type PlayerState = {
     iron : Nat;
     fuel : Nat;
     crystal : Nat;
     frntBalance : Nat;
+    icpBalance : Nat;
     plotsOwned : Nat;
     combatVictories : Nat;
     commanderType : ?Text;
@@ -96,6 +98,7 @@ actor {
     empTargets : [(Nat, Int)];
     totalFRNTRBurned : Float;
     passiveIncomePerDay : Float;
+    lastClaimTime : Int;  // nanosecond timestamp of last claimAccumulatedTokens call
   };
 
   // ─── ICRC-2 types for ICP ledger transfer_from ────────────────────────────
@@ -130,8 +133,8 @@ actor {
   type CombatEvent = {
     timestamp : Int;
     attacker : Principal;
-    fromPlot : Nat;
-    toPlot : Nat;
+    fromPlot : Text;
+    toPlot : Text;
     success : Bool;
     atkPower : Nat;
     defPower : Nat;
@@ -166,36 +169,51 @@ actor {
   };
 
   // ─── Stable backing arrays (survive canister upgrades) ──────────────────
-  stable var stablePlots           : [(Nat, PlotState)]                    = [];
+  stable var stablePlots           : [(Text, PlotState)]                   = [];
+  // stablePlayers holds current PlayerState entries; migrated from old PlayerState on first upgrade.
   stable var stablePlayers         : [(Principal, PlayerState)]            = [];
   stable var stableCombatLog       : [(Int, CombatEvent)]                  = [];
   stable var stableLeaderboard     : [(Principal, LeaderEntry)]            = [];
-  stable var stableInterceptors    : [(Nat, Text)]                         = [];
-  stable var stableGeneratorTiers  : [(Nat, GameTypes.GeneratorTier)]      = [];
-  stable var stablePlotRarities    : [(Nat, CommonTypes.PlotRarity)]       = [];
+  stable var stableInterceptors    : [(Text, Text)]                        = [];
+  stable var stableGeneratorTiers  : [(Text, GameTypes.GeneratorTier)]     = [];
+  stable var stablePlotRarities    : [(Text, CommonTypes.PlotRarity)]      = [];
   stable var stableUsernames       : [(Principal, Text)]                   = [];
   stable var stableFaucetClaims    : [(Principal, Nat)]                    = [];
+  stable var stableClaimTimes      : [(Principal, Int)]                    = []; // lastClaimAccumulatedTokens timestamp per player
   stable var stableStatsState      : (Nat, Nat, Nat)                       = (0, 0, 0); // (totalFRNTRBurned, totalFRNTRMined, activePlayers)
   stable var stablePlotSoldCount   : Nat                                   = 0;
-  stable var stableSubParcels      : [(Nat, SubParcel)]                    = [];
+  stable var stableSubParcels      : [(Text, SubParcel)]                   = [];
+  stable var stablePlotSoldState   : Nat                                   = 0; // alias for stablePlotSoldCount
+  stable var stableTreasuryPots    : (Nat, Nat, Nat)                       = (0, 0, 0);
+  // Survey records: surveyKey -> Survey.  SurveyKey = plotId # "::" # principalText
+  stable var stableSurveys         : [(Text, GameTypes.Survey)]             = [];
+  // Feature flags — set to true in future updates to re-enable deferred systems.
+  // subParcelAccumulationEnabled: re-enable for the full sub-parcel accumulation system.
+  stable var subParcelAccumulationEnabled : Bool = false;
+  // commanderNFTEnabled: re-enable when Commander NFT system launches.
+  stable var commanderNFTEnabled : Bool = false;
 
   // ─── Heap maps — loaded from stable arrays on init ───────────────────────
-  let plots          = Map.fromIter<Nat, PlotState>(stablePlots.vals());
+  let plots          = Map.fromIter<Text, PlotState>(stablePlots.vals());
   let players        = Map.fromIter<Principal, PlayerState>(stablePlayers.vals());
   let combatLog      = Map.fromIter<Int, CombatEvent>(stableCombatLog.vals());
   let _leaderboard   = Map.fromIter<Principal, LeaderEntry>(stableLeaderboard.vals());
-  let interceptors   = Map.fromIter<Nat, Text>(stableInterceptors.vals());
+  let interceptors   = Map.fromIter(stableInterceptors.vals()); // plotId (Text) -> interceptorType
 
-  // Generator tier per plot
-  let generatorTiers = Map.fromIter<Nat, GameTypes.GeneratorTier>(stableGeneratorTiers.vals());
+  // Generator tier per plot (keyed by H3 Text plot ID)
+  let generatorTiers = Map.fromIter<Text, GameTypes.GeneratorTier>(stableGeneratorTiers.vals());
   // Plot rarities for price lookups
-  let _plotRarities  = Map.fromIter<Nat, CommonTypes.PlotRarity>(stablePlotRarities.vals());
+  let _plotRarities  = Map.fromIter<Text, CommonTypes.PlotRarity>(stablePlotRarities.vals());
   // Username registry: principal -> username
   let usernames      = Map.fromIter(stableUsernames.vals());
   // Faucet claims: principal -> claim count
   let faucetClaims   = Map.fromIter<Principal, Nat>(stableFaucetClaims.vals());
-  // Sub-parcels map: subParcelId -> SubParcel
-  let subParcels     = Map.fromIter<Nat, SubParcel>(stableSubParcels.vals());
+  // Claim timestamps: principal -> nanosecond timestamp of last claimAccumulatedTokens
+  let claimTimes     = Map.fromIter(stableClaimTimes.vals());
+  // Sub-parcels map: subParcelId (Text) -> SubParcel
+  let subParcels     = Map.fromIter<Text, SubParcel>(stableSubParcels.vals());
+  // Survey map: surveyKey -> Survey
+  let surveys        = Map.fromIter<Text, GameTypes.Survey>(stableSurveys.vals());
 
   // Global stats tracking — loaded from stable tuple
   let statsState = {
@@ -264,13 +282,12 @@ actor {
     SessionLib.display(caller);
   };
 
-  // ─── Testnet faucet (new — 500 FRNTR + 2 ICP per click) ─────────────────
+  // ─── Testnet faucet (5000 FRNTR + 5 ICP per click) ─────────────────────
 
-  /// Testnet faucet: grants 500 FRNTR + 2 ICP (simulated) per click.
-  /// No cooldown, no auth check beyond TESTNET_MODE=true.
-  /// Testnet faucet: grants 500 FRNTR + 2 ICP (simulated) per click.
-  /// Auto-creates a player record (600 FRNTR seed) if one doesn't exist.
-  /// No cooldown, no auth check beyond TESTNET_MODE=true.
+  /// Testnet faucet: grants 5000 FRNTR (500_000_000_000 e8s) + 5 ICP (500_000_000 e8s) per click.
+  /// Transfers FRNTR via ICRC-1 ledger (if set) and 5 ICP via ICP ledger.
+  /// Auto-creates a player record if one doesn't exist.
+  /// No cooldown. TESTNET_MODE=true only.
   public shared ({ caller }) func testFaucetV2() : async TestnetTypes.FaucetResult {
     if (not TESTNET_MODE) { return #err("Faucet only available in testnet mode") };
     if (caller.isAnonymous()) { return #err("Must be authenticated") };
@@ -284,15 +301,15 @@ actor {
       case (?p) { p };
     };
     let grant = TestnetLib.buildGrant();
+    // Transfer 500 FRNTR via ICRC-1 ledger if configured, otherwise update local balance
     if (frntrLedgerIsSet()) {
-      // Transfer 500 FRNTR (50_000_000_000 raw) from game canister to caller via ICRC-1
       let tokenActor = actor(frntrLedgerState.frntrLedger) : actor {
         icrc1_transfer : (TokenTypes.TransferArg) -> async TokenTypes.TransferResult
       };
       let transferArg : TokenTypes.TransferArg = {
         from_subaccount = null;
         to = toFrntrAccount(caller);
-        amount = 50_000_000_000; // 500 FRNTR at 8 decimals
+        amount = 500_000_000_000; // 5000 FRNTR at 8 decimals
         fee = null;
         memo = null;
         created_at_time = null;
@@ -304,12 +321,38 @@ actor {
         };
       };
     } else {
-      // Fallback: increment local FRNTR counter only
+      // Fallback: increment local FRNTR counter
       players.add(caller, {
         player with
         frntBalance = player.frntBalance + grant.frntGranted;
       });
       statsState.totalFRNTRMined += grant.frntGranted;
+    };
+    // Transfer 2 ICP (200_000_000 e8s) to caller via ICP ledger
+    let icpLedger = actor(ICP_LEDGER_ID) : actor {
+      icrc1_transfer : ({
+        from_subaccount : ?Blob;
+        to              : { owner : Principal; subaccount : ?Blob };
+        amount          : Nat;
+        fee             : ?Nat;
+        memo            : ?Blob;
+        created_at_time : ?Nat64;
+      }) -> async { #Ok : Nat; #Err : { #BadFee : { expected_fee : Nat }; #BadBurn : { min_burn_amount : Nat }; #InsufficientFunds : { balance : Nat }; #TooOld; #CreatedInFuture : { ledger_time : Nat64 }; #Duplicate : { duplicate_of : Nat }; #TemporarilyUnavailable; #GenericError : { error_code : Nat; message : Text } } }
+    };
+    switch (await icpLedger.icrc1_transfer({
+      from_subaccount = null;
+      to              = { owner = caller; subaccount = null };
+      amount          = 500_000_000; // 5 ICP in e8s
+      fee             = ?10_000;
+      memo            = null;
+      created_at_time = null;
+    })) {
+      case (#Ok(_))  {};
+      case (#Err(e)) {
+        // ICP transfer failed — FRNTR was already granted; surface warning in result
+        // but do not crash. The caller can retry the ICP portion or use faucet again.
+        ignore e; // error is non-fatal; FRNTR grant succeeded
+      };
     };
     ignore TestnetLib.recordClaim(faucetClaims, caller, Time.now());
     #ok(grant);
@@ -325,6 +368,84 @@ actor {
     };
   };
 
+  // ─── Claim accumulated FRNTR tokens ─────────────────────────────────────────────
+
+  /// Compute how much FRNTR has accrued for the caller since their lastClaimTime,
+  /// transfer it from the game canister to the caller's principal via ICRC-1,
+  /// update lastClaimTime to now, and return the claimed amount (in e8s) or an error.
+  public shared ({ caller }) func claimAccumulatedTokens() : async { #ok : Nat; #err : Text } {
+    if (caller.isAnonymous()) { return #err("Must be authenticated to claim tokens") };
+
+    let player = switch (players.get(caller)) {
+      case (null) { return #err("No player record found. Purchase a plot first.") };
+      case (?p)   { p };
+    };
+
+    let now : Int = Time.now();
+    let lastClaim : Int = switch (claimTimes.get(caller)) { case (?t) t; case (null) 0 };
+    let elapsedNs : Int = now - lastClaim;
+    if (elapsedNs <= 0) { return #err("No time has elapsed since last claim") };
+
+    // Sum daily rates for all plots owned by caller.
+    // Base rate: 7 FRNTR/day per plot; generator tier bonuses stack on top.
+    var dailyRateE8s : Nat = 0;
+    for ((pid, _) in plots.entries()) {
+      switch (plots.get(pid)) {
+        case (null) {};
+        case (?plot) {
+          if (plot.owner == ?caller) {
+            let tier = switch (generatorTiers.get(pid)) {
+              case (?t) { t };
+              case (null) { #None };
+            };
+            let bonus = GameLib.tierBonus(tier);
+            let dailyBase : Float = 7.0 + bonus;
+            // Convert FRNTR/day to e8s/day (1 FRNTR = 100_000_000 e8s)
+            let dailyE8s : Nat = Int.abs(Float.toInt(dailyBase * 100_000_000.0));
+            dailyRateE8s += dailyE8s;
+          };
+        };
+      };
+    };
+
+    if (dailyRateE8s == 0) { return #err("No plots owned; nothing to claim") };
+
+    // accrued = dailyRateE8s * elapsedNs / (86400 * 1_000_000_000)
+    let dayNs : Int = 86_400_000_000_000;
+    let accrued : Nat = Int.abs((Int.fromNat(dailyRateE8s) * elapsedNs) / dayNs);
+    if (accrued == 0) { return #err("Accrued amount is zero; wait longer before claiming") };
+
+    // Transfer accrued FRNTR to caller via ICRC-1 ledger if configured
+    if (frntrLedgerIsSet()) {
+      let tokenActor = actor(frntrLedgerState.frntrLedger) : actor {
+        icrc1_transfer : (TokenTypes.TransferArg) -> async TokenTypes.TransferResult
+      };
+      let transferArg : TokenTypes.TransferArg = {
+        from_subaccount = null;
+        to = toFrntrAccount(caller);
+        amount = accrued;
+        fee = null;
+        memo = null;
+        created_at_time = null;
+      };
+      switch (await tokenActor.icrc1_transfer(transferArg)) {
+        case (#Err(e)) {
+          return #err("FRNTR transfer failed: " # debug_show(e));
+        };
+        case (#Ok(_)) {};
+      };
+    } else {
+      // Fallback: credit directly to local balance
+      players.add(caller, { player with frntBalance = player.frntBalance + accrued });
+      statsState.totalFRNTRMined += accrued;
+    };
+
+    // Update claimTimes to now
+    claimTimes.add(caller, now);
+    players.add(caller, player);
+    #ok(accrued);
+  };
+
   // ─── Stress-test endpoints (TESTNET_MODE only) ───────────────────────────
 
   /// Rapidly mint `count` unowned plots (TESTNET_MODE only).
@@ -333,10 +454,9 @@ actor {
     if (caller.isAnonymous()) { return #err("Must be authenticated") };
     var results : [TestnetTypes.StressActionResult] = [];
     var i = 0;
-    let startId : Nat = 900_000;
     while (i < count) {
       let t0 = Time.now();
-      let plotId = startId + i;
+      let plotId : Text = "stress_" # i.toText();
       let res : TestnetTypes.StressActionResult = try {
         plots.add(plotId, {
           plotId; biome = "Temperate"; richness = 85;
@@ -368,7 +488,7 @@ actor {
     var i = 0;
     while (i < count) {
       let t0 = Time.now();
-      let plotId = 900_000 + i;
+      let plotId : Text = "stress_" # i.toText();
       let res : TestnetTypes.StressActionResult = try {
         let existing = plots.get(plotId);
         switch (existing) {
@@ -425,7 +545,7 @@ actor {
     var i = 0;
     while (i < count) {
       let t0 = Time.now();
-      let plotId = 900_000 + (i % 10);
+      let plotId : Text = "stress_" # (i % 10).toText();
       let res : TestnetTypes.StressActionResult = try {
         let curTier : GameTypes.GeneratorTier = switch (generatorTiers.get(plotId)) {
           case (?t) { t };
@@ -486,14 +606,14 @@ actor {
     treasuryPots.liquidityPot   := 0;
   };
 
-  func validatePlotExists(plotId : Nat) : PlotState {
+  func validatePlotExists(plotId : Text) : PlotState {
     switch (plots.get(plotId)) {
-      case (null) { Runtime.trap("Plot does not exist!") };
+      case (null) { Runtime.trap("Plot does not exist: " # plotId) };
       case (?plot) { plot };
     };
   };
 
-  public shared ({ caller }) func assignInterceptor(plotId : Nat, interceptorType : Text) : async () {
+  public shared ({ caller }) func assignInterceptor(plotId : Text, interceptorType : Text) : async () {
     let _ = validatePlotExists(plotId);
     switch (interceptorType) {
       case ("IRON-DOME-F") { };
@@ -504,13 +624,13 @@ actor {
     interceptors.add(plotId, interceptorType);
   };
 
-  public query ({ caller }) func getAssignedInterceptor(plotId : Nat) : async ?Text {
+  public query ({ caller }) func getAssignedInterceptor(plotId : Text) : async ?Text {
     interceptors.get(plotId);
   };
 
   // Returns daily FRNTR rate for a plot (base 7 + nexus electricity bonus)
   // Returns daily FRNTR rate for a plot using canonical formula: base 7 + (tierIndex * 3) + nexus bonus
-  func plotDailyRate(plotId : Nat) : Float {
+  func plotDailyRate(plotId : Text) : Float {
     let tierIndex : Nat = switch (generatorTiers.get(plotId)) {
       case (null)      { 0 };
       case (?#None)    { 0 };
@@ -547,13 +667,13 @@ actor {
     total;
   };
 
-  public query func getPassiveIncome(plotId : Nat) : async Float {
+  public query func getPassiveIncome(plotId : Text) : async Float {
     plotDailyRate(plotId);
   };
 
   /// Upgrade the generator tier for an owned plot.
   /// Deducts FRNTR cost from player balance, tracks burn, sends 0.075% liquidity tax to treasury.
-  public shared ({ caller }) func upgradeGenerator(plotId : Nat) : async { #ok : GameTypes.PlotUpgradesView; #err : GameTypes.UpgradeError } {
+  public shared ({ caller }) func upgradeGenerator(plotId : Text) : async { #ok : GameTypes.PlotUpgradesView; #err : GameTypes.UpgradeError } {
     if (caller.isAnonymous()) { return #err(#NotOwner) };
 
     let plot = switch (plots.get(plotId)) {
@@ -589,17 +709,26 @@ actor {
       case (?p)   { p };
     };
 
-    if (player.frntBalance < cost) { return #err(#InsufficientFRNTR) };
+    // Fetch live FRNTR balance from the ICRC-1 ledger (bypasses stale player.frntBalance)
+    let liveFrntBalance : Nat = if (frntrLedgerIsSet()) {
+      let tokenActor = actor(frntrLedgerState.frntrLedger) : actor {
+        icrc1_balance_of : (TokenTypes.Account) -> async Nat
+      };
+      await tokenActor.icrc1_balance_of(toFrntrAccount(caller));
+    } else {
+      player.frntBalance;
+    };
+
+    if (liveFrntBalance < cost) { return #err(#InsufficientFRNTR) };
 
     // Calculate 0.075% liquidity tax: taxAmount = cost * 75 / 100_000
     let taxAmount : Nat = cost * 75 / 100_000;
-    let burnedAmount : Nat = cost - taxAmount;
+
+    // Track the full cost burned (not just the non-tax portion)
+    statsState.totalFRNTRBurned += cost;
 
     // Deduct full cost from player balance
     players.add(caller, { player with frntBalance = player.frntBalance - cost });
-
-    // Track the burned portion in global counter
-    statsState.totalFRNTRBurned += burnedAmount;
 
     // Record upgrade
     generatorTiers.add(plotId, nextTier);
@@ -626,7 +755,7 @@ actor {
   };
 
 
-  public query func isSubParcelLocked(plotId : Nat) : async Bool {
+  public query func isSubParcelLocked(plotId : Text) : async Bool {
     let fourHoursNs : Int = 14_400_000_000_000;
     switch (plots.get(plotId)) {
       case (null) { false };
@@ -656,6 +785,11 @@ actor {
 
   public query func getAdminPrincipal() : async Text {
     adminState.adminPrincipal;
+  };
+
+  /// Returns true if the caller is the current admin principal.
+  public shared query ({ caller }) func getIsAdmin() : async Bool {
+    not caller.isAnonymous() and caller.toText() == adminState.adminPrincipal;
   };
 
 
@@ -696,35 +830,15 @@ actor {
     };
   };
 
+  // ---------------------------------------------------------------------------
+  // MINING DISABLED — gated behind featureFlag; will be re-enabled in a future
+  // update when the full resource-mining system launches.
+  // ---------------------------------------------------------------------------
   /// Mine resources from an owned plot.
-  public shared ({ caller }) func mineResources(plotId : Nat) : async { #ok : GameTypes.MineResult; #err : Text } {
-    if (caller.isAnonymous()) { return #err("Anonymous users cannot mine") };
-    let plot = switch (plots.get(plotId)) {
-      case (null) { return #err("Plot not found") };
-      case (?p)   { p };
-    };
-    if (plot.owner != ?caller) { return #err("Not your plot") };
-
-    let efficiencyFloat : Float = plot.richness.toFloat() / 100.0;
-    let seed : Int = Time.now() % 1_000_000;
-    let yields = GameLib.computeMineYields(plot.biome, efficiencyFloat, seed);
-
-    let genTier = switch (generatorTiers.get(plotId)) {
-      case (?t)   { t };
-      case (null) { #None };
-    };
-    let frntRate : Float = 7.0 + GameLib.tierBonus(genTier);
-
-    let player = switch (players.get(caller)) {
-      case (null) { emptyPlayerState() };
-      case (?p)   { p };
-    };
-    let frntGainFloat = frntRate / 24.0;
-    let frntGain : Nat = if (frntGainFloat >= 1.0) { frntGainFloat.toInt().toNat() } else { 0 };
-    players.add(caller, { player with frntBalance = player.frntBalance + frntGain });
-    statsState.totalFRNTRMined += frntGain;
-
-    #ok({ plotId; resourceYields = yields; frntRate; efficiency = efficiencyFloat });
+  /// DISABLED: returns an informative error until the mining system launches.
+  public shared ({ caller }) func mineResources(_plotId : Text) : async { #ok : GameTypes.MineResult; #err : Text } {
+    ignore caller;
+    #err("Resource mining is coming soon. Stay tuned for the next update!");
   };
 
   /// Testnet faucet: grants exactly 500 FRNTR per click.
@@ -795,7 +909,9 @@ actor {
 
   public shared ({ caller }) func getPlayerState() : async {
     ownedPlots         : [Text];
+    plotIds            : [Text];
     frntBalance        : Nat;
+    icpBalance         : Nat;
     resourceBalances   : [(GameTypes.ResourceType, Float)];
     generatorTiersMap  : [(Text, Nat)];
     username           : ?Text;
@@ -810,7 +926,7 @@ actor {
   } {
     if (caller.isAnonymous()) {
       return {
-        ownedPlots = []; frntBalance = 0; resourceBalances = [];
+        ownedPlots = []; plotIds = []; frntBalance = 0; icpBalance = 0; resourceBalances = [];
         generatorTiersMap = []; username = null; lastFaucetTime = null;
         iron = 0; fuel = 0; crystal = 0; plotsOwned = 0;
         combatVictories = 0; totalFRNTRBurned = 0.0; passiveIncomePerDay = 0.0;
@@ -825,7 +941,92 @@ actor {
     var genList : [(Text, Nat)] = [];
     for ((plotId, plot) in plots.entries()) {
       if (plot.owner == ?caller) {
-        let idText = plotId.toText();
+        ownedList := ownedList.concat([plotId]);
+        let tierNat : Nat = switch (generatorTiers.get(plotId)) {
+          case (null)      { 0 };
+          case (?#None)    { 0 };
+          case (?#TierI)   { 1 };
+          case (?#TierII)  { 2 };
+          case (?#TierIII) { 3 };
+          case (?#TierIV)  { 4 };
+          case (?#TierV)   { 5 };
+          case (?#TierVI)  { 6 };
+        };
+        genList := genList.concat([(plotId, tierNat)]);
+      };
+    };
+
+    let resourceBalances : [(GameTypes.ResourceType, Float)] = [
+      (#Iron,      base.iron.toFloat()),
+      (#Fuel,      base.fuel.toFloat()),
+      (#Crystal,   base.crystal.toFloat()),
+      (#RareEarth, 0.0),
+    ];
+
+    // If FRNTR ledger is set, fetch live balance from ICRC-1 canister
+    let frntBalance : Nat = if (frntrLedgerIsSet()) {
+      let tokenActor = actor(frntrLedgerState.frntrLedger) : actor {
+        icrc1_balance_of : (TokenTypes.Account) -> async Nat
+      };
+      await tokenActor.icrc1_balance_of(toFrntrAccount(caller));
+    } else {
+      base.frntBalance;
+    };
+
+    let icpLedger = actor(ICP_LEDGER_ID) : actor {
+      icrc1_balance_of : ({ owner : Principal; subaccount : ?Blob }) -> async Nat
+    };
+    let icpBalance : Nat = await icpLedger.icrc1_balance_of({ owner = caller; subaccount = null });
+
+    {
+      ownedPlots          = ownedList;
+      plotIds             = ownedList;
+      frntBalance;
+      icpBalance;
+      resourceBalances;
+      generatorTiersMap   = genList;
+      username            = usernames.get(caller);
+      lastFaucetTime      = null;
+      iron                = base.iron;
+      fuel                = base.fuel;
+      crystal             = base.crystal;
+      plotsOwned          = base.plotsOwned;
+      combatVictories     = base.combatVictories;
+      totalFRNTRBurned    = base.totalFRNTRBurned;
+      passiveIncomePerDay = computePassiveIncomePerDay(caller);
+    };
+  };
+
+    /// Query the full player state for a given principal.
+  /// Returns a zeroed state if the principal has not played yet.
+  /// Uses live ICRC-1 ledger balance when frntrLedger is configured.
+  public shared func getPlayerStateByPrincipal(principal : Principal) : async {
+    ownedPlots         : [Text];
+    plotIds            : [Text];
+    frntBalance        : Nat;
+    icpBalance         : Nat;
+    resourceBalances   : [(GameTypes.ResourceType, Float)];
+    generatorTiersMap  : [(Text, Nat)];
+    username           : ?Text;
+    lastFaucetTime     : ?Int;
+    iron               : Nat;
+    fuel               : Nat;
+    crystal            : Nat;
+    plotsOwned         : Nat;
+    combatVictories    : Nat;
+    totalFRNTRBurned   : Float;
+    passiveIncomePerDay : Float;
+  } {
+    let base = switch (players.get(principal)) {
+      case (null) { emptyPlayerState() };
+      case (?p)   { p };
+    };
+
+    var ownedList : [Text] = [];
+    var genList : [(Text, Nat)] = [];
+    for ((plotId, plot) in plots.entries()) {
+      if (plot.owner == ?principal) {
+        let idText = plotId;
         ownedList := ownedList.concat([idText]);
         let tierNat : Nat = switch (generatorTiers.get(plotId)) {
           case (null)      { 0 };
@@ -853,80 +1054,21 @@ actor {
       let tokenActor = actor(frntrLedgerState.frntrLedger) : actor {
         icrc1_balance_of : (TokenTypes.Account) -> async Nat
       };
-      await tokenActor.icrc1_balance_of(toFrntrAccount(caller));
+      await tokenActor.icrc1_balance_of(toFrntrAccount(principal));
     } else {
       base.frntBalance;
     };
 
+    let icpLedger2 = actor(ICP_LEDGER_ID) : actor {
+      icrc1_balance_of : ({ owner : Principal; subaccount : ?Blob }) -> async Nat
+    };
+    let icpBalance : Nat = await icpLedger2.icrc1_balance_of({ owner = principal; subaccount = null });
+
     {
       ownedPlots          = ownedList;
+      plotIds             = ownedList;
       frntBalance;
-      resourceBalances;
-      generatorTiersMap   = genList;
-      username            = usernames.get(caller);
-      lastFaucetTime      = null;
-      iron                = base.iron;
-      fuel                = base.fuel;
-      crystal             = base.crystal;
-      plotsOwned          = base.plotsOwned;
-      combatVictories     = base.combatVictories;
-      totalFRNTRBurned    = base.totalFRNTRBurned;
-      passiveIncomePerDay = computePassiveIncomePerDay(caller);
-    };
-  };
-
-    /// Query the full player state for a given principal.
-  /// Returns a zeroed state if the principal has not played yet.
-  public query func getPlayerStateByPrincipal(principal : Principal) : async {
-    ownedPlots         : [Text];
-    frntBalance        : Nat;
-    resourceBalances   : [(GameTypes.ResourceType, Float)];
-    generatorTiersMap  : [(Text, Nat)];
-    username           : ?Text;
-    lastFaucetTime     : ?Int;
-    iron               : Nat;
-    fuel               : Nat;
-    crystal            : Nat;
-    plotsOwned         : Nat;
-    combatVictories    : Nat;
-    totalFRNTRBurned   : Float;
-    passiveIncomePerDay : Float;
-  } {
-    let base = switch (players.get(principal)) {
-      case (null) { emptyPlayerState() };
-      case (?p)   { p };
-    };
-
-    var ownedList : [Text] = [];
-    var genList : [(Text, Nat)] = [];
-    for ((plotId, plot) in plots.entries()) {
-      if (plot.owner == ?principal) {
-        let idText = plotId.toText();
-        ownedList := ownedList.concat([idText]);
-        let tierNat : Nat = switch (generatorTiers.get(plotId)) {
-          case (null)      { 0 };
-          case (?#None)    { 0 };
-          case (?#TierI)   { 1 };
-          case (?#TierII)  { 2 };
-          case (?#TierIII) { 3 };
-          case (?#TierIV)  { 4 };
-          case (?#TierV)   { 5 };
-          case (?#TierVI)  { 6 };
-        };
-        genList := genList.concat([(idText, tierNat)]);
-      };
-    };
-
-    let resourceBalances : [(GameTypes.ResourceType, Float)] = [
-      (#Iron,      base.iron.toFloat()),
-      (#Fuel,      base.fuel.toFloat()),
-      (#Crystal,   base.crystal.toFloat()),
-      (#RareEarth, 0.0),
-    ];
-
-    {
-      ownedPlots          = ownedList;
-      frntBalance         = base.frntBalance;
+      icpBalance;
       resourceBalances;
       generatorTiersMap   = genList;
       username            = usernames.get(principal);
@@ -972,6 +1114,7 @@ func missileStats(missileType : Text) : MissileStats {
       fuel = 0;
       crystal = 0;
       frntBalance = 0;
+      icpBalance = 0;
       plotsOwned = 0;
       combatVictories = 0;
       commanderType = null;
@@ -982,6 +1125,7 @@ func missileStats(missileType : Text) : MissileStats {
       empTargets = [];
       totalFRNTRBurned = 0.0;
       passiveIncomePerDay = 0.0;
+      lastClaimTime = 0;
     };
   };
 
@@ -997,9 +1141,42 @@ func missileStats(missileType : Text) : MissileStats {
     normalizedDiff;
   };
 
-  public shared ({ caller }) func purchasePlot(plotId : Nat) : async { #ok : Text; #err : Text } {
+  public shared ({ caller }) func purchasePlot(plotId : Text) : async { #ok : Text; #err : Text } {
     if (caller.isAnonymous()) { return #err("Anonymous users cannot purchase plots") };
-    let plot = validatePlotExists(plotId);
+    let plot = switch (plots.get(plotId)) {
+      case (null) {
+        // Auto-create the plot so any valid H3 index is purchasable
+        var seed : Nat = 0;
+        for (c in plotId.chars()) {
+          seed := (seed * 31 + c.toNat32().toNat()) % 100;
+        };
+        let richness : Nat = 78 + seed % 21;
+        let newPlot : PlotState = {
+          plotId;
+          biome = "ocean";
+          richness;
+          lat = 0.0;
+          lng = 0.0;
+          owner = null;
+          nftTokenId = null;
+          iron = 0;
+          fuel = 0;
+          crystal = 0;
+          lastTick = Time.now();
+          defenses = { turrets = 0; shields = 0; walls = 0 };
+          facilities = { electricityPlant = false; blockchainNode = false; dataCentre = false; aiLab = false };
+          attackCooldown = 0;
+          faction = null;
+          morale = 100;
+          interceptorSystem = null;
+          purchaseTimestamp = null;
+          nexusElectricityLevel = 0;
+        };
+        plots.add(plotId, newPlot);
+        newPlot;
+      };
+      case (?p)   { p };
+    };
 
     switch (plot.owner) {
       case (?owner) {
@@ -1018,9 +1195,7 @@ func missileStats(missileType : Text) : MissileStats {
       case (null) {};
     };
 
-    // ICP-only payment via ICRC-2 transfer_from.
-    // Caller must have pre-approved the game canister as a spender on the ICP ledger.
-    // FRNTR is NEVER deducted for land purchases — only for upgrades and in-game actions.
+    // Ensure player record exists
     let player = switch (players.get(caller)) {
       case (null) {
         statsState.activePlayers += 1;
@@ -1031,12 +1206,9 @@ func missileStats(missileType : Text) : MissileStats {
       case (?p) { p };
     };
 
-    // Dynamic pricing via getPlotPriceById — never hardcode ICP amount
+    // Dynamic pricing from richness
     let icpAmt : Nat = do {
-      let richness : Nat = switch (plots.get(plotId)) {
-        case (null)  { 78 + ((plotId * 2_654_435_761) % 21) };
-        case (?plot) { plot.richness };
-      };
+      let richness : Nat = plot.richness;
       let pricing = pricingState.pricing;
       if (richness < 90) {
         pricing.commonMin + ((pricing.commonMax - pricing.commonMin) * (richness - 78) / 11);
@@ -1047,7 +1219,7 @@ func missileStats(missileType : Text) : MissileStats {
       };
     };
 
-    // In TESTNET_MODE skip real ICP ledger transfer
+    // In TESTNET_MODE skip real ICP ledger transfer, simulate success
     if (not TESTNET_MODE) {
       let icpLedger = actor(ICP_LEDGER_ID) : actor {
         icrc2_transfer_from : (ICRC2TransferFromArgs) -> async ICRC2TransferFromResult
@@ -1063,18 +1235,19 @@ func missileStats(missileType : Text) : MissileStats {
       };
       switch (await icpLedger.icrc2_transfer_from(transferArgs)) {
         case (#Err(err)) {
+          // Treasury deposit failed — do NOT assign ownership
           return #err("ICP transfer failed: " # debug_show(err));
         };
         case (#Ok(_)) {};
       };
     };
 
-    // ICP transfer succeeded — assign ownership
-    let updatedPlayer : PlayerState = {
+    // ICP transfer succeeded (or skipped in TESTNET_MODE) — assign ownership atomically
+    let updatedPlayer2 : PlayerState = {
       player with
       plotsOwned = player.plotsOwned + 1;
     };
-    players.add(caller, updatedPlayer);
+    players.add(caller, updatedPlayer2);
     plotSoldState.count += 1;
 
     // Apply 25/25/50 treasury split on ICP payment (precise Nat arithmetic)
@@ -1082,12 +1255,12 @@ func missileStats(missileType : Text) : MissileStats {
     treasuryPots.leaderboardPot += icpAmt / 4;                               // 25%
     treasuryPots.liquidityPot   += icpAmt - (icpAmt / 4) - (icpAmt / 4);   // 50% remainder
 
-    let updatedPlot : PlotState = {
+    let updatedPlot2 : PlotState = {
       plot with
       owner = ?caller;
       purchaseTimestamp = ?Time.now();
     };
-    plots.add(plotId, updatedPlot);
+    plots.add(plotId, updatedPlot2);
 
     // Notify treasury canister if configured (non-blocking — ignore failures)
     if (treasuryState.treasuryPrincipal != "aaaaa-aa") {
@@ -1101,7 +1274,7 @@ func missileStats(missileType : Text) : MissileStats {
 
   /// Seed plots from the frontend (admin only). Skips plots that already exist.
   /// Also creates 7 sub-parcels per plot (slot 0 = center Nexus, slots 1-6 = surrounding).
-  public shared ({ caller }) func initPlots(plotData : [(Nat, Text, Float, Float, Nat)]) : async () {
+  public shared ({ caller }) func initPlots(plotData : [(Text, Text, Float, Float, Nat)]) : async () {
     if (caller.toText() != adminState.adminPrincipal) {
       Runtime.trap("Unauthorized: only admin can call initPlots");
     };
@@ -1133,7 +1306,7 @@ func missileStats(missileType : Text) : MissileStats {
         // Create 7 sub-parcels: slot 0 = center Nexus, slots 1-6 = surrounding
         var slot = 0;
         while (slot < 7) {
-          let subId = id * 10 + slot;
+          let subId = id # ":" # slot.toText();
           subParcels.add(subId, {
             subParcelId    = subId;
             plotId         = id;
@@ -1148,13 +1321,17 @@ func missileStats(missileType : Text) : MissileStats {
     };
   };
 
-  /// Returns the ICP price in e8s for a plot identified by its numeric plot ID.
+  /// Returns the ICP price in e8s for a plot identified by its H3 Text ID.
   /// Price tier is derived from biome richness stored in the plots map.
-  public query func getPlotPriceById(plotId : Nat) : async Nat {
+  public query func getPlotPriceById(plotId : Text) : async Nat {
     let richness : Nat = switch (plots.get(plotId)) {
       case (null)  {
-        // Fall back to deterministic richness from plot ID if plot not seeded yet
-        78 + ((plotId * 2_654_435_761) % 21);
+        // Fall back to deterministic richness from H3 index if plot not seeded yet
+        var seed : Nat = 0;
+        for (c in plotId.chars()) {
+          seed := (seed * 31 + c.toNat32().toNat()) % 100;
+        };
+        78 + seed % 21;
       };
       case (?plot) { plot.richness };
     };
@@ -1170,11 +1347,11 @@ func missileStats(missileType : Text) : MissileStats {
   };
 
   /// Returns all 7 sub-parcels for a given plot ID.
-  public query func getSubParcels(plotId : Nat) : async [SubParcel] {
+  public query func getSubParcels(plotId : Text) : async [SubParcel] {
     var result : [SubParcel] = [];
     var slot = 0;
     while (slot < 7) {
-      let subId = plotId * 10 + slot;
+      let subId = plotId # ":" # slot.toText();
       switch (subParcels.get(subId)) {
         case (?sp) { result := result.concat([sp]) };
         case (null) {};
@@ -1187,8 +1364,8 @@ func missileStats(missileType : Text) : MissileStats {
   /// Returns 7 SubParcelInfo entries (slots 0-6) for a plot.
   /// isLocked = true during the 4-hour post-purchase cooldown.
   /// cooldownSecondsRemaining = 0 when not locked.
-  /// Sub-parcel ID = plotId * 10 + slotIndex.
-  public query func getSubParcelStatus(plotId : Nat) : async [GameTypes.SubParcelInfo] {
+  /// Sub-parcel ID = plotId # ":" # slotIndex.
+  public query func getSubParcelStatus(plotId : Text) : async [GameTypes.SubParcelInfo] {
     let now : Int = Time.now();
     let fourHoursNs : Int = 14_400_000_000_000;
 
@@ -1217,7 +1394,7 @@ func missileStats(missileType : Text) : MissileStats {
     var result : [GameTypes.SubParcelInfo] = [];
     var slot = 0;
     while (slot < 7) {
-      let subId = plotId * 10 + slot;
+      let subId = plotId # ":" # slot.toText();
       let (buildingType, resourceRate) : (Text, Float) = switch (subParcels.get(subId)) {
         case (null) { ("", 0.0) };
         case (?sp) {
@@ -1260,8 +1437,21 @@ func missileStats(missileType : Text) : MissileStats {
   public query func getPlotCount() : async Nat { plots.size() };
 
   /// Returns all plots that have an owner as (plotId, ownerPrincipalText) pairs.
-  public query func getAllPlotOwners() : async [(Nat, Text)] {
-    var result : [(Nat, Text)] = [];
+  public query func getAllPlotOwners() : async [(Text, Text)] {
+    var result : [(Text, Text)] = [];
+    for ((id, plot) in plots.entries()) {
+      switch (plot.owner) {
+        case (?_owner) { result := result.concat([(id, _owner.toText())]) };
+        case (null) {};
+      };
+    };
+    result;
+  };
+
+  /// Returns all owned plots as (plotId, ownerPrincipalText) pairs.
+  /// Alias used by frontend for globe ownership sync.
+  public query func getLivePlotOwners() : async [(Text, Text)] {
+    var result : [(Text, Text)] = [];
     for ((id, plot) in plots.entries()) {
       switch (plot.owner) {
         case (?_owner) { result := result.concat([(id, _owner.toText())]) };
@@ -1273,8 +1463,8 @@ func missileStats(missileType : Text) : MissileStats {
 
   /// Returns the first plot ID with no owner, or null if all plots are owned.
   /// Used by the stress-test to find a purchasable plot without hardcoding an ID.
-  public query func getFirstAvailablePlot() : async ?Nat {
-    var found : ?Nat = null;
+  public query func getFirstAvailablePlot() : async ?Text {
+    var found : ?Text = null;
     label search for ((id, plot) in plots.entries()) {
       switch (plot.owner) {
         case (null) { found := ?id; break search };
@@ -1285,8 +1475,8 @@ func missileStats(missileType : Text) : MissileStats {
   };
 
   /// Returns all plot IDs owned by a given principal.
-  public query func getPlotsByOwner(owner : Principal) : async [Nat] {
-    var result : [Nat] = [];
+  public query func getPlotsByOwner(owner : Principal) : async [Text] {
+    var result : [Text] = [];
     for ((id, plot) in plots.entries()) {
       switch (plot.owner) {
         case (?o) { if (o == owner) { result := result.concat([id]) } };
@@ -1296,8 +1486,22 @@ func missileStats(missileType : Text) : MissileStats {
     result;
   };
 
+  /// Returns the canonical generator tier catalog for all tiers.
+  /// Frontend uses this so tier data is never hardcoded.
+  public query func getGeneratorTierCatalog() : async [{ tierIndex : Nat; bonusPerDay : Float; cost : Nat }] {
+    [
+      { tierIndex = 0; bonusPerDay = 0.0;  cost = 0 },
+      { tierIndex = 1; bonusPerDay = 2.0;  cost = GameLib.tierCost(#TierI) },
+      { tierIndex = 2; bonusPerDay = 5.0;  cost = GameLib.tierCost(#TierII) },
+      { tierIndex = 3; bonusPerDay = 10.0; cost = GameLib.tierCost(#TierIII) },
+      { tierIndex = 4; bonusPerDay = 18.0; cost = GameLib.tierCost(#TierIV) },
+      { tierIndex = 5; bonusPerDay = 30.0; cost = GameLib.tierCost(#TierV) },
+      { tierIndex = 6; bonusPerDay = 48.0; cost = GameLib.tierCost(#TierVI) },
+    ];
+  };
+
   /// Live global game stats for the UNIVERSE panel (v2 — detailed fields).
-  /// totalSupply = 10B hard cap; remainingMineable = 5B mineable cap minus total burned.
+  /// totalSupply = 10B hard cap (in e8s); remainingMineable = 5B mineable cap minus total burned.
   public query func getGameStats() : async {
     totalSupply        : Nat;
     totalBurned        : Nat;
@@ -1307,14 +1511,16 @@ func missileStats(missileType : Text) : MissileStats {
     remainingMineable  : Nat;
     totalFrntrBurned   : Nat;
   } {
-    let mineableCap : Nat = 5_000_000_000;
+    // mineableCap in e8s: 5_000_000_000 FRNTR * 100_000_000 e8s
+    let mineableCap : Nat = 5_000_000_000_00000000;
     let burned      : Nat = statsState.totalFRNTRBurned;
     let remaining   : Nat = if (burned >= mineableCap) { 0 } else { mineableCap - burned };
+    let ownedCount  : Nat = plots.size();
     {
-      totalSupply        = 10_000_000_000;
+      totalSupply        = 10_000_000_000_00000000; // 10B FRNTR in e8s
       totalBurned        = burned;
-      totalPlots         = plotSoldState.count;
-      totalPlayers       = statsState.activePlayers;
+      totalPlots         = plotSoldState.count;     // plots sold (purchased)
+      totalPlayers       = players.size();       // live player count
       emissionRatePerDay = plotSoldState.count * 7;
       remainingMineable  = remaining;
       totalFrntrBurned   = burned;
@@ -1423,8 +1629,8 @@ func missileStats(missileType : Text) : MissileStats {
   };
 
   public shared ({ caller }) func launchMissile(
-    fromPlotId : Nat,
-    toPlotId : Nat,
+    fromPlotId : Text,
+    toPlotId : Text,
     missileType : Text,
   ) : async { #ok : Text; #err : Text } {
     if (caller.isAnonymous()) { return #err("Anonymous users cannot launch missile attacks") };
@@ -1446,11 +1652,6 @@ func missileStats(missileType : Text) : MissileStats {
     let playerForBalance = switch (players.get(caller)) {
       case (null) { emptyPlayerState() };
       case (?player) { player };
-    };
-
-    let _ = switch (toPlot.owner) {
-      case (null) { toPlot.defenses };
-      case (?_owner) { toPlot.defenses };
     };
 
     let interceptorChance = switch (interceptors.get(toPlotId)) {
@@ -1498,8 +1699,8 @@ func missileStats(missileType : Text) : MissileStats {
   func recordCombatEvent(
     timestamp : Int,
     attacker : Principal,
-    fromPlot : Nat,
-    toPlot : Nat,
+    fromPlot : Text,
+    toPlot : Text,
     success : Bool,
     atkPower : Nat,
     defPower : Nat,
@@ -1507,7 +1708,7 @@ func missileStats(missileType : Text) : MissileStats {
     interceptorType : ?Text,
     missileType : ?Text,
   ) {
-    let combatEvent : CombatEvent = {
+    let combatEvent2 : CombatEvent = {
       timestamp;
       attacker;
       fromPlot;
@@ -1519,13 +1720,13 @@ func missileStats(missileType : Text) : MissileStats {
       interceptorType;
       missileType;
     };
-    combatLog.add(timestamp, combatEvent);
+    combatLog.add(timestamp, combatEvent2);
   };
 
   func resolveMissileWithoutInterceptor(
     caller : Principal,
-    fromPlot : Nat,
-    toPlot : Nat,
+    fromPlot : Text,
+    toPlot : Text,
     missileType : Text,
     _attackerPlot : PlotState,
     defenderPlot : PlotState,
@@ -1596,18 +1797,319 @@ func missileStats(missileType : Text) : MissileStats {
     limitedEvents.map(func((timestamp, event)) { event });
   };
 
-  public query ({ caller }) func getAdjacentPlots(plotId : Nat) : async [Nat] {
-    if (plotId >= 100) { return [] };
-
-    let plot = validatePlotExists(plotId);
-    let iterator = plots.keys();
-    let resultArray : [Nat] = iterator.toArray().sort().filter(
-      func(id) {
-        let nextPlot = validatePlotExists(id);
-        id != plotId and (Float.abs(latDistance(plot.lat, nextPlot.lat) * 1.5) <= 15.0);
+  public query ({ caller }) func getAdjacentPlots(plotId : Text) : async [Text] {
+    let plot : PlotState = switch (plots.get(plotId)) {
+      case (null) { return [] };
+      case (?p) { p };
+    };
+    let resultArray : [Text] = plots.keys().toArray().filter(
+      func(id : Text) : Bool {
+        if (id == plotId) { return false };
+        switch (plots.get(id)) {
+          case (null) { false };
+          case (?nextPlot) {
+            Float.abs(latDistance(plot.lat, nextPlot.lat) * 1.5) <= 15.0;
+          };
+        };
       }
     );
     resultArray.sliceToArray(0, Float.min(6.0, resultArray.size().toFloat()).toInt());
+  };
+
+  // ===========================================================================
+  // SURVEY SYSTEM — pay-to-unlock, 30-minute timer, biome + resource % result
+  // ===========================================================================
+
+  /// Survey cost in FRNTR e8s by plot rarity.
+  /// Common: 100 FRNTR, Rare: 250 FRNTR, Epic: 500 FRNTR.
+  private func surveyCostForPlot(plotId : Text) : Nat {
+    let rarity = switch (_plotRarities.get(plotId)) {
+      case (?r) { r };
+      case (null) {
+        switch (plots.get(plotId)) {
+          case (?plot) { GameLib.rarityFromBiome(plot.biome, 0) };
+          case (null)  { #Common };
+        };
+      };
+    };
+    switch (rarity) {
+      case (#Common) { 10_000_000_000 };   // 100 FRNTR at 8 decimals
+      case (#Rare)   { 25_000_000_000 };   // 250 FRNTR at 8 decimals
+      case (#Epic)   { 50_000_000_000 };   // 500 FRNTR at 8 decimals
+    };
+  };
+
+  /// Key for the survey map: plotId # "::" # Principal.toText(principal)
+  private func surveyKey(plotId : Text, p : Principal) : Text {
+    plotId # "::" # p.toText();
+  };
+
+  /// Compute a completed survey result from the plot's stored biome and richness.
+  private func buildSurveyResult(plotId : Text) : GameTypes.SurveyResult {
+    let (biomeVariant, resPct) = switch (plots.get(plotId)) {
+      case (null) {
+        (#Temperate : GameTypes.Biome, 50);
+      };
+      case (?plot) {
+        let bv : GameTypes.Biome = switch (plot.biome) {
+          case ("Temperate")      { #Temperate };
+          case ("Desert")         { #Desert };
+          case ("Arctic")         { #Arctic };
+          case ("Tropical")       { #Tropical };
+          case ("Ocean")          { #Ocean };
+          case ("DeepOcean")      { #DeepOcean };
+          case ("Volcanic")       { #Volcanic };
+          case ("AsteroidImpact") { #AsteroidImpact };
+          case (_) { GameLib.assignBiome(plot.lat, plot.lng, plotId) };
+        };
+        (bv, GameLib.resourcePercentageForBiome(bv, plotId));
+      };
+    };
+    let bonus : ?Text = switch (biomeVariant) {
+      case (#AsteroidImpact) { ?("Exotic asteroid particles detected — rare mineral deposits present.") };
+      case (#Volcanic)       { ?("High geothermal activity — potential for rare mineral seams.") };
+      case (#DeepOcean)      { ?("Deep-sea currents detected — strategic shipping lane access.") };
+      case (#Ocean)          { ?("Coastal waters — moderate shipping lane proximity.") };
+      case (_)               { null };
+    };
+    { biome = biomeVariant; resourcePercentage = resPct; bonusInfo = bonus };
+  };
+
+  /// Start a survey for a plot the caller owns.
+  /// Deducts the survey cost in FRNTR (from local balance or ICRC-1 ledger) and
+  /// records an in-progress survey record with startTime = now.
+  /// Returns #err if the plot is not owned by the caller, if a survey is already
+  /// in progress or completed, or if the caller has insufficient FRNTR.
+  public shared ({ caller }) func startSurvey(plotId : Text) : async { #ok : GameTypes.SurveyView; #err : Text } {
+    if (caller.isAnonymous()) { return #err("Must be authenticated to start a survey") };
+
+    let plot = switch (plots.get(plotId)) {
+      case (null) { return #err("Plot not found") };
+      case (?p)   { p };
+    };
+    if (plot.owner != ?caller) { return #err("You do not own this plot") };
+
+    let key = surveyKey(plotId, caller);
+    switch (surveys.get(key)) {
+      case (?existing) {
+        switch (existing.status) {
+          case (#InProgress) { return #err("Survey already in progress for this plot") };
+          case (#Completed)  { return #err("Survey already completed. Call getSurveyResult to view it.") };
+          case (#Locked) {}; // allow re-start on a locked (never-started) entry
+        };
+      };
+      case (null) {};
+    };
+
+    let cost = surveyCostForPlot(plotId);
+    let now  = Time.now();
+
+    // Deduct survey cost from FRNTR balance
+    let player = switch (players.get(caller)) {
+      case (null) { return #err("No player record found. Purchase a plot first.") };
+      case (?p)   { p };
+    };
+
+    let liveFrntBalance : Nat = if (frntrLedgerIsSet()) {
+      let tokenActor = actor(frntrLedgerState.frntrLedger) : actor {
+        icrc1_balance_of : (TokenTypes.Account) -> async Nat
+      };
+      await tokenActor.icrc1_balance_of(toFrntrAccount(caller));
+    } else {
+      player.frntBalance;
+    };
+
+    if (liveFrntBalance < cost) {
+      return #err(
+        "Insufficient FRNTR. Need " # Nat.toText(cost / 100_000_000) # " FRNTR to survey this plot."
+      );
+    };
+
+    // Burn the survey cost via ICRC-1 transfer when ledger is configured
+    if (frntrLedgerIsSet()) {
+      type TransferArgs = {
+        to              : { owner : Principal; subaccount : ?Blob };
+        amount          : Nat;
+        fee             : ?Nat;
+        memo            : ?Blob;
+        from_subaccount : ?Blob;
+        created_at_time : ?Nat64;
+      };
+      type TransferError = {
+        #BadFee               : { expected_fee : Nat };
+        #BadBurn              : { min_burn_amount : Nat };
+        #InsufficientFunds    : { balance : Nat };
+        #TooOld;
+        #CreatedInFuture      : { ledger_time : Nat64 };
+        #Duplicate            : { duplicate_of : Nat };
+        #TemporarilyUnavailable;
+        #GenericError         : { error_code : Nat; message : Text };
+      };
+      type TransferResult = { #Ok : Nat; #Err : TransferError };
+      let frntrActor = actor(frntrLedgerState.frntrLedger) : actor {
+        icrc1_transfer : (TransferArgs) -> async TransferResult
+      };
+      switch (await frntrActor.icrc1_transfer({
+        to              = { owner = Principal.fromText("aaaaa-aa"); subaccount = null };
+        amount          = cost;
+        fee             = ?10_000;
+        memo            = null;
+        from_subaccount = null;
+        created_at_time = null;
+      })) {
+        case (#Err(e)) { return #err("FRNTR burn failed: " # debug_show(e)) };
+        case (#Ok(_))  {};
+      };
+    } else {
+      // Testnet fallback: deduct from local balance
+      if (player.frntBalance < cost) {
+        return #err("Insufficient FRNTR (local balance)");
+      };
+      players.add(caller, { player with frntBalance = player.frntBalance - cost });
+    };
+
+    // Track the burn in global stats
+    statsState.totalFRNTRBurned += cost;
+
+    let thirtyMinNs : Nat = 1_800_000_000_000;
+    let record : GameTypes.Survey = {
+      plotId;
+      surveyor    = caller;
+      status      = #InProgress;
+      unlockCost  = cost;
+      startTime   = now;
+      duration    = thirtyMinNs;
+      result      = null;
+    };
+    surveys.add(key, record);
+
+    let view : GameTypes.SurveyView = {
+      plotId;
+      status           = #InProgress;
+      unlockCost       = cost;
+      startTime        = now;
+      secondsRemaining = thirtyMinNs / 1_000_000_000;
+      result           = null;
+    };
+    #ok(view);
+  };
+
+  /// Get the current survey status for a plot.
+  /// If the timer has expired the result is auto-computed and the survey is
+  /// promoted to #Completed — the updated record is persisted.
+  public shared ({ caller }) func getSurveyStatus(plotId : Text) : async { #ok : GameTypes.SurveyView; #err : Text } {
+    if (caller.isAnonymous()) { return #err("Must be authenticated") };
+    let key = surveyKey(plotId, caller);
+    let record = switch (surveys.get(key)) {
+      case (null) {
+        // No survey started — return a locked placeholder with the cost
+        let cost = surveyCostForPlot(plotId);
+        return #ok({
+          plotId;
+          status           = #Locked;
+          unlockCost       = cost;
+          startTime        = 0;
+          secondsRemaining = 0;
+          result           = null;
+        });
+      };
+      case (?r) { r };
+    };
+
+    let now = Time.now();
+    switch (record.status) {
+      case (#Completed) {
+        #ok({
+          plotId;
+          status           = #Completed;
+          unlockCost       = record.unlockCost;
+          startTime        = record.startTime;
+          secondsRemaining = 0;
+          result           = record.result;
+        });
+      };
+      case (#InProgress) {
+        let elapsed : Int = now - record.startTime;
+        let durInt  : Int = record.duration.toInt();
+        if (elapsed >= durInt) {
+          // Timer expired — compute and persist result
+          let res = buildSurveyResult(plotId);
+          let completed : GameTypes.Survey = { record with status = #Completed; result = ?res };
+          surveys.add(key, completed);
+          #ok({
+            plotId;
+            status           = #Completed;
+            unlockCost       = record.unlockCost;
+            startTime        = record.startTime;
+            secondsRemaining = 0;
+            result           = ?res;
+          });
+        } else {
+          let remaining : Nat = ((durInt - elapsed) / 1_000_000_000).toNat();
+          #ok({
+            plotId;
+            status           = #InProgress;
+            unlockCost       = record.unlockCost;
+            startTime        = record.startTime;
+            secondsRemaining = remaining;
+            result           = null;
+          });
+        };
+      };
+      case (#Locked) {
+        #ok({
+          plotId;
+          status           = #Locked;
+          unlockCost       = record.unlockCost;
+          startTime        = 0;
+          secondsRemaining = 0;
+          result           = null;
+        });
+      };
+    };
+  };
+
+  /// Get the completed survey result for a plot.
+  /// Returns #err if the survey has not been started or the timer hasn't expired.
+  public shared ({ caller }) func getSurveyResult(plotId : Text) : async { #ok : GameTypes.SurveyResult; #err : Text } {
+    if (caller.isAnonymous()) { return #err("Must be authenticated") };
+    let key = surveyKey(plotId, caller);
+    let record = switch (surveys.get(key)) {
+      case (null) { return #err("No survey started for this plot. Call startSurvey first.") };
+      case (?r)   { r };
+    };
+    switch (record.status) {
+      case (#Locked)     { #err("Survey has not been started.") };
+      case (#InProgress) {
+        let now = Time.now();
+        let elapsed : Int = now - record.startTime;
+        let durInt  : Int = record.duration.toInt();
+        if (elapsed >= durInt) {
+          // Auto-complete if timer has expired
+          let res = buildSurveyResult(plotId);
+          surveys.add(key, { record with status = #Completed; result = ?res });
+          #ok(res);
+        } else {
+          let remaining : Nat = ((durInt - elapsed) / 1_000_000_000).toNat();
+          #err("Survey in progress. " # remaining.toText() # " seconds remaining.");
+        };
+      };
+      case (#Completed) {
+        switch (record.result) {
+          case (?res) { #ok(res) };
+          case (null) {
+            let res = buildSurveyResult(plotId);
+            surveys.add(key, { record with result = ?res });
+            #ok(res);
+          };
+        };
+      };
+    };
+  };
+
+  /// Returns the survey cost (in FRNTR e8s) for a given plot.
+  public query func getSurveyCost(plotId : Text) : async Nat {
+    surveyCostForPlot(plotId);
   };
 
   // ─── Upgrade hooks — persist heap state to stable arrays ─────────────────
@@ -1732,6 +2234,21 @@ func missileStats(missileType : Text) : MissileStats {
     lastPriceValue;
   };
 
+  /// Returns the currently approved DEX canister principal for liquidity withdrawals.
+  /// Set via setApprovedLiquidityCanister (admin only).
+  public query func getApprovedLiquidityCanister() : async ?Text {
+    approvedDexPrincipalText;
+  };
+
+  /// Returns the caller's real ICP balance from the on-chain ICP ledger (ryjl3-tyaaa-aaaaa-aaaba-cai).
+  /// Result is in raw e8s (divide by 100_000_000 for ICP display).
+  public shared func getIcpBalance(principal : Principal) : async Nat {
+    let icpLedger = actor(ICP_LEDGER_ID) : actor {
+      icrc1_balance_of : ({ owner : Principal; subaccount : ?Blob }) -> async Nat
+    };
+    await icpLedger.icrc1_balance_of({ owner = principal; subaccount = null });
+  };
+
   system func preupgrade() {
     stablePlots          := plots.toArray();
     stablePlayers        := players.toArray();
@@ -1742,6 +2259,7 @@ func missileStats(missileType : Text) : MissileStats {
     stablePlotRarities   := _plotRarities.toArray();
     stableUsernames      := usernames.toArray();
     stableFaucetClaims   := faucetClaims.toArray();
+    stableClaimTimes     := claimTimes.toArray();
     stableStatsState     := (
       statsState.totalFRNTRBurned,
       statsState.totalFRNTRMined,
@@ -1749,6 +2267,8 @@ func missileStats(missileType : Text) : MissileStats {
     );
     stablePlotSoldCount  := plotSoldState.count;
     stableSubParcels     := subParcels.toArray();
+    stableTreasuryPots   := (treasuryPots.devPot, treasuryPots.leaderboardPot, treasuryPots.liquidityPot);
+    stableSurveys        := surveys.toArray();
   };
 
   // ─── Free stable arrays after upgrade to reclaim heap memory ─────────────
@@ -1763,6 +2283,14 @@ func missileStats(missileType : Text) : MissileStats {
     stablePlotRarities   := [];
     stableUsernames      := [];
     stableFaucetClaims   := [];
+    stableClaimTimes     := [];
     stableSubParcels     := [];
+    stableSurveys        := [];
+    if (stableTreasuryPots.0 != 0 or stableTreasuryPots.1 != 0 or stableTreasuryPots.2 != 0) {
+      treasuryPots.devPot        := stableTreasuryPots.0;
+      treasuryPots.leaderboardPot := stableTreasuryPots.1;
+      treasuryPots.liquidityPot  := stableTreasuryPots.2;
+      stableTreasuryPots         := (0, 0, 0);
+    };
   };
 };

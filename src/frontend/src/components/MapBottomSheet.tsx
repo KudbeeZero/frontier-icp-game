@@ -4,7 +4,6 @@ import {
   Folder,
   Globe,
   Lock,
-  Pickaxe,
   Radio,
   Shield,
   ShieldCheck,
@@ -15,7 +14,6 @@ import type { LucideIcon } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
 import { createActor } from "../backend";
-import { getMineralYield, projectedMonthlyYield } from "../constants/minerals";
 import { usePurchasePlot } from "../hooks/usePurchasePlot";
 import {
   type GeneratorTier,
@@ -29,26 +27,50 @@ const CYAN_DIM = "rgba(0,255,204,0.5)";
 const BORDER = "rgba(0,255,204,0.15)";
 
 const BIOME_BADGE_COLORS: Record<string, string> = {
-  Arctic: "#a8d8ea",
+  Temperate: "#4a9b5f",
   Desert: "#e8c97a",
-  Forest: "#4a9b5f",
+  Arctic: "#a8d8ea",
+  Tropical: "#22c55e",
   Ocean: "#1a6b9e",
-  Mountain: "#7a6b5a",
+  DeepOcean: "#0f3460",
   Volcanic: "#c0392b",
+  AsteroidImpact: "#9333ea",
+  // Legacy biomes for backward compat
+  Forest: "#4a9b5f",
+  Mountain: "#7a6b5a",
   Grassland: "#5aab4a",
   Toxic: "#7dba3a",
 };
 
-const COMMANDER_IMAGES: Record<string, string> = {
-  "NOVA PRIME":
-    "/assets/generated/commander-nova-prime-transparent.dim_300x300.png",
-  "IRON CLAW":
-    "/assets/generated/commander-iron-claw-transparent.dim_300x300.png",
-  "PHANTOM OPS":
-    "/assets/generated/commander-phantom-ops-transparent.dim_300x300.png",
-  "VOID HUNTER":
-    "/assets/generated/commander-void-hunter-transparent.dim_300x300.png",
+const RARITY_CONFIG: Record<
+  string,
+  { label: string; color: string; bg: string }
+> = {
+  AsteroidImpact: {
+    label: "RARE",
+    color: "#9333ea",
+    bg: "rgba(147,51,234,0.18)",
+  },
+  Volcanic: {
+    label: "UNCOMMON",
+    color: "#f97316",
+    bg: "rgba(249,115,22,0.15)",
+  },
 };
+
+function getRarity(biome: string): {
+  label: string;
+  color: string;
+  bg: string;
+} {
+  return (
+    RARITY_CONFIG[biome] ?? {
+      label: "COMMON",
+      color: "rgba(148,163,184,0.8)",
+      bg: "rgba(148,163,184,0.12)",
+    }
+  );
+}
 
 function _getCountdown(purchaseTime: number): string {
   const unlockAt = purchaseTime + 4 * 60 * 60 * 1000;
@@ -107,48 +129,12 @@ interface MapBottomSheetProps {
 interface SurveyReportProps {
   plot: import("../store/gameStore").PlotData;
   isOwnPlot: boolean;
-  playerFrntr: number;
-  mineYield: {
-    iron: number;
-    fuel: number;
-    crystal: number;
-    rareEarth: number;
-  } | null;
-  regenError: string | null;
-  onMine: () => void;
-  onRegen: () => void;
 }
 
-function SurveyReport({
-  plot,
-  isOwnPlot,
-  playerFrntr,
-  mineYield,
-  regenError,
-  onMine,
-  onRegen,
-}: SurveyReportProps) {
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 10000);
-    return () => clearInterval(t);
-  }, []);
-
-  const regenActive = now < plot.regenActiveUntil;
-  const regenRemaining = plot.regenActiveUntil - now;
-  const regenHours = Math.floor(regenRemaining / 3600000);
-  const regenMins = Math.floor((regenRemaining % 3600000) / 60000);
-
-  const monthly = projectedMonthlyYield(plot.biome, plot.efficiency);
+function SurveyReport({ plot, isOwnPlot: _isOwnPlot }: SurveyReportProps) {
   const effPct = plot.efficiency;
   const effColor =
     effPct > 80 ? "#22c55e" : effPct >= 60 ? "#f59e0b" : "#ef4444";
-
-  const previewYield = getMineralYield(
-    plot.biome,
-    plot.efficiency,
-    regenActive,
-  );
 
   return (
     <div style={{ marginBottom: 14 }}>
@@ -216,207 +202,7 @@ function SurveyReport({
             }}
           />
         </div>
-        <div
-          style={{
-            marginTop: 3,
-            fontSize: 7,
-            color: "rgba(224,244,255,0.3)",
-            fontFamily: "monospace",
-            letterSpacing: 0.5,
-          }}
-        >
-          Extracted: {plot.mineCount}x · Degrades 1% per 2 mines
-        </div>
       </div>
-
-      {/* Regen status */}
-      {regenActive && (
-        <div
-          data-ocid="map.success_state"
-          style={{
-            marginBottom: 8,
-            fontSize: 8,
-            color: CYAN,
-            fontFamily: "monospace",
-            letterSpacing: 1,
-            padding: "3px 6px",
-            background: "rgba(0,255,204,0.07)",
-            border: "1px solid rgba(0,255,204,0.2)",
-            borderRadius: 3,
-          }}
-        >
-          ⚡ REGEN ACTIVE: {regenHours}h {regenMins}m remaining
-        </div>
-      )}
-
-      {/* Monthly projection */}
-      <div
-        style={{
-          marginBottom: 10,
-          padding: "7px 8px",
-          background: "rgba(0,0,0,0.25)",
-          border: "1px solid rgba(0,255,204,0.12)",
-          borderRadius: 4,
-        }}
-      >
-        <div
-          style={{
-            fontSize: 7,
-            color: CYAN_DIM,
-            letterSpacing: 2,
-            fontFamily: "monospace",
-            marginBottom: 5,
-          }}
-        >
-          PROJECTED MONTHLY YIELD
-        </div>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "3px 10px",
-          }}
-        >
-          {[
-            { label: "IRON", val: monthly.iron, color: "#94a3b8" },
-            { label: "FUEL", val: monthly.fuel, color: "#f97316" },
-            { label: "CRYSTAL", val: monthly.crystal, color: "#3b82f6" },
-            { label: "RARE EARTH", val: monthly.rareEarth, color: "#c084fc" },
-          ].map(({ label, val, color }) => (
-            <div
-              key={label}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <span
-                style={{
-                  fontSize: 7,
-                  color: "rgba(224,244,255,0.45)",
-                  letterSpacing: 0.5,
-                  fontFamily: "monospace",
-                }}
-              >
-                {label}
-              </span>
-              <span
-                style={{
-                  fontSize: 8,
-                  fontWeight: 700,
-                  color,
-                  fontFamily: "monospace",
-                }}
-              >
-                {val >= 1000 ? `${(val / 1000).toFixed(1)}K` : val}
-              </span>
-            </div>
-          ))}
-        </div>
-        <div
-          style={{
-            marginTop: 4,
-            fontSize: 7,
-            color: "rgba(224,244,255,0.25)",
-            fontFamily: "monospace",
-          }}
-        >
-          Based on 10 mines/day · Biome: {plot.biome}
-        </div>
-      </div>
-
-      {/* Per-mine preview */}
-      <div
-        style={{
-          marginBottom: isOwnPlot ? 10 : 0,
-          fontSize: 7,
-          color: "rgba(224,244,255,0.35)",
-          fontFamily: "monospace",
-          letterSpacing: 0.5,
-        }}
-      >
-        Per mine:{" "}
-        <span style={{ color: "#94a3b8" }}>+{previewYield.iron} Fe</span>{" "}
-        <span style={{ color: "#f97316" }}>+{previewYield.fuel} Fuel</span>{" "}
-        <span style={{ color: "#3b82f6" }}>+{previewYield.crystal} Xtal</span>{" "}
-        <span style={{ color: "#c084fc" }}>+{previewYield.rareEarth} Rare</span>
-      </div>
-
-      {/* Mine yield popup */}
-      {mineYield && (
-        <div
-          data-ocid="map.success_state"
-          style={{
-            marginBottom: 8,
-            padding: "5px 8px",
-            background: "rgba(34,197,94,0.12)",
-            border: "1px solid rgba(34,197,94,0.3)",
-            borderRadius: 4,
-            fontSize: 9,
-            color: "#22c55e",
-            fontFamily: "monospace",
-            letterSpacing: 0.5,
-            fontWeight: 700,
-          }}
-        >
-          +{mineYield.iron} IRON +{mineYield.fuel} FUEL +{mineYield.crystal}{" "}
-          XTAL +{mineYield.rareEarth} RARE
-        </div>
-      )}
-
-      {/* Mine + Regen buttons (own plots only) */}
-      {isOwnPlot && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <button
-            type="button"
-            data-ocid="map.primary_button"
-            onClick={onMine}
-            style={{
-              ...actionBtnStyle("#00ffcc", "rgba(0,255,204,0.1)"),
-              fontSize: 10,
-            }}
-          >
-            ⛏ MINE RESOURCES
-          </button>
-          <button
-            type="button"
-            data-ocid="map.secondary_button"
-            onClick={onRegen}
-            disabled={regenActive || playerFrntr < 50}
-            style={{
-              ...actionBtnStyle(
-                regenActive
-                  ? "rgba(0,255,204,0.3)"
-                  : playerFrntr < 50
-                    ? "rgba(245,158,11,0.3)"
-                    : "#f59e0b",
-                regenActive ? "rgba(0,0,0,0.2)" : "rgba(245,158,11,0.08)",
-              ),
-              opacity: regenActive || playerFrntr < 50 ? 0.55 : 1,
-              cursor:
-                regenActive || playerFrntr < 50 ? "not-allowed" : "pointer",
-              fontSize: 10,
-            }}
-          >
-            ⚡ REGEN BOOST — 50 FRNTR
-          </button>
-          {regenError && (
-            <div
-              data-ocid="map.error_state"
-              style={{
-                fontSize: 9,
-                color: "#ef4444",
-                textAlign: "center",
-                letterSpacing: 1,
-                fontFamily: "monospace",
-              }}
-            >
-              {regenError}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -435,8 +221,9 @@ const TIER_COSTS: Record<number, number> = {
   0: 500,
   1: 1500,
   2: 4000,
-  3: 8000,
-  4: 15000,
+  3: 10000,
+  4: 25000,
+  5: 60000,
 };
 
 export default function MapBottomSheet({
@@ -444,17 +231,14 @@ export default function MapBottomSheet({
   controlsRef,
 }: MapBottomSheetProps) {
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
-  const [mineYield, setMineYield] = useState<{
-    iron: number;
-    fuel: number;
-    crystal: number;
-    rareEarth: number;
-  } | null>(null);
-  const [regenError, setRegenError] = useState<string | null>(null);
+  const [showPurchaseConfirm, setShowPurchaseConfirm] = useState(false);
   const [upgradeStatus, setUpgradeStatus] = useState<
     "idle" | "upgrading" | "success" | "error"
   >("idle");
   const [upgradeError, setUpgradeError] = useState<string | null>(null);
+  const [claimStatus, setClaimStatus] = useState<
+    "idle" | "claiming" | "success" | "error"
+  >("idle");
 
   const { actor } = useActor(createActor);
 
@@ -465,12 +249,12 @@ export default function MapBottomSheet({
   const getSubParcels = useGameStore((s) => s.getSubParcels);
   const setTargetPlotId = useGameStore((s) => s.setTargetPlotId);
   const setPlotHoverCard = useGameStore((s) => s.setPlotHoverCard);
-  const commanderAssignments = useGameStore((s) => s.commanderAssignments);
   const icpUsdPrice = useGameStore((s) => s.icpUsdPrice);
+  const accruedSinceSync = useGameStore((s) => s.accruedFrntSinceSync);
+  const confirmedFrntBalance = useGameStore((s) => s.confirmedFrntBalance);
 
-  const mineResources = useGameStore((s) => s.mineResources);
-  const activateRegenBoost = useGameStore((s) => s.activateRegenBoost);
-
+  // Fix 1: Fetch plot price from canister
+  const [fetchedPriceE8s, setFetchedPriceE8s] = useState<bigint | null>(null);
   const { purchasePlot, isPurchasing } = usePurchasePlot();
 
   const plot =
@@ -478,14 +262,45 @@ export default function MapBottomSheet({
       ? (plots.find((p) => p.id === selectedPlotId) ?? null)
       : null;
 
+  // Local fallback price from efficiency
+  const localPriceE8s = plot
+    ? BigInt(
+        (plot.efficiency ?? 0) >= 90
+          ? 30_0000_0000
+          : (plot.efficiency ?? 0) >= 80
+            ? 9_0000_0000
+            : 2_5000_0000,
+      )
+    : null;
+
+  useEffect(() => {
+    setFetchedPriceE8s(null);
+    if (!actor || selectedPlotId === null) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const price = await (actor as any).getPlotPrice(BigInt(selectedPlotId));
+        if (!cancelled) setFetchedPriceE8s(BigInt(price));
+      } catch {
+        // keep localPriceE8s fallback
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [actor, selectedPlotId]);
+
   const handleUpgrade = useCallback(async () => {
     if (!plot || !actor || upgradeStatus === "upgrading") return;
     setUpgradeStatus("upgrading");
     setUpgradeError(null);
     try {
-      const res = await actor.upgradeGenerator(BigInt(plot.id));
-      if ("ok" in res) {
-        const newTier = res.ok.generatorTier;
+      const res = await actor.upgradeGenerator(String(plot.id));
+      if (res.__kind__ === "ok") {
+        const view = (
+          res as { __kind__: "ok"; ok: import("../backend").PlotUpgradesView }
+        ).ok;
+        const newTier = view.generatorTier;
         // Map GeneratorTier enum to numeric tier
         const tierMap: Record<string, number> = {
           None: 0,
@@ -494,6 +309,7 @@ export default function MapBottomSheet({
           TierIII: 3,
           TierIV: 4,
           TierV: 5,
+          TierVI: 6,
         };
         const numericTier = tierMap[newTier as unknown as string] ?? 1;
         const burnCost = TIER_COSTS[numericTier - 1] ?? 0;
@@ -521,8 +337,10 @@ export default function MapBottomSheet({
         setUpgradeStatus("success");
         setTimeout(() => setUpgradeStatus("idle"), 2500);
       } else {
-        const errStr = String((res as { err: unknown }).err);
-        setUpgradeError(errStr);
+        const errKind = (
+          res as { __kind__: "err"; err: import("../backend").UpgradeError }
+        ).err;
+        setUpgradeError(String(errKind));
         setUpgradeStatus("error");
         setTimeout(() => setUpgradeStatus("idle"), 3000);
       }
@@ -541,17 +359,13 @@ export default function MapBottomSheet({
   const isOwnPlot =
     isOwned &&
     (plot?.owner === playerPrincipal ||
-      (selectedPlotId !== null && player.plotsOwned.includes(selectedPlotId)));
+      (selectedPlotId !== null &&
+        player.plotsOwned.includes(String(selectedPlotId))));
   const isEnemyPlot = isOwned && !isOwnPlot;
 
-  // Raw ICP price in e8s for display; formatted with USD when available
-  const icpPriceE8s =
-    (plot?.efficiency ?? 0) >= 90
-      ? 30_0000_0000
-      : (plot?.efficiency ?? 0) >= 80
-        ? 9_0000_0000
-        : 2_5000_0000;
-  const icpFloat = icpPriceE8s / 1e8;
+  // Use canister price if fetched, else local fallback (Fix 1)
+  const activePriceE8s = fetchedPriceE8s ?? localPriceE8s ?? 200_000_000n;
+  const icpFloat = Number(activePriceE8s) / 1e8;
   const icpPriceDisplay = icpUsdPrice
     ? `${icpFloat.toFixed(4)} ICP (~${(icpFloat * icpUsdPrice).toFixed(2)})`
     : `${icpFloat.toFixed(4)} ICP ($ unavailable)`;
@@ -559,19 +373,72 @@ export default function MapBottomSheet({
   async function handlePurchase() {
     if (!plot || isPurchasing) return;
     setPurchaseError(null);
-    const result = await purchasePlot(plot.id);
+    // Show confirmation modal first
+    setShowPurchaseConfirm(true);
+  }
+
+  async function handleConfirmPurchase() {
+    if (!plot || isPurchasing) return;
+    setShowPurchaseConfirm(false);
+    setPurchaseError(null);
+    const shortId = String(plot.id).slice(0, 8);
+    const result = await purchasePlot(String(plot.id));
     if (result.success) {
       onClose();
       focusOnPlot(plot.lat, plot.lng, controlsRef);
       setPlotHoverCard({
         plotId: plot.id,
         owner: player.principal ?? "You",
-        action: "TERRITORY ACQUIRED",
-        nextStep:
-          "Open Command Center to track FRNTR generation. Build a Silo to attack.",
+        action: `Plot acquired! ${plot.biome} plot ${shortId}`,
+        nextStep: "Open Command Center to track FRNTR generation.",
       });
     } else {
       setPurchaseError(result.message);
+    }
+  }
+
+  async function handleClaimFrntr() {
+    if (claimStatus === "claiming" || accruedSinceSync < 0.001) return;
+    setClaimStatus("claiming");
+    try {
+      if (actor) {
+        const res = await (
+          actor as unknown as {
+            claimAccumulatedTokens: () => Promise<
+              { __kind__: "ok"; ok: bigint } | { __kind__: "err"; err: string }
+            >;
+          }
+        ).claimAccumulatedTokens();
+        if (res.__kind__ === "ok") {
+          // Refresh balance from canister
+          try {
+            const state = await actor.getPlayerState();
+            if (state) {
+              useGameStore.setState(() => ({
+                confirmedFrntBalance: Number(state.frntBalance) / 100_000_000,
+                accruedFrntSinceSync: 0,
+                player: {
+                  ...useGameStore.getState().player,
+                  frntBalance: Number(state.frntBalance) / 100_000_000,
+                },
+              }));
+            }
+          } catch {
+            /* non-critical */
+          }
+          setClaimStatus("success");
+          setTimeout(() => setClaimStatus("idle"), 2500);
+        } else {
+          setClaimStatus("error");
+          setTimeout(() => setClaimStatus("idle"), 3000);
+        }
+      } else {
+        setClaimStatus("error");
+        setTimeout(() => setClaimStatus("idle"), 3000);
+      }
+    } catch {
+      setClaimStatus("error");
+      setTimeout(() => setClaimStatus("idle"), 3000);
     }
   }
 
@@ -719,50 +586,6 @@ export default function MapBottomSheet({
                 >
                   {plot.lat.toFixed(2)}°N · {plot.lng.toFixed(2)}°E
                 </div>
-                {commanderAssignments?.[plot.id] && (
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      marginTop: 5,
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: 24,
-                        height: 24,
-                        clipPath:
-                          "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)",
-                        overflow: "hidden",
-                        flexShrink: 0,
-                        border: "1px solid rgba(0,255,204,0.4)",
-                      }}
-                    >
-                      <img
-                        src={
-                          COMMANDER_IMAGES[commanderAssignments[plot.id]] ?? ""
-                        }
-                        alt={commanderAssignments[plot.id]}
-                        style={{
-                          width: "100%",
-                          height: "100%",
-                          objectFit: "cover",
-                        }}
-                      />
-                    </div>
-                    <span
-                      style={{
-                        fontSize: 9,
-                        color: "#00ffcc",
-                        letterSpacing: 1,
-                        fontFamily: "monospace",
-                      }}
-                    >
-                      CMD: {commanderAssignments[plot.id]}
-                    </span>
-                  </div>
-                )}
               </div>
 
               {/* DIVIDER */}
@@ -776,28 +599,7 @@ export default function MapBottomSheet({
               />
 
               {/* SURVEY REPORT */}
-              <SurveyReport
-                plot={plot}
-                isOwnPlot={isOwnPlot}
-                playerFrntr={player.frntBalance}
-                mineYield={mineYield}
-                regenError={regenError}
-                onMine={() => {
-                  const yld = mineResources(plot.id);
-                  if (yld) {
-                    setMineYield(yld);
-                    setTimeout(() => setMineYield(null), 3000);
-                  }
-                }}
-                onRegen={() => {
-                  setRegenError(null);
-                  if (player.frntBalance < 50) {
-                    setRegenError("INSUFFICIENT FRNTR");
-                    return;
-                  }
-                  activateRegenBoost(plot.id);
-                }}
-              />
+              <SurveyReport plot={plot} isOwnPlot={isOwnPlot} />
             </>
           )}
         </div>
@@ -813,26 +615,196 @@ export default function MapBottomSheet({
           >
             {!isOwned && (
               <div>
-                <button
-                  type="button"
-                  data-ocid="map.primary_button"
-                  onClick={handlePurchase}
-                  disabled={isPurchasing}
-                  style={{
-                    ...actionBtnStyle(
-                      "#00ffcc",
-                      isPurchasing
-                        ? "rgba(0,255,204,0.06)"
-                        : "rgba(0,255,204,0.12)",
-                    ),
-                    opacity: isPurchasing ? 0.6 : 1,
-                    cursor: isPurchasing ? "not-allowed" : "pointer",
-                  }}
-                >
-                  {isPurchasing
-                    ? "PROCESSING…"
-                    : `PURCHASE — ${icpPriceDisplay}`}
-                </button>
+                {showPurchaseConfirm && plot ? (
+                  /* NFT PURCHASE CONFIRMATION CARD */
+                  <div
+                    data-ocid="map.dialog"
+                    style={{
+                      background: "rgba(0,10,20,0.85)",
+                      border: "1px solid rgba(0,255,204,0.25)",
+                      borderRadius: 8,
+                      padding: "14px 14px 10px",
+                      backdropFilter: "blur(14px)",
+                      WebkitBackdropFilter: "blur(14px)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 9,
+                        color: CYAN_DIM,
+                        letterSpacing: 2,
+                        fontFamily: "monospace",
+                        marginBottom: 10,
+                      }}
+                    >
+                      CONFIRM PURCHASE
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 5,
+                        marginBottom: 12,
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          fontSize: 9,
+                          fontFamily: "monospace",
+                        }}
+                      >
+                        <span style={{ color: "rgba(224,244,255,0.45)" }}>
+                          PLOT ID
+                        </span>
+                        <span style={{ color: CYAN, fontWeight: 700 }}>
+                          {String(plot.id).slice(0, 8)}
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          fontSize: 9,
+                          fontFamily: "monospace",
+                        }}
+                      >
+                        <span style={{ color: "rgba(224,244,255,0.45)" }}>
+                          BIOME
+                        </span>
+                        <span
+                          style={{
+                            padding: "1px 6px",
+                            borderRadius: 3,
+                            background: `${BIOME_BADGE_COLORS[plot.biome] ?? CYAN}22`,
+                            border: `1px solid ${BIOME_BADGE_COLORS[plot.biome] ?? CYAN}`,
+                            color: BIOME_BADGE_COLORS[plot.biome] ?? CYAN,
+                            fontWeight: 700,
+                            letterSpacing: 1,
+                          }}
+                        >
+                          {plot.biome.toUpperCase()}
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          fontSize: 9,
+                          fontFamily: "monospace",
+                        }}
+                      >
+                        <span style={{ color: "rgba(224,244,255,0.45)" }}>
+                          RARITY
+                        </span>
+                        {(() => {
+                          const r = getRarity(plot.biome);
+                          return (
+                            <span
+                              style={{
+                                padding: "1px 6px",
+                                borderRadius: 3,
+                                background: r.bg,
+                                border: `1px solid ${r.color}`,
+                                color: r.color,
+                                fontWeight: 700,
+                                letterSpacing: 1,
+                              }}
+                            >
+                              {r.label}
+                            </span>
+                          );
+                        })()}
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          fontSize: 9,
+                          fontFamily: "monospace",
+                        }}
+                      >
+                        <span style={{ color: "rgba(224,244,255,0.45)" }}>
+                          PRICE
+                        </span>
+                        <span style={{ color: "#ffd700", fontWeight: 700 }}>
+                          {icpPriceDisplay}
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button
+                        type="button"
+                        data-ocid="map.confirm_button"
+                        onClick={handleConfirmPurchase}
+                        disabled={isPurchasing}
+                        style={{
+                          flex: 1,
+                          padding: "10px 0",
+                          background: isPurchasing
+                            ? "rgba(34,197,94,0.06)"
+                            : "rgba(34,197,94,0.15)",
+                          border: "1px solid #22c55e",
+                          borderRadius: 6,
+                          color: "#22c55e",
+                          fontSize: 10,
+                          fontWeight: 700,
+                          letterSpacing: 2,
+                          cursor: isPurchasing ? "not-allowed" : "pointer",
+                          fontFamily: "monospace",
+                          textShadow: "0 0 8px #22c55e80",
+                          opacity: isPurchasing ? 0.6 : 1,
+                        }}
+                      >
+                        {isPurchasing ? "PROCESSING…" : "CONFIRM"}
+                      </button>
+                      <button
+                        type="button"
+                        data-ocid="map.cancel_button"
+                        onClick={() => setShowPurchaseConfirm(false)}
+                        style={{
+                          flex: 1,
+                          padding: "10px 0",
+                          background: "rgba(0,0,0,0.2)",
+                          border: `1px solid ${BORDER}`,
+                          borderRadius: 6,
+                          color: CYAN_DIM,
+                          fontSize: 10,
+                          fontWeight: 700,
+                          letterSpacing: 2,
+                          cursor: "pointer",
+                          fontFamily: "monospace",
+                        }}
+                      >
+                        CANCEL
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    data-ocid="map.primary_button"
+                    onClick={handlePurchase}
+                    disabled={isPurchasing}
+                    style={{
+                      ...actionBtnStyle(
+                        "#00ffcc",
+                        isPurchasing
+                          ? "rgba(0,255,204,0.06)"
+                          : "rgba(0,255,204,0.12)",
+                      ),
+                      opacity: isPurchasing ? 0.6 : 1,
+                      cursor: isPurchasing ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    {isPurchasing
+                      ? "PROCESSING…"
+                      : `PURCHASE — ${icpPriceDisplay}`}
+                  </button>
+                )}
                 {purchaseError && (
                   <div
                     data-ocid="map.error_state"
@@ -852,21 +824,54 @@ export default function MapBottomSheet({
             )}
             {isOwnPlot &&
               (() => {
-                const currentTier = generatorTiers[plot.id] ?? 0;
+                const currentTier = generatorTiers[String(plot.id)] ?? 0;
                 const dailyRate = TIER_DAILY_RATES[currentTier] ?? 7;
                 const upgradeCost = TIER_COSTS[currentTier] ?? null;
+                const displayBalance = confirmedFrntBalance + accruedSinceSync;
                 const canUpgrade =
                   upgradeCost !== null &&
-                  player.frntBalance >= upgradeCost &&
-                  currentTier < 5;
-                const isMaxTier = currentTier >= 5;
+                  displayBalance >= upgradeCost &&
+                  currentTier < 6;
+                const isMaxTier = currentTier >= 6;
+                const claimableAmount = accruedSinceSync;
+                const canClaim = claimableAmount >= 0.001;
                 return (
-                  <div style={{ marginTop: 8 }}>
+                  <div
+                    style={{
+                      marginTop: 8,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 6,
+                    }}
+                  >
+                    {/* MINE/CLAIM button */}
+                    <button
+                      type="button"
+                      data-ocid="map.claim_button"
+                      onClick={handleClaimFrntr}
+                      disabled={!canClaim || claimStatus === "claiming"}
+                      style={{
+                        ...actionBtnStyle(
+                          canClaim ? CYAN : "rgba(0,255,204,0.25)",
+                          canClaim ? "rgba(0,255,204,0.1)" : "rgba(0,0,0,0.2)",
+                        ),
+                        opacity: canClaim ? 1 : 0.5,
+                        cursor: canClaim ? "pointer" : "not-allowed",
+                        fontSize: 10,
+                      }}
+                    >
+                      {claimStatus === "claiming"
+                        ? "CLAIMING…"
+                        : claimStatus === "success"
+                          ? "✓ CLAIMED"
+                          : `⚡ CLAIM — ${claimableAmount >= 0.001 ? claimableAmount.toFixed(4) : "0.0000"} FRNTR`}
+                    </button>
+
+                    {/* Tier info + upgrade */}
                     <div
                       style={{
                         display: "flex",
                         justifyContent: "space-between",
-                        marginBottom: 6,
                         fontSize: 9,
                         color: CYAN_DIM,
                         fontFamily: "monospace",
@@ -874,15 +879,13 @@ export default function MapBottomSheet({
                       }}
                     >
                       <span>
-                        GEN TIER {currentTier} · {dailyRate} FRNTR/DAY
+                        TIER {currentTier}/6 · {dailyRate} FRNTR/DAY
                       </span>
                       {!isMaxTier && upgradeCost !== null && (
                         <span
                           style={{
                             color:
-                              player.frntBalance >= upgradeCost
-                                ? CYAN
-                                : "#ef4444",
+                              displayBalance >= upgradeCost ? CYAN : "#ef4444",
                           }}
                         >
                           COST: {upgradeCost.toLocaleString()} FRNTR
@@ -927,7 +930,7 @@ export default function MapBottomSheet({
                           ? "UPGRADING…"
                           : upgradeStatus === "success"
                             ? "✓ UPGRADED"
-                            : `UPGRADE TO TIER ${currentTier + 1}`}
+                            : `UPGRADE TIER ${currentTier} → ${currentTier + 1}`}
                       </button>
                     )}
                     {upgradeError && (

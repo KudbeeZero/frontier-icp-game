@@ -34,8 +34,20 @@ module {
   /// Compute FRNTR per day for a given generator tier index (0–6).
   /// Formula: base 7 + (tier * 3).
   /// This is the canonical formula — use this everywhere, not hard-coded local tables.
+  /// Compute FRNTR per day for a given generator tier index (0–6).
+  /// Lookup table: tier 0=None→9, 1→12, 2→17, 3→25, 4→37, 5→55 (tier VI).
+  /// Base 7 + bonus [2,5,10,18,30,48]. Index 0=no upgrade=base 7+2 bonus→9.
   public func dailyRateFromTierIndex(tierIndex : Nat) : Float {
-    7.0 + (tierIndex * 3).toFloat();
+    switch (tierIndex) {
+      case (0) { 7.0  }; // no upgrade, base only
+      case (1) { 9.0  }; // TierI:   base 7 + bonus 2
+      case (2) { 12.0 }; // TierII:  base 7 + bonus 5
+      case (3) { 17.0 }; // TierIII: base 7 + bonus 10
+      case (4) { 25.0 }; // TierIV:  base 7 + bonus 18
+      case (5) { 37.0 }; // TierV:   base 7 + bonus 30
+      case (6) { 55.0 }; // TierVI:  base 7 + bonus 48
+      case (_) { 7.0  }; // fallback: base rate
+    };
   };
 
   /// Map a GeneratorTier variant to its index (0 = None … 6 = TierVI).

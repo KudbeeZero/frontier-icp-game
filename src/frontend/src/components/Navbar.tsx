@@ -1,7 +1,7 @@
 import { useInternetIdentity } from "@caffeineai/core-infrastructure";
 import { Link } from "@tanstack/react-router";
 import { Zap } from "lucide-react";
-import { useTokenBalance } from "../hooks/useTokenBalance";
+import { useGameStore } from "../store/gameStore";
 
 const NAV_LINKS = [
   { label: "Home", to: "/" },
@@ -11,7 +11,9 @@ const NAV_LINKS = [
 export default function Navbar() {
   const { login, clear, identity } = useInternetIdentity();
   const isAuthenticated = !!identity;
-  const balance = useTokenBalance();
+  const frntrBalance = useGameStore(
+    (s) => s.confirmedFrntBalance + s.accruedFrntSinceSync,
+  );
 
   return (
     <header
@@ -105,7 +107,7 @@ export default function Navbar() {
             FRNTR
           </span>
           <span className="text-xs font-bold" style={{ color: "#00ffcc" }}>
-            {balance}
+            {frntrBalance.toFixed(8)}
           </span>
         </div>
 

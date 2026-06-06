@@ -33,7 +33,7 @@ module {
 
   /// Per-plot production rate summary returned by getPlotProductionRate.
   public type PlotProductionRate = {
-    plotId         : Nat;
+    plotId         : Text;
     baseFRNTRPerDay : Float;   // always 7.0
     tierBonus      : Float;    // from generator tier (0 if no upgrade)
     nexusBonus     : Float;    // from nexus electricity level

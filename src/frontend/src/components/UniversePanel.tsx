@@ -15,41 +15,9 @@ const GOLD = "#ffd700";
 const TOTAL_SUPPLY = 10_000_000_000;
 const PRE_MINTED = 5_000_000_000;
 const MINEABLE = 5_000_000_000;
-const _MAX_PLOTS = 5882;
+const _MAX_PLOTS = 10242;
 
-const GENERATOR_TIERS = [
-  { tier: "I", production: "7 FRNTR/day", cost: "500 FRNTR", color: "#94a3b8" },
-  {
-    tier: "II",
-    production: "15 FRNTR/day",
-    cost: "1,500 FRNTR",
-    color: "#22c55e",
-  },
-  {
-    tier: "III",
-    production: "31 FRNTR/day",
-    cost: "4,000 FRNTR",
-    color: "#3b82f6",
-  },
-  {
-    tier: "IV",
-    production: "63 FRNTR/day",
-    cost: "10,000 FRNTR",
-    color: "#8b5cf6",
-  },
-  {
-    tier: "V",
-    production: "127 FRNTR/day",
-    cost: "25,000 FRNTR",
-    color: "#f59e0b",
-  },
-  {
-    tier: "VI",
-    production: "255 FRNTR/day",
-    cost: "60,000 FRNTR",
-    color: CYAN,
-  },
-];
+// Hardcoded tiers removed — fetched live from canister via getGeneratorTierCatalog()
 
 function fmtBig(n: number): string {
   if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(2)}B`;
@@ -126,6 +94,22 @@ interface Props {
   inline?: boolean;
 }
 
+interface LiveTierEntry {
+  tier: string;
+  production: string;
+  cost: string;
+  color: string;
+}
+
+const TIER_COLORS = [
+  "#94a3b8",
+  "#22c55e",
+  "#3b82f6",
+  "#8b5cf6",
+  "#f59e0b",
+  CYAN,
+];
+
 export default function UniversePanel({ onClose, inline = false }: Props) {
   const { actor } = useActor(createActor);
   const player = useGameStore((s) => s.player);
@@ -136,6 +120,69 @@ export default function UniversePanel({ onClose, inline = false }: Props) {
   const setTreasuryState = useGameStore((s) => s.setTreasuryState);
   // FRNTR/ICP price — shown as 'Pool not yet seeded' if unavailable
   const [frntrIcpPrice, _setFrntrIcpPrice] = useState<number | null>(null);
+
+  // Live generator tier catalog from canister
+  const [liveTiers, setLiveTiers] = useState<LiveTierEntry[] | null>(null);
+  useEffect(() => {
+    if (!actor) return;
+    actor
+      .getGeneratorTierCatalog()
+      .then((catalog) => {
+        const TIER_NAMES = ["I", "II", "III", "IV", "V", "VI"];
+        const sorted = [...catalog].sort(
+          (a, b) => Number(a.tierIndex) - Number(b.tierIndex),
+        );
+        setLiveTiers(
+          sorted.map((t, i) => ({
+            tier: TIER_NAMES[i] ?? String(Number(t.tierIndex)),
+            production: `${t.bonusPerDay.toFixed(0)} FRNTR/day`,
+            cost: `${(Number(t.cost) / 1e8).toLocaleString(undefined, { maximumFractionDigits: 0 })} FRNTR`,
+            color: TIER_COLORS[i] ?? CYAN,
+          })),
+        );
+      })
+      .catch(() => {
+        // Fallback to hardcoded correct values if canister unavailable
+        setLiveTiers([
+          {
+            tier: "I",
+            production: "9 FRNTR/day",
+            cost: "500 FRNTR",
+            color: TIER_COLORS[0],
+          },
+          {
+            tier: "II",
+            production: "12 FRNTR/day",
+            cost: "1,500 FRNTR",
+            color: TIER_COLORS[1],
+          },
+          {
+            tier: "III",
+            production: "17 FRNTR/day",
+            cost: "4,000 FRNTR",
+            color: TIER_COLORS[2],
+          },
+          {
+            tier: "IV",
+            production: "25 FRNTR/day",
+            cost: "10,000 FRNTR",
+            color: TIER_COLORS[3],
+          },
+          {
+            tier: "V",
+            production: "37 FRNTR/day",
+            cost: "25,000 FRNTR",
+            color: TIER_COLORS[4],
+          },
+          {
+            tier: "VI",
+            production: "55 FRNTR/day",
+            cost: "60,000 FRNTR",
+            color: TIER_COLORS[5],
+          },
+        ]);
+      });
+  }, [actor]);
 
   // ── Pot balances fetched directly every 10 seconds ──
   const [potBalances, setPotBalances] = useState<{
@@ -202,30 +249,31 @@ export default function UniversePanel({ onClose, inline = false }: Props) {
   const PRE_MINTED_VAL = globalStats?.preMinted ?? PRE_MINTED;
   const MINEABLE_VAL = globalStats?.mineableSupply ?? MINEABLE;
 
-  // ── TIER_BONUS shared for player and global calculation ──
-  const TIER_BONUS: Record<number, number> = {
-    1: 8,
-    2: 24,
-    3: 48,
-    4: 96,
-    5: 192,
-    6: 384,
+  // ── Correct tier daily rates: tier 0=7, I=9, II=12, III=17, IV=25, V=37, VI=55 ──
+  const TIER_RATES: Record<number, number> = {
+    0: 7,
+    1: 9,
+    2: 12,
+    3: 17,
+    4: 25,
+    5: 37,
+    6: 55,
   };
 
   // ── Player's daily FRNTR rate ──
   let playerDailyFrntr = 0;
   for (const pid of player.plotsOwned) {
-    playerDailyFrntr += 7;
-    const tier = generatorTiers[pid] ?? 0;
-    if (tier > 0) playerDailyFrntr += TIER_BONUS[tier] ?? 0;
+    const tier = (generatorTiers[pid] ?? 0) as number;
+    playerDailyFrntr += TIER_RATES[tier] ?? 7;
   }
 
   // ── Global daily emission: on-chain if available, else compute locally ──
   let localDailyEmission = 0;
   for (const plot of globalOwnedPlots) {
-    localDailyEmission += 7;
-    const tier = generatorTiers[plot.id] ?? plot.generatorTier ?? 0;
-    if (tier > 0) localDailyEmission += TIER_BONUS[tier] ?? 0;
+    const tier = (generatorTiers[String(plot.id)] ??
+      plot.generatorTier ??
+      0) as number;
+    localDailyEmission += TIER_RATES[tier] ?? 7;
   }
   const globalDailyEmission =
     globalStats?.currentDailyEmissionRate ?? localDailyEmission;
@@ -424,7 +472,7 @@ export default function UniversePanel({ onClose, inline = false }: Props) {
               label: "TOTAL PLOTS OWNED",
               value: totalPlotsOwned.toLocaleString(),
               color: CYAN,
-              sub: "of 5,882 max",
+              sub: "of 10,242 max",
             },
             {
               label: "ACTIVE PLAYERS",
@@ -699,7 +747,7 @@ export default function UniversePanel({ onClose, inline = false }: Props) {
                 marginTop: 2,
               }}
             >
-              of 5,882 total
+              of 10,242 total
             </div>
           </div>
         </div>
@@ -719,71 +767,86 @@ export default function UniversePanel({ onClose, inline = false }: Props) {
           5-year mining curve · 6 generator upgrade tiers
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {GENERATOR_TIERS.map((g) => (
+          {liveTiers === null ? (
             <div
-              key={g.tier}
-              style={{ display: "flex", alignItems: "center", gap: 10 }}
+              style={{
+                fontSize: 9,
+                color: TEXT_DIM,
+                textAlign: "center",
+                padding: "8px 0",
+              }}
             >
+              Loading tier data…
+            </div>
+          ) : (
+            liveTiers.map((g, idx) => (
               <div
-                style={{
-                  width: 24,
-                  height: 24,
-                  borderRadius: 6,
-                  background: `${g.color}22`,
-                  border: `1px solid ${g.color}66`,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 9,
-                  fontWeight: 900,
-                  color: g.color,
-                  flexShrink: 0,
-                }}
+                key={g.tier}
+                style={{ display: "flex", alignItems: "center", gap: 10 }}
               >
-                {g.tier}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
                 <div
                   style={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: 6,
+                    background: `${g.color}22`,
+                    border: `1px solid ${g.color}66`,
                     display: "flex",
-                    justifyContent: "space-between",
                     alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 9,
+                    fontWeight: 900,
+                    color: g.color,
+                    flexShrink: 0,
                   }}
                 >
-                  <span
-                    style={{
-                      fontSize: 10,
-                      fontWeight: 700,
-                      color: TEXT,
-                      fontFamily: "monospace",
-                    }}
-                  >
-                    {g.production}
-                  </span>
-                  <span style={{ fontSize: 8, color: g.color }}>{g.cost}</span>
+                  {g.tier}
                 </div>
-                <div
-                  style={{
-                    height: 3,
-                    background: "rgba(255,255,255,0.06)",
-                    borderRadius: 2,
-                    marginTop: 4,
-                    overflow: "hidden",
-                  }}
-                >
+                <div style={{ flex: 1, minWidth: 0 }}>
                   <div
                     style={{
-                      height: "100%",
-                      width: `${((GENERATOR_TIERS.indexOf(g) + 1) / 6) * 100}%`,
-                      background: g.color,
-                      borderRadius: 2,
-                      boxShadow: `0 0 6px ${g.color}`,
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
                     }}
-                  />
+                  >
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        color: TEXT,
+                        fontFamily: "monospace",
+                      }}
+                    >
+                      {g.production}
+                    </span>
+                    <span style={{ fontSize: 8, color: g.color }}>
+                      {g.cost}
+                    </span>
+                  </div>
+                  <div
+                    style={{
+                      height: 3,
+                      background: "rgba(255,255,255,0.06)",
+                      borderRadius: 2,
+                      marginTop: 4,
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      style={{
+                        height: "100%",
+                        width: `${((idx + 1) / liveTiers.length) * 100}%`,
+                        background: g.color,
+                        borderRadius: 2,
+                        boxShadow: `0 0 6px ${g.color}`,
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </GlowCard>
 

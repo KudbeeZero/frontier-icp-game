@@ -2,7 +2,7 @@
 module {
   public type Timestamp = Int;
   public type PlayerId = Principal;
-  public type PlotId = Nat;
+  public type PlotId = Text; // H3 hex string e.g. "8029fffffffffff"
 
   // Plot rarity tiers — determines pricing and base characteristics.
   public type PlotRarity = {

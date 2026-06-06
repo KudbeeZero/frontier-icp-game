@@ -16,7 +16,6 @@ mixin (
                                   empTargets : [(Nat, Int)]; totalFRNTRBurned : Float;
                                   passiveIncomePerDay : Float }>,
   faucetClaims : Map.Map<Principal, Nat>,
-  simulatedIcp : Map.Map<Principal, Nat>,
   statsState : { var activePlayers : Nat; var totalFRNTRMined : Nat; var totalFRNTRBurned : Nat },
   testnetMode : Bool,
 ) {
@@ -53,12 +52,6 @@ mixin (
     };
     let grant = TestnetLib.buildGrant();
     players.add(caller, { player with frntBalance = player.frntBalance + grant.frntGranted });
-    simulatedIcp.add(caller,
-      switch (simulatedIcp.get(caller)) {
-        case (?bal) { bal + grant.icpGranted };
-        case (null)  { grant.icpGranted };
-      }
-    );
     ignore TestnetLib.recordClaim(faucetClaims, caller, Time.now());
     #ok(grant);
   };
@@ -121,7 +114,6 @@ mixin (
     TestnetLib.requireTestnet(testnetMode);
     players.remove(caller);
     faucetClaims.remove(caller);
-    simulatedIcp.remove(caller);
     #ok("Test state cleared for " # caller.toText());
   };
 };

@@ -5,10 +5,10 @@ import Types "../types/testnet";
 import Runtime "mo:core/Runtime";
 
 module {
-  // Amount of FRNTR granted per faucet click.
-  public let FAUCET_FRNT : Nat = 500;
-  // Simulated ICP per faucet click (in e8s: 2 ICP = 200_000_000 e8s).
-  public let FAUCET_ICP_E8S : Nat = 200_000_000;
+  // Amount of FRNTR granted per faucet click (5000 FRNTR at 8 decimals = 500_000_000_000 e8s).
+  public let FAUCET_FRNT : Nat = 500_000_000_000;
+  // Simulated ICP per faucet click (in e8s: 5 ICP = 500_000_000 e8s).
+  public let FAUCET_ICP_E8S : Nat = 500_000_000;
 
   /// Validate that the testnet mode flag is enabled; traps if not.
   public func requireTestnet(testnetMode : Bool) {

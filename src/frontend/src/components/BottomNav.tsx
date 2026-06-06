@@ -4,14 +4,16 @@ import {
   Map as MapIcon,
   Package,
   Radio,
+  Shield,
   Trophy,
 } from "lucide-react";
+import { useGameStore } from "../store/gameStore";
 
 const CYAN = "#00ffcc";
 const CYAN_DIM = "rgba(0,255,204,0.35)";
 const BORDER_TOP = "rgba(0,255,204,0.28)";
 
-const NAV_ITEMS = [
+const BASE_NAV_ITEMS = [
   { id: "map", label: "MAP", Icon: MapIcon },
   { id: "command", label: "CMD", Icon: LayoutDashboard },
   { id: "intel", label: "INTEL", Icon: Radio },
@@ -20,7 +22,13 @@ const NAV_ITEMS = [
   { id: "inventory", label: "INV", Icon: Package },
 ] as const;
 
-export type BottomNavTab = (typeof NAV_ITEMS)[number]["id"];
+const ADMIN_NAV_ITEM = { id: "admin" as const, label: "ADMIN", Icon: Shield };
+
+export const NAV_ITEMS = BASE_NAV_ITEMS;
+
+export type BottomNavTab =
+  | (typeof BASE_NAV_ITEMS)[number]["id"]
+  | typeof ADMIN_NAV_ITEM.id;
 
 interface BottomNavProps {
   activeTab: BottomNavTab | null;
@@ -28,6 +36,17 @@ interface BottomNavProps {
 }
 
 export default function BottomNav({ activeTab, onTabClick }: BottomNavProps) {
+  const isAdmin = useGameStore((s) => s.player.isAdmin);
+  const visibleItems: {
+    id: BottomNavTab;
+    label: string;
+    Icon: React.ElementType<{
+      size?: number;
+      color?: string;
+      style?: React.CSSProperties;
+    }>;
+  }[] = [...BASE_NAV_ITEMS, ...(isAdmin ? [ADMIN_NAV_ITEM] : [])];
+
   return (
     <div
       data-ocid="bottom_nav.panel"
@@ -42,7 +61,7 @@ export default function BottomNav({ activeTab, onTabClick }: BottomNavProps) {
         paddingBottom: "env(safe-area-inset-bottom)",
       }}
     >
-      {NAV_ITEMS.map(({ id, label, Icon }) => {
+      {visibleItems.map(({ id, label, Icon }) => {
         const isActive = activeTab === id;
         return (
           <button
@@ -76,7 +95,13 @@ export default function BottomNav({ activeTab, onTabClick }: BottomNavProps) {
             )}
             <Icon
               size={18}
-              color={isActive ? CYAN : CYAN_DIM}
+              color={
+                isActive
+                  ? CYAN
+                  : id === "admin"
+                    ? "rgba(255,100,100,0.6)"
+                    : CYAN_DIM
+              }
               style={{
                 filter: isActive ? `drop-shadow(0 0 4px ${CYAN})` : "none",
                 transition: "filter 0.15s",
@@ -99,4 +124,4 @@ export default function BottomNav({ activeTab, onTabClick }: BottomNavProps) {
   );
 }
 
-export { NAV_ITEMS };
+export { BASE_NAV_ITEMS };

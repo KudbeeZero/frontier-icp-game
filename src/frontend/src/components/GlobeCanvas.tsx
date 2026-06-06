@@ -8,6 +8,7 @@ import { useGameStore } from "../store/gameStore";
 import {
   GEODESIC_TILES,
   PLOT_POSITION_CACHE,
+  assignBiomeForTile,
   findNearestTile,
 } from "../utils/geodesicGrid";
 
@@ -86,7 +87,23 @@ const _quat = new THREE.Quaternion();
 const _pos = new THREE.Vector3();
 const _Y = new THREE.Vector3(0, 1, 0);
 
-// State colours
+// Biome colors — exact palette from requirements
+export const BIOME_TILE_COLORS: Record<string, THREE.Color> = {
+  Temperate: new THREE.Color("#4a7c59"),
+  Desert: new THREE.Color("#c8a96e"),
+  Arctic: new THREE.Color("#a8d8ea"),
+  Tropical: new THREE.Color("#2d6a4f"),
+  Ocean: new THREE.Color("#1a4a6e"),
+  DeepOcean: new THREE.Color("#0d2d45"),
+  Volcanic: new THREE.Color("#6b3a3a"),
+  AsteroidImpact: new THREE.Color("#7b5ea7"),
+  // Legacy mappings for backward compat
+  Forest: new THREE.Color("#4a7c59"),
+  Grassland: new THREE.Color("#4a7c59"),
+  Mountain: new THREE.Color("#a8d8ea"),
+  Toxic: new THREE.Color("#2d6a4f"),
+};
+
 const COL_BASE = new THREE.Color(0.05, 0.07, 0.07);
 const COL_OWNED = new THREE.Color(0x00f5ff); // bright cyan
 const COL_OTHERS_OWNED = new THREE.Color(0xff8c00); // orange — other players
@@ -129,24 +146,31 @@ function GlobeHexGrid() {
     mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
   }, []);
 
-  // Colour updates — use isOwnedByMe flag, never COL_FACTION principal lookup
+  // Colour updates — biome base, then ownership override
   useEffect(() => {
     const mesh = meshRef.current;
     if (!mesh) return;
-    for (let i = 0; i < count; i++) mesh.setColorAt(i, COL_BASE);
+    // Apply biome colors as base
+    for (let i = 0; i < count; i++) {
+      const tile = GEODESIC_TILES[i];
+      const biome = tile ? assignBiomeForTile(tile.lat, tile.lng) : "Ocean";
+      const biomeCol = BIOME_TILE_COLORS[biome] ?? COL_BASE;
+      mesh.setColorAt(i, biomeCol);
+    }
     // Orange: other players' plots
     for (const p of plots) {
       if (p.owner && !p.isOwnedByMe && p.id >= 0 && p.id < count)
-        mesh.setColorAt(p.id, COL_OTHERS_OWNED);
+        mesh.setColorAt(Number(p.id), COL_OTHERS_OWNED);
     }
     // Cyan: my plots — wins over orange
     for (const p of plots) {
       if (p.isOwnedByMe && p.id >= 0 && p.id < count)
-        mesh.setColorAt(p.id, COL_OWNED);
+        mesh.setColorAt(Number(p.id), COL_OWNED);
     }
     // Also color by ownedPlots array as fallback (local store)
     for (const pid of ownedPlots) {
-      if (pid >= 0 && pid < count) mesh.setColorAt(pid, COL_OWNED);
+      if (Number(pid) >= 0 && Number(pid) < count)
+        mesh.setColorAt(Number(pid), COL_OWNED);
     }
     if (hoveredId !== null && hoveredId >= 0 && hoveredId < count) {
       mesh.setColorAt(hoveredId, COL_HOVER);
@@ -158,16 +182,16 @@ function GlobeHexGrid() {
     mesh.instanceColor!.needsUpdate = true;
   }, [plots, hoveredId, selectedId, ownedPlots, count]);
 
-  // Distance-based opacity fade (tiles — not the selection ring)
+  // Distance-based opacity fade — biome tiles are semi-transparent overlays
   useFrame(() => {
     const mesh = meshRef.current;
     if (!mesh) return;
     const dist = camera.position.length();
     const mat = mesh.material as THREE.MeshBasicMaterial;
     mat.opacity = THREE.MathUtils.clamp(
-      THREE.MathUtils.mapLinear(dist, 1.4, 2.5, 0.35, 0.06),
-      0.04,
-      0.38,
+      THREE.MathUtils.mapLinear(dist, 1.4, 2.5, 0.55, 0.18),
+      0.12,
+      0.6,
     );
   });
 
@@ -1371,19 +1395,40 @@ export default function GlobeCanvas({
   missileConfig,
   onPlotSelect,
 }: GlobeCanvasProps) {
+  const hoveredPlotId = useGameStore((s) => s.hoveredPlotId);
+  const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(
+    null,
+  );
+  const handlePointerMoveOverlay = (e: React.PointerEvent) => {
+    setMousePos({ x: e.clientX, y: e.clientY });
+  };
+
   return (
-    <Canvas
-      camera={{ fov: 60, position: [0, 0, 2.8], near: 0.1, far: 200 }}
-      gl={{ antialias: true, alpha: false }}
-      style={{ background: "#020509", touchAction: "none" }}
+    <div
+      className="relative w-full h-full"
+      onPointerMove={handlePointerMoveOverlay}
     >
-      <GlobeScene
-        controlsRef={controlsRef}
-        missileActive={missileActive}
-        onMissileComplete={onMissileComplete}
-        missileConfig={missileConfig}
-        onPlotSelect={onPlotSelect}
-      />
-    </Canvas>
+      {hoveredPlotId !== null && mousePos && (
+        <div
+          className="absolute z-50 pointer-events-none px-2 py-1 rounded-md text-xs font-mono text-white bg-black/60 backdrop-blur-sm border border-white/10 shadow-lg"
+          style={{ left: mousePos.x + 12, top: mousePos.y - 28 }}
+        >
+          Plot #{hoveredPlotId}
+        </div>
+      )}
+      <Canvas
+        camera={{ fov: 60, position: [0, 0, 2.8], near: 0.1, far: 200 }}
+        gl={{ antialias: true, alpha: false }}
+        style={{ background: "#020509", touchAction: "none" }}
+      >
+        <GlobeScene
+          controlsRef={controlsRef}
+          missileActive={missileActive}
+          onMissileComplete={onMissileComplete}
+          missileConfig={missileConfig}
+          onPlotSelect={onPlotSelect}
+        />
+      </Canvas>
+    </div>
   );
 }

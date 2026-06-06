@@ -11,6 +11,11 @@ export interface FaucetGrant {
     icpGranted: bigint;
     frntGranted: bigint;
 }
+export interface SurveyResult {
+    resourcePercentage: bigint;
+    bonusInfo?: string;
+    biome: Biome;
+}
 export type Timestamp = bigint;
 export interface StressActionResult {
     ok: boolean;
@@ -19,12 +24,6 @@ export interface StressActionResult {
     errorMsg?: string;
     durationMs: bigint;
 }
-export interface MineResult {
-    efficiency: number;
-    plotId: PlotId;
-    resourceYields: Array<[ResourceType, number]>;
-    frntRate: number;
-}
 export type ResetResult = {
     __kind__: "ok";
     ok: string;
@@ -32,6 +31,12 @@ export type ResetResult = {
     __kind__: "err";
     err: string;
 };
+export interface MineResult {
+    efficiency: number;
+    plotId: PlotId;
+    resourceYields: Array<[ResourceType, number]>;
+    frntRate: number;
+}
 export interface PlotUpgradesView {
     tierName: string;
     plotId: PlotId;
@@ -41,9 +46,9 @@ export interface PlotUpgradesView {
     generatorTier: GeneratorTier;
 }
 export interface SubParcel {
-    subParcelId: bigint;
+    subParcelId: string;
     cooldownEnds: bigint;
-    plotId: bigint;
+    plotId: string;
     building?: string;
     slotIndex: bigint;
     specialization: string;
@@ -60,12 +65,20 @@ export interface PrincipalDisplay {
     short: string;
     isAuthed: boolean;
 }
-export type PlotId = bigint;
+export type PlotId = string;
 export interface GeneratorTierInfo {
     name: string;
     tierIndex: bigint;
     bonusPerDay: number;
     costFRNTR: bigint;
+}
+export interface SurveyView {
+    startTime: bigint;
+    status: SurveyStatus;
+    result?: SurveyResult;
+    unlockCost: bigint;
+    secondsRemaining: bigint;
+    plotId: PlotId;
 }
 export interface FaucetClaimSummary {
     principal: string;
@@ -79,6 +92,14 @@ export interface SubParcelInfo {
     buildingType: string;
     cooldownSecondsRemaining: bigint;
 }
+export interface PlotProductionRate {
+    totalPerDay: number;
+    plotId: string;
+    tierBonus: number;
+    baseFRNTRPerDay: number;
+    generatorTier: bigint;
+    nexusBonus: number;
+}
 export type FaucetResult = {
     __kind__: "ok";
     ok: FaucetGrant;
@@ -86,22 +107,14 @@ export type FaucetResult = {
     __kind__: "err";
     err: string;
 };
-export interface PlotProductionRate {
-    totalPerDay: number;
-    plotId: bigint;
-    tierBonus: number;
-    baseFRNTRPerDay: number;
-    generatorTier: bigint;
-    nexusBonus: number;
-}
 export interface CombatEvent {
     attacker: Principal;
     intercepted: boolean;
     interceptorType?: string;
-    toPlot: bigint;
+    toPlot: string;
     atkPower: bigint;
     timestamp: bigint;
-    fromPlot: bigint;
+    fromPlot: string;
     success: boolean;
     missileType?: string;
     defPower: bigint;
@@ -122,6 +135,16 @@ export interface GlobalStats {
     dailyEmission: bigint;
     totalBurned: bigint;
 }
+export enum Biome {
+    Tropical = "Tropical",
+    AsteroidImpact = "AsteroidImpact",
+    DeepOcean = "DeepOcean",
+    Desert = "Desert",
+    Volcanic = "Volcanic",
+    Temperate = "Temperate",
+    Ocean = "Ocean",
+    Arctic = "Arctic"
+}
 export enum GeneratorTier {
     TierIII = "TierIII",
     None = "None",
@@ -137,6 +160,11 @@ export enum ResourceType {
     Iron = "Iron",
     Crystal = "Crystal"
 }
+export enum SurveyStatus {
+    Locked = "Locked",
+    InProgress = "InProgress",
+    Completed = "Completed"
+}
 export enum UpgradeError {
     SubParcelLocked = "SubParcelLocked",
     PlotNotFound = "PlotNotFound",
@@ -146,14 +174,31 @@ export enum UpgradeError {
     InsufficientFRNTR = "InsufficientFRNTR"
 }
 export interface backendInterface {
-    assignInterceptor(plotId: bigint, interceptorType: string): Promise<void>;
-    getAdjacentPlots(plotId: bigint): Promise<Array<bigint>>;
+    assignInterceptor(plotId: string, interceptorType: string): Promise<void>;
+    /**
+     * / Compute how much FRNTR has accrued for the caller since their lastClaimTime,
+     * / transfer it from the game canister to the caller's principal via ICRC-1,
+     * / update lastClaimTime to now, and return the claimed amount (in e8s) or an error.
+     */
+    claimAccumulatedTokens(): Promise<{
+        __kind__: "ok";
+        ok: bigint;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    getAdjacentPlots(plotId: string): Promise<Array<string>>;
     getAdminPrincipal(): Promise<string>;
     /**
      * / Returns all plots that have an owner as (plotId, ownerPrincipalText) pairs.
      */
-    getAllPlotOwners(): Promise<Array<[bigint, string]>>;
-    getAssignedInterceptor(plotId: bigint): Promise<string | null>;
+    getAllPlotOwners(): Promise<Array<[string, string]>>;
+    /**
+     * / Returns the currently approved DEX canister principal for liquidity withdrawals.
+     * / Set via setApprovedLiquidityCanister (admin only).
+     */
+    getApprovedLiquidityCanister(): Promise<string | null>;
+    getAssignedInterceptor(plotId: string): Promise<string | null>;
     getCombatLog(limit: bigint): Promise<Array<CombatEvent>>;
     getCoreGeneratorTiers(): Promise<Array<GeneratorTierInfo>>;
     /**
@@ -164,12 +209,12 @@ export interface backendInterface {
      * / Returns the first plot ID with no owner, or null if all plots are owned.
      * / Used by the stress-test to find a purchasable plot without hardcoding an ID.
      */
-    getFirstAvailablePlot(): Promise<bigint | null>;
+    getFirstAvailablePlot(): Promise<string | null>;
     getFrntrLedger(): Promise<string>;
     getGameCanisterPrincipal(): Promise<string>;
     /**
      * / Live global game stats for the UNIVERSE panel (v2 — detailed fields).
-     * / totalSupply = 10B hard cap; remainingMineable = 5B mineable cap minus total burned.
+     * / totalSupply = 10B hard cap (in e8s); remainingMineable = 5B mineable cap minus total burned.
      */
     getGameStats(): Promise<{
         totalPlayers: bigint;
@@ -180,7 +225,21 @@ export interface backendInterface {
         emissionRatePerDay: bigint;
         remainingMineable: bigint;
     }>;
+    /**
+     * / Returns the canonical generator tier catalog for all tiers.
+     * / Frontend uses this so tier data is never hardcoded.
+     */
+    getGeneratorTierCatalog(): Promise<Array<{
+        cost: bigint;
+        tierIndex: bigint;
+        bonusPerDay: number;
+    }>>;
     getGlobalStats(): Promise<GlobalStats>;
+    /**
+     * / Returns the caller's real ICP balance from the on-chain ICP ledger (ryjl3-tyaaa-aaaaa-aaaba-cai).
+     * / Result is in raw e8s (divide by 100_000_000 for ICP display).
+     */
+    getIcpBalance(principal: Principal): Promise<bigint>;
     /**
      * / ICP/USD price oracle — performs HTTP outcall to CoinGecko API with 60s cache.
      * / URL: https://api.coingecko.com/api/v3/simple/price?ids=internet-computer&vs_currencies=usd
@@ -192,6 +251,10 @@ export interface backendInterface {
      * / Returns 0.0 if the price has never been fetched.
      */
     getIcpUsdPriceCached(): Promise<number>;
+    /**
+     * / Returns true if the caller is the current admin principal.
+     */
+    getIsAdmin(): Promise<boolean>;
     /**
      * / Public leaderboard query: top players by FRNTR balance.
      */
@@ -213,15 +276,22 @@ export interface backendInterface {
         totalFRNTRMined: bigint;
         totalFRNTRBurned: bigint;
     }>;
-    getPassiveIncome(plotId: bigint): Promise<number>;
+    /**
+     * / Returns all owned plots as (plotId, ownerPrincipalText) pairs.
+     * / Alias used by frontend for globe ownership sync.
+     */
+    getLivePlotOwners(): Promise<Array<[string, string]>>;
+    getPassiveIncome(plotId: string): Promise<number>;
     getPlayerState(): Promise<{
         resourceBalances: Array<[ResourceType, number]>;
         username?: string;
         fuel: bigint;
         iron: bigint;
+        icpBalance: bigint;
         frntBalance: bigint;
         totalFRNTRBurned: number;
         plotsOwned: bigint;
+        plotIds: Array<string>;
         lastFaucetTime?: bigint;
         crystal: bigint;
         ownedPlots: Array<string>;
@@ -232,15 +302,18 @@ export interface backendInterface {
     /**
      * / Query the full player state for a given principal.
      * / Returns a zeroed state if the principal has not played yet.
+     * / Uses live ICRC-1 ledger balance when frntrLedger is configured.
      */
     getPlayerStateByPrincipal(principal: Principal): Promise<{
         resourceBalances: Array<[ResourceType, number]>;
         username?: string;
         fuel: bigint;
         iron: bigint;
+        icpBalance: bigint;
         frntBalance: bigint;
         totalFRNTRBurned: number;
         plotsOwned: bigint;
+        plotIds: Array<string>;
         lastFaucetTime?: bigint;
         crystal: bigint;
         ownedPlots: Array<string>;
@@ -257,15 +330,15 @@ export interface backendInterface {
      */
     getPlotPrice(h3Index: string): Promise<bigint>;
     /**
-     * / Returns the ICP price in e8s for a plot identified by its numeric plot ID.
+     * / Returns the ICP price in e8s for a plot identified by its H3 Text ID.
      * / Price tier is derived from biome richness stored in the plots map.
      */
-    getPlotPriceById(plotId: bigint): Promise<bigint>;
-    getPlotProductionRate(plotId: bigint): Promise<PlotProductionRate>;
+    getPlotPriceById(plotId: string): Promise<bigint>;
+    getPlotProductionRate(plotId: string): Promise<PlotProductionRate>;
     /**
      * / Returns all plot IDs owned by a given principal.
      */
-    getPlotsByOwner(owner: Principal): Promise<Array<bigint>>;
+    getPlotsByOwner(owner: Principal): Promise<Array<string>>;
     /**
      * / Returns the caller's principal display info for wallet/identity UI.
      */
@@ -274,13 +347,40 @@ export interface backendInterface {
      * / Returns 7 SubParcelInfo entries (slots 0-6) for a plot.
      * / isLocked = true during the 4-hour post-purchase cooldown.
      * / cooldownSecondsRemaining = 0 when not locked.
-     * / Sub-parcel ID = plotId * 10 + slotIndex.
+     * / Sub-parcel ID = plotId # ":" # slotIndex.
      */
-    getSubParcelStatus(plotId: bigint): Promise<Array<SubParcelInfo>>;
+    getSubParcelStatus(plotId: string): Promise<Array<SubParcelInfo>>;
     /**
      * / Returns all 7 sub-parcels for a given plot ID.
      */
-    getSubParcels(plotId: bigint): Promise<Array<SubParcel>>;
+    getSubParcels(plotId: string): Promise<Array<SubParcel>>;
+    /**
+     * / Returns the survey cost (in FRNTR e8s) for a given plot.
+     */
+    getSurveyCost(plotId: string): Promise<bigint>;
+    /**
+     * / Get the completed survey result for a plot.
+     * / Returns #err if the survey has not been started or the timer hasn't expired.
+     */
+    getSurveyResult(plotId: string): Promise<{
+        __kind__: "ok";
+        ok: SurveyResult;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    /**
+     * / Get the current survey status for a plot.
+     * / If the timer has expired the result is auto-computed and the survey is
+     * / promoted to #Completed — the updated record is persisted.
+     */
+    getSurveyStatus(plotId: string): Promise<{
+        __kind__: "ok";
+        ok: SurveyView;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
     getTokenomics(): Promise<Tokenomics>;
     getTreasuryBalances(): Promise<{
         leaderboardPot: bigint;
@@ -306,9 +406,9 @@ export interface backendInterface {
      * / Seed plots from the frontend (admin only). Skips plots that already exist.
      * / Also creates 7 sub-parcels per plot (slot 0 = center Nexus, slots 1-6 = surrounding).
      */
-    initPlots(plotData: Array<[bigint, string, number, number, bigint]>): Promise<void>;
-    isSubParcelLocked(plotId: bigint): Promise<boolean>;
-    launchMissile(fromPlotId: bigint, toPlotId: bigint, missileType: string): Promise<{
+    initPlots(plotData: Array<[string, string, number, number, bigint]>): Promise<void>;
+    isSubParcelLocked(plotId: string): Promise<boolean>;
+    launchMissile(fromPlotId: string, toPlotId: string, missileType: string): Promise<{
         __kind__: "ok";
         ok: string;
     } | {
@@ -317,15 +417,16 @@ export interface backendInterface {
     }>;
     /**
      * / Mine resources from an owned plot.
+     * / DISABLED: returns an informative error until the mining system launches.
      */
-    mineResources(plotId: bigint): Promise<{
+    mineResources(_plotId: string): Promise<{
         __kind__: "ok";
         ok: MineResult;
     } | {
         __kind__: "err";
         err: string;
     }>;
-    purchasePlot(plotId: bigint): Promise<{
+    purchasePlot(plotId: string): Promise<{
         __kind__: "ok";
         ok: string;
     } | {
@@ -371,6 +472,20 @@ export interface backendInterface {
         err: string;
     }>;
     /**
+     * / Start a survey for a plot the caller owns.
+     * / Deducts the survey cost in FRNTR (from local balance or ICRC-1 ledger) and
+     * / records an in-progress survey record with startTime = now.
+     * / Returns #err if the plot is not owned by the caller, if a survey is already
+     * / in progress or completed, or if the caller has insufficient FRNTR.
+     */
+    startSurvey(plotId: string): Promise<{
+        __kind__: "ok";
+        ok: SurveyView;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    /**
      * / Buy `count` plots in sequence (TESTNET_MODE only).
      */
     stressBuyPlots(count: bigint): Promise<StressTestResult>;
@@ -394,11 +509,10 @@ export interface backendInterface {
         err: string;
     }>;
     /**
-     * / Testnet faucet: grants 500 FRNTR + 2 ICP (simulated) per click.
-     * / No cooldown, no auth check beyond TESTNET_MODE=true.
-     * / Testnet faucet: grants 500 FRNTR + 2 ICP (simulated) per click.
-     * / Auto-creates a player record (600 FRNTR seed) if one doesn't exist.
-     * / No cooldown, no auth check beyond TESTNET_MODE=true.
+     * / Testnet faucet: grants 5000 FRNTR (500_000_000_000 e8s) + 5 ICP (500_000_000 e8s) per click.
+     * / Transfers FRNTR via ICRC-1 ledger (if set) and 5 ICP via ICP ledger.
+     * / Auto-creates a player record if one doesn't exist.
+     * / No cooldown. TESTNET_MODE=true only.
      */
     testFaucetV2(): Promise<FaucetResult>;
     updateAdminPrincipalAuth(newPrincipal: string): Promise<void>;
@@ -406,7 +520,7 @@ export interface backendInterface {
      * / Upgrade the generator tier for an owned plot.
      * / Deducts FRNTR cost from player balance, tracks burn, sends 0.075% liquidity tax to treasury.
      */
-    upgradeGenerator(plotId: bigint): Promise<{
+    upgradeGenerator(plotId: string): Promise<{
         __kind__: "ok";
         ok: PlotUpgradesView;
     } | {

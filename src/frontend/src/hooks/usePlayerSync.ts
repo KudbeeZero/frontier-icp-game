@@ -1,5 +1,5 @@
 import { useActor } from "@caffeineai/core-infrastructure";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { createActor } from "../backend";
 import {
   type Biome,
@@ -10,6 +10,20 @@ import {
 } from "../store/gameStore";
 import { GEODESIC_TILES, assignBiome } from "../utils/geodesicGrid";
 
+/**
+ * Accumulation-model helpers.
+ * The store now tracks confirmedFrntBalance (last known from canister)
+ * and accruedFrntSinceSync (per-second ticker). These helpers simply
+ * pass through to the store's setFrntrBalance which resets accrued.
+ */
+export function applyConfirmedFrntrBalance(rawE8s: bigint): void {
+  useGameStore.getState().setFrntrBalance(rawE8s);
+}
+
+export const lastFaucetClaimRef = { current: 0 };
+export function setLastFaucetClaim() {
+  lastFaucetClaimRef.current = Date.now();
+}
 /**
  * Polls player state and leaderboard from the ICP canister.
  * Maps backend PlayerState fields to the local gameStore.
@@ -42,7 +56,7 @@ export function usePlayerSync(): void {
           name:
             e.username ??
             `${e.principal.slice(0, 8)}...${e.principal.slice(-4)}`,
-          principal: e.principal,
+          principal: e.principal as string,
           plotsOwned: Number(e.plotsOwned),
           frntEarned: Number(e.frntBalance),
           victories: 0,
@@ -79,21 +93,22 @@ export function usePlayerSync(): void {
           );
         }
 
-        const owners = (await (actor as any).getAllPlotOwners()) as [
-          bigint,
-          string,
-        ][];
+        const owners = await actor.getLivePlotOwners();
         const myPrincipal = useGameStore.getState().player.principal ?? "";
-        useGameStore.getState().setPlotOwnership(owners, myPrincipal);
+        useGameStore.getState().setLivePlotOwners(owners, myPrincipal);
 
         // Find first unowned plot for stress tests / purchase UI
-        const ownedIds = new Set(owners.map(([id]) => Number(id)));
+        const ownedSet = new Set(owners.map(([id]) => id));
         const firstAvailable =
-          useGameStore.getState().plots.find((p) => !ownedIds.has(p.id))?.id ??
-          null;
+          owners.length > 0
+            ? await actor.getFirstAvailablePlot()
+            : (useGameStore
+                .getState()
+                .plots.find((p) => !ownedSet.has(String(p.id)))
+                ?.id?.toString() ?? null);
         useGameStore.setState({ firstAvailablePlotId: firstAvailable });
-      } catch (err) {
-        console.warn("syncPlotOwners error:", err);
+      } catch {
+        // Non-critical: keep existing plot ownership if sync fails
       }
     };
 
@@ -102,18 +117,38 @@ export function usePlayerSync(): void {
         const state = await actor.getPlayerState();
         if (!state) return;
 
-        // frntBalance is raw ICRC-1 units (8 decimals). Divide by 1e8 for display.
+        // Accumulation model: sync only updates the confirmed base.
+        // The per-second ticker (accruedFrntSinceSync) is never touched here.
+        const newRawFrnt = BigInt(state.frntBalance);
+        useGameStore.getState().setFrntrBalance(newRawFrnt);
+
+        // Read icpBalance from PlayerState if available (testnet local tracking)
+        const icpFromState =
+          "icpBalance" in state && typeof state.icpBalance !== "undefined"
+            ? Number(state.icpBalance) / 1e8
+            : null;
+
+        // Read plotIds (string[]) from getPlayerState response
+        const plotIds: string[] = Array.isArray(state.plotIds)
+          ? state.plotIds
+          : [];
+
         useGameStore.setState((s) => ({
           player: {
             ...s.player,
-            frntBalance: Number(state.frntBalance) / 100_000_000,
+            // Use backend icpBalance as fallback when live ledger has no value
+            icpBalance:
+              icpFromState !== null && s.player.icpBalance === 0
+                ? icpFromState
+                : s.player.icpBalance,
             iron: Number(state.iron) / 100_000_000,
             fuel: Number(state.fuel) / 100_000_000,
             crystal: Number(state.crystal) / 100_000_000,
-            // plotsOwned is local array; backend returns bigint count, not array
+            // Update plotsOwned from backend if it has data
+            plotsOwned: plotIds.length > 0 ? plotIds : s.player.plotsOwned,
           },
           rankStats: {
-            ...s.rankStats,
+            ...((s.rankStats as Record<string, unknown> | undefined) ?? {}),
             combatWins: Number(state.combatVictories),
           },
           serverPassiveIncomePerDay: Number(state.passiveIncomePerDay),
@@ -172,12 +207,25 @@ export function usePlayerSync(): void {
     void syncLeaderboard();
     void syncPlotOwners();
     void syncGlobalStats();
+    // Check admin status once per actor session
+    void (async () => {
+      try {
+        const adminPrincipal = await actor.getAdminPrincipal();
+        const myPrincipal = useGameStore.getState().player.principal;
+        const isAdmin = !!myPrincipal && myPrincipal === adminPrincipal;
+        useGameStore.setState((s) => ({
+          player: { ...s.player, isAdmin },
+        }));
+      } catch {
+        // Non-critical
+      }
+    })();
 
     const interval = setInterval(() => {
       void syncPrincipal();
       void syncPlayer();
       void syncLeaderboard();
-      void syncPlotOwners();
+      void syncPlotOwners(); // uses getLivePlotOwners every cycle
     }, 10_000);
 
     const globalInterval = setInterval(() => {
@@ -210,68 +258,62 @@ export function usePlayerSync(): void {
     return () => clearInterval(priceInterval);
   }, [actor, isFetching]);
 
-  useEffect(() => {
-    if (actor) {
-      const seed = async () => {
-        try {
-          const count = await (actor as any).getPlotCount();
-          if (count === 0n || count === 0) {
-            // Reset state first for clean slate
-            try {
-              await (actor as any).resetAllData();
-            } catch {
-              /* non-critical */
-            }
+  // Seed ref — ensures initPlots only fires once per session
+  const hasSeeded = useRef(false);
 
-            // Seed ALL GEODESIC_TILES in batches of 200
-            const BATCH = 200;
-            for (let start = 0; start < GEODESIC_TILES.length; start += BATCH) {
-              const batch = GEODESIC_TILES.slice(start, start + BATCH);
-              const tuples = batch.map(
-                (tile): [bigint, string, number, number, bigint] => [
-                  BigInt(tile.id),
-                  assignBiome(tile.lat, tile.lng),
-                  tile.lat,
-                  tile.lng,
-                  BigInt(
-                    Math.floor(78 + (((tile.id * 2654435761) >>> 0) % 21)),
-                  ),
-                ],
-              );
-              await (actor as any).initPlots(tuples);
-            }
-          }
-          // After seeding, sync ownership and find firstAvailablePlotId
-          const owners = await (actor as any).getAllPlotOwners();
-          const myPrincipal = useGameStore.getState().player.principal;
-          const state = useGameStore.getState();
-          const ownedIds = new Set(
-            owners.map(([id]: [bigint, string]) => Number(id)),
-          );
-          const updatedPlots = state.plots.map((plot) => {
-            const ownerEntry = owners.find(
-              ([id]: [bigint, string]) => Number(id) === plot.id,
+  useEffect(() => {
+    if (!actor || isFetching) return;
+    if (hasSeeded.current) return;
+
+    const seed = async () => {
+      hasSeeded.current = true;
+      try {
+        const count = await (actor as any).getPlotCount();
+        if (count === 0n || count === 0) {
+          // Seed ALL GEODESIC_TILES in batches of 500
+          const BATCH = 500;
+          for (let start = 0; start < GEODESIC_TILES.length; start += BATCH) {
+            const batch = GEODESIC_TILES.slice(start, start + BATCH);
+            const tuples = batch.map(
+              (tile): [string, string, number, number, bigint] => [
+                String(tile.id),
+                assignBiome(tile.lat, tile.lng),
+                tile.lat,
+                tile.lng,
+                BigInt(Math.floor(78 + (((tile.id * 2654435761) >>> 0) % 21))),
+              ],
             );
-            if (ownerEntry) {
-              const isOwnedByMe =
-                !!myPrincipal && ownerEntry[1] === myPrincipal;
-              return { ...plot, owner: ownerEntry[1], isOwnedByMe };
-            }
-            return { ...plot, isOwnedByMe: false };
-          });
-          const firstAvailable =
-            updatedPlots.find((p) => !ownedIds.has(p.id))?.id ?? null;
-          useGameStore.setState({
-            plots: updatedPlots,
-            firstAvailablePlotId: firstAvailable,
-          });
-        } catch (err) {
-          console.warn("seedPlotsIfEmpty error:", err);
+            await (actor as any).initPlots(tuples);
+          }
         }
-      };
-      void seed();
-    }
-  }, [actor]);
+        // After seeding (or if already seeded), sync ownership
+        const owners = await actor.getLivePlotOwners();
+        const myPrincipal = useGameStore.getState().player.principal ?? "";
+        const storeState = useGameStore.getState();
+        const ownedSet = new Set(owners.map(([id]) => id));
+        const updatedPlots = storeState.plots.map((plot) => {
+          const ownerEntry = owners.find(([id]) => id === String(plot.id));
+          if (ownerEntry) {
+            const isOwnedByMe = !!myPrincipal && ownerEntry[1] === myPrincipal;
+            return { ...plot, owner: ownerEntry[1], isOwnedByMe };
+          }
+          return { ...plot, owner: null, isOwnedByMe: false };
+        });
+        const firstAvailable =
+          updatedPlots
+            .find((p) => !ownedSet.has(String(p.id)))
+            ?.id?.toString() ?? null;
+        useGameStore.setState({
+          plots: updatedPlots,
+          firstAvailablePlotId: firstAvailable,
+        });
+      } catch {
+        // Allow retry on next actor change
+        hasSeeded.current = false;
+      }
+    };
+    void seed();
+  }, [actor, isFetching]);
 }
 
 function makeStep(

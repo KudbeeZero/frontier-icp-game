@@ -1,15 +1,15 @@
+import { useActor } from "@caffeineai/core-infrastructure";
 import {
-  BarChart2,
   CheckCircle,
   Circle,
   Flame,
-  Pickaxe,
   Target,
   TrendingUp,
   Zap,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { createActor } from "../backend";
 import { useGameStore } from "../store/gameStore";
 
 const CYAN = "#00ffcc";
@@ -17,86 +17,62 @@ const CYAN_DIM = "rgba(0,255,204,0.35)";
 const BORDER = "rgba(0,255,204,0.22)";
 const TEXT = "#e0f4ff";
 const TEXT_DIM = "rgba(224,244,255,0.45)";
-const GOLD = "#ffd700";
-
-const RESOURCE_COLORS: Record<string, string> = {
-  iron: "#94a3b8",
-  fuel: "#f97316",
-  crystal: "#3b82f6",
-  rareEarth: "#c084fc",
-};
-
-const RESOURCE_LABELS: Record<string, string> = {
-  iron: "IRON",
-  fuel: "FUEL",
-  crystal: "CRYSTAL",
-  rareEarth: "RARE EARTH",
-};
-
-const GENERATOR_PRODUCTION: Record<number, number> = {
-  0: 7,
-  1: 15,
-  2: 31,
-  3: 63,
-  4: 127,
-  5: 255,
-  6: 511,
-};
-
-function fmtFrntr(n: number): string {
-  return n.toFixed(8);
-}
-
-function fmtResource(n: number): string {
-  if (n >= 100) return n.toFixed(2);
-  if (n >= 1) return n.toFixed(4);
-  return n.toFixed(8);
-}
-
-function MiniBar({
+const MiniBar = ({
   value,
   max,
   color,
-}: { value: number; max: number; color: string }) {
-  const pct = max > 0 ? Math.min(value / max, 1) * 100 : 0;
-  return (
+}: { value: number; max: number; color: string }) => (
+  <div className="w-full h-2 bg-slate-700 rounded overflow-hidden">
     <div
+      className="h-full rounded"
       style={{
-        height: 4,
-        background: "rgba(255,255,255,0.06)",
-        borderRadius: 2,
-        overflow: "hidden",
-        marginTop: 4,
+        width: `${Math.min(100, (value / max) * 100)}%`,
+        backgroundColor: color,
       }}
-    >
-      <div
-        style={{
-          height: "100%",
-          width: `${pct}%`,
-          background: color,
-          borderRadius: 2,
-          boxShadow: `0 0 4px ${color}88`,
-          transition: "width 0.4s ease",
-        }}
-      />
-    </div>
-  );
+    />
+  </div>
+);
+
+// Real tier daily rates matching backend
+const _TIER_RATES: Record<number, number> = {
+  0: 7,
+  1: 9,
+  2: 12,
+  3: 17,
+  4: 25,
+  5: 37,
+  6: 55,
+};
+
+const _TIER_COSTS: Record<number, number> = {
+  1: 500,
+  2: 1500,
+  3: 4000,
+  4: 10000,
+  5: 25000,
+  6: 60000,
+};
+
+function fmtFrntr(n: number): string {
+  if (Number.isNaN(n) || n === undefined) return "0.00000000";
+  if (n >= 1_000_000) return n.toFixed(2);
+  if (n >= 1_000) return n.toFixed(4);
+  return n.toFixed(8);
 }
 
 export default function CommandCenter() {
   const player = useGameStore((s) => s.player);
   const generatorTiers = useGameStore((s) => s.generatorTiers);
   const totalFRNTRBurned = useGameStore((s) => s.totalFRNTRBurned);
-  const mineResources = useGameStore((s) => s.mineResources);
-  const claimAllFrntr = useGameStore((s) => s.claimAllFrntr);
   const plots = useGameStore((s) => s.plots);
+  const accruedFrntSinceSync = useGameStore((s) => s.accruedFrntSinceSync);
+  const setFrntrBalance = useGameStore((s) => s.setFrntrBalance);
 
   const addFrntr = useGameStore((s) => s.addFrntr);
+  const { actor } = useActor(createActor);
+  const [isClaiming, setIsClaiming] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<"tokens" | "mining" | "missions">(
-    "tokens",
-  );
-  const [mineMsg, setMineMsg] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"tokens" | "missions">("tokens");
 
   // ── Missions ──────────────────────────────────────────────────────────────
   const MISSIONS_LS_KEY = "frontier_missions_v1";
@@ -177,34 +153,72 @@ export default function CommandCenter() {
   }, [MISSION_DEFS, addFrntr, saveMissions]);
 
   const ownedPlotData = useMemo(
-    () => plots.filter((p) => player.plotsOwned.includes(p.id)),
+    () => plots.filter((p) => player.plotsOwned.includes(String(p.id))),
     [plots, player.plotsOwned],
   );
 
+  const TIER_DAILY: Record<number, number> = {
+    0: 7,
+    1: 9,
+    2: 12,
+    3: 17,
+    4: 25,
+    5: 37,
+    6: 55,
+  };
+
   const totalDailyFrntr = useMemo(() => {
     return ownedPlotData.reduce((sum, plot) => {
-      const tier = generatorTiers[plot.id] ?? 0;
-      return sum + (GENERATOR_PRODUCTION[tier] ?? 7);
+      const tier = generatorTiers[String(plot.id)] ?? 0;
+      return sum + (TIER_DAILY[tier] ?? 7);
     }, 0);
   }, [ownedPlotData, generatorTiers]);
 
-  const handleMineAll = () => {
-    let _totalIron = 0;
-    let _totalFuel = 0;
-    for (const plotId of player.plotsOwned) {
-      const result = mineResources(plotId);
-      if (result) {
-        _totalIron += result.iron;
-        _totalFuel += result.fuel;
-      }
-    }
-    const bonus = (totalDailyFrntr / 86400) * 600; // 10 min worth
-    claimAllFrntr(bonus);
-    setMineMsg(`+${bonus.toFixed(4)} FRNTR harvested!`);
-    setTimeout(() => setMineMsg(null), 3000);
-  };
+  // ── Per-second accrual ticker ─────────────────
+  useEffect(() => {
+    const interval = setInterval(() => {
+      useGameStore.getState().tickPassiveIncome();
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
-  const storageCap = player.resourceStorageCap;
+  const displayBalance = useGameStore(
+    (s) => s.confirmedFrntBalance + s.accruedFrntSinceSync,
+  );
+  const perSecRate = totalDailyFrntr / 86400;
+  const displayBurned = totalFRNTRBurned;
+
+  const handleClaim = async () => {
+    if (!actor || isClaiming || accruedFrntSinceSync < 0.001) return;
+    setIsClaiming(true);
+    try {
+      const res = await actor.claimAccumulatedTokens();
+      if ("ok" in res) {
+        const claimed = Number((res as { ok: bigint }).ok) / 1e8;
+        toast.success(`Claimed ${claimed.toFixed(4)} FRNTR!`, {
+          duration: 4000,
+        });
+        // Refresh balance from canister
+        try {
+          const state = await actor.getPlayerState();
+          if (state) {
+            setFrntrBalance(state.frntBalance);
+          }
+        } catch {
+          // fallback: add locally
+          addFrntr(accruedFrntSinceSync);
+        }
+      } else {
+        const errMsg = (res as { err: string }).err;
+        toast.error(`Claim failed: ${errMsg}`, { duration: 4000 });
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Claim failed";
+      toast.error(msg, { duration: 4000 });
+    } finally {
+      setIsClaiming(false);
+    }
+  };
 
   return (
     <div
@@ -220,7 +234,7 @@ export default function CommandCenter() {
     >
       {/* Tabs */}
       <div style={{ display: "flex", gap: 6 }}>
-        {(["tokens", "mining", "missions"] as const).map((tab) => (
+        {(["tokens", "missions"] as const).map((tab) => (
           <button
             key={tab}
             type="button"
@@ -247,11 +261,7 @@ export default function CommandCenter() {
                   : "1px solid transparent",
             }}
           >
-            {tab === "tokens"
-              ? "TOKEN ECONOMY"
-              : tab === "mining"
-                ? "MINING OPS"
-                : "MISSIONS"}
+            {tab === "tokens" ? "TOKEN ECONOMY" : "MISSIONS"}
           </button>
         ))}
       </div>
@@ -287,12 +297,54 @@ export default function CommandCenter() {
                 marginBottom: 4,
               }}
             >
-              {fmtFrntr(player.frntBalance)}
+              {fmtFrntr(displayBalance)}
             </div>
-            <div style={{ fontSize: 9, color: CYAN_DIM }}>
-              +{totalDailyFrntr} FRNTR/DAY ·{" "}
-              {(totalDailyFrntr / 86400).toFixed(8)} FRNTR/SEC
+            <div style={{ fontSize: 9, color: CYAN_DIM, marginBottom: 10 }}>
+              +{totalDailyFrntr.toLocaleString()} FRNTR/DAY ·{" "}
+              {perSecRate.toFixed(8)} FRNTR/SEC
             </div>
+            {/* CLAIM button */}
+            <button
+              type="button"
+              data-ocid="command.claim_button"
+              onClick={handleClaim}
+              disabled={isClaiming || accruedFrntSinceSync < 0.001 || !actor}
+              style={{
+                width: "100%",
+                padding: "9px 0",
+                borderRadius: 6,
+                background:
+                  accruedFrntSinceSync >= 0.001 && !isClaiming
+                    ? "linear-gradient(135deg, rgba(0,255,204,0.18), rgba(0,255,204,0.07))"
+                    : "rgba(255,255,255,0.03)",
+                border: `1px solid ${
+                  accruedFrntSinceSync >= 0.001 && !isClaiming
+                    ? `${CYAN}99`
+                    : BORDER
+                }`,
+                color:
+                  accruedFrntSinceSync >= 0.001 && !isClaiming
+                    ? CYAN
+                    : "rgba(0,255,204,0.3)",
+                fontSize: 11,
+                fontWeight: 900,
+                letterSpacing: 2,
+                cursor:
+                  accruedFrntSinceSync >= 0.001 && !isClaiming && actor
+                    ? "pointer"
+                    : "not-allowed",
+                fontFamily: "monospace",
+                textShadow:
+                  accruedFrntSinceSync >= 0.001 ? `0 0 8px ${CYAN}88` : "none",
+                transition: "all 0.2s",
+              }}
+            >
+              {isClaiming
+                ? "CLAIMING…"
+                : accruedFrntSinceSync < 0.001
+                  ? "CLAIM (ACCUMULATING…)"
+                  : `CLAIM +${fmtFrntr(accruedFrntSinceSync)} FRNTR`}
+            </button>
           </div>
 
           {/* Stats grid */}
@@ -310,7 +362,7 @@ export default function CommandCenter() {
               {
                 icon: Flame,
                 label: "FRNTR Burned",
-                value: totalFRNTRBurned.toFixed(2),
+                value: fmtFrntr(displayBurned),
                 color: "#ef4444",
                 sub: "out of circulation",
               },
@@ -318,11 +370,11 @@ export default function CommandCenter() {
                 icon: TrendingUp,
                 label: "Daily Yield",
                 value: `${totalDailyFrntr}`,
-                color: GOLD,
+                color: "#ffd700",
                 sub: "FRNTR total",
               },
               {
-                icon: BarChart2,
+                icon: Zap,
                 label: "Rank Points",
                 value: player.plotsOwned.length * 100,
                 color: "#a855f7",
@@ -394,7 +446,7 @@ export default function CommandCenter() {
                 label: "Pre-Minted",
                 value: 5_000_000_000,
                 total: 10_000_000_000,
-                color: GOLD,
+                color: "#ffd700",
               },
               {
                 label: "Mineable Left",
@@ -540,219 +592,6 @@ export default function CommandCenter() {
             );
           })}
         </div>
-      )}
-
-      {activeTab === "mining" && (
-        <>
-          {/* Mine All button */}
-          <button
-            type="button"
-            data-ocid="command.mine_all_button"
-            onClick={handleMineAll}
-            disabled={player.plotsOwned.length === 0}
-            style={{
-              padding: "12px",
-              borderRadius: 10,
-              background:
-                player.plotsOwned.length > 0
-                  ? "linear-gradient(135deg, rgba(0,255,204,0.2), rgba(0,255,204,0.08))"
-                  : "rgba(255,255,255,0.03)",
-              border: `2px solid ${player.plotsOwned.length > 0 ? CYAN : BORDER}`,
-              color: player.plotsOwned.length > 0 ? CYAN : TEXT_DIM,
-              fontSize: 12,
-              fontWeight: 900,
-              letterSpacing: 2,
-              cursor: player.plotsOwned.length > 0 ? "pointer" : "not-allowed",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 8,
-            }}
-          >
-            <Pickaxe size={14} />
-            MINE ALL PLOTS
-          </button>
-
-          {mineMsg && (
-            <div
-              data-ocid="command.success_state"
-              style={{
-                padding: "8px 12px",
-                borderRadius: 8,
-                background: "rgba(0,255,204,0.08)",
-                border: `1px solid ${BORDER}`,
-                fontSize: 10,
-                color: CYAN,
-                fontWeight: 700,
-                textAlign: "center",
-                letterSpacing: 1,
-              }}
-            >
-              ✓ {mineMsg}
-            </div>
-          )}
-
-          {/* Resource stockpiles */}
-          <div
-            style={{
-              background: "rgba(0,20,40,0.55)",
-              border: `1px solid ${BORDER}`,
-              borderRadius: 10,
-              padding: "12px 14px",
-            }}
-          >
-            <div
-              style={{
-                fontSize: 8,
-                color: TEXT_DIM,
-                letterSpacing: 2,
-                marginBottom: 10,
-              }}
-            >
-              RESOURCE STOCKPILES
-            </div>
-            {(["iron", "fuel", "crystal", "rareEarth"] as const).map((key) => (
-              <div key={key} style={{ marginBottom: 10 }}>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    marginBottom: 3,
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: 8,
-                      color: RESOURCE_COLORS[key],
-                      fontWeight: 700,
-                    }}
-                  >
-                    {RESOURCE_LABELS[key]}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 9,
-                      color: TEXT,
-                      fontFamily: "monospace",
-                    }}
-                  >
-                    {fmtResource(player[key])}
-                  </span>
-                </div>
-                <MiniBar
-                  value={player[key]}
-                  max={storageCap}
-                  color={RESOURCE_COLORS[key]}
-                />
-                <div style={{ fontSize: 7, color: TEXT_DIM, marginTop: 2 }}>
-                  {player[key].toFixed(2)} / {storageCap} stored
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Per-plot mining ops */}
-          {ownedPlotData.length === 0 ? (
-            <div
-              data-ocid="command.empty_state"
-              style={{
-                padding: "24px",
-                textAlign: "center",
-                color: TEXT_DIM,
-                fontSize: 10,
-                letterSpacing: 0.5,
-              }}
-            >
-              <div style={{ fontSize: 24, marginBottom: 8 }}>🌍</div>
-              NO PLOTS OWNED
-              <br />
-              <span style={{ fontSize: 8 }}>
-                Purchase land on the globe to start mining
-              </span>
-            </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <div
-                style={{
-                  fontSize: 8,
-                  color: TEXT_DIM,
-                  letterSpacing: 2,
-                  marginBottom: 2,
-                }}
-              >
-                MINING OPERATIONS
-              </div>
-              {ownedPlotData.map((plot, idx) => {
-                const tier = generatorTiers[plot.id] ?? 0;
-                const prod = GENERATOR_PRODUCTION[tier] ?? 7;
-                return (
-                  <div
-                    key={plot.id}
-                    data-ocid={`command.plot.${idx + 1}`}
-                    style={{
-                      background: "rgba(0,10,20,0.5)",
-                      border: `1px solid ${BORDER}`,
-                      borderRadius: 8,
-                      padding: "8px 10px",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: 28,
-                        height: 28,
-                        borderRadius: 6,
-                        background: "rgba(0,255,204,0.08)",
-                        border: `1px solid ${CYAN}44`,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: 8,
-                        fontWeight: 900,
-                        color: CYAN,
-                        flexShrink: 0,
-                      }}
-                    >
-                      #{plot.id}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div
-                        style={{ fontSize: 9, fontWeight: 700, color: TEXT }}
-                      >
-                        {plot.biome.toUpperCase()} · GEN-
-                        {tier === 0 ? "0" : tier}
-                      </div>
-                      <div style={{ fontSize: 7, color: CYAN_DIM }}>
-                        {prod} FRNTR/DAY · EFF {plot.efficiency}%
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      data-ocid={`command.mine_button.${idx + 1}`}
-                      onClick={() => mineResources(plot.id)}
-                      style={{
-                        padding: "4px 8px",
-                        borderRadius: 4,
-                        fontSize: 8,
-                        background: "rgba(0,255,204,0.08)",
-                        border: `1px solid ${BORDER}`,
-                        color: CYAN,
-                        cursor: "pointer",
-                        fontWeight: 700,
-                        letterSpacing: 1,
-                        flexShrink: 0,
-                      }}
-                    >
-                      MINE
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </>
       )}
     </div>
   );

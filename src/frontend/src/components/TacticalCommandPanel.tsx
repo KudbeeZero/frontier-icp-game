@@ -117,12 +117,12 @@ export default function TacticalCommandPanel() {
 
   if (!plot) return null;
 
-  const isOwned = player.plotsOwned.includes(plot.id);
+  const isOwned = player.plotsOwned.includes(String(plot.id));
   const isOwnedByPlayer = isOwned;
   const biomeColor = BIOME_COLOR[plot.biome] ?? "#3b82f6";
   const rarity = getPlotRarity(plot.id);
   const rarityCfg = RARITY_CONFIG[rarity];
-  const genTier = generatorTiers[plot.id] ?? 0;
+  const genTier = generatorTiers[String(plot.id)] ?? 0;
   const production = tierProduction[genTier] ?? 7;
   const nextTierCost = genTier < 6 ? (upgradeCosts[genTier + 1] ?? null) : null;
   const canUpgrade =
@@ -456,7 +456,7 @@ export default function TacticalCommandPanel() {
           <button
             type="button"
             data-ocid="tactical.colonize_button"
-            onClick={() => purchasePlot(plot.id)}
+            onClick={() => purchasePlot(String(plot.id))}
             style={{
               flex: 1,
               padding: "10px",
@@ -479,7 +479,7 @@ export default function TacticalCommandPanel() {
             <button
               type="button"
               data-ocid="tactical.mine_button"
-              onClick={() => mineResources(plot.id)}
+              onClick={() => mineResources(Number(plot.id))}
               style={{
                 flex: 1,
                 padding: "10px",
@@ -499,7 +499,7 @@ export default function TacticalCommandPanel() {
               <button
                 type="button"
                 data-ocid="tactical.upgrade_button"
-                onClick={() => upgradeGenerator(plot.id)}
+                onClick={() => upgradeGenerator(String(plot.id))}
                 disabled={!canUpgrade}
                 style={{
                   flex: 1,

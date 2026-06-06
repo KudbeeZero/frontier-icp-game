@@ -1,6 +1,7 @@
 import { useInternetIdentity } from "@caffeineai/core-infrastructure";
 import { Actor, HttpAgent } from "@icp-sdk/core/agent";
 import { useCallback, useEffect, useState } from "react";
+import { useGameStore } from "../store/gameStore";
 
 const ICP_LEDGER_CANISTER_ID = "ryjl3-tyaaa-aaaaa-aaaba-cai";
 const POLL_INTERVAL_MS = 30_000;
@@ -36,17 +37,19 @@ export interface IcpBalanceResult {
 /**
  * Queries the ICP ledger canister for the authenticated user's real wallet balance.
  * Polls every 30 seconds while authenticated.
+ * Also writes the fetched balance to the game store so the accumulation model stays in sync.
  */
 export function useIcpBalance(): IcpBalanceResult {
   const { identity, isAuthenticated } = useInternetIdentity();
-  const [icpBalance, setIcpBalance] = useState<bigint>(0n);
+  const [icpBalance, setIcpBalanceState] = useState<bigint>(0n);
   const [_tick, setTick] = useState(0);
+  const setIcpBalance = useGameStore((s) => s.setIcpBalance);
 
   const refetch = useCallback(() => setTick((t) => t + 1), []);
 
   useEffect(() => {
     if (!identity || !isAuthenticated) {
-      setIcpBalance(0n);
+      setIcpBalanceState(0n);
       return;
     }
 
@@ -68,6 +71,8 @@ export function useIcpBalance(): IcpBalanceResult {
         });
 
         if (!cancelled) {
+          setIcpBalanceState(raw);
+          // Also update the game store so the accumulation model stays in sync
           setIcpBalance(raw);
         }
       } catch {
@@ -82,7 +87,7 @@ export function useIcpBalance(): IcpBalanceResult {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [identity, isAuthenticated]);
+  }, [identity, isAuthenticated, setIcpBalance]);
 
   const icpBalanceFormatted = Number(icpBalance) / 1e8;
 

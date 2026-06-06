@@ -10,14 +10,22 @@ import type { ActorMethod } from '@icp-sdk/core/agent';
 import type { IDL } from '@icp-sdk/core/candid';
 import type { Principal } from '@icp-sdk/core/principal';
 
+export type Biome = { 'Tropical' : null } |
+  { 'AsteroidImpact' : null } |
+  { 'DeepOcean' : null } |
+  { 'Desert' : null } |
+  { 'Volcanic' : null } |
+  { 'Temperate' : null } |
+  { 'Ocean' : null } |
+  { 'Arctic' : null };
 export interface CombatEvent {
   'attacker' : Principal,
   'intercepted' : boolean,
   'interceptorType' : [] | [string],
-  'toPlot' : bigint,
+  'toPlot' : string,
   'atkPower' : bigint,
   'timestamp' : bigint,
-  'fromPlot' : bigint,
+  'fromPlot' : string,
   'success' : boolean,
   'missileType' : [] | [string],
   'defPower' : bigint,
@@ -56,10 +64,10 @@ export interface MineResult {
   'resourceYields' : Array<[ResourceType, number]>,
   'frntRate' : number,
 }
-export type PlotId = bigint;
+export type PlotId = string;
 export interface PlotProductionRate {
   'totalPerDay' : number,
-  'plotId' : bigint,
+  'plotId' : string,
   'tierBonus' : number,
   'baseFRNTRPerDay' : number,
   'generatorTier' : bigint,
@@ -94,9 +102,9 @@ export interface StressActionResult {
 export type StressTestResult = { 'ok' : Array<StressActionResult> } |
   { 'err' : string };
 export interface SubParcel {
-  'subParcelId' : bigint,
+  'subParcelId' : string,
   'cooldownEnds' : bigint,
-  'plotId' : bigint,
+  'plotId' : string,
   'building' : [] | [string],
   'slotIndex' : bigint,
   'specialization' : string,
@@ -107,6 +115,22 @@ export interface SubParcelInfo {
   'isLocked' : boolean,
   'buildingType' : string,
   'cooldownSecondsRemaining' : bigint,
+}
+export interface SurveyResult {
+  'resourcePercentage' : bigint,
+  'bonusInfo' : [] | [string],
+  'biome' : Biome,
+}
+export type SurveyStatus = { 'Locked' : null } |
+  { 'InProgress' : null } |
+  { 'Completed' : null };
+export interface SurveyView {
+  'startTime' : bigint,
+  'status' : SurveyStatus,
+  'result' : [] | [SurveyResult],
+  'unlockCost' : bigint,
+  'secondsRemaining' : bigint,
+  'plotId' : PlotId,
 }
 export type Timestamp = bigint;
 export interface Tokenomics {
@@ -125,14 +149,29 @@ export type UpgradeError = { 'SubParcelLocked' : null } |
   { 'AlreadyMaxTier' : null } |
   { 'InsufficientFRNTR' : null };
 export interface _SERVICE {
-  'assignInterceptor' : ActorMethod<[bigint, string], undefined>,
-  'getAdjacentPlots' : ActorMethod<[bigint], Array<bigint>>,
+  'assignInterceptor' : ActorMethod<[string, string], undefined>,
+  /**
+   * / Compute how much FRNTR has accrued for the caller since their lastClaimTime,
+   * / transfer it from the game canister to the caller's principal via ICRC-1,
+   * / update lastClaimTime to now, and return the claimed amount (in e8s) or an error.
+   */
+  'claimAccumulatedTokens' : ActorMethod<
+    [],
+    { 'ok' : bigint } |
+      { 'err' : string }
+  >,
+  'getAdjacentPlots' : ActorMethod<[string], Array<string>>,
   'getAdminPrincipal' : ActorMethod<[], string>,
   /**
    * / Returns all plots that have an owner as (plotId, ownerPrincipalText) pairs.
    */
-  'getAllPlotOwners' : ActorMethod<[], Array<[bigint, string]>>,
-  'getAssignedInterceptor' : ActorMethod<[bigint], [] | [string]>,
+  'getAllPlotOwners' : ActorMethod<[], Array<[string, string]>>,
+  /**
+   * / Returns the currently approved DEX canister principal for liquidity withdrawals.
+   * / Set via setApprovedLiquidityCanister (admin only).
+   */
+  'getApprovedLiquidityCanister' : ActorMethod<[], [] | [string]>,
+  'getAssignedInterceptor' : ActorMethod<[string], [] | [string]>,
   'getCombatLog' : ActorMethod<[bigint], Array<CombatEvent>>,
   'getCoreGeneratorTiers' : ActorMethod<[], Array<GeneratorTierInfo>>,
   /**
@@ -143,12 +182,12 @@ export interface _SERVICE {
    * / Returns the first plot ID with no owner, or null if all plots are owned.
    * / Used by the stress-test to find a purchasable plot without hardcoding an ID.
    */
-  'getFirstAvailablePlot' : ActorMethod<[], [] | [bigint]>,
+  'getFirstAvailablePlot' : ActorMethod<[], [] | [string]>,
   'getFrntrLedger' : ActorMethod<[], string>,
   'getGameCanisterPrincipal' : ActorMethod<[], string>,
   /**
    * / Live global game stats for the UNIVERSE panel (v2 — detailed fields).
-   * / totalSupply = 10B hard cap; remainingMineable = 5B mineable cap minus total burned.
+   * / totalSupply = 10B hard cap (in e8s); remainingMineable = 5B mineable cap minus total burned.
    */
   'getGameStats' : ActorMethod<
     [],
@@ -162,7 +201,20 @@ export interface _SERVICE {
       'remainingMineable' : bigint,
     }
   >,
+  /**
+   * / Returns the canonical generator tier catalog for all tiers.
+   * / Frontend uses this so tier data is never hardcoded.
+   */
+  'getGeneratorTierCatalog' : ActorMethod<
+    [],
+    Array<{ 'cost' : bigint, 'tierIndex' : bigint, 'bonusPerDay' : number }>
+  >,
   'getGlobalStats' : ActorMethod<[], GlobalStats>,
+  /**
+   * / Returns the caller's real ICP balance from the on-chain ICP ledger (ryjl3-tyaaa-aaaaa-aaaba-cai).
+   * / Result is in raw e8s (divide by 100_000_000 for ICP display).
+   */
+  'getIcpBalance' : ActorMethod<[Principal], bigint>,
   /**
    * / ICP/USD price oracle — performs HTTP outcall to CoinGecko API with 60s cache.
    * / URL: https://api.coingecko.com/api/v3/simple/price?ids=internet-computer&vs_currencies=usd
@@ -174,6 +226,10 @@ export interface _SERVICE {
    * / Returns 0.0 if the price has never been fetched.
    */
   'getIcpUsdPriceCached' : ActorMethod<[], number>,
+  /**
+   * / Returns true if the caller is the current admin principal.
+   */
+  'getIsAdmin' : ActorMethod<[], boolean>,
   /**
    * / Public leaderboard query: top players by FRNTR balance.
    */
@@ -203,7 +259,12 @@ export interface _SERVICE {
       'totalFRNTRBurned' : bigint,
     }
   >,
-  'getPassiveIncome' : ActorMethod<[bigint], number>,
+  /**
+   * / Returns all owned plots as (plotId, ownerPrincipalText) pairs.
+   * / Alias used by frontend for globe ownership sync.
+   */
+  'getLivePlotOwners' : ActorMethod<[], Array<[string, string]>>,
+  'getPassiveIncome' : ActorMethod<[string], number>,
   'getPlayerState' : ActorMethod<
     [],
     {
@@ -211,9 +272,11 @@ export interface _SERVICE {
       'username' : [] | [string],
       'fuel' : bigint,
       'iron' : bigint,
+      'icpBalance' : bigint,
       'frntBalance' : bigint,
       'totalFRNTRBurned' : number,
       'plotsOwned' : bigint,
+      'plotIds' : Array<string>,
       'lastFaucetTime' : [] | [bigint],
       'crystal' : bigint,
       'ownedPlots' : Array<string>,
@@ -225,6 +288,7 @@ export interface _SERVICE {
   /**
    * / Query the full player state for a given principal.
    * / Returns a zeroed state if the principal has not played yet.
+   * / Uses live ICRC-1 ledger balance when frntrLedger is configured.
    */
   'getPlayerStateByPrincipal' : ActorMethod<
     [Principal],
@@ -233,9 +297,11 @@ export interface _SERVICE {
       'username' : [] | [string],
       'fuel' : bigint,
       'iron' : bigint,
+      'icpBalance' : bigint,
       'frntBalance' : bigint,
       'totalFRNTRBurned' : number,
       'plotsOwned' : bigint,
+      'plotIds' : Array<string>,
       'lastFaucetTime' : [] | [bigint],
       'crystal' : bigint,
       'ownedPlots' : Array<string>,
@@ -253,15 +319,15 @@ export interface _SERVICE {
    */
   'getPlotPrice' : ActorMethod<[string], bigint>,
   /**
-   * / Returns the ICP price in e8s for a plot identified by its numeric plot ID.
+   * / Returns the ICP price in e8s for a plot identified by its H3 Text ID.
    * / Price tier is derived from biome richness stored in the plots map.
    */
-  'getPlotPriceById' : ActorMethod<[bigint], bigint>,
-  'getPlotProductionRate' : ActorMethod<[bigint], PlotProductionRate>,
+  'getPlotPriceById' : ActorMethod<[string], bigint>,
+  'getPlotProductionRate' : ActorMethod<[string], PlotProductionRate>,
   /**
    * / Returns all plot IDs owned by a given principal.
    */
-  'getPlotsByOwner' : ActorMethod<[Principal], Array<bigint>>,
+  'getPlotsByOwner' : ActorMethod<[Principal], Array<string>>,
   /**
    * / Returns the caller's principal display info for wallet/identity UI.
    */
@@ -270,13 +336,36 @@ export interface _SERVICE {
    * / Returns 7 SubParcelInfo entries (slots 0-6) for a plot.
    * / isLocked = true during the 4-hour post-purchase cooldown.
    * / cooldownSecondsRemaining = 0 when not locked.
-   * / Sub-parcel ID = plotId * 10 + slotIndex.
+   * / Sub-parcel ID = plotId # ":" # slotIndex.
    */
-  'getSubParcelStatus' : ActorMethod<[bigint], Array<SubParcelInfo>>,
+  'getSubParcelStatus' : ActorMethod<[string], Array<SubParcelInfo>>,
   /**
    * / Returns all 7 sub-parcels for a given plot ID.
    */
-  'getSubParcels' : ActorMethod<[bigint], Array<SubParcel>>,
+  'getSubParcels' : ActorMethod<[string], Array<SubParcel>>,
+  /**
+   * / Returns the survey cost (in FRNTR e8s) for a given plot.
+   */
+  'getSurveyCost' : ActorMethod<[string], bigint>,
+  /**
+   * / Get the completed survey result for a plot.
+   * / Returns #err if the survey has not been started or the timer hasn't expired.
+   */
+  'getSurveyResult' : ActorMethod<
+    [string],
+    { 'ok' : SurveyResult } |
+      { 'err' : string }
+  >,
+  /**
+   * / Get the current survey status for a plot.
+   * / If the timer has expired the result is auto-computed and the survey is
+   * / promoted to #Completed — the updated record is persisted.
+   */
+  'getSurveyStatus' : ActorMethod<
+    [string],
+    { 'ok' : SurveyView } |
+      { 'err' : string }
+  >,
   'getTokenomics' : ActorMethod<[], Tokenomics>,
   'getTreasuryBalances' : ActorMethod<
     [],
@@ -301,25 +390,26 @@ export interface _SERVICE {
    * / Also creates 7 sub-parcels per plot (slot 0 = center Nexus, slots 1-6 = surrounding).
    */
   'initPlots' : ActorMethod<
-    [Array<[bigint, string, number, number, bigint]>],
+    [Array<[string, string, number, number, bigint]>],
     undefined
   >,
-  'isSubParcelLocked' : ActorMethod<[bigint], boolean>,
+  'isSubParcelLocked' : ActorMethod<[string], boolean>,
   'launchMissile' : ActorMethod<
-    [bigint, bigint, string],
+    [string, string, string],
     { 'ok' : string } |
       { 'err' : string }
   >,
   /**
    * / Mine resources from an owned plot.
+   * / DISABLED: returns an informative error until the mining system launches.
    */
   'mineResources' : ActorMethod<
-    [bigint],
+    [string],
     { 'ok' : MineResult } |
       { 'err' : string }
   >,
   'purchasePlot' : ActorMethod<
-    [bigint],
+    [string],
     { 'ok' : string } |
       { 'err' : string }
   >,
@@ -354,6 +444,18 @@ export interface _SERVICE {
    */
   'setUsername' : ActorMethod<[string], { 'ok' : null } | { 'err' : string }>,
   /**
+   * / Start a survey for a plot the caller owns.
+   * / Deducts the survey cost in FRNTR (from local balance or ICRC-1 ledger) and
+   * / records an in-progress survey record with startTime = now.
+   * / Returns #err if the plot is not owned by the caller, if a survey is already
+   * / in progress or completed, or if the caller has insufficient FRNTR.
+   */
+  'startSurvey' : ActorMethod<
+    [string],
+    { 'ok' : SurveyView } |
+      { 'err' : string }
+  >,
+  /**
    * / Buy `count` plots in sequence (TESTNET_MODE only).
    */
   'stressBuyPlots' : ActorMethod<[bigint], StressTestResult>,
@@ -371,11 +473,10 @@ export interface _SERVICE {
    */
   'testFaucet' : ActorMethod<[], { 'ok' : string } | { 'err' : string }>,
   /**
-   * / Testnet faucet: grants 500 FRNTR + 2 ICP (simulated) per click.
-   * / No cooldown, no auth check beyond TESTNET_MODE=true.
-   * / Testnet faucet: grants 500 FRNTR + 2 ICP (simulated) per click.
-   * / Auto-creates a player record (600 FRNTR seed) if one doesn't exist.
-   * / No cooldown, no auth check beyond TESTNET_MODE=true.
+   * / Testnet faucet: grants 5000 FRNTR (500_000_000_000 e8s) + 5 ICP (500_000_000 e8s) per click.
+   * / Transfers FRNTR via ICRC-1 ledger (if set) and 5 ICP via ICP ledger.
+   * / Auto-creates a player record if one doesn't exist.
+   * / No cooldown. TESTNET_MODE=true only.
    */
   'testFaucetV2' : ActorMethod<[], FaucetResult>,
   'updateAdminPrincipalAuth' : ActorMethod<[string], undefined>,
@@ -384,7 +485,7 @@ export interface _SERVICE {
    * / Deducts FRNTR cost from player balance, tracks burn, sends 0.075% liquidity tax to treasury.
    */
   'upgradeGenerator' : ActorMethod<
-    [bigint],
+    [string],
     { 'ok' : PlotUpgradesView } |
       { 'err' : UpgradeError }
   >,

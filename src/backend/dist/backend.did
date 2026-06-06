@@ -18,6 +18,27 @@ type Tokenomics =
    totalBurned: nat;
  };
 type Timestamp = int;
+type SurveyView = 
+ record {
+   plotId: PlotId;
+   result: opt SurveyResult;
+   secondsRemaining: nat;
+   startTime: int;
+   status: SurveyStatus;
+   unlockCost: nat;
+ };
+type SurveyStatus = 
+ variant {
+   Completed;
+   InProgress;
+   Locked;
+ };
+type SurveyResult = 
+ record {
+   biome: Biome;
+   bonusInfo: opt text;
+   resourcePercentage: nat;
+ };
 type SubParcelInfo = 
  record {
    buildingType: text;
@@ -30,10 +51,10 @@ type SubParcel =
  record {
    building: opt text;
    cooldownEnds: int;
-   plotId: nat;
+   plotId: text;
    slotIndex: nat;
    specialization: text;
-   subParcelId: nat;
+   subParcelId: text;
  };
 type StressTestResult = 
  variant {
@@ -80,11 +101,11 @@ type PlotProductionRate =
    baseFRNTRPerDay: float64;
    generatorTier: nat;
    nexusBonus: float64;
-   plotId: nat;
+   plotId: text;
    tierBonus: float64;
    totalPerDay: float64;
  };
-type PlotId = nat;
+type PlotId = text;
 type MineResult = 
  record {
    efficiency: float64;
@@ -141,35 +162,56 @@ type CombatEvent =
    atkPower: nat;
    attacker: principal;
    defPower: nat;
-   fromPlot: nat;
+   fromPlot: text;
    intercepted: bool;
    interceptorType: opt text;
    missileType: opt text;
    success: bool;
    timestamp: int;
-   toPlot: nat;
+   toPlot: text;
+ };
+type Biome = 
+ variant {
+   Arctic;
+   AsteroidImpact;
+   DeepOcean;
+   Desert;
+   Ocean;
+   Temperate;
+   Tropical;
+   Volcanic;
  };
 service : {
-  assignInterceptor: (plotId: nat, interceptorType: text) -> ();
-  getAdjacentPlots: (plotId: nat) -> (vec nat) query;
+  assignInterceptor: (plotId: text, interceptorType: text) -> ();
+  /// Compute how much FRNTR has accrued for the caller since their lastClaimTime,
+  /// transfer it from the game canister to the caller's principal via ICRC-1,
+  /// update lastClaimTime to now, and return the claimed amount (in e8s) or an error.
+  claimAccumulatedTokens: () -> (variant {
+                                   err: text;
+                                   ok: nat;
+                                 });
+  getAdjacentPlots: (plotId: text) -> (vec text) query;
   getAdminPrincipal: () -> (text) query;
   /// Returns all plots that have an owner as (plotId, ownerPrincipalText) pairs.
   getAllPlotOwners: () -> (vec record {
-                                 nat;
+                                 text;
                                  text;
                                }) query;
-  getAssignedInterceptor: (plotId: nat) -> (opt text) query;
+  /// Returns the currently approved DEX canister principal for liquidity withdrawals.
+  /// Set via setApprovedLiquidityCanister (admin only).
+  getApprovedLiquidityCanister: () -> (opt text) query;
+  getAssignedInterceptor: (plotId: text) -> (opt text) query;
   getCombatLog: (limit: nat) -> (vec CombatEvent) query;
   getCoreGeneratorTiers: () -> (vec GeneratorTierInfo) query;
   /// Returns total faucet claims for a principal (debug/analytics).
   getFaucetClaims: ("principal": principal) -> (FaucetClaimSummary) query;
   /// Returns the first plot ID with no owner, or null if all plots are owned.
   /// Used by the stress-test to find a purchasable plot without hardcoding an ID.
-  getFirstAvailablePlot: () -> (opt nat) query;
+  getFirstAvailablePlot: () -> (opt text) query;
   getFrntrLedger: () -> (text) query;
   getGameCanisterPrincipal: () -> (text) query;
   /// Live global game stats for the UNIVERSE panel (v2 — detailed fields).
-  /// totalSupply = 10B hard cap; remainingMineable = 5B mineable cap minus total burned.
+  /// totalSupply = 10B hard cap (in e8s); remainingMineable = 5B mineable cap minus total burned.
   getGameStats: () ->
    (record {
       emissionRatePerDay: nat;
@@ -180,7 +222,18 @@ service : {
       totalPlots: nat;
       totalSupply: nat;
     }) query;
+  /// Returns the canonical generator tier catalog for all tiers.
+  /// Frontend uses this so tier data is never hardcoded.
+  getGeneratorTierCatalog: () ->
+   (vec record {
+          bonusPerDay: float64;
+          cost: nat;
+          tierIndex: nat;
+        }) query;
   getGlobalStats: () -> (GlobalStats) query;
+  /// Returns the caller's real ICP balance from the on-chain ICP ledger (ryjl3-tyaaa-aaaaa-aaaba-cai).
+  /// Result is in raw e8s (divide by 100_000_000 for ICP display).
+  getIcpBalance: ("principal": principal) -> (nat);
   /// ICP/USD price oracle — performs HTTP outcall to CoinGecko API with 60s cache.
   /// URL: https://api.coingecko.com/api/v3/simple/price?ids=internet-computer&vs_currencies=usd
   /// Returns the current ICP/USD price as a Float.
@@ -188,6 +241,8 @@ service : {
   /// Returns the cached ICP/USD price without an HTTP outcall.
   /// Returns 0.0 if the price has never been fetched.
   getIcpUsdPriceCached: () -> (float64) query;
+  /// Returns true if the caller is the current admin principal.
+  getIsAdmin: () -> (bool) query;
   /// Public leaderboard query: top players by FRNTR balance.
   getLeaderboard: (limit: nat) ->
    (vec
@@ -208,7 +263,13 @@ service : {
       totalFRNTRMined: nat;
       totalPlotsOwned: nat;
     }) query;
-  getPassiveIncome: (plotId: nat) -> (float64) query;
+  /// Returns all owned plots as (plotId, ownerPrincipalText) pairs.
+  /// Alias used by frontend for globe ownership sync.
+  getLivePlotOwners: () -> (vec record {
+                                  text;
+                                  text;
+                                }) query;
+  getPassiveIncome: (plotId: text) -> (float64) query;
   getPlayerState: () ->
    (record {
       combatVictories: nat;
@@ -219,10 +280,12 @@ service : {
                                text;
                                nat;
                              };
+      icpBalance: nat;
       iron: nat;
       lastFaucetTime: opt int;
       ownedPlots: vec text;
       passiveIncomePerDay: float64;
+      plotIds: vec text;
       plotsOwned: nat;
       resourceBalances: vec record {
                               ResourceType;
@@ -233,6 +296,7 @@ service : {
     });
   /// Query the full player state for a given principal.
   /// Returns a zeroed state if the principal has not played yet.
+  /// Uses live ICRC-1 ledger balance when frntrLedger is configured.
   getPlayerStateByPrincipal: ("principal": principal) ->
    (record {
       combatVictories: nat;
@@ -243,10 +307,12 @@ service : {
                                text;
                                nat;
                              };
+      icpBalance: nat;
       iron: nat;
       lastFaucetTime: opt int;
       ownedPlots: vec text;
       passiveIncomePerDay: float64;
+      plotIds: vec text;
       plotsOwned: nat;
       resourceBalances: vec record {
                               ResourceType;
@@ -254,26 +320,41 @@ service : {
                             };
       totalFRNTRBurned: float64;
       username: opt text;
-    }) query;
+    });
   /// Returns the total number of plots currently stored.
   getPlotCount: () -> (nat) query;
   /// Returns the canonical ICP price (e8s) for a plot identified by its H3 index.
   getPlotPrice: (h3Index: text) -> (nat) query;
-  /// Returns the ICP price in e8s for a plot identified by its numeric plot ID.
+  /// Returns the ICP price in e8s for a plot identified by its H3 Text ID.
   /// Price tier is derived from biome richness stored in the plots map.
-  getPlotPriceById: (plotId: nat) -> (nat) query;
-  getPlotProductionRate: (plotId: nat) -> (PlotProductionRate) query;
+  getPlotPriceById: (plotId: text) -> (nat) query;
+  getPlotProductionRate: (plotId: text) -> (PlotProductionRate) query;
   /// Returns all plot IDs owned by a given principal.
-  getPlotsByOwner: (owner: principal) -> (vec nat) query;
+  getPlotsByOwner: (owner: principal) -> (vec text) query;
   /// Returns the caller's principal display info for wallet/identity UI.
   getPrincipal: () -> (PrincipalDisplay) query;
   /// Returns 7 SubParcelInfo entries (slots 0-6) for a plot.
   /// isLocked = true during the 4-hour post-purchase cooldown.
   /// cooldownSecondsRemaining = 0 when not locked.
-  /// Sub-parcel ID = plotId * 10 + slotIndex.
-  getSubParcelStatus: (plotId: nat) -> (vec SubParcelInfo) query;
+  /// Sub-parcel ID = plotId # ":" # slotIndex.
+  getSubParcelStatus: (plotId: text) -> (vec SubParcelInfo) query;
   /// Returns all 7 sub-parcels for a given plot ID.
-  getSubParcels: (plotId: nat) -> (vec SubParcel) query;
+  getSubParcels: (plotId: text) -> (vec SubParcel) query;
+  /// Returns the survey cost (in FRNTR e8s) for a given plot.
+  getSurveyCost: (plotId: text) -> (nat) query;
+  /// Get the completed survey result for a plot.
+  /// Returns #err if the survey has not been started or the timer hasn't expired.
+  getSurveyResult: (plotId: text) -> (variant {
+                                        err: text;
+                                        ok: SurveyResult;
+                                      });
+  /// Get the current survey status for a plot.
+  /// If the timer has expired the result is auto-computed and the survey is
+  /// promoted to #Completed — the updated record is persisted.
+  getSurveyStatus: (plotId: text) -> (variant {
+                                        err: text;
+                                        ok: SurveyView;
+                                      });
   getTokenomics: () -> (Tokenomics) query;
   getTreasuryBalances: () ->
    (record {
@@ -296,27 +377,28 @@ service : {
   /// Seed plots from the frontend (admin only). Skips plots that already exist.
   /// Also creates 7 sub-parcels per plot (slot 0 = center Nexus, slots 1-6 = surrounding).
   initPlots: (plotData: vec record {
-                              nat;
+                              text;
                               text;
                               float64;
                               float64;
                               nat;
                             }) -> ();
-  isSubParcelLocked: (plotId: nat) -> (bool) query;
-  launchMissile: (fromPlotId: nat, toPlotId: nat, missileType: text) ->
+  isSubParcelLocked: (plotId: text) -> (bool) query;
+  launchMissile: (fromPlotId: text, toPlotId: text, missileType: text) ->
    (variant {
       err: text;
       ok: text;
     });
   /// Mine resources from an owned plot.
-  mineResources: (plotId: nat) -> (variant {
+  /// DISABLED: returns an informative error until the mining system launches.
+  mineResources: (_plotId: text) -> (variant {
+                                       err: text;
+                                       ok: MineResult;
+                                     });
+  purchasePlot: (plotId: text) -> (variant {
                                      err: text;
-                                     ok: MineResult;
+                                     ok: text;
                                    });
-  purchasePlot: (plotId: nat) -> (variant {
-                                    err: text;
-                                    ok: text;
-                                  });
   /// Admin: wipe all game state (plots, players, usernames, faucetClaims,
   /// generatorTiers, subParcels, statsState, plotSoldCount) back to empty.
   /// Used before migrating to mainnet for a clean slate.
@@ -340,6 +422,15 @@ service : {
                                       err: text;
                                       ok;
                                     });
+  /// Start a survey for a plot the caller owns.
+  /// Deducts the survey cost in FRNTR (from local balance or ICRC-1 ledger) and
+  /// records an in-progress survey record with startTime = now.
+  /// Returns #err if the plot is not owned by the caller, if a survey is already
+  /// in progress or completed, or if the caller has insufficient FRNTR.
+  startSurvey: (plotId: text) -> (variant {
+                                    err: text;
+                                    ok: SurveyView;
+                                  });
   /// Buy `count` plots in sequence (TESTNET_MODE only).
   stressBuyPlots: (count: nat) -> (StressTestResult);
   /// Rapidly mint `count` unowned plots (TESTNET_MODE only).
@@ -352,16 +443,15 @@ service : {
                        err: text;
                        ok: text;
                      });
-  /// Testnet faucet: grants 500 FRNTR + 2 ICP (simulated) per click.
-  /// No cooldown, no auth check beyond TESTNET_MODE=true.
-  /// Testnet faucet: grants 500 FRNTR + 2 ICP (simulated) per click.
-  /// Auto-creates a player record (600 FRNTR seed) if one doesn't exist.
-  /// No cooldown, no auth check beyond TESTNET_MODE=true.
+  /// Testnet faucet: grants 5000 FRNTR (500_000_000_000 e8s) + 5 ICP (500_000_000 e8s) per click.
+  /// Transfers FRNTR via ICRC-1 ledger (if set) and 5 ICP via ICP ledger.
+  /// Auto-creates a player record if one doesn't exist.
+  /// No cooldown. TESTNET_MODE=true only.
   testFaucetV2: () -> (FaucetResult);
   updateAdminPrincipalAuth: (newPrincipal: text) -> ();
   /// Upgrade the generator tier for an owned plot.
   /// Deducts FRNTR cost from player balance, tracks burn, sends 0.075% liquidity tax to treasury.
-  upgradeGenerator: (plotId: nat) ->
+  upgradeGenerator: (plotId: text) ->
    (variant {
       err: UpgradeError;
       ok: PlotUpgradesView;

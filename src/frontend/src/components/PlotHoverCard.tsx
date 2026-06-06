@@ -1,12 +1,5 @@
 import { X } from "lucide-react";
 import { useEffect, useState } from "react";
-import {
-  type OwnedCommander,
-  TIER_COLORS,
-  commanderHasWings,
-  getArchetype,
-  getCommander,
-} from "../constants/commanders";
 import { useGameStore } from "../store/gameStore";
 
 const CYAN = "#00ffcc";
@@ -29,9 +22,6 @@ export default function PlotHoverCard({
   onDismiss,
 }: PlotHoverCardProps) {
   const [visible, setVisible] = useState(false);
-  const commanderAssignments = useGameStore((s) => s.commanderAssignments);
-  const ownedCommanders = useGameStore((s) => s.ownedCommanders) ?? [];
-
   useEffect(() => {
     const t = setTimeout(() => setVisible(true), 20);
     return () => clearTimeout(t);
@@ -40,22 +30,6 @@ export default function PlotHoverCard({
   const isTarget = action === "TARGET LOCKED";
   const isOwned = action === "TERRITORY ACQUIRED" || action === "YOU OWN THIS";
   const actionColor = isTarget ? "#ef4444" : CYAN;
-
-  const assignedInstanceId = commanderAssignments?.[plotId];
-  const commander = assignedInstanceId
-    ? getCommander(assignedInstanceId)
-    : null;
-  const ownedInstance = (ownedCommanders as OwnedCommander[])?.find(
-    (c) => c.instanceId === assignedInstanceId,
-  );
-  const hasWings = ownedInstance ? commanderHasWings(ownedInstance) : false;
-  // Use the exact rank insignia image rather than the archetype badge fallback
-  const rankImage = ownedInstance
-    ? (getArchetype(ownedInstance.archetypeId)?.rankProgression[
-        ownedInstance.currentRankIndex
-      ]?.image ?? null)
-    : null;
-  const tierColor = commander ? (TIER_COLORS[commander.tier] ?? CYAN) : CYAN;
 
   return (
     <div
@@ -179,147 +153,6 @@ export default function PlotHoverCard({
         </span>
       </div>
 
-      {/* Commander block */}
-      {commander ? (
-        <div
-          style={{
-            background: `${tierColor}06`,
-            border: `1px solid ${tierColor}28`,
-            borderRadius: 7,
-            padding: "8px 10px",
-            marginBottom: 8,
-            display: "flex",
-            flexDirection: "column",
-            gap: 6,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div
-              style={{
-                width: 44,
-                height: 44,
-                flexShrink: 0,
-                borderRadius: 6,
-                overflow: "hidden",
-                background: "rgba(0,0,0,0.6)",
-                boxShadow: `0 0 8px ${tierColor}55`,
-                border: `1px solid ${tierColor}44`,
-              }}
-            >
-              <img
-                src={rankImage ?? commander.badge}
-                alt={commander.name}
-                style={{ width: "100%", height: "100%", objectFit: "contain" }}
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src =
-                    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' fill='%23112233' rx='6'/%3E%3Ctext x='24' y='32' text-anchor='middle' fill='%2300ffcc' font-size='20'%3E%E2%98%85%3C/text%3E%3C/svg%3E";
-                }}
-              />
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div
-                style={{
-                  fontSize: 9,
-                  fontWeight: 700,
-                  color: "#e0f4ff",
-                  fontFamily: "monospace",
-                  letterSpacing: 1,
-                  marginBottom: 3,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 5,
-                }}
-              >
-                {commander.name}
-                {hasWings && (
-                  <span
-                    style={{ fontSize: 10 }}
-                    title="Wings Earned — F-16 Eligible"
-                  >
-                    ✈
-                  </span>
-                )}
-              </div>
-              <span
-                style={{
-                  fontSize: 8,
-                  fontWeight: 700,
-                  color: tierColor,
-                  background: `${tierColor}18`,
-                  border: `1px solid ${tierColor}44`,
-                  borderRadius: 3,
-                  padding: "1px 5px",
-                  letterSpacing: 1,
-                  fontFamily: "monospace",
-                }}
-              >
-                {commander.tier.replace(/_/g, " ")}
-              </span>
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: 6 }}>
-            <span
-              style={{
-                fontSize: 8,
-                fontWeight: 700,
-                color: "#ef4444",
-                background: "rgba(239,68,68,0.12)",
-                border: "1px solid rgba(239,68,68,0.3)",
-                borderRadius: 4,
-                padding: "2px 7px",
-                fontFamily: "monospace",
-                letterSpacing: 0.5,
-              }}
-            >
-              ATK +{commander.atk}
-            </span>
-            <span
-              style={{
-                fontSize: 8,
-                fontWeight: 700,
-                color: "#3b82f6",
-                background: "rgba(59,130,246,0.12)",
-                border: "1px solid rgba(59,130,246,0.3)",
-                borderRadius: 4,
-                padding: "2px 7px",
-                fontFamily: "monospace",
-                letterSpacing: 0.5,
-              }}
-            >
-              DEF +{commander.def}
-            </span>
-          </div>
-          <div
-            style={{
-              fontSize: 8,
-              color: CYAN,
-              fontFamily: "monospace",
-              letterSpacing: 0.5,
-              opacity: 0.85,
-            }}
-          >
-            +{(commander.rarityBonus * 100).toFixed(0)}% FRNTR/DAY BONUS
-          </div>
-        </div>
-      ) : (
-        <div
-          style={{
-            background: "rgba(255,255,255,0.02)",
-            border: "1px solid rgba(255,255,255,0.06)",
-            borderRadius: 7,
-            padding: "7px 10px",
-            marginBottom: 8,
-            fontSize: 8,
-            color: "rgba(200,220,255,0.3)",
-            fontFamily: "monospace",
-            letterSpacing: 1,
-            textAlign: "center",
-          }}
-        >
-          NO COMMANDER ASSIGNED
-        </div>
-      )}
-
       {/* Next step */}
       <div
         style={{
@@ -388,11 +221,7 @@ export default function PlotHoverCard({
               whiteSpace: "nowrap",
             }}
           >
-            ⚡{" "}
-            {commander
-              ? `${(50 * (1 + commander.rarityBonus)).toFixed(1)}`
-              : "50"}{" "}
-            FRNTR/DAY
+            ⚡ {"50"} FRNTR/DAY
             <br />
             GENERATING
           </div>

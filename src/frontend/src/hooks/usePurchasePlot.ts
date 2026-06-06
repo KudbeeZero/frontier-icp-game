@@ -2,6 +2,7 @@ import { useActor, useInternetIdentity } from "@caffeineai/core-infrastructure";
 import { Actor, HttpAgent } from "@icp-sdk/core/agent";
 import { useState } from "react";
 import { createActor } from "../backend";
+import { applyConfirmedFrntrBalance } from "../hooks/usePlayerSync";
 import { useGameStore } from "../store/gameStore";
 
 /**
@@ -73,7 +74,7 @@ export function usePurchasePlot() {
 
   const purchasePlotLocal = useGameStore((s) => s.purchasePlot);
 
-  async function purchasePlot(plotId: number): Promise<PurchaseResult> {
+  async function purchasePlot(plotId: string): Promise<PurchaseResult> {
     setIsPurchasing(true);
     setLastResult(null);
 
@@ -89,7 +90,7 @@ export function usePurchasePlot() {
       setIsPurchasing(false);
       const result: PurchaseResult = {
         success: true,
-        message: `[OFFLINE] PLOT #${plotId} ACQUIRED`,
+        message: `[OFFLINE] PLOT ${plotId} ACQUIRED`,
       };
       setLastResult(result);
       return result;
@@ -117,12 +118,16 @@ export function usePurchasePlot() {
             { agent: icpAgent, canisterId: ICP_LEDGER_CANISTER_ID },
           ) as Icrc2Actor;
 
-          // Fetch actual plot price dynamically
+          // Fetch actual plot price from getPlotPrice (Fix 1 — source of truth)
           let plotPriceE8s: bigint;
           try {
-            plotPriceE8s = (await (actor as any).getPlotPriceById(
-              BigInt(plotId),
-            )) as bigint;
+            plotPriceE8s = BigInt(
+              await (
+                actor as unknown as {
+                  getPlotPrice: (id: string) => Promise<bigint>;
+                }
+              ).getPlotPrice(plotId),
+            );
           } catch {
             plotPriceE8s = 200_000_000n; // fallback: 2 ICP
           }
@@ -149,7 +154,9 @@ export function usePurchasePlot() {
                 plotsOwned: s.player.plotsOwned.filter((id) => id !== plotId),
               },
               plots: s.plots.map((p) =>
-                p.id === plotId ? { ...p, owner: null, isOwnedByMe: false } : p,
+                String(p.id) === plotId
+                  ? { ...p, owner: null, isOwnedByMe: false }
+                  : p,
               ),
             }));
             const errMsg =
@@ -171,11 +178,11 @@ export function usePurchasePlot() {
       }
 
       // Step 2: Call purchasePlot on the game canister
-      const res = await actor.purchasePlot(BigInt(plotId));
+      const res = await actor.purchasePlot(plotId);
       const success = "ok" in res;
       const message = success
-        ? ((res as { ok: string }).ok ?? `PLOT #${plotId} ACQUIRED`)
-        : ((res as { err: string }).err ?? `PLOT #${plotId} PURCHASE FAILED`);
+        ? ((res as { ok: string }).ok ?? `PLOT ${plotId} ACQUIRED`)
+        : ((res as { err: string }).err ?? `PLOT ${plotId} PURCHASE FAILED`);
       // Attach formatted price to success message when available
       const displayMessage =
         success && priceDisplay ? `${message} · ${priceDisplay}` : message;
@@ -185,20 +192,37 @@ export function usePurchasePlot() {
         const unlockTs = Date.now() + 4 * 60 * 60 * 1000;
         useGameStore.setState((s) => ({
           subParcelCooldowns: {
-            ...s.subParcelCooldowns,
-            [String(plotId)]: unlockTs,
+            ...(s.subParcelCooldowns ?? {}),
+            [plotId]: unlockTs,
           },
         }));
+
+        // Immediately sync ownership so globe highlights and inventory updates
+        // without waiting for the next 10-second poll
+        try {
+          const [playerState, owners] = await Promise.all([
+            actor.getPlayerState(),
+            actor.getLivePlotOwners(),
+          ]);
+          if (playerState) {
+            applyConfirmedFrntrBalance(BigInt(playerState.frntBalance));
+          }
+          const myPrincipal = useGameStore.getState().player.principal ?? "";
+          useGameStore.getState().setLivePlotOwners(owners, myPrincipal);
+        } catch {
+          // Non-critical: next poll will catch up
+        }
       } else {
-        // Rollback: un-own the plot locally
+        // Rollback: un-own the plot locally — do NOT touch frntBalance (ICP flow)
         useGameStore.setState((s) => ({
           player: {
             ...s.player,
             plotsOwned: s.player.plotsOwned.filter((id) => id !== plotId),
-            frntBalance: s.player.frntBalance + 100,
           },
           plots: s.plots.map((p) =>
-            p.id === plotId ? { ...p, owner: null } : p,
+            String(p.id) === plotId
+              ? { ...p, owner: null, isOwnedByMe: false }
+              : p,
           ),
         }));
       }
@@ -210,15 +234,16 @@ export function usePurchasePlot() {
       const message =
         err instanceof Error ? err.message : "PURCHASE FAILED — NETWORK ERROR";
 
-      // Rollback
+      // Rollback: only un-own plot — never touch frntBalance (ICP flow, no FRNTR deducted)
       useGameStore.setState((s) => ({
         player: {
           ...s.player,
           plotsOwned: s.player.plotsOwned.filter((id) => id !== plotId),
-          frntBalance: s.player.frntBalance + 100,
         },
         plots: s.plots.map((p) =>
-          p.id === plotId ? { ...p, owner: null } : p,
+          String(p.id) === plotId
+            ? { ...p, owner: null, isOwnedByMe: false }
+            : p,
         ),
       }));
 

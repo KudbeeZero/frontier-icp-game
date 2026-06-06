@@ -167,11 +167,11 @@ export default function Leaderboard() {
       principal: player.principal ?? "",
       plots: player.plotsOwned.length,
       frntr: Math.round(player.frntBalance),
-      wins: rankStats.combatWins,
+      wins: (rankStats as { combatWins: number }).combatWins,
       score: computeScore(
         player.plotsOwned.length,
         player.frntBalance,
-        rankStats.combatWins,
+        (rankStats as { combatWins: number }).combatWins,
       ),
       isMe: true,
     };
@@ -190,17 +190,17 @@ export default function Leaderboard() {
         va = a.name.toLowerCase();
         vb = b.name.toLowerCase();
       } else if (sortKey === "plots") {
-        va = a.plots;
-        vb = b.plots;
+        va = a.plots ?? 0;
+        vb = b.plots ?? 0;
       } else if (sortKey === "frntr") {
-        va = a.frntr;
-        vb = b.frntr;
+        va = a.frntr ?? 0;
+        vb = b.frntr ?? 0;
       } else if (sortKey === "wins") {
-        va = a.wins;
-        vb = b.wins;
+        va = a.wins ?? 0;
+        vb = b.wins ?? 0;
       } else {
-        va = a.score;
-        vb = b.score;
+        va = a.score ?? 0;
+        vb = b.score ?? 0;
       }
       if (typeof va === "string" && typeof vb === "string") {
         return sortDir === "asc" ? va.localeCompare(vb) : vb.localeCompare(va);

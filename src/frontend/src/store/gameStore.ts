@@ -1,22 +1,61 @@
 import { create } from "zustand";
-const LS_KEY = "frontier_player_state_v1";
+const LS_KEY = "frontier_player_state_v2";
 
 function loadFromStorage() {
   try {
+    // Try v2 key first (string-keyed)
     const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as {
-      frntBalance: number;
-      iron: number;
-      fuel: number;
-      crystal: number;
-      rareEarth: number;
-      plotsOwned: number[];
-      resourceStorageCap: number;
-      generatorTiers: Record<number, GeneratorTier>;
-      plotPurchaseTimes: Record<number, number>;
-      totalFRNTRBurned: number;
-    };
+    if (raw) {
+      return JSON.parse(raw) as {
+        frntBalance: number;
+        iron: number;
+        fuel: number;
+        crystal: number;
+        rareEarth: number;
+        plotsOwned: string[];
+        resourceStorageCap: number;
+        generatorTiers: Record<string, GeneratorTier>;
+        plotPurchaseTimes: Record<string, number>;
+        totalFRNTRBurned: number;
+      };
+    }
+    // Migrate from v1 (numeric keys)
+    const rawV1 = localStorage.getItem("frontier_player_state_v1");
+    if (rawV1) {
+      const v1 = JSON.parse(rawV1) as {
+        frntBalance?: number;
+        iron?: number;
+        fuel?: number;
+        crystal?: number;
+        rareEarth?: number;
+        plotsOwned?: (number | string)[];
+        resourceStorageCap?: number;
+        generatorTiers?: Record<string | number, GeneratorTier>;
+        plotPurchaseTimes?: Record<string | number, number>;
+        totalFRNTRBurned?: number;
+      };
+      const tiers: Record<string, GeneratorTier> = {};
+      for (const [k, v] of Object.entries(v1.generatorTiers ?? {})) {
+        tiers[String(k)] = v;
+      }
+      const times: Record<string, number> = {};
+      for (const [k, v] of Object.entries(v1.plotPurchaseTimes ?? {})) {
+        times[String(k)] = v;
+      }
+      return {
+        frntBalance: v1.frntBalance ?? 0,
+        iron: v1.iron ?? 0,
+        fuel: v1.fuel ?? 0,
+        crystal: v1.crystal ?? 0,
+        rareEarth: v1.rareEarth ?? 0,
+        plotsOwned: (v1.plotsOwned ?? []).map(String),
+        resourceStorageCap: v1.resourceStorageCap ?? 200,
+        generatorTiers: tiers,
+        plotPurchaseTimes: times,
+        totalFRNTRBurned: v1.totalFRNTRBurned ?? 0,
+      };
+    }
+    return null;
   } catch {
     return null;
   }
@@ -134,11 +173,10 @@ export interface PlayerData {
   crystal: number;
   rareEarth: number;
   frntBalance: number;
-  plotsOwned: number[];
+  icpBalance: number;
+  plotsOwned: string[];
   resourceStorageCap: number;
-  commanderType?: string;
-  commanderAtk?: number;
-  commanderDef?: number;
+  isAdmin: boolean;
   victories?: number;
   weaponInventory?: Record<string, number>;
 }
@@ -148,8 +186,8 @@ export interface CombatEntry {
   timestamp: number;
   attacker: string;
   defender: string;
-  fromPlot: number;
-  toPlot: number;
+  fromPlot: string;
+  toPlot: string;
   success: boolean;
 }
 
@@ -192,11 +230,13 @@ export interface PlotHoverCard {
   nextStep: string;
 }
 
-function generateSubParcels(plotId: number): SubParcel[] {
+function generateSubParcels(plotId: number | string): SubParcel[] {
+  const numericId =
+    typeof plotId === "string" ? Number.parseInt(plotId, 10) || 0 : plotId;
   return [
     {
       subId: 0,
-      plotId,
+      plotId: numericId,
       unlocked: true,
       purchaseTime: Date.now(),
       buildingType: null,
@@ -204,7 +244,7 @@ function generateSubParcels(plotId: number): SubParcel[] {
     },
     {
       subId: 1,
-      plotId,
+      plotId: numericId,
       unlocked: false,
       purchaseTime: Date.now() - 1000 * 60 * 30,
       buildingType: null,
@@ -212,7 +252,7 @@ function generateSubParcels(plotId: number): SubParcel[] {
     },
     {
       subId: 2,
-      plotId,
+      plotId: numericId,
       unlocked: true,
       purchaseTime: Date.now(),
       buildingType: null,
@@ -220,7 +260,7 @@ function generateSubParcels(plotId: number): SubParcel[] {
     },
     {
       subId: 3,
-      plotId,
+      plotId: numericId,
       unlocked: true,
       purchaseTime: Date.now(),
       buildingType: null,
@@ -228,7 +268,7 @@ function generateSubParcels(plotId: number): SubParcel[] {
     },
     {
       subId: 4,
-      plotId,
+      plotId: numericId,
       unlocked: false,
       purchaseTime: Date.now() - 1000 * 60 * 10,
       buildingType: null,
@@ -236,7 +276,7 @@ function generateSubParcels(plotId: number): SubParcel[] {
     },
     {
       subId: 5,
-      plotId,
+      plotId: numericId,
       unlocked: false,
       purchaseTime: Date.now(),
       buildingType: null,
@@ -244,7 +284,7 @@ function generateSubParcels(plotId: number): SubParcel[] {
     },
     {
       subId: 6,
-      plotId,
+      plotId: numericId,
       unlocked: false,
       purchaseTime: Date.now(),
       buildingType: null,
@@ -340,30 +380,38 @@ interface GameState {
   targetPlotId: number | null;
   combatLog: CombatEntry[];
   leaderboard: LeaderEntry[];
-  subParcels: Record<number, SubParcel[]>;
+  subParcels: Record<string, SubParcel[]>;
   hoveredPlotId: number | null;
   plotHoverCard: PlotHoverCard | null;
-  plotPurchaseTimes: Record<number, number>;
-  generatorTiers: Record<number, GeneratorTier>;
+  plotPurchaseTimes: Record<string, number>;
+  generatorTiers: Record<string, GeneratorTier>;
   serverPassiveIncomePerDay: number;
   totalFRNTRBurned: number;
   purchaseDebugLogs: PurchaseDebugLog[];
-  firstAvailablePlotId: number | null;
+  firstAvailablePlotId: string | null;
 
   globalStats: GlobalStats | null;
   treasuryState: TreasuryState;
   icpUsdPrice: number | null;
 
-  activeBattleEntry?: any;
-  assignedInterceptors?: Record<number, string>;
+  // Accumulation model: confirmed = last known from canister; accrued = per-second ticker since last sync
+  confirmedFrntBalance: number;
+  accruedFrntSinceSync: number;
+  confirmedIcpBalance: number;
+  accruedIcpSinceSync: number;
+
+  activeBattleEntry?: unknown;
+  assignedInterceptors?: Record<string, string>;
 
   setGlobalStats: (stats: GlobalStats) => void;
+  setFrntrBalance: (e8s: bigint) => void;
+  setIcpBalance: (e8s: bigint) => void;
   setTreasuryState: (state: TreasuryState) => void;
   setIcpUsdPrice: (price: number | null) => void;
   selectPlot: (id: number | null) => void;
   setSelectedWorldPoint: (p: [number, number, number] | null) => void;
-  purchasePlot: (id: number) => void;
-  transferPlot: (plotId: number, recipient: string) => void;
+  purchasePlot: (id: string) => void;
+  transferPlot: (plotId: string, recipient: string) => void;
   claimResources: (id: number) => void;
   mineResources: (id: number) => {
     iron: number;
@@ -376,9 +424,9 @@ interface GameState {
   addFrntr: (amount: number) => void;
   mintTestTokens: () => void;
   setAuth: (principal: string | null) => void;
-  getSubParcels: (plotId: number) => SubParcel[];
+  getSubParcels: (plotId: string) => SubParcel[];
   buildStructure: (
-    plotId: number,
+    plotId: string,
     subId: number,
     buildingType: string,
     cost: number,
@@ -387,8 +435,8 @@ interface GameState {
   setPlotHoverCard: (card: PlotHoverCard | null) => void;
   setHoveredPlotId: (id: number | null) => void;
   setPlotSpecialization: (plotId: number, spec: PlotSpecialization) => void;
-  upgradeStorage: (plotId: number) => void;
-  upgradeGenerator: (plotId: number) => void;
+  upgradeStorage: (plotId: string) => void;
+  upgradeGenerator: (plotId: string) => void;
   tickPassiveIncome: () => void;
   tickMineralDrip: () => void;
   setServerPassiveIncome: (rate: number) => void;
@@ -397,28 +445,27 @@ interface GameState {
   clearPurchaseDebugLogs: () => void;
   setPlots: (plots: PlotData[]) => void;
   setPlotOwnership: (
-    owners: Array<[bigint, string]>,
+    owners: Array<[string, string]>,
     myPrincipal: string,
   ) => void;
-  fetchSubParcels: (plotId: number) => Promise<void>;
+  setLivePlotOwners: (owners: [string, string][], myPrincipal: string) => void;
+  fetchSubParcels: (plotId: string) => Promise<void>;
 
   // v1.0 phased rollout stubs (hidden features)
   compareModeActive?: boolean;
   setComparePlotId?: (id: number | null) => void;
-  commanderAssignments?: Record<number, string>;
-  ownedCommanders?: any[];
   getNetworkBonus?: () => number;
   attack?: (targetId: number) => void;
   arsenalInventory?: Record<string, number>;
   fireArsenalMissile?: () => void;
   artilleryInventory?: Record<string, number>;
   fireArtillery?: () => void;
-  rankStats?: any;
-  subParcelCooldowns?: Record<number, number>;
+  rankStats?: unknown;
+  subParcelCooldowns?: Record<string, number>;
   activeWeapon?: string | null;
   setActiveWeapon?: (w: string | null) => void;
   interceptorInventory?: Record<string, number>;
-  assignInterceptorToPlot?: (plotId: number, interceptorId: string) => void;
+  assignInterceptorToPlot?: (plotId: string, interceptorId: string) => void;
   buyWeapon?: (weaponId: string) => void;
   weaponInventory?: Record<string, number>;
   setFaction?: (f: string) => void;
@@ -434,8 +481,10 @@ export const useGameStore = create<GameState>((set, get) => ({
     crystal: _cached?.crystal ?? 0,
     rareEarth: _cached?.rareEarth ?? 0,
     frntBalance: _cached?.frntBalance ?? 0,
-    plotsOwned: _cached?.plotsOwned ?? [],
+    icpBalance: 0,
+    plotsOwned: (_cached?.plotsOwned ?? []).map(String),
     resourceStorageCap: _cached?.resourceStorageCap ?? 200,
+    isAdmin: false,
   },
   selectedPlotId: null,
   selectedWorldPoint: null,
@@ -455,6 +504,54 @@ export const useGameStore = create<GameState>((set, get) => ({
   treasuryState: { developer: 0n, leaderboard: 0n, liquidity: 0n },
   icpUsdPrice: null,
 
+  // Accumulation model
+  confirmedFrntBalance: _cached?.frntBalance ?? 0,
+  accruedFrntSinceSync: 0,
+  confirmedIcpBalance: 0,
+  accruedIcpSinceSync: 0,
+
+  setFrntrBalance: (e8s) =>
+    set((s) => {
+      const confirmed = Number(e8s) / 100_000_000;
+      // Only reset accruedFrntSinceSync when the canister balance goes DOWN
+      // (i.e. user spent tokens). When balance goes up or stays same, keep
+      // the accrued ticker running so the display never flickers backward.
+      const prevDisplay = s.confirmedFrntBalance + s.accruedFrntSinceSync;
+      const newAccrued =
+        confirmed >= s.confirmedFrntBalance
+          ? Math.max(0, prevDisplay - confirmed) // absorb upward diff smoothly
+          : 0; // balance dropped — user spent
+      const next = {
+        ...s,
+        confirmedFrntBalance: confirmed,
+        accruedFrntSinceSync: newAccrued,
+        player: { ...s.player, frntBalance: confirmed + newAccrued },
+      };
+      saveToStorage(next as GameState);
+      return {
+        confirmedFrntBalance: confirmed,
+        accruedFrntSinceSync: newAccrued,
+        player: next.player,
+      };
+    }),
+
+  setIcpBalance: (e8s) =>
+    set((s) => {
+      const confirmed = Number(e8s) / 100_000_000;
+      const next = {
+        ...s,
+        confirmedIcpBalance: confirmed,
+        accruedIcpSinceSync: 0,
+        player: { ...s.player, icpBalance: confirmed },
+      };
+      saveToStorage(next as GameState);
+      return {
+        confirmedIcpBalance: confirmed,
+        accruedIcpSinceSync: 0,
+        player: next.player,
+      };
+    }),
+
   setGlobalStats: (stats) => set({ globalStats: stats }),
   setTreasuryState: (state) => set({ treasuryState: state }),
   setIcpUsdPrice: (price) => set({ icpUsdPrice: price }),
@@ -462,23 +559,62 @@ export const useGameStore = create<GameState>((set, get) => ({
   setPlots: (plots) => set({ plots }),
 
   setPlotOwnership: (owners, myPrincipal) => {
-    const ownerMap = new Map<number, string>();
+    const ownerMap = new Map<string, string>();
     for (const [id, principal] of owners) {
-      ownerMap.set(Number(id), principal);
+      ownerMap.set(String(id), principal);
     }
     set((s) => ({
       plots: s.plots.map((p) => {
-        const owner = ownerMap.get(p.id) ?? null;
-        return owner !== undefined
-          ? { ...p, owner, isOwnedByMe: !!myPrincipal && owner === myPrincipal }
-          : { ...p, isOwnedByMe: false };
+        const owner = ownerMap.get(String(p.id));
+        if (owner !== undefined) {
+          return {
+            ...p,
+            owner,
+            isOwnedByMe: !!myPrincipal && owner === myPrincipal,
+          };
+        }
+        return { ...p, owner: null, isOwnedByMe: false };
       }),
+      player: {
+        ...s.player,
+        plotsOwned: myPrincipal
+          ? Array.from(ownerMap.entries())
+              .filter(([, principal]) => principal === myPrincipal)
+              .map(([id]) => id)
+          : s.player.plotsOwned,
+      },
     }));
   },
 
-  fetchSubParcels: async (_plotId) => {
-    // stub — sub-parcel specialization deferred to post-v1.0
+  setLivePlotOwners: (owners, myPrincipal) => {
+    const ownerMap = new Map<string, string>();
+    for (const [plotId, principal] of owners) {
+      ownerMap.set(plotId, principal);
+    }
+    set((s) => ({
+      plots: s.plots.map((p) => {
+        const owner = ownerMap.get(String(p.id));
+        if (owner !== undefined) {
+          return {
+            ...p,
+            owner,
+            isOwnedByMe: !!myPrincipal && owner === myPrincipal,
+          };
+        }
+        return { ...p, owner: null, isOwnedByMe: false };
+      }),
+      player: {
+        ...s.player,
+        plotsOwned: myPrincipal
+          ? Array.from(ownerMap.entries())
+              .filter(([, principal]) => principal === myPrincipal)
+              .map(([id]) => id)
+          : s.player.plotsOwned,
+      },
+    }));
   },
+
+  fetchSubParcels: async (_plotId) => {},
 
   selectPlot: (id) => set({ selectedPlotId: id }),
   setSelectedWorldPoint: (p) => set({ selectedWorldPoint: p }),
@@ -487,24 +623,21 @@ export const useGameStore = create<GameState>((set, get) => ({
   setPlotHoverCard: (card) => set({ plotHoverCard: card }),
   setHoveredPlotId: (id) => set({ hoveredPlotId: id }),
 
-  purchasePlot: (id) => {
+  purchasePlot: (id: string) => {
     const state = get();
     if (state.player.plotsOwned.includes(id)) return;
-    const plot = state.plots.find((p) => p.id === id);
+    const plot = state.plots.find((p) => String(p.id) === id);
     if (!plot) return;
-    const cost = 100;
-    if (state.player.frntBalance < cost) return;
     const subParcels = generateSubParcels(id);
     set((s) => {
       const next = {
         ...s,
         player: {
           ...s.player,
-          frntBalance: s.player.frntBalance - cost,
           plotsOwned: [...s.player.plotsOwned, id],
         },
         plots: s.plots.map((p) =>
-          p.id === id
+          String(p.id) === id
             ? { ...p, owner: s.player.principal ?? "You", isOwnedByMe: true }
             : p,
         ),
@@ -521,7 +654,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     });
   },
 
-  transferPlot: (plotId, recipient) => {
+  transferPlot: (plotId: string, recipient: string) => {
     const state = get();
     if (!state.player.plotsOwned.includes(plotId)) return;
     set((s) => ({
@@ -530,7 +663,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         plotsOwned: s.player.plotsOwned.filter((id) => id !== plotId),
       },
       plots: s.plots.map((p) =>
-        p.id === plotId ? { ...p, owner: recipient } : p,
+        String(p.id) === plotId ? { ...p, owner: recipient } : p,
       ),
     }));
   },
@@ -541,14 +674,13 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   mineResources: (id) => {
     const state = get();
-    if (!state.player.plotsOwned.includes(id)) return null;
+    if (!state.player.plotsOwned.includes(String(id))) return null;
     const plot = state.plots.find((p) => p.id === id);
     if (!plot) return null;
     const regenActive = Date.now() < plot.regenActiveUntil;
     const yld = getMineralYield(plot.biome, plot.efficiency, regenActive);
     const resourcesMult = plot.specialization === "RESOURCES" ? 1.15 : 1.0;
     const storageCap = state.player.resourceStorageCap;
-    // MINE is now a small boost (10% of normal yield), not a full lump sum
     const boostFactor = 0.1;
     const scaledYield = {
       iron: yld.iron * resourcesMult * boostFactor,
@@ -583,59 +715,86 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   activateRegenBoost: (id) => {
     const state = get();
-    if (!state.player.plotsOwned.includes(id)) return;
+    if (!state.player.plotsOwned.includes(String(id))) return;
     const cost = 50;
-    if (state.player.frntBalance < cost) return;
+    const displayBal = state.confirmedFrntBalance + state.accruedFrntSinceSync;
+    if (displayBal < cost) return;
     const plot = state.plots.find((p) => p.id === id);
     if (!plot) return;
-    set((s) => ({
-      player: { ...s.player, frntBalance: s.player.frntBalance - cost },
-      plots: s.plots.map((p) =>
-        p.id === id
-          ? {
-              ...p,
-              regenActiveUntil: Date.now() + 4 * 60 * 60 * 1000,
-              efficiency: Math.min(98, p.efficiency + 20),
-            }
-          : p,
-      ),
-    }));
+    set((s) => {
+      const nextConfirmed = s.confirmedFrntBalance - cost;
+      const next = {
+        ...s,
+        confirmedFrntBalance: nextConfirmed,
+        player: {
+          ...s.player,
+          frntBalance: nextConfirmed + s.accruedFrntSinceSync,
+        },
+        plots: s.plots.map((p) =>
+          p.id === id
+            ? {
+                ...p,
+                regenActiveUntil: Date.now() + 4 * 60 * 60 * 1000,
+                efficiency: Math.min(98, p.efficiency + 20),
+              }
+            : p,
+        ),
+      };
+      saveToStorage(next as GameState);
+      return {
+        confirmedFrntBalance: nextConfirmed,
+        player: next.player,
+        plots: next.plots,
+      };
+    });
   },
 
   claimAllFrntr: (amount) =>
     set((s) => {
+      const nextConfirmed = s.confirmedFrntBalance + amount;
       const next = {
         ...s,
-        player: { ...s.player, frntBalance: s.player.frntBalance + amount },
+        confirmedFrntBalance: nextConfirmed,
+        player: {
+          ...s.player,
+          frntBalance: nextConfirmed + s.accruedFrntSinceSync,
+        },
       };
       saveToStorage(next as GameState);
-      return { player: next.player };
+      return { confirmedFrntBalance: nextConfirmed, player: next.player };
     }),
 
   addFrntr: (amount) =>
     set((s) => {
+      const nextConfirmed = s.confirmedFrntBalance + amount;
       const next = {
         ...s,
-        player: { ...s.player, frntBalance: s.player.frntBalance + amount },
+        confirmedFrntBalance: nextConfirmed,
+        player: {
+          ...s.player,
+          frntBalance: nextConfirmed + s.accruedFrntSinceSync,
+        },
       };
       saveToStorage(next as GameState);
-      return { player: next.player };
+      return { confirmedFrntBalance: nextConfirmed, player: next.player };
     }),
 
   mintTestTokens: () =>
     set((s) => {
+      const nextConfirmed = s.confirmedFrntBalance + 500;
       const next = {
         ...s,
+        confirmedFrntBalance: nextConfirmed,
         player: {
           ...s.player,
-          frntBalance: s.player.frntBalance + 500,
+          frntBalance: nextConfirmed + s.accruedFrntSinceSync,
         },
       };
       saveToStorage(next as GameState);
-      return { player: next.player };
+      return { confirmedFrntBalance: nextConfirmed, player: next.player };
     }),
 
-  upgradeGenerator: (plotId) => {
+  upgradeGenerator: (plotId: string) => {
     const state = get();
     if (!state.player.plotsOwned.includes(plotId)) return;
     const currentTier = state.generatorTiers[plotId] ?? 0;
@@ -649,33 +808,64 @@ export const useGameStore = create<GameState>((set, get) => ({
       6: 60000,
     };
     const cost = COSTS[currentTier + 1];
-    if (!cost || state.player.frntBalance < cost) return;
-    set((s) => ({
-      player: { ...s.player, frntBalance: s.player.frntBalance - cost },
-      generatorTiers: {
-        ...s.generatorTiers,
-        [plotId]: (currentTier + 1) as GeneratorTier,
-      },
-    }));
+    if (!cost) return;
+    const displayBal = state.confirmedFrntBalance + state.accruedFrntSinceSync;
+    if (displayBal < cost) return;
+    set((s) => {
+      const nextConfirmed = s.confirmedFrntBalance - cost;
+      const next = {
+        ...s,
+        confirmedFrntBalance: nextConfirmed,
+        player: {
+          ...s.player,
+          frntBalance: nextConfirmed + s.accruedFrntSinceSync,
+        },
+        generatorTiers: {
+          ...s.generatorTiers,
+          [plotId]: (currentTier + 1) as GeneratorTier,
+        },
+      };
+      saveToStorage(next as GameState);
+      return {
+        confirmedFrntBalance: nextConfirmed,
+        player: next.player,
+        generatorTiers: next.generatorTiers,
+      };
+    });
   },
 
-  getSubParcels: (plotId) => {
+  getSubParcels: (plotId: string) => {
     const state = get();
     if (state.subParcels[plotId]) return state.subParcels[plotId];
     return generateSubParcels(plotId);
   },
 
-  buildStructure: (plotId, subId, buildingType, cost) => {
+  buildStructure: (plotId: string, subId, buildingType, cost) => {
     const state = get();
-    if (state.player.frntBalance < cost) return;
+    const displayBal = state.confirmedFrntBalance + state.accruedFrntSinceSync;
+    if (displayBal < cost) return;
     const existing = state.subParcels[plotId] ?? generateSubParcels(plotId);
     const updated = existing.map((sp) =>
       sp.subId === subId ? { ...sp, buildingType, durability: 100 } : sp,
     );
-    set((s) => ({
-      player: { ...s.player, frntBalance: s.player.frntBalance - cost },
-      subParcels: { ...s.subParcels, [plotId]: updated },
-    }));
+    set((s) => {
+      const nextConfirmed = s.confirmedFrntBalance - cost;
+      const next = {
+        ...s,
+        confirmedFrntBalance: nextConfirmed,
+        player: {
+          ...s.player,
+          frntBalance: nextConfirmed + s.accruedFrntSinceSync,
+        },
+        subParcels: { ...s.subParcels, [plotId]: updated },
+      };
+      saveToStorage(next as GameState);
+      return {
+        confirmedFrntBalance: nextConfirmed,
+        player: next.player,
+        subParcels: next.subParcels,
+      };
+    });
   },
 
   setPlotSpecialization: (plotId, spec) =>
@@ -685,18 +875,26 @@ export const useGameStore = create<GameState>((set, get) => ({
       ),
     })),
 
-  upgradeStorage: (plotId) => {
+  upgradeStorage: (plotId: string) => {
     const state = get();
     if (!state.player.plotsOwned.includes(plotId)) return;
-    if (state.player.frntBalance < 150) return;
+    const displayBal = state.confirmedFrntBalance + state.accruedFrntSinceSync;
+    if (displayBal < 150) return;
     if (state.player.resourceStorageCap >= 500) return;
-    set((s) => ({
-      player: {
-        ...s.player,
-        frntBalance: s.player.frntBalance - 150,
-        resourceStorageCap: Math.min(500, s.player.resourceStorageCap + 50),
-      },
-    }));
+    set((s) => {
+      const nextConfirmed = s.confirmedFrntBalance - 150;
+      const next = {
+        ...s,
+        confirmedFrntBalance: nextConfirmed,
+        player: {
+          ...s.player,
+          frntBalance: nextConfirmed + s.accruedFrntSinceSync,
+          resourceStorageCap: Math.min(500, s.player.resourceStorageCap + 50),
+        },
+      };
+      saveToStorage(next as GameState);
+      return { confirmedFrntBalance: nextConfirmed, player: next.player };
+    });
   },
 
   getNetworkBonus: () => {
@@ -704,7 +902,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     const ownedSpecs = new Set(
       state.plots
         .filter(
-          (p) => state.player.plotsOwned.includes(p.id) && p.specialization,
+          (p) =>
+            state.player.plotsOwned.includes(String(p.id)) && p.specialization,
         )
         .map((p) => p.specialization),
     );
@@ -725,42 +924,42 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   clearPurchaseDebugLogs: () => set({ purchaseDebugLogs: [] }),
 
-  // Passive FRNTR drip: uses server-synced rate if available, else local calculation
   tickPassiveIncome: () => {
     const state = get();
     if (state.player.plotsOwned.length === 0) return;
-    const plotCount = state.player.plotsOwned.length;
-    // Use server-synced rate if available (divided by 86400 per second per plot)
     const serverRate = state.serverPassiveIncomePerDay;
-    const TIER_BONUS: Record<number, number> = {
-      1: 8 / 86400,
-      2: 24 / 86400,
-      3: 48 / 86400,
-      4: 96 / 86400,
-      5: 192 / 86400,
-      6: 384 / 86400,
+    // Correct tier daily rates: tier 0=7, I=9, II=12, III=17, IV=25, V=37, VI=55
+    const TIER_RATES: Record<number, number> = {
+      0: 7,
+      1: 9,
+      2: 12,
+      3: 17,
+      4: 25,
+      5: 37,
+      6: 55,
     };
     let totalFrntr = 0;
-    if (serverRate > 0 && plotCount > 0) {
-      // Server rate is total per day; convert to per-second tick
+    if (serverRate > 0) {
       totalFrntr = serverRate / 86400;
     } else {
-      const BASE_PER_PLOT_PER_SEC = 7 / 86400; // 7 FRNTR/day fallback
       for (const plotId of state.player.plotsOwned) {
-        const plot = state.plots.find((p) => p.id === plotId);
-        if (!plot) continue;
-        totalFrntr += BASE_PER_PLOT_PER_SEC;
-        const tier = state.generatorTiers[plotId] ?? 0;
-        if (tier > 0) totalFrntr += TIER_BONUS[tier] ?? 0;
+        const tier = (state.generatorTiers[plotId] ?? 0) as GeneratorTier;
+        totalFrntr += (TIER_RATES[tier] ?? 7) / 86400;
       }
     }
     if (totalFrntr === 0) return;
-    set((s) => ({
-      player: { ...s.player, frntBalance: s.player.frntBalance + totalFrntr },
-    }));
+    set((s) => {
+      const nextAccrued = s.accruedFrntSinceSync + totalFrntr;
+      return {
+        accruedFrntSinceSync: nextAccrued,
+        player: {
+          ...s.player,
+          frntBalance: s.confirmedFrntBalance + nextAccrued,
+        },
+      };
+    });
   },
 
-  // Gradual mineral drip: biome-based per-second accumulation
   tickMineralDrip: () => {
     const state = get();
     if (state.player.plotsOwned.length === 0) return;
@@ -770,16 +969,15 @@ export const useGameStore = create<GameState>((set, get) => ({
       let dXtal = 0;
       let dRare = 0;
       for (const plotId of s.player.plotsOwned) {
-        const plot = s.plots.find((p) => p.id === plotId);
+        const plot = s.plots.find((p) => String(p.id) === plotId);
         if (!plot) continue;
         const rates = BIOME_DRIP[plot.biome] ?? [0.001, 0.001, 0.001, 0.001];
         const eff = (plot.efficiency ?? 90) / 100;
         const regenMult = Date.now() < plot.regenActiveUntil ? 1.2 : 1.0;
-        const specMult = 1.0;
-        dIron += rates[0] * eff * regenMult * specMult;
-        dFuel += rates[1] * eff * regenMult * specMult;
-        dXtal += rates[2] * eff * regenMult * specMult;
-        dRare += rates[3] * eff * regenMult * specMult;
+        dIron += rates[0] * eff * regenMult;
+        dFuel += rates[1] * eff * regenMult;
+        dXtal += rates[2] * eff * regenMult;
+        dRare += rates[3] * eff * regenMult;
       }
       const storageCap = s.player.resourceStorageCap;
       return {
@@ -794,11 +992,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     });
   },
 
-  // v1.0 phased rollout stubs (hidden features)
   compareModeActive: false,
   setComparePlotId: () => {},
-  commanderAssignments: {},
-  ownedCommanders: [] as any[],
   attack: () => {},
   arsenalInventory: {},
   fireArsenalMissile: () => {},
