@@ -3,6 +3,8 @@ import { X } from "lucide-react";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { createActor } from "../backend";
+import { TIER_DAILY_RATES } from "../constants/tiers";
+import { useEconomySnapshots } from "../hooks/useEconomySnapshots";
 import { useGameStore } from "../store/gameStore";
 
 const CYAN = "#00ffcc";
@@ -116,10 +118,50 @@ export default function UniversePanel({ onClose, inline = false }: Props) {
   const totalFRNTRBurned = useGameStore((s) => s.totalFRNTRBurned);
   const generatorTiers = useGameStore((s) => s.generatorTiers);
   // icpUsdPrice from gameStore — polled every 60s by usePlayerSync (foundation)
-  const icpUsdPrice = useGameStore((s) => s.icpUsdPrice);
+  const _icpUsdPrice = useGameStore((s) => s.icpUsdPrice);
   const setTreasuryState = useGameStore((s) => s.setTreasuryState);
   // FRNTR/ICP price — shown as 'Pool not yet seeded' if unavailable
   const [frntrIcpPrice, _setFrntrIcpPrice] = useState<number | null>(null);
+  const [snapshotExpanded, setSnapshotExpanded] = useState(false);
+
+  // ── ICP/USD price fetched directly from canister ──
+  const [icpPrice, setIcpPrice] = useState<number>(10.0);
+  const [icpPriceLastUpdated, setIcpPriceLastUpdated] = useState<number>(
+    Date.now(),
+  );
+
+  useEffect(() => {
+    if (!actor) return;
+    const fetchPrice = () => {
+      actor
+        .getICPPriceUSD()
+        .then((price: number) => {
+          setIcpPrice(price);
+          setIcpPriceLastUpdated(Date.now());
+        })
+        .catch(() => {});
+    };
+    fetchPrice();
+    const id = setInterval(fetchPrice, 900_000); // refresh every 15 minutes
+    return () => clearInterval(id);
+  }, [actor]);
+
+  // Update "X min ago" text every minute
+  const [minutesAgo, setMinutesAgo] = useState(0);
+  useEffect(() => {
+    const update = () => {
+      setMinutesAgo(Math.floor((Date.now() - icpPriceLastUpdated) / 60_000));
+    };
+    update();
+    const id = setInterval(update, 60_000);
+    return () => clearInterval(id);
+  }, [icpPriceLastUpdated]);
+  const {
+    snapshots,
+    latestSnapshot,
+    loading: snapshotsLoading,
+  } = useEconomySnapshots();
+  const isAdmin = useGameStore((s) => s.player?.isAdmin ?? false);
 
   // Live generator tier catalog from canister
   const [liveTiers, setLiveTiers] = useState<LiveTierEntry[] | null>(null);
@@ -249,22 +291,11 @@ export default function UniversePanel({ onClose, inline = false }: Props) {
   const PRE_MINTED_VAL = globalStats?.preMinted ?? PRE_MINTED;
   const MINEABLE_VAL = globalStats?.mineableSupply ?? MINEABLE;
 
-  // ── Correct tier daily rates: tier 0=7, I=9, II=12, III=17, IV=25, V=37, VI=55 ──
-  const TIER_RATES: Record<number, number> = {
-    0: 7,
-    1: 9,
-    2: 12,
-    3: 17,
-    4: 25,
-    5: 37,
-    6: 55,
-  };
-
   // ── Player's daily FRNTR rate ──
   let _playerDailyFrntr = 0;
   for (const pid of player.plotsOwned) {
     const tier = (generatorTiers[pid] ?? 0) as number;
-    _playerDailyFrntr += TIER_RATES[tier] ?? 7;
+    _playerDailyFrntr += TIER_DAILY_RATES[tier] ?? 7;
   }
 
   // ── Global daily emission: on-chain if available, else compute locally ──
@@ -273,7 +304,7 @@ export default function UniversePanel({ onClose, inline = false }: Props) {
     const tier = (generatorTiers[String(plot.id)] ??
       plot.generatorTier ??
       0) as number;
-    localDailyEmission += TIER_RATES[tier] ?? 7;
+    localDailyEmission += TIER_DAILY_RATES[tier] ?? 7;
   }
   const globalDailyEmission =
     globalStats?.currentDailyEmissionRate ?? localDailyEmission;
@@ -288,8 +319,7 @@ export default function UniversePanel({ onClose, inline = false }: Props) {
   const activePlayers = globalStats?.activePlayerCount ?? 0;
 
   // ── FRNTR mined across the network ──
-  const networkFRNTRMined =
-    globalStats?.totalFRNTRMined ?? globalDailyEmission * 30;
+  const networkFRNTRMined = globalStats?.totalFRNTRMined ?? 0;
 
   // ── Live circulating supply: on-chain if available, else estimate ──
   const estimatedNetworkMined = globalDailyEmission * 30;
@@ -300,8 +330,14 @@ export default function UniversePanel({ onClose, inline = false }: Props) {
   const circulating =
     globalStats?.totalFRNTRInCirculation ?? circulatingEstimate;
 
-  // ── Burn rate: scales with global plot activity ──
-  const burnRate = 0.00042 + totalPlotsOwned * 0.0000015;
+  // ── Burn rate: derived from on-chain data; null if no burns recorded yet ──
+  const burnRate =
+    globalStats?.burnRate ??
+    (globalStats?.totalFRNTRBurned && globalStats.totalFRNTRBurned > 0
+      ? Number(globalStats.totalFRNTRBurned) /
+        Math.max(1, (Date.now() / 1000 - 1700000000) / 86400) /
+        86400
+      : null);
 
   /** Inner scrollable content — shared between inline and overlay modes */
   const content = (
@@ -543,7 +579,7 @@ export default function UniversePanel({ onClose, inline = false }: Props) {
                 fontFamily: "monospace",
               }}
             >
-              {burnRate.toFixed(5)}
+              {burnRate != null ? burnRate.toFixed(5) : "—"}
             </div>
             <div
               style={{
@@ -793,10 +829,7 @@ export default function UniversePanel({ onClose, inline = false }: Props) {
           ] as const
         ).map((pot) => {
           const icpDisplay = `${pot.balance.toFixed(4)} ICP`;
-          const usdDisplay =
-            icpUsdPrice !== null
-              ? `${(pot.balance * icpUsdPrice).toFixed(2)} USD`
-              : "$ --";
+          const usdDisplay = `${(pot.balance * icpPrice).toFixed(2)} USD`;
           return (
             <div
               key={pot.key}
@@ -1135,20 +1168,38 @@ export default function UniversePanel({ onClose, inline = false }: Props) {
                   fontFamily: "monospace",
                 }}
               >
-                ${icpUsdPrice != null ? icpUsdPrice.toFixed(2) : "--"} USD
+                ${icpPrice.toFixed(2)} USD
+              </div>
+              <div
+                style={{
+                  fontSize: 8,
+                  color: TEXT_DIM,
+                  marginTop: 2,
+                }}
+              >
+                Updated: {minutesAgo} min ago
               </div>
             </div>
             <div
               style={{
                 fontSize: 7,
                 color: TEXT_DIM,
-                fontStyle: "italic",
                 textAlign: "right",
               }}
             >
-              Live pricing
-              <br />
-              coming soon
+              <span
+                style={{
+                  display: "inline-block",
+                  padding: "2px 6px",
+                  borderRadius: 4,
+                  background: "rgba(255,200,0,0.12)",
+                  border: "1px solid rgba(255,200,0,0.35)",
+                  color: "#ffd700",
+                  letterSpacing: 0.5,
+                }}
+              >
+                Pool not yet seeded
+              </span>
             </div>
           </div>
           <div style={{ height: 1, background: BORDER }} />
@@ -1223,6 +1274,230 @@ export default function UniversePanel({ onClose, inline = false }: Props) {
           </div>
         </div>
       </GlowCard>
+
+      {/* SNAPSHOT HISTORY */}
+      <div
+        data-ocid="universe.snapshot_section"
+        style={{
+          marginBottom: 16,
+          border: `1px solid ${BORDER}`,
+          borderRadius: 10,
+          overflow: "hidden",
+          background: "rgba(0,20,40,0.45)",
+          backdropFilter: "blur(12px)",
+          WebkitBackdropFilter: "blur(12px)",
+        }}
+      >
+        {/* Collapsible header */}
+        <button
+          type="button"
+          data-ocid="universe.snapshot.toggle"
+          onClick={() => setSnapshotExpanded((v) => !v)}
+          style={{
+            width: "100%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "10px 14px",
+            background: "transparent",
+            border: "none",
+            cursor: "pointer",
+            color: TEXT,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div
+              style={{
+                width: 2,
+                height: 12,
+                background: CYAN_DIM,
+                borderRadius: 1,
+              }}
+            />
+            <span
+              style={{
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: 3,
+                color: CYAN_DIM,
+                textTransform: "uppercase" as const,
+                textShadow: `0 0 6px ${CYAN_DIM}`,
+              }}
+            >
+              Snapshot History
+            </span>
+            {latestSnapshot && (
+              <span
+                style={{ fontSize: 8, color: TEXT_DIM, letterSpacing: 0.5 }}
+              >
+                &mdash; last:{" "}
+                {new Date(
+                  Number(latestSnapshot.timestamp) / 1_000_000,
+                ).toLocaleDateString()}
+              </span>
+            )}
+          </div>
+          <span
+            style={{
+              fontSize: 11,
+              color: CYAN_DIM,
+              transform: snapshotExpanded ? "rotate(180deg)" : "rotate(0deg)",
+              transition: "transform 0.2s ease",
+              display: "inline-block",
+            }}
+          >
+            &#8963;
+          </span>
+        </button>
+
+        {/* Expanded content */}
+        {snapshotExpanded && (
+          <div style={{ padding: "0 14px 14px" }}>
+            {snapshotsLoading ? (
+              <div
+                style={{
+                  fontSize: 9,
+                  color: TEXT_DIM,
+                  textAlign: "center",
+                  padding: "12px 0",
+                  letterSpacing: 1,
+                }}
+              >
+                LOADING...
+              </div>
+            ) : snapshots.length === 0 ? (
+              <div
+                style={{
+                  fontSize: 9,
+                  color: TEXT_DIM,
+                  textAlign: "center",
+                  padding: "12px 0",
+                  letterSpacing: 1,
+                }}
+              >
+                No snapshots yet
+              </div>
+            ) : (
+              <div style={{ overflowX: "auto" }}>
+                <table
+                  style={{
+                    width: "100%",
+                    borderCollapse: "collapse" as const,
+                    fontSize: 8,
+                    color: TEXT,
+                    fontFamily: "monospace",
+                    minWidth: 640,
+                  }}
+                >
+                  <thead>
+                    <tr>
+                      {[
+                        "Date",
+                        "Supply",
+                        "Burned",
+                        "Circulating",
+                        "Plots",
+                        "Daily Out",
+                        "Unclaimed",
+                        "Dev",
+                        "LB",
+                        "LQ",
+                      ].map((col) => (
+                        <th
+                          key={col}
+                          style={{
+                            padding: "4px 6px",
+                            textAlign: "right" as const,
+                            color: CYAN_DIM,
+                            fontWeight: 700,
+                            letterSpacing: 1,
+                            borderBottom: `1px solid ${BORDER}`,
+                            whiteSpace: "nowrap" as const,
+                          }}
+                        >
+                          {col}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const thirtyDaysAgo =
+                        Date.now() - 30 * 24 * 60 * 60 * 1000;
+                      const visible = isAdmin
+                        ? snapshots
+                        : snapshots.filter(
+                            (s) =>
+                              Number(s.timestamp) / 1_000_000 >= thirtyDaysAgo,
+                          );
+                      const sorted = [...visible].sort(
+                        (a, b) => Number(b.timestamp) - Number(a.timestamp),
+                      );
+                      return sorted.map((snap, idx) => {
+                        const ts = new Date(Number(snap.timestamp) / 1_000_000);
+                        const fmt = (n: bigint) =>
+                          Number(n).toLocaleString(undefined, {
+                            maximumFractionDigits: 0,
+                          });
+                        const fmtIcp = (n: bigint) =>
+                          (Number(n) / 1e8).toFixed(4);
+                        const mined = Number(snap.totalFRNTRMined);
+                        const burned = Number(snap.totalFRNTRBurned);
+                        const circulating = Math.max(0, mined - burned);
+                        const rowBg =
+                          idx % 2 === 0
+                            ? "transparent"
+                            : "rgba(0,255,204,0.02)";
+                        const cell: React.CSSProperties = {
+                          padding: "5px 6px",
+                          textAlign: "right",
+                          borderBottom: "1px solid rgba(0,255,204,0.06)",
+                          background: rowBg,
+                          whiteSpace: "nowrap",
+                          color: TEXT_DIM,
+                        };
+                        const firstCell: React.CSSProperties = {
+                          ...cell,
+                          textAlign: "left",
+                          color: TEXT,
+                        };
+                        return (
+                          <tr key={String(snap.timestamp)}>
+                            <td style={firstCell}>{ts.toLocaleDateString()}</td>
+                            <td style={cell}>{fmtBig(mined)}</td>
+                            <td
+                              style={{ ...cell, color: "rgba(239,68,68,0.7)" }}
+                            >
+                              {fmtBig(burned)}
+                            </td>
+                            <td
+                              style={{ ...cell, color: "rgba(0,255,204,0.6)" }}
+                            >
+                              {fmtBig(circulating)}
+                            </td>
+                            <td style={cell}>{fmt(snap.totalPlotsOwned)}</td>
+                            <td style={cell}>{fmt(snap.globalDailyOutput)}</td>
+                            <td style={cell}>
+                              {fmtBig(Number(snap.totalUnclaimedFRNTR))}
+                            </td>
+                            <td style={cell}>{fmtIcp(snap.treasuryDev)}</td>
+                            <td style={cell}>
+                              {fmtIcp(snap.treasuryLeaderboard)}
+                            </td>
+                            <td style={cell}>
+                              {fmtIcp(snap.treasuryLiquidity)}
+                            </td>
+                          </tr>
+                        );
+                      });
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* MARKET DATA */}
       <SectionTitle>Market Data</SectionTitle>

@@ -63,6 +63,19 @@ export interface ActionAuditEntry {
     caller: Principal;
     amount?: bigint;
 }
+export interface EconomySnapshot {
+    trigger: string;
+    treasuryLiquidity: bigint;
+    activePlayers: bigint;
+    totalPlotsOwned: bigint;
+    treasuryDev: bigint;
+    totalFRNTRMined: bigint;
+    totalFRNTRBurned: bigint;
+    timestamp: bigint;
+    globalDailyOutput: bigint;
+    treasuryLeaderboard: bigint;
+    totalUnclaimedFRNTR: bigint;
+}
 export type FaucetResult = {
     __kind__: "ok";
     ok: FaucetGrant;
@@ -157,7 +170,12 @@ export interface SurveyView {
     result?: SurveyResult;
     unlockCost: bigint;
     secondsRemaining: bigint;
+    estimatedReward: bigint;
     plotId: PlotId;
+    isCollectable: boolean;
+    resourcePct: bigint;
+    biome: string;
+    remainingSeconds: bigint;
 }
 export interface FaucetClaimSummary {
     principal: string;
@@ -280,7 +298,22 @@ export interface backendInterface {
      * / Returns #ok(awardE8s) on success or #err(message) on failure.
      */
     completeSurvey(plotId: string): Promise<Result>;
+    /**
+     * / Convert an ICP amount (in e8s) to micro-USD using the cached price.
+     * / Result is micro-USD (divide by 1_000_000 to get USD).
+     */
+    convertICPToUSD(icpE8s: bigint): Promise<bigint>;
     getAdjacentPlots(plotId: string): Promise<Array<string>>;
+    /**
+     * / Returns current admin configuration for the frontend admin panel.
+     * / Surfaces: admin principal, testnet mode flag, total plot count, cycle balance.
+     */
+    getAdminInfo(): Promise<{
+        adminPrincipal: string;
+        testnestMode: boolean;
+        totalPlots: bigint;
+        cyclesBalance: bigint;
+    }>;
     getAdminPrincipal(): Promise<string>;
     /**
      * / Returns all plots that have an owner as (plotId, ownerPrincipalText) pairs.
@@ -307,8 +340,17 @@ export interface backendInterface {
         __kind__: "err";
         err: string;
     }>;
+    /**
+     * / Returns the current cycle balance of this canister. Admin only.
+     * / Use this to monitor cycles before mainnet deployment.
+     */
+    getCanisterCycles(): Promise<bigint>;
     getCombatLog(limit: bigint): Promise<Array<CombatEvent>>;
     getCoreGeneratorTiers(): Promise<Array<GeneratorTierInfo>>;
+    /**
+     * / Return all stored economy snapshots (most recent last).
+     */
+    getEconomySnapshots(): Promise<Array<EconomySnapshot>>;
     /**
      * / Returns total faucet claims for a principal (debug/analytics).
      */
@@ -355,11 +397,25 @@ export interface backendInterface {
         tierIndex: bigint;
         bonusPerDay: number;
     }>>;
+    /**
+     * / Total global daily output in FRNTR (not e8s) across all owned plots.
+     * / This is the canonical name expected by the frontend UNIVERSE panel.
+     */
+    getGlobalDailyOutput(): Promise<bigint>;
     getGlobalStats(): Promise<GlobalStats>;
     /**
      * / Total global unclaimed tokens in e8s sitting on all owned plots.
      */
     getGlobalUnclaimedTokens(): Promise<bigint>;
+    /**
+     * / Returns the cached ICP/USD price as micro-USD (e.g. 12_340_000 = $12.34).
+     * / Updated every 15 minutes from the XRC canister; falls back to $10.00 on cold start.
+     */
+    getICPPrice(): Promise<bigint>;
+    /**
+     * / Returns the cached ICP/USD price as a Float (e.g. 12.34).
+     */
+    getICPPriceUSD(): Promise<number>;
     getIcpBalance(principal: Principal): Promise<bigint>;
     /**
      * / ICP/USD price oracle — performs HTTP outcall to CoinGecko API with 60s cache.
@@ -376,6 +432,14 @@ export interface backendInterface {
      * / Returns true if the caller is the current admin principal.
      */
     getIsAdmin(): Promise<boolean>;
+    /**
+     * / Return the timestamp (nanoseconds) of the last snapshot.
+     */
+    getLastSnapshotTime(): Promise<bigint>;
+    /**
+     * / Return only the most recent economy snapshot, if any.
+     */
+    getLatestEconomySnapshot(): Promise<EconomySnapshot | null>;
     /**
      * / Public leaderboard query: top players by FRNTR balance.
      */
@@ -510,6 +574,11 @@ export interface backendInterface {
      * / Get the current survey status for a plot.
      * / If the timer has expired the result is auto-computed and the survey is
      * / promoted to #Completed — the updated record is persisted.
+     * / Get the current survey status for a plot.
+     * / If the timer has expired the result is auto-computed and the survey is
+     * / promoted to #Completed — the updated record is persisted.
+     * / Returns enriched SurveyView with remainingSeconds, biome, resourcePct,
+     * / estimatedReward, and isCollectable for frontend countdown display.
      */
     getSurveyStatus(plotId: string): Promise<{
         __kind__: "ok";
@@ -586,6 +655,7 @@ export interface backendInterface {
         __kind__: "err";
         err: string;
     }>;
+    purgeTestPlayers(): Promise<Result>;
     /**
      * / Admin: wipe all game state (plots, players, usernames, faucetClaims,
      * / generatorTiers, subParcels, statsState, plotSoldCount) back to empty.

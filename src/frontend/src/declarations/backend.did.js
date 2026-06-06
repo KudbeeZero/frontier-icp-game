@@ -52,6 +52,19 @@ export const GeneratorTierInfo = IDL.Record({
   'bonusPerDay' : IDL.Float64,
   'costFRNTR' : IDL.Nat,
 });
+export const EconomySnapshot = IDL.Record({
+  'trigger' : IDL.Text,
+  'treasuryLiquidity' : IDL.Nat,
+  'activePlayers' : IDL.Nat,
+  'totalPlotsOwned' : IDL.Nat,
+  'treasuryDev' : IDL.Nat,
+  'totalFRNTRMined' : IDL.Nat,
+  'totalFRNTRBurned' : IDL.Nat,
+  'timestamp' : IDL.Int,
+  'globalDailyOutput' : IDL.Nat,
+  'treasuryLeaderboard' : IDL.Nat,
+  'totalUnclaimedFRNTR' : IDL.Nat,
+});
 export const FaucetClaimSummary = IDL.Record({
   'principal' : IDL.Text,
   'lastClaim' : IDL.Opt(IDL.Int),
@@ -125,7 +138,12 @@ export const SurveyView = IDL.Record({
   'result' : IDL.Opt(SurveyResult),
   'unlockCost' : IDL.Nat,
   'secondsRemaining' : IDL.Nat,
+  'estimatedReward' : IDL.Nat,
   'plotId' : PlotId,
+  'isCollectable' : IDL.Bool,
+  'resourcePct' : IDL.Nat,
+  'biome' : IDL.Text,
+  'remainingSeconds' : IDL.Int,
 });
 export const Tokenomics = IDL.Record({
   'burnRate' : IDL.Nat,
@@ -222,7 +240,20 @@ export const idlService = IDL.Service({
       [],
     ),
   'completeSurvey' : IDL.Func([IDL.Text], [Result], []),
+  'convertICPToUSD' : IDL.Func([IDL.Nat], [IDL.Nat64], ['query']),
   'getAdjacentPlots' : IDL.Func([IDL.Text], [IDL.Vec(IDL.Text)], ['query']),
+  'getAdminInfo' : IDL.Func(
+      [],
+      [
+        IDL.Record({
+          'adminPrincipal' : IDL.Text,
+          'testnestMode' : IDL.Bool,
+          'totalPlots' : IDL.Nat,
+          'cyclesBalance' : IDL.Nat,
+        }),
+      ],
+      ['query'],
+    ),
   'getAdminPrincipal' : IDL.Func([], [IDL.Text], ['query']),
   'getAllPlotOwners' : IDL.Func(
       [],
@@ -246,12 +277,14 @@ export const idlService = IDL.Service({
       ],
       ['query'],
     ),
+  'getCanisterCycles' : IDL.Func([], [IDL.Nat], ['query']),
   'getCombatLog' : IDL.Func([IDL.Nat], [IDL.Vec(CombatEvent)], ['query']),
   'getCoreGeneratorTiers' : IDL.Func(
       [],
       [IDL.Vec(GeneratorTierInfo)],
       ['query'],
     ),
+  'getEconomySnapshots' : IDL.Func([], [IDL.Vec(EconomySnapshot)], ['query']),
   'getFaucetClaims' : IDL.Func(
       [IDL.Principal],
       [FaucetClaimSummary],
@@ -301,12 +334,21 @@ export const idlService = IDL.Service({
       ],
       ['query'],
     ),
+  'getGlobalDailyOutput' : IDL.Func([], [IDL.Nat], ['query']),
   'getGlobalStats' : IDL.Func([], [GlobalStats], ['query']),
   'getGlobalUnclaimedTokens' : IDL.Func([], [IDL.Nat], ['query']),
+  'getICPPrice' : IDL.Func([], [IDL.Nat64], ['query']),
+  'getICPPriceUSD' : IDL.Func([], [IDL.Float64], ['query']),
   'getIcpBalance' : IDL.Func([IDL.Principal], [IDL.Nat], []),
   'getIcpUsdPrice' : IDL.Func([], [IDL.Float64], []),
   'getIcpUsdPriceCached' : IDL.Func([], [IDL.Float64], ['query']),
   'getIsAdmin' : IDL.Func([], [IDL.Bool], ['query']),
+  'getLastSnapshotTime' : IDL.Func([], [IDL.Int], ['query']),
+  'getLatestEconomySnapshot' : IDL.Func(
+      [],
+      [IDL.Opt(EconomySnapshot)],
+      ['query'],
+    ),
   'getLeaderboard' : IDL.Func(
       [IDL.Nat],
       [
@@ -482,6 +524,7 @@ export const idlService = IDL.Service({
       [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
       [],
     ),
+  'purgeTestPlayers' : IDL.Func([], [Result], []),
   'resetAllData' : IDL.Func([], [], []),
   'resetTestState' : IDL.Func([], [ResetResult], []),
   'setAdminPrincipal' : IDL.Func([IDL.Principal], [], []),
@@ -573,6 +616,19 @@ export const idlFactory = ({ IDL }) => {
     'bonusPerDay' : IDL.Float64,
     'costFRNTR' : IDL.Nat,
   });
+  const EconomySnapshot = IDL.Record({
+    'trigger' : IDL.Text,
+    'treasuryLiquidity' : IDL.Nat,
+    'activePlayers' : IDL.Nat,
+    'totalPlotsOwned' : IDL.Nat,
+    'treasuryDev' : IDL.Nat,
+    'totalFRNTRMined' : IDL.Nat,
+    'totalFRNTRBurned' : IDL.Nat,
+    'timestamp' : IDL.Int,
+    'globalDailyOutput' : IDL.Nat,
+    'treasuryLeaderboard' : IDL.Nat,
+    'totalUnclaimedFRNTR' : IDL.Nat,
+  });
   const FaucetClaimSummary = IDL.Record({
     'principal' : IDL.Text,
     'lastClaim' : IDL.Opt(IDL.Int),
@@ -646,7 +702,12 @@ export const idlFactory = ({ IDL }) => {
     'result' : IDL.Opt(SurveyResult),
     'unlockCost' : IDL.Nat,
     'secondsRemaining' : IDL.Nat,
+    'estimatedReward' : IDL.Nat,
     'plotId' : PlotId,
+    'isCollectable' : IDL.Bool,
+    'resourcePct' : IDL.Nat,
+    'biome' : IDL.Text,
+    'remainingSeconds' : IDL.Int,
   });
   const Tokenomics = IDL.Record({
     'burnRate' : IDL.Nat,
@@ -743,7 +804,20 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'completeSurvey' : IDL.Func([IDL.Text], [Result], []),
+    'convertICPToUSD' : IDL.Func([IDL.Nat], [IDL.Nat64], ['query']),
     'getAdjacentPlots' : IDL.Func([IDL.Text], [IDL.Vec(IDL.Text)], ['query']),
+    'getAdminInfo' : IDL.Func(
+        [],
+        [
+          IDL.Record({
+            'adminPrincipal' : IDL.Text,
+            'testnestMode' : IDL.Bool,
+            'totalPlots' : IDL.Nat,
+            'cyclesBalance' : IDL.Nat,
+          }),
+        ],
+        ['query'],
+      ),
     'getAdminPrincipal' : IDL.Func([], [IDL.Text], ['query']),
     'getAllPlotOwners' : IDL.Func(
         [],
@@ -771,12 +845,14 @@ export const idlFactory = ({ IDL }) => {
         ],
         ['query'],
       ),
+    'getCanisterCycles' : IDL.Func([], [IDL.Nat], ['query']),
     'getCombatLog' : IDL.Func([IDL.Nat], [IDL.Vec(CombatEvent)], ['query']),
     'getCoreGeneratorTiers' : IDL.Func(
         [],
         [IDL.Vec(GeneratorTierInfo)],
         ['query'],
       ),
+    'getEconomySnapshots' : IDL.Func([], [IDL.Vec(EconomySnapshot)], ['query']),
     'getFaucetClaims' : IDL.Func(
         [IDL.Principal],
         [FaucetClaimSummary],
@@ -826,12 +902,21 @@ export const idlFactory = ({ IDL }) => {
         ],
         ['query'],
       ),
+    'getGlobalDailyOutput' : IDL.Func([], [IDL.Nat], ['query']),
     'getGlobalStats' : IDL.Func([], [GlobalStats], ['query']),
     'getGlobalUnclaimedTokens' : IDL.Func([], [IDL.Nat], ['query']),
+    'getICPPrice' : IDL.Func([], [IDL.Nat64], ['query']),
+    'getICPPriceUSD' : IDL.Func([], [IDL.Float64], ['query']),
     'getIcpBalance' : IDL.Func([IDL.Principal], [IDL.Nat], []),
     'getIcpUsdPrice' : IDL.Func([], [IDL.Float64], []),
     'getIcpUsdPriceCached' : IDL.Func([], [IDL.Float64], ['query']),
     'getIsAdmin' : IDL.Func([], [IDL.Bool], ['query']),
+    'getLastSnapshotTime' : IDL.Func([], [IDL.Int], ['query']),
+    'getLatestEconomySnapshot' : IDL.Func(
+        [],
+        [IDL.Opt(EconomySnapshot)],
+        ['query'],
+      ),
     'getLeaderboard' : IDL.Func(
         [IDL.Nat],
         [
@@ -1011,6 +1096,7 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
         [],
       ),
+    'purgeTestPlayers' : IDL.Func([], [Result], []),
     'resetAllData' : IDL.Func([], [], []),
     'resetTestState' : IDL.Func([], [ResetResult], []),
     'setAdminPrincipal' : IDL.Func([IDL.Principal], [], []),

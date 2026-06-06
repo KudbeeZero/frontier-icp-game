@@ -1,10 +1,9 @@
-import { useActor, useInternetIdentity } from "@caffeineai/core-infrastructure";
-import { useCallback, useEffect, useState } from "react";
-import { toast } from "sonner";
-import { createActor } from "../backend";
-import type { Mission, MissionRequirementKind } from "../backend";
+import { useInternetIdentity } from "@caffeineai/core-infrastructure";
+import { useEffect, useState } from "react";
+import type { MissionRequirementKind } from "../backend";
 import { ActionConfirmModal } from "../components/ActionConfirmModal";
 import { PostActionToast } from "../components/PostActionToast";
+import { useMissions } from "../hooks/useMissions";
 import { useGameStore } from "../store/gameStore";
 
 const CYAN = "#00ffcc";
@@ -13,10 +12,7 @@ const BORDER = "rgba(0,255,204,0.22)";
 const TEXT = "#e0f4ff";
 const TEXT_DIM = "rgba(224,244,255,0.45)";
 
-interface PlayerMission {
-  mission: Mission;
-  completed: boolean;
-}
+type FilterMode = "all" | "active" | "completed";
 
 function getMissionProgress(
   req: MissionRequirementKind,
@@ -144,43 +140,32 @@ const COMING_SOON_MISSIONS = [
 ];
 
 export default function MissionsTab() {
-  const { actor } = useActor(createActor);
   const { isAuthenticated } = useInternetIdentity();
 
   const player = useGameStore((s) => s.player);
   const generatorTiers = useGameStore((s) => s.generatorTiers);
   const confirmedFrntBalance = useGameStore((s) => s.confirmedFrntBalance);
   const accruedFrntSinceSync = useGameStore((s) => s.accruedFrntSinceSync);
-  const setFrntrBalance = useGameStore((s) => s.setFrntrBalance);
 
   const frntBalance = confirmedFrntBalance + accruedFrntSinceSync;
   const plotsOwned = player.plotsOwned;
-  // claimCount: use totalFRNTRBurned as proxy until we have a dedicated counter
   const claimCount = useGameStore((s) => (s.totalFRNTRBurned > 0 ? 1 : 0));
 
-  const [playerMissions, setPlayerMissions] = useState<PlayerMission[]>([]);
-  const [loading, setLoading] = useState(false);
+  const {
+    playerMissions,
+    completedMissionIds,
+    loading,
+    error,
+    loadMissions,
+    completeMission,
+  } = useMissions();
+
   const [claiming, setClaiming] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [missionConfirmOpen, setMissionConfirmOpen] = useState(false);
   const [pendingMissionId, setPendingMissionId] = useState<string | null>(null);
   const [pendingReward, setPendingReward] = useState<bigint>(0n);
   const [postMissionType, setPostMissionType] = useState<string | null>(null);
-
-  const loadMissions = useCallback(async () => {
-    if (!actor || !isAuthenticated) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await actor.getPlayerMissions();
-      setPlayerMissions(result);
-    } catch (e) {
-      setError("Failed to load missions. Please try again.");
-      console.error("MissionsTab load error:", e);
-    } finally {
-      setLoading(false);
-    }
-  }, [actor, isAuthenticated]);
+  const [filterMode, setFilterMode] = useState<FilterMode>("all");
 
   useEffect(() => {
     loadMissions();
@@ -194,58 +179,23 @@ export default function MissionsTab() {
 
   const handleConfirmMission = async () => {
     setMissionConfirmOpen(false);
-    if (pendingMissionId !== null)
-      await executeClaimMission(pendingMissionId, pendingReward);
+    if (pendingMissionId !== null) {
+      setClaiming(pendingMissionId);
+      const ok = await completeMission(pendingMissionId, pendingReward);
+      setClaiming(null);
+      if (ok) setPostMissionType("mission");
+    }
   };
 
   const handleCancelMission = () => {
-    (async () => {
-      try {
-        await actor?.logCancelledAction(
-          "completeMission",
-          pendingMissionId,
-          null,
-          "User cancelled mission completion",
-        );
-      } catch {}
-    })();
     setMissionConfirmOpen(false);
   };
 
-  async function executeClaimMission(missionId: string, rewardE8s: bigint) {
-    if (!actor) {
-      toast.error("Not connected to canister");
-      return;
-    }
-    setClaiming(missionId);
-    try {
-      const res = await actor.completeMission(missionId);
-      if ("ok" in res) {
-        const rewardFrntr = Number(res.ok) / 1e8;
-        setPostMissionType("mission");
-        toast.success(
-          `Mission complete! +${rewardFrntr.toFixed(2)} FRNTR minted to your wallet`,
-          {
-            duration: 5000,
-          },
-        );
-        // Refresh FRNTR balance from ledger
-        const rewardAmount = Number(rewardE8s);
-        setFrntrBalance(
-          BigInt(Math.round(confirmedFrntBalance * 1e8 + rewardAmount)),
-        );
-        // Reload mission list
-        await loadMissions();
-      } else {
-        toast.error(res.err || "Failed to claim reward", { duration: 5000 });
-      }
-    } catch (e) {
-      toast.error("Claim failed. Please try again.");
-      console.error("MissionsTab claim error:", e);
-    } finally {
-      setClaiming(null);
-    }
-  }
+  const filteredMissions = playerMissions.filter(({ completed }) => {
+    if (filterMode === "active") return !completed;
+    if (filterMode === "completed") return completed;
+    return true;
+  });
 
   return (
     <div
@@ -281,7 +231,7 @@ export default function MissionsTab() {
           <div
             style={{ width: 2, height: 12, background: CYAN, borderRadius: 1 }}
           />
-          ACTIVE MISSIONS
+          MISSIONS
         </div>
         <button
           type="button"
@@ -302,6 +252,52 @@ export default function MissionsTab() {
         >
           {loading ? "LOADING..." : "REFRESH"}
         </button>
+      </div>
+
+      {/* Filter toggle */}
+      <div
+        data-ocid="missions.filter.tab"
+        style={{
+          display: "flex",
+          gap: 4,
+          background: "rgba(0,20,40,0.6)",
+          border: `1px solid ${BORDER}`,
+          borderRadius: 7,
+          padding: 3,
+        }}
+      >
+        {(["all", "active", "completed"] as FilterMode[]).map((mode) => {
+          const labels: Record<FilterMode, string> = {
+            all: `ALL (${playerMissions.length})`,
+            active: `ACTIVE (${playerMissions.filter((m) => !m.completed).length})`,
+            completed: `DONE (${completedMissionIds.length})`,
+          };
+          const isActive = filterMode === mode;
+          return (
+            <button
+              key={mode}
+              type="button"
+              data-ocid={`missions.filter_${mode}`}
+              onClick={() => setFilterMode(mode)}
+              style={{
+                flex: 1,
+                fontSize: 8,
+                fontWeight: 700,
+                letterSpacing: 1,
+                color: isActive ? "#020a12" : TEXT_DIM,
+                background: isActive ? CYAN : "transparent",
+                border: "none",
+                borderRadius: 5,
+                padding: "4px 6px",
+                cursor: "pointer",
+                textTransform: "uppercase" as const,
+                transition: "all 0.15s",
+              }}
+            >
+              {labels[mode]}
+            </button>
+          );
+        })}
       </div>
 
       {/* Not connected state */}
@@ -366,21 +362,29 @@ export default function MissionsTab() {
       )}
 
       {/* Mission cards */}
-      {!loading && isAuthenticated && playerMissions.length === 0 && !error && (
-        <div
-          data-ocid="missions.empty_state"
-          style={{
-            textAlign: "center",
-            padding: "32px 16px",
-            color: TEXT_DIM,
-            fontSize: 10,
-          }}
-        >
-          No missions available. Check back after connecting.
-        </div>
-      )}
+      {!loading &&
+        isAuthenticated &&
+        filteredMissions.length === 0 &&
+        !error && (
+          <div
+            data-ocid="missions.empty_state"
+            style={{
+              textAlign: "center",
+              padding: "32px 16px",
+              color: TEXT_DIM,
+              fontSize: 10,
+            }}
+          >
+            {filterMode === "completed"
+              ? "No completed missions yet. Keep playing!"
+              : filterMode === "active"
+                ? "No active missions remaining — check completed tab!"
+                : "No missions available. Check back after connecting."}
+          </div>
+        )}
 
-      {playerMissions.map(({ mission, completed }, idx) => {
+      {filteredMissions.map(({ mission }, idx) => {
+        const isCompleted = completedMissionIds.includes(mission.id);
         const rewardFrntr = Number(mission.rewardE8s) / 1e8;
         const isClaiming = claiming === mission.id;
         const met = isMissionMet(
@@ -403,29 +407,31 @@ export default function MissionsTab() {
             key={mission.id}
             data-ocid={`missions.item.${idx + 1}`}
             style={{
-              background: completed
+              background: isCompleted
                 ? "rgba(34,197,94,0.04)"
                 : met
                   ? "rgba(0,255,204,0.06)"
                   : "rgba(0,20,40,0.55)",
               border: `1px solid ${
-                completed
+                isCompleted
                   ? "rgba(34,197,94,0.3)"
                   : met
                     ? BORDER
                     : "rgba(0,255,204,0.12)"
               }`,
               borderTop: `2px solid ${
-                completed ? "#22c55e" : met ? CYAN : "rgba(0,255,204,0.2)"
+                isCompleted ? "#22c55e" : met ? CYAN : "rgba(0,255,204,0.2)"
               }`,
               borderRadius: 10,
               padding: "12px 14px",
               position: "relative" as const,
               overflow: "hidden",
+              opacity: isCompleted ? 0.6 : 1,
+              transition: "opacity 0.2s",
             }}
           >
             {/* Scanlines for active missions */}
-            {!completed && (
+            {!isCompleted && (
               <div
                 aria-hidden="true"
                 style={{
@@ -453,14 +459,14 @@ export default function MissionsTab() {
                   style={{
                     fontSize: 11,
                     fontWeight: 900,
-                    color: completed ? "#22c55e" : TEXT,
+                    color: isCompleted ? "#22c55e" : TEXT,
                     letterSpacing: 0.5,
                   }}
                 >
                   {mission.title}
                 </div>
                 {/* Status badge */}
-                {completed ? (
+                {isCompleted ? (
                   <span
                     data-ocid={`missions.status.${idx + 1}`}
                     style={{
@@ -473,9 +479,12 @@ export default function MissionsTab() {
                       borderRadius: 4,
                       padding: "2px 7px",
                       flexShrink: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
                     }}
                   >
-                    ✓ COMPLETE
+                    ✓ COMPLETED
                   </span>
                 ) : met ? (
                   <span
@@ -527,7 +536,7 @@ export default function MissionsTab() {
               </p>
 
               {/* Progress */}
-              {!completed && (
+              {!isCompleted && (
                 <div style={{ marginBottom: 8 }}>
                   <div
                     style={{ fontSize: 8, color: TEXT_DIM, letterSpacing: 0.5 }}
@@ -581,7 +590,22 @@ export default function MissionsTab() {
                   </span>
                 </div>
 
-                {!completed && met && (
+                {isCompleted ? (
+                  <div
+                    data-ocid={`missions.completed_badge.${idx + 1}`}
+                    style={{
+                      fontSize: 8,
+                      fontWeight: 700,
+                      letterSpacing: 1.5,
+                      color: "rgba(34,197,94,0.7)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                    }}
+                  >
+                    <span style={{ fontSize: 12 }}>✓</span> REWARD CLAIMED
+                  </div>
+                ) : met ? (
                   <button
                     type="button"
                     data-ocid={`missions.claim_button.${idx + 1}`}
@@ -603,7 +627,7 @@ export default function MissionsTab() {
                   >
                     {isClaiming ? "CLAIMING..." : "CLAIM REWARD"}
                   </button>
-                )}
+                ) : null}
               </div>
             </div>
           </div>

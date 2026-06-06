@@ -156,9 +156,9 @@ export default function _PostActionToast({
       aria-live="polite"
       style={{
         position: "fixed",
-        bottom: 86,
+        bottom: 72,
         right: 14,
-        zIndex: 8500,
+        zIndex: 9000,
         width: 290,
         background: "rgba(0,10,22,0.92)",
         backdropFilter: "blur(20px)",

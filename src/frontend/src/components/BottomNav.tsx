@@ -60,7 +60,7 @@ export default function BottomNav({ activeTab, onTabClick }: BottomNavProps) {
         bottom: 0,
         left: 0,
         right: 0,
-        zIndex: 50,
+        zIndex: 30,
         paddingBottom: "env(safe-area-inset-bottom)",
         background: "rgba(2,10,20,0.97)",
         borderTop: `1px solid ${BORDER_TOP}`,

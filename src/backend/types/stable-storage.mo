@@ -17,4 +17,20 @@ module {
     #ok : Text;
     #err : Text;
   };
+
+  /// Point-in-time snapshot of the global game economy.
+  /// Captured daily via heartbeat and on every canister upgrade.
+  public type EconomySnapshot = {
+    timestamp            : Int;   // Time.now() nanoseconds
+    totalPlotsOwned      : Nat;
+    totalFRNTRBurned     : Nat;
+    totalFRNTRMined      : Nat;
+    activePlayers        : Nat;
+    globalDailyOutput    : Nat;   // FRNTR/day across all owned plots
+    totalUnclaimedFRNTR  : Nat;   // approximate global unclaimed accumulation
+    treasuryDev          : Nat;   // ICP e8s
+    treasuryLeaderboard  : Nat;   // ICP e8s
+    treasuryLiquidity    : Nat;   // ICP e8s
+    trigger              : Text;  // "daily", "canister_upgrade", "event"
+  };
 };

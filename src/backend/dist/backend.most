@@ -37,6 +37,20 @@ type CombatEvent__911207586 =
 type Data__80296667<K, V> =
   {var count : Nat__1040412405; kvs : [var ?(K, V)]};
 type Defenses__132598069 = {shields : Nat; turrets : Nat; walls : Nat};
+type EconomySnapshot__119819669 =
+  {
+    activePlayers : Nat;
+    globalDailyOutput : Nat;
+    timestamp : Int;
+    totalFRNTRBurned : Nat;
+    totalFRNTRMined : Nat;
+    totalPlotsOwned : Nat;
+    totalUnclaimedFRNTR : Nat;
+    treasuryDev : Nat;
+    treasuryLeaderboard : Nat;
+    treasuryLiquidity : Nat;
+    trigger : Text
+  };
 type Facilities__892995381 =
   {
     aiLab : Bool;
@@ -182,8 +196,11 @@ actor {
         shared HttpRequest__103655718 -> async HttpResponse__280953736
     };
   stable MISSIONS : [Mission__366741264];
+  stable PRICE_FETCH_INTERVAL_NS : Int;
+  stable SNAPSHOT_INTERVAL_NS : Int;
   stable TESTNET_MODE : Bool;
   stable TIER_DAILY_RATES : [Nat];
+  stable XRC_CANISTER_ID : Text;
   stable _leaderboard :
     {
       var root : Node__1000929467<Principal, LeaderEntry__1009553798>;
@@ -202,6 +219,7 @@ actor {
   stable adminState : {var adminPrincipal : Text};
   stable var approvedDexPrincipalText : ?Text;
   stable auditState : {var nextIndex : Int};
+  stable var cachedICPPrice : Nat64;
   stable claimTimes :
     {var root : Node__1000929467<Principal, Int>; var size : Nat__1040412405};
   stable combatLog :
@@ -210,6 +228,7 @@ actor {
       var size : Nat__1040412405
     };
   stable var commanderNFTEnabled : Bool;
+  stable var economySnapshots : [EconomySnapshot__119819669];
   stable faucetClaims :
     {var root : Node__1000929467<Principal, Nat>; var size : Nat__1040412405};
   stable frntrLedgerState :
@@ -221,8 +240,10 @@ actor {
     };
   stable interceptors :
     {var root : Node__1000929467<Text, Text>; var size : Nat__1040412405};
+  stable var lastPriceFetchTime : Int;
   stable var lastPriceTimestamp : Int;
   stable var lastPriceValue : Float;
+  stable var lastSnapshotTime : Int;
   stable missionStatus :
     {
       var root :
@@ -249,9 +270,11 @@ actor {
   stable var stableActionAuditLog : [(Int, ActionAuditEntry__116674707)];
   stable var stableClaimTimes : [(Principal, Int)];
   stable var stableCombatLog : [(Int, CombatEvent__911207586)];
+  stable var stableEconomySnapshots : [EconomySnapshot__119819669];
   stable var stableFaucetClaims : [(Principal, Nat)];
   stable var stableGeneratorTiers : [(Text, GeneratorTier__319383119)];
   stable var stableInterceptors : [(Text, Text)];
+  stable var stableLastSnapshotTime : Int;
   stable var stableLeaderboard : [(Principal, LeaderEntry__1009553798)];
   stable var stableMissionStatus : [(Principal, [(Text, Bool, ?Int)])];
   stable var stablePlayerClaimCounts : [(Principal, Nat)];

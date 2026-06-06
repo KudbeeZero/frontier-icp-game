@@ -24,3 +24,4 @@ args = [ "--default-persistent-actors", "--actor-idl=src/backend/system-idl", "-
 
 [dependencies]
 core = "2.5.0"
+base = "0.16.0"

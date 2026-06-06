@@ -40,6 +40,19 @@ export interface CombatEvent {
   'missileType' : [] | [string],
   'defPower' : bigint,
 }
+export interface EconomySnapshot {
+  'trigger' : string,
+  'treasuryLiquidity' : bigint,
+  'activePlayers' : bigint,
+  'totalPlotsOwned' : bigint,
+  'treasuryDev' : bigint,
+  'totalFRNTRMined' : bigint,
+  'totalFRNTRBurned' : bigint,
+  'timestamp' : bigint,
+  'globalDailyOutput' : bigint,
+  'treasuryLeaderboard' : bigint,
+  'totalUnclaimedFRNTR' : bigint,
+}
 export interface FaucetClaimSummary {
   'principal' : string,
   'lastClaim' : [] | [bigint],
@@ -155,7 +168,12 @@ export interface SurveyView {
   'result' : [] | [SurveyResult],
   'unlockCost' : bigint,
   'secondsRemaining' : bigint,
+  'estimatedReward' : bigint,
   'plotId' : PlotId,
+  'isCollectable' : boolean,
+  'resourcePct' : bigint,
+  'biome' : string,
+  'remainingSeconds' : bigint,
 }
 export type Timestamp = bigint;
 export interface Tokenomics {
@@ -223,7 +241,25 @@ export interface _SERVICE {
    * / Returns #ok(awardE8s) on success or #err(message) on failure.
    */
   'completeSurvey' : ActorMethod<[string], Result>,
+  /**
+   * / Convert an ICP amount (in e8s) to micro-USD using the cached price.
+   * / Result is micro-USD (divide by 1_000_000 to get USD).
+   */
+  'convertICPToUSD' : ActorMethod<[bigint], bigint>,
   'getAdjacentPlots' : ActorMethod<[string], Array<string>>,
+  /**
+   * / Returns current admin configuration for the frontend admin panel.
+   * / Surfaces: admin principal, testnet mode flag, total plot count, cycle balance.
+   */
+  'getAdminInfo' : ActorMethod<
+    [],
+    {
+      'adminPrincipal' : string,
+      'testnestMode' : boolean,
+      'totalPlots' : bigint,
+      'cyclesBalance' : bigint,
+    }
+  >,
   'getAdminPrincipal' : ActorMethod<[], string>,
   /**
    * / Returns all plots that have an owner as (plotId, ownerPrincipalText) pairs.
@@ -248,8 +284,17 @@ export interface _SERVICE {
     { 'ok' : Array<[bigint, ActionAuditEntry]> } |
       { 'err' : string }
   >,
+  /**
+   * / Returns the current cycle balance of this canister. Admin only.
+   * / Use this to monitor cycles before mainnet deployment.
+   */
+  'getCanisterCycles' : ActorMethod<[], bigint>,
   'getCombatLog' : ActorMethod<[bigint], Array<CombatEvent>>,
   'getCoreGeneratorTiers' : ActorMethod<[], Array<GeneratorTierInfo>>,
+  /**
+   * / Return all stored economy snapshots (most recent last).
+   */
+  'getEconomySnapshots' : ActorMethod<[], Array<EconomySnapshot>>,
   /**
    * / Returns total faucet claims for a principal (debug/analytics).
    */
@@ -296,11 +341,25 @@ export interface _SERVICE {
     [],
     Array<{ 'cost' : bigint, 'tierIndex' : bigint, 'bonusPerDay' : number }>
   >,
+  /**
+   * / Total global daily output in FRNTR (not e8s) across all owned plots.
+   * / This is the canonical name expected by the frontend UNIVERSE panel.
+   */
+  'getGlobalDailyOutput' : ActorMethod<[], bigint>,
   'getGlobalStats' : ActorMethod<[], GlobalStats>,
   /**
    * / Total global unclaimed tokens in e8s sitting on all owned plots.
    */
   'getGlobalUnclaimedTokens' : ActorMethod<[], bigint>,
+  /**
+   * / Returns the cached ICP/USD price as micro-USD (e.g. 12_340_000 = $12.34).
+   * / Updated every 15 minutes from the XRC canister; falls back to $10.00 on cold start.
+   */
+  'getICPPrice' : ActorMethod<[], bigint>,
+  /**
+   * / Returns the cached ICP/USD price as a Float (e.g. 12.34).
+   */
+  'getICPPriceUSD' : ActorMethod<[], number>,
   'getIcpBalance' : ActorMethod<[Principal], bigint>,
   /**
    * / ICP/USD price oracle — performs HTTP outcall to CoinGecko API with 60s cache.
@@ -317,6 +376,14 @@ export interface _SERVICE {
    * / Returns true if the caller is the current admin principal.
    */
   'getIsAdmin' : ActorMethod<[], boolean>,
+  /**
+   * / Return the timestamp (nanoseconds) of the last snapshot.
+   */
+  'getLastSnapshotTime' : ActorMethod<[], bigint>,
+  /**
+   * / Return only the most recent economy snapshot, if any.
+   */
+  'getLatestEconomySnapshot' : ActorMethod<[], [] | [EconomySnapshot]>,
   /**
    * / Public leaderboard query: top players by FRNTR balance.
    */
@@ -463,6 +530,11 @@ export interface _SERVICE {
    * / Get the current survey status for a plot.
    * / If the timer has expired the result is auto-computed and the survey is
    * / promoted to #Completed — the updated record is persisted.
+   * / Get the current survey status for a plot.
+   * / If the timer has expired the result is auto-computed and the survey is
+   * / promoted to #Completed — the updated record is persisted.
+   * / Returns enriched SurveyView with remainingSeconds, biome, resourcePct,
+   * / estimatedReward, and isCollectable for frontend countdown display.
    */
   'getSurveyStatus' : ActorMethod<
     [string],
@@ -535,6 +607,7 @@ export interface _SERVICE {
     { 'ok' : string } |
       { 'err' : string }
   >,
+  'purgeTestPlayers' : ActorMethod<[], Result>,
   /**
    * / Admin: wipe all game state (plots, players, usernames, faucetClaims,
    * / generatorTiers, subParcels, statsState, plotSoldCount) back to empty.

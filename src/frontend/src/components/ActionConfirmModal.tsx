@@ -1,4 +1,6 @@
 import type React from "react";
+import { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 
 const CYAN = "#00ffcc";
 const GOLD = "#ffd700";
@@ -60,20 +62,49 @@ export default function _ActionConfirmModal({
   warningText,
   isLoading = false,
 }: ActionConfirmModalProps) {
+  const overlayRef = useRef<HTMLDialogElement>(null);
+
+  // Lock body scroll while open
+  useEffect(() => {
+    if (!isOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [isOpen]);
+
+  // Close on Escape
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCancel();
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [isOpen, onCancel]);
+
   if (!isOpen) return null;
 
   const accentColor = ACTION_COLORS[actionType] ?? CYAN;
   const headerLabel = ACTION_LABELS[actionType] ?? "CONFIRM ACTION";
 
-  return (
+  const modal = (
     <dialog
+      ref={overlayRef}
       data-ocid="action_confirm.dialog"
-      open
       aria-labelledby="action-confirm-title"
+      onClick={(e: React.MouseEvent) => {
+        if (e.target === overlayRef.current) onCancel();
+      }}
+      onKeyDown={(e: React.KeyboardEvent) => {
+        if (e.key === "Escape") onCancel();
+      }}
+      open
       style={{
         position: "fixed",
         inset: 0,
-        zIndex: 9000,
+        zIndex: 99999,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -85,14 +116,9 @@ export default function _ActionConfirmModal({
         margin: 0,
         maxWidth: "100vw",
         maxHeight: "100vh",
-        width: "100vw",
-        height: "100vh",
-      }}
-      onClick={(e: React.MouseEvent) => {
-        if ((e.target as HTMLElement) === e.currentTarget) onCancel();
-      }}
-      onKeyDown={(e: React.KeyboardEvent) => {
-        if (e.key === "Escape") onCancel();
+        width: "100%",
+        height: "100%",
+        overflow: "visible",
       }}
     >
       <div
@@ -104,10 +130,12 @@ export default function _ActionConfirmModal({
           boxShadow: `0 0 40px ${accentColor}22, 0 0 80px rgba(0,0,0,0.6), inset 0 0 30px rgba(0,255,204,0.03)`,
           borderRadius: 14,
           width: "100%",
-          maxWidth: 380,
+          maxWidth: 400,
           overflow: "hidden",
           position: "relative",
         }}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e: React.KeyboardEvent) => e.stopPropagation()}
       >
         {/* Top accent line */}
         <div
@@ -329,4 +357,6 @@ export default function _ActionConfirmModal({
       </div>
     </dialog>
   );
+
+  return createPortal(modal, document.body);
 }

@@ -20,7 +20,12 @@ type Tokenomics =
 type Timestamp = int;
 type SurveyView = 
  record {
+   biome: text;
+   estimatedReward: nat;
+   isCollectable: bool;
    plotId: PlotId;
+   remainingSeconds: int;
+   resourcePct: nat;
    result: opt SurveyResult;
    secondsRemaining: nat;
    startTime: int;
@@ -179,6 +184,20 @@ type FaucetClaimSummary =
    "principal": text;
    totalClaims: nat;
  };
+type EconomySnapshot = 
+ record {
+   activePlayers: nat;
+   globalDailyOutput: nat;
+   timestamp: int;
+   totalFRNTRBurned: nat;
+   totalFRNTRMined: nat;
+   totalPlotsOwned: nat;
+   totalUnclaimedFRNTR: nat;
+   treasuryDev: nat;
+   treasuryLeaderboard: nat;
+   treasuryLiquidity: nat;
+   trigger: text;
+ };
 type CombatEvent = 
  record {
    atkPower: nat;
@@ -258,7 +277,19 @@ service : {
   /// Complete a survey that has finished its timer and mint the token award to the caller.
   /// Returns #ok(awardE8s) on success or #err(message) on failure.
   completeSurvey: (plotId: text) -> (Result);
+  /// Convert an ICP amount (in e8s) to micro-USD using the cached price.
+  /// Result is micro-USD (divide by 1_000_000 to get USD).
+  convertICPToUSD: (icpE8s: nat) -> (nat64) query;
   getAdjacentPlots: (plotId: text) -> (vec text) query;
+  /// Returns current admin configuration for the frontend admin panel.
+  /// Surfaces: admin principal, testnet mode flag, total plot count, cycle balance.
+  getAdminInfo: () ->
+   (record {
+      adminPrincipal: text;
+      cyclesBalance: nat;
+      testnestMode: bool;
+      totalPlots: nat;
+    }) query;
   getAdminPrincipal: () -> (text) query;
   /// Returns all plots that have an owner as (plotId, ownerPrincipalText) pairs.
   getAllPlotOwners: () -> (vec record {
@@ -281,8 +312,13 @@ service : {
                 ActionAuditEntry;
               };
     }) query;
+  /// Returns the current cycle balance of this canister. Admin only.
+  /// Use this to monitor cycles before mainnet deployment.
+  getCanisterCycles: () -> (nat) query;
   getCombatLog: (limit: nat) -> (vec CombatEvent) query;
   getCoreGeneratorTiers: () -> (vec GeneratorTierInfo) query;
+  /// Return all stored economy snapshots (most recent last).
+  getEconomySnapshots: () -> (vec EconomySnapshot) query;
   /// Returns total faucet claims for a principal (debug/analytics).
   getFaucetClaims: ("principal": principal) -> (FaucetClaimSummary) query;
   /// Returns the first plot ID with no owner, or null if all plots are owned.
@@ -322,9 +358,17 @@ service : {
           cost: nat;
           tierIndex: nat;
         }) query;
+  /// Total global daily output in FRNTR (not e8s) across all owned plots.
+  /// This is the canonical name expected by the frontend UNIVERSE panel.
+  getGlobalDailyOutput: () -> (nat) query;
   getGlobalStats: () -> (GlobalStats) query;
   /// Total global unclaimed tokens in e8s sitting on all owned plots.
   getGlobalUnclaimedTokens: () -> (nat) query;
+  /// Returns the cached ICP/USD price as micro-USD (e.g. 12_340_000 = $12.34).
+  /// Updated every 15 minutes from the XRC canister; falls back to $10.00 on cold start.
+  getICPPrice: () -> (nat64) query;
+  /// Returns the cached ICP/USD price as a Float (e.g. 12.34).
+  getICPPriceUSD: () -> (float64) query;
   getIcpBalance: ("principal": principal) -> (nat);
   /// ICP/USD price oracle — performs HTTP outcall to CoinGecko API with 60s cache.
   /// URL: https://api.coingecko.com/api/v3/simple/price?ids=internet-computer&vs_currencies=usd
@@ -335,6 +379,10 @@ service : {
   getIcpUsdPriceCached: () -> (float64) query;
   /// Returns true if the caller is the current admin principal.
   getIsAdmin: () -> (bool) query;
+  /// Return the timestamp (nanoseconds) of the last snapshot.
+  getLastSnapshotTime: () -> (int) query;
+  /// Return only the most recent economy snapshot, if any.
+  getLatestEconomySnapshot: () -> (opt EconomySnapshot) query;
   /// Public leaderboard query: top players by FRNTR balance.
   getLeaderboard: (limit: nat) ->
    (vec
@@ -457,6 +505,11 @@ service : {
   /// Get the current survey status for a plot.
   /// If the timer has expired the result is auto-computed and the survey is
   /// promoted to #Completed — the updated record is persisted.
+  /// Get the current survey status for a plot.
+  /// If the timer has expired the result is auto-computed and the survey is
+  /// promoted to #Completed — the updated record is persisted.
+  /// Returns enriched SurveyView with remainingSeconds, biome, resourcePct,
+  /// estimatedReward, and isCollectable for frontend countdown display.
   getSurveyStatus: (plotId: text) -> (variant {
                                         err: text;
                                         ok: SurveyView;
@@ -516,6 +569,7 @@ service : {
                                      err: text;
                                      ok: text;
                                    });
+  purgeTestPlayers: () -> (Result);
   /// Admin: wipe all game state (plots, players, usernames, faucetClaims,
   /// generatorTiers, subParcels, statsState, plotSoldCount) back to empty.
   /// Used before migrating to mainnet for a clean slate.

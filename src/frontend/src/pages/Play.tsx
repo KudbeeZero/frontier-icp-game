@@ -27,6 +27,7 @@ import PlotHoverCard from "../components/PlotHoverCard";
 import PostActionToast from "../components/PostActionToast";
 import RoadmapTab from "../components/RoadmapTab";
 import UniversePanel from "../components/UniversePanel";
+import { TIER_DAILY_RATES } from "../constants/tiers";
 import { useIcpBalance } from "../hooks/useIcpBalance";
 import { usePlayerSync } from "../hooks/usePlayerSync";
 import { usePurchasePlot } from "../hooks/usePurchasePlot";
@@ -69,14 +70,13 @@ function TopBar({
         ? displayFrntr.toFixed(4)
         : displayFrntr.toFixed(8);
 
-  const TIER_BONUS_TB = [0, 2, 5, 10, 18, 30, 48];
   const _totalDailyFrntr = useMemo(() => {
     const ownedPlots = plots.filter((p) =>
       player.plotsOwned.includes(String(p.id)),
     );
     return ownedPlots.reduce((sum, plot) => {
       const tier = (generatorTiers[String(plot.id)] as number) ?? 0;
-      return sum + 7 + (TIER_BONUS_TB[tier] ?? 0);
+      return sum + (TIER_DAILY_RATES[tier] ?? 7);
     }, 0);
   }, [plots, player.plotsOwned, generatorTiers]);
 
@@ -509,7 +509,7 @@ function InventoryPanel() {
           {player.plotsOwned.map((plotId, idx) => {
             const plot = plots.find((p) => String(p.id) === String(plotId));
             const tier = generatorTiers[String(plotId)] ?? 0;
-            const dailyRate = 7 + tier * 2;
+            const dailyRate = TIER_DAILY_RATES[tier] ?? 7;
 
             return (
               <div
@@ -1055,7 +1055,7 @@ function QuickNavPopup({
         bottom: 84,
         left: "50%",
         transform: "translateX(-50%)",
-        zIndex: 200,
+        zIndex: 60,
         width: "min(96vw, 420px)",
         background: "rgba(4,12,28,0.97)",
         backdropFilter: "blur(20px)",
@@ -1336,7 +1336,7 @@ export default function Play() {
           position: "fixed",
           top: 64,
           right: 12,
-          zIndex: 48,
+          zIndex: 35,
           display: "flex",
           flexDirection: "column",
           alignItems: "flex-end",
@@ -1589,7 +1589,7 @@ export default function Play() {
       {purchaseToast && (
         <div
           data-ocid="map.success_state"
-          className="fixed left-1/2 -translate-x-1/2 z-[75] flex items-center gap-2.5 px-5 py-2.5 rounded-lg whitespace-nowrap"
+          className="fixed left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2.5 px-5 py-2.5 rounded-lg whitespace-nowrap"
           style={{
             bottom: 80,
             background: "rgba(4,12,24,0.95)",

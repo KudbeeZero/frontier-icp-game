@@ -12,14 +12,18 @@ const BORDER = "rgba(0,255,204,0.22)";
 
 /**
  * Fixed upper-right faucet overlay, z-stacked above globe.
- * Each click grants 500 FRNTR + 2 ICP, no cooldown.
+ * Only renders when testnetMode is true in the store.
  */
 export default function FaucetOverlay() {
   const { isAuthenticated } = useInternetIdentity();
   const { actor, isFetching } = useActor(createActor);
   const mintTestTokens = useGameStore((s) => s.mintTestTokens);
+  const testnetMode = useGameStore((s) => s.testnetMode);
   const { refetch: refetchIcp } = useIcpBalance();
   const [loading, setLoading] = useState(false);
+
+  // Hide entirely when not in testnet mode
+  if (!testnetMode) return null;
 
   const isReady = isAuthenticated && !!actor && !isFetching;
 

@@ -177,12 +177,19 @@ module {
   public type SurveyKey = Text;
 
   // Public-facing survey state returned to the frontend.
+  // remainingSeconds = max(0, (startTime + duration - now) / 1_000_000_000)
+  // isCollectable = status == #Completed and result != null (not yet claimed)
   public type SurveyView = {
     plotId              : PlotId;
     status              : SurveyStatus;
     unlockCost          : Nat;
     startTime           : Int;
-    secondsRemaining    : Nat;    // 0 when not in-progress or completed
+    secondsRemaining    : Nat;    // 0 when not in-progress or completed (legacy field kept)
+    remainingSeconds    : Int;    // 0 if completed or locked; countdown seconds when InProgress
+    biome               : Text;   // biome name string (available even before survey completes)
+    resourcePct         : Nat;    // 0-100 resource percentage estimate
+    estimatedReward     : Nat;    // projected FRNTR e8s reward based on biome + efficiency
+    isCollectable       : Bool;   // true when Completed and reward not yet collected
     result              : ?SurveyResult;
   };
 

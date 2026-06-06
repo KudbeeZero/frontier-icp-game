@@ -3,9 +3,15 @@ import { RefreshCw, RotateCcw, Shield, Zap } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { createActor } from "../backend";
+import {
+  CYCLES_CRITICAL,
+  CYCLES_WARNING,
+  useCanisterCycles,
+} from "../hooks/useCanisterCycles";
 import { setLastFaucetClaim } from "../hooks/usePlayerSync";
 import { useGameStore } from "../store/gameStore";
 import { GEODESIC_TILES, assignBiome } from "../utils/geodesicGrid";
+import ActionConfirmModal from "./ActionConfirmModal";
 
 const CYAN = "#00ffcc";
 const BORDER = "rgba(0,255,204,0.22)";
@@ -66,10 +72,19 @@ export default function AdminPanel() {
   const player = useGameStore((s) => s.player);
   const { actor } = useActor(createActor);
 
+  const {
+    cycles,
+    cyclesFormatted,
+    loading: cyclesLoading,
+  } = useCanisterCycles();
+
   const [mintLoading, setMintLoading] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
   const [reseedLoading, setReseedLoading] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [showPurgeConfirm, setShowPurgeConfirm] = useState(false);
+  const [purgeResult, setPurgeResult] = useState<string | null>(null);
+  const [isPurging, setIsPurging] = useState(false);
 
   if (!player.isAdmin) return null;
 
@@ -142,6 +157,27 @@ export default function AdminPanel() {
       setResetLoading(false);
     }
   }
+
+  const handlePurgeTestPlayers = async () => {
+    if (!actor) {
+      setPurgeResult("Error: Actor not ready");
+      return;
+    }
+    setIsPurging(true);
+    setShowPurgeConfirm(false);
+    try {
+      const result = await actor.purgeTestPlayers();
+      if (result.__kind__ === "ok") {
+        setPurgeResult(`Removed ${Number(result.ok)} test entries`);
+      } else {
+        setPurgeResult(`Error: ${result.err}`);
+      }
+    } catch (e) {
+      setPurgeResult(`Error: ${String(e)}`);
+    } finally {
+      setIsPurging(false);
+    }
+  };
 
   async function handleReseedPlots() {
     if (!actor) {
@@ -225,6 +261,129 @@ export default function AdminPanel() {
 
       {/* Divider */}
       <div style={{ height: 1, background: BORDER }} />
+
+      {/* Canister Cycles */}
+      {(() => {
+        const isCritical = cycles !== null && cycles < CYCLES_CRITICAL;
+        const isWarning =
+          cycles !== null &&
+          cycles >= CYCLES_CRITICAL &&
+          cycles < CYCLES_WARNING;
+        const accentColor = isCritical
+          ? "#ff4444"
+          : isWarning
+            ? "#ffcc00"
+            : CYAN;
+        const bgColor = isCritical
+          ? "rgba(255,68,68,0.08)"
+          : isWarning
+            ? "rgba(255,204,0,0.07)"
+            : "rgba(0,255,204,0.04)";
+        const borderColor = isCritical
+          ? "rgba(255,68,68,0.35)"
+          : isWarning
+            ? "rgba(255,204,0,0.35)"
+            : BORDER;
+
+        return (
+          <div
+            data-ocid="admin.cycles_card"
+            style={{
+              padding: "10px 12px",
+              borderRadius: 8,
+              background: bgColor,
+              border: `1px solid ${borderColor}`,
+              display: "flex",
+              flexDirection: "column",
+              gap: 4,
+              backdropFilter: "blur(8px)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 8,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 7,
+                  color: TEXT_DIM,
+                  letterSpacing: 1.5,
+                  textTransform: "uppercase" as const,
+                }}
+              >
+                CANISTER CYCLES
+              </span>
+              {(isCritical || isWarning) && (
+                <span
+                  style={{
+                    fontSize: 7,
+                    fontWeight: 700,
+                    letterSpacing: 1.5,
+                    color: accentColor,
+                    textTransform: "uppercase" as const,
+                    padding: "1px 6px",
+                    borderRadius: 6,
+                    background: isCritical
+                      ? "rgba(255,68,68,0.15)"
+                      : "rgba(255,204,0,0.12)",
+                    border: `1px solid ${accentColor}55`,
+                  }}
+                >
+                  {isCritical ? "⚠ CRITICAL" : "⚠ LOW"}
+                </span>
+              )}
+            </div>
+            <div
+              data-ocid="admin.cycles_value"
+              style={{
+                fontSize: 20,
+                fontWeight: 900,
+                color: accentColor,
+                letterSpacing: 1,
+                fontFamily: "monospace",
+                textShadow: `0 0 10px ${accentColor}99`,
+                lineHeight: 1.1,
+              }}
+            >
+              {cyclesLoading ? (
+                <span style={{ fontSize: 11, color: TEXT_DIM }}>Loading…</span>
+              ) : (
+                cyclesFormatted
+              )}
+            </div>
+            {isCritical && (
+              <div
+                data-ocid="admin.cycles_warning"
+                style={{
+                  fontSize: 8,
+                  color: "#ff8888",
+                  letterSpacing: 0.3,
+                  marginTop: 2,
+                }}
+              >
+                ⚠ Critical — top up canister cycles immediately.
+              </div>
+            )}
+            {isWarning && (
+              <div
+                data-ocid="admin.cycles_warning"
+                style={{
+                  fontSize: 8,
+                  color: "#ffdd66",
+                  letterSpacing: 0.3,
+                  marginTop: 2,
+                }}
+              >
+                ⚠ Below 1T cycles — consider topping up soon.
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Principal display */}
       <div
@@ -355,6 +514,69 @@ export default function AdminPanel() {
           </div>
         )}
       </div>
+
+      {/* Leaderboard Maintenance */}
+      <div style={{ marginBottom: 12 }}>
+        <div
+          style={{
+            fontSize: 9,
+            color: TEXT_DIM,
+            letterSpacing: 1.5,
+            textTransform: "uppercase",
+            marginBottom: 6,
+          }}
+        >
+          LEADERBOARD MAINTENANCE
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowPurgeConfirm(true)}
+          disabled={isPurging}
+          style={{
+            width: "100%",
+            padding: "8px 12px",
+            borderRadius: 6,
+            background: "rgba(220,38,38,0.1)",
+            border: "1px solid rgba(220,38,38,0.4)",
+            color: "#f87171",
+            fontSize: 10,
+            letterSpacing: 0.8,
+            cursor: isPurging ? "not-allowed" : "pointer",
+            opacity: isPurging ? 0.5 : 1,
+          }}
+        >
+          {isPurging ? "PURGING..." : "PURGE TEST PLAYERS"}
+        </button>
+        {purgeResult && (
+          <div
+            style={{
+              marginTop: 6,
+              fontSize: 9,
+              color: purgeResult.startsWith("Error") ? "#f87171" : "#34d399",
+              letterSpacing: 0.5,
+            }}
+          >
+            {purgeResult}
+          </div>
+        )}
+      </div>
+
+      {showPurgeConfirm && (
+        <ActionConfirmModal
+          isOpen={showPurgeConfirm}
+          actionType="purchase"
+          title="Purge Test Players"
+          details={[
+            {
+              label: "Action",
+              value: "Remove all test/placeholder leaderboard entries",
+            },
+          ]}
+          warningText="This cannot be undone. All test player entries will be permanently removed."
+          onConfirm={handlePurgeTestPlayers}
+          onCancel={() => setShowPurgeConfirm(false)}
+        />
+      )}
 
       {/* Info */}
       <div

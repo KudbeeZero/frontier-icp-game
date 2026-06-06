@@ -152,12 +152,34 @@ export default function CommandCenter() {
             changed = true;
           }
           if (current.completed && !current.claimed) {
-            addFrntr(m.reward);
-            toast.success(`Mission complete! +${m.reward} FRNTR`, {
-              duration: 4000,
-            });
             next[m.id] = { completed: true, claimed: true };
             changed = true;
+            // Fire-and-forget canister call; UI already updated optimistically above
+            (async () => {
+              if (!actor) {
+                toast.error("Not connected — mission reward not credited", {
+                  duration: 5000,
+                });
+                return;
+              }
+              try {
+                const result = await actor.completeMission(m.id);
+                if (result.__kind__ === "ok") {
+                  // result.ok is the new confirmed balance returned by the canister
+                  setFrntrBalance(result.ok);
+                  toast.success(`Mission complete! +${m.reward} FRNTR`, {
+                    duration: 4000,
+                  });
+                } else {
+                  toast.error(`Mission failed: ${result.err}`, {
+                    duration: 5000,
+                  });
+                }
+              } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                toast.error(`Mission error: ${msg}`, { duration: 5000 });
+              }
+            })();
           }
         }
         if (changed) saveMissions(next);
@@ -165,7 +187,7 @@ export default function CommandCenter() {
       });
     }, 2000);
     return () => clearInterval(interval);
-  }, [MISSION_DEFS, addFrntr, saveMissions]);
+  }, [MISSION_DEFS, actor, setFrntrBalance, saveMissions]);
 
   // ── Per-second accrual ticker ─────────────────
   useEffect(() => {

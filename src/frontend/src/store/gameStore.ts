@@ -404,6 +404,10 @@ interface GameState {
   confirmedIcpBalance: number;
   accruedIcpSinceSync: number;
 
+  // Per-plot unclaimed accrual: maps plotId -> tokens accrued since last claim for that plot
+  // These always sum to accruedFrntSinceSync
+  plotAccruedTokens: Record<string, number>;
+
   // Claim tracking
   claimCount: number;
   lastBalanceBoostTime: number;
@@ -411,6 +415,10 @@ interface GameState {
   // Global token economy stats
   totalGlobalDailyOutput: number;
   globalUnclaimedTokens: number;
+
+  // Testnet mode gate — when false the faucet UI is hidden and faucet calls are blocked
+  testnetMode: boolean;
+  setTestnetMode: (enabled: boolean) => void;
 
   activeBattleEntry?: unknown;
   assignedInterceptors?: Record<string, string>;
@@ -438,6 +446,17 @@ interface GameState {
   activateRegenBoost: (id: number) => void;
   claimAllFrntr: (amount: number) => void;
   addFrntr: (amount: number) => void;
+  /**
+   * claimPlotTokens — atomically moves the accrued tokens for one specific plot
+   * from accruedFrntSinceSync into confirmedFrntBalance.
+   *
+   * If `amount` is provided it is used directly (from the canister response).
+   * If omitted, the locally-tracked plotAccruedTokens value is used as the fallback.
+   *
+   * The confirmed wallet balance goes UP; the accrued ticker goes DOWN by the
+   * same amount — the displayed total never changes, eliminating visual flicker.
+   */
+  claimPlotTokens: (plotId: string, amount?: number) => void;
   mintTestTokens: () => void;
   setAuth: (principal: string | null) => void;
   getSubParcels: (plotId: string) => SubParcel[];
@@ -526,6 +545,9 @@ export const useGameStore = create<GameState>((set, get) => ({
   confirmedIcpBalance: 0,
   accruedIcpSinceSync: 0,
 
+  // Per-plot unclaimed accrual
+  plotAccruedTokens: {},
+
   // Claim tracking
   claimCount: 0,
   lastBalanceBoostTime: 0,
@@ -534,18 +556,29 @@ export const useGameStore = create<GameState>((set, get) => ({
   totalGlobalDailyOutput: 0,
   globalUnclaimedTokens: 0,
 
+  // Testnet mode: default true so the faucet is visible in dev/testnet
+  testnetMode: import.meta.env.VITE_TESTNET_MODE !== "false",
+  setTestnetMode: (enabled) => set({ testnetMode: enabled }),
+
   setFrntrBalance: (e8s) =>
     set((s) => {
       const confirmed = Number(e8s) / 100_000_000;
-      // Only update confirmedFrntBalance if the new canister value is HIGHER.
-      // A downward sync means a stale poll — ignore it to prevent flicker.
-      // Balance only goes down via spendFrntr (explicit user action).
+
+      // Anti-flicker rule:
+      // The confirmed wallet balance is ONLY allowed to go down via an explicit
+      // spendFrntr / claimPlotTokens / claimAllFrntr call — never through a
+      // background canister poll. If the polled value is lower than what we
+      // already know, discard it entirely.
       if (confirmed < s.confirmedFrntBalance) {
-        // Ignore downward canister syncs — do not update state
         return {};
       }
-      // New balance is >= confirmed: absorb any difference smoothly.
-      // Keep the accrued ticker running from where it was.
+
+      // The polled value is >= our confirmed balance (e.g. canister just settled
+      // a claim we initiated). Absorb the delta into confirmed and reduce the
+      // accrued counter by the same amount so the DISPLAYED total stays stable.
+      //
+      // Before: display = confirmedFrntBalance + accruedFrntSinceSync
+      // After:  display = confirmed + newAccrued  (same value)
       const prevDisplay = s.confirmedFrntBalance + s.accruedFrntSinceSync;
       const newAccrued = Math.max(0, prevDisplay - confirmed);
       const next = {
@@ -558,6 +591,51 @@ export const useGameStore = create<GameState>((set, get) => ({
       return {
         confirmedFrntBalance: confirmed,
         accruedFrntSinceSync: newAccrued,
+        player: next.player,
+      };
+    }),
+
+  // --------------------------------------------------------------------------
+  // claimPlotTokens — per-plot atomic claim
+  // Moves the accrued tokens for ONE plot from the accrued bucket into the
+  // confirmed bucket. The displayed balance never changes (no flicker).
+  // The optional `amount` param lets callers pass the on-chain confirmed amount;
+  // if absent we use the locally-tracked plotAccruedTokens value.
+  // --------------------------------------------------------------------------
+  claimPlotTokens: (plotId, amount) =>
+    set((s) => {
+      // Determine how many tokens to move.
+      const plotAccrued = s.plotAccruedTokens[plotId] ?? 0;
+      const toMove = amount !== undefined ? amount : plotAccrued;
+      if (toMove <= 0) return {};
+
+      // Clamp: cannot claim more than we have accrued in total.
+      const clamped = Math.min(toMove, s.accruedFrntSinceSync);
+
+      const nextConfirmed = s.confirmedFrntBalance + clamped;
+      const nextAccrued = Math.max(0, s.accruedFrntSinceSync - clamped);
+
+      // Clear this plot's accrued bucket (reset to 0 after claim).
+      const nextPlotAccrued = { ...s.plotAccruedTokens, [plotId]: 0 };
+
+      // player.frntBalance = confirmed + accrued — value stays the same.
+      const nextDisplay = nextConfirmed + nextAccrued;
+      const next = {
+        ...s,
+        confirmedFrntBalance: nextConfirmed,
+        accruedFrntSinceSync: nextAccrued,
+        plotAccruedTokens: nextPlotAccrued,
+        claimCount: s.claimCount + 1,
+        lastBalanceBoostTime: Date.now(),
+        player: { ...s.player, frntBalance: nextDisplay },
+      };
+      saveToStorage(next as GameState);
+      return {
+        confirmedFrntBalance: nextConfirmed,
+        accruedFrntSinceSync: nextAccrued,
+        plotAccruedTokens: nextPlotAccrued,
+        claimCount: next.claimCount,
+        lastBalanceBoostTime: next.lastBalanceBoostTime,
         player: next.player,
       };
     }),
@@ -804,18 +882,29 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   claimAllFrntr: (amount) =>
     set((s) => {
+      // Move the on-chain confirmed amount into confirmedFrntBalance.
+      // Simultaneously drain accruedFrntSinceSync by the same `amount` so the
+      // displayed total stays stable (confirmed ↑, accrued ↓ by same delta).
       const nextConfirmed = s.confirmedFrntBalance + amount;
+      const nextAccrued = Math.max(0, s.accruedFrntSinceSync - amount);
+      // Clear all per-plot accrual buckets since everything was just claimed.
+      const nextPlotAccrued: Record<string, number> = {};
+      for (const k of Object.keys(s.plotAccruedTokens)) {
+        nextPlotAccrued[k] = 0;
+      }
+      const nextDisplay = nextConfirmed + nextAccrued;
       const next = {
         ...s,
         confirmedFrntBalance: nextConfirmed,
-        player: {
-          ...s.player,
-          frntBalance: nextConfirmed + s.accruedFrntSinceSync,
-        },
+        accruedFrntSinceSync: nextAccrued,
+        plotAccruedTokens: nextPlotAccrued,
+        player: { ...s.player, frntBalance: nextDisplay },
       };
       saveToStorage(next as GameState);
       return {
         confirmedFrntBalance: nextConfirmed,
+        accruedFrntSinceSync: nextAccrued,
+        plotAccruedTokens: nextPlotAccrued,
         player: next.player,
         lastBalanceBoostTime: Date.now(),
       };
@@ -989,6 +1078,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     const state = get();
     if (state.player.plotsOwned.length === 0) return;
     const serverRate = state.serverPassiveIncomePerDay;
+
     // Correct tier daily rates: tier 0=7, I=9, II=12, III=17, IV=25, V=37, VI=55
     const TIER_RATES: Record<number, number> = {
       0: 7,
@@ -999,20 +1089,44 @@ export const useGameStore = create<GameState>((set, get) => ({
       5: 37,
       6: 55,
     };
+
+    // Build per-plot increments so claimPlotTokens can use them.
+    const perPlotIncrement: Record<string, number> = {};
     let totalFrntr = 0;
+
     if (serverRate > 0) {
-      totalFrntr = serverRate / 86400;
+      // Server-provided total rate: distribute evenly across owned plots
+      const perPlot =
+        serverRate / 86400 / Math.max(1, state.player.plotsOwned.length);
+      for (const plotId of state.player.plotsOwned) {
+        perPlotIncrement[plotId] = perPlot;
+        totalFrntr += perPlot;
+      }
     } else {
       for (const plotId of state.player.plotsOwned) {
         const tier = (state.generatorTiers[plotId] ?? 0) as GeneratorTier;
-        totalFrntr += (TIER_RATES[tier] ?? 7) / 86400;
+        const inc = (TIER_RATES[tier] ?? 7) / 86400;
+        perPlotIncrement[plotId] = inc;
+        totalFrntr += inc;
       }
     }
+
     if (totalFrntr === 0) return;
+
     set((s) => {
+      // Accumulate global accrued counter — never touches confirmedFrntBalance
       const nextAccrued = s.accruedFrntSinceSync + totalFrntr;
+
+      // Accumulate per-plot buckets for per-plot claim tracking
+      const nextPlotAccrued = { ...s.plotAccruedTokens };
+      for (const [plotId, inc] of Object.entries(perPlotIncrement)) {
+        nextPlotAccrued[plotId] = (nextPlotAccrued[plotId] ?? 0) + inc;
+      }
+
       return {
         accruedFrntSinceSync: nextAccrued,
+        plotAccruedTokens: nextPlotAccrued,
+        // player.frntBalance = confirmed + accrued; confirmed is NEVER touched here
         player: {
           ...s.player,
           frntBalance: s.confirmedFrntBalance + nextAccrued,
@@ -1072,5 +1186,16 @@ export const useGameStore = create<GameState>((set, get) => ({
   faction: null,
 }));
 
-export type BattleFormation = "swarm" | "precision" | "suppression" | "stealth";
+export function formatICPWithUSD(
+  icpE8s: number,
+  icpUsdPrice: number | null,
+): string {
+  const icp = icpE8s / 100_000_000;
+  if (icpUsdPrice && icpUsdPrice > 0) {
+    const usd = icp * icpUsdPrice;
+    return `${icp.toFixed(4)} ICP (~${usd.toFixed(2)})`;
+  }
+  return `${icp.toFixed(4)} ICP`;
+}
+
 export const getPlotCombatStats = () => [];

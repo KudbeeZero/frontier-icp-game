@@ -592,15 +592,17 @@ mixin (
       created_at_time  = null;
       spender_subaccount = null;
     };
+    var icpTransferBlockIndex : Nat = 0;
     switch (await icpLedger.icrc2_transfer_from(transferArgs)) {
       case (#Err(err)) {
         // Transfer failed — ownership NOT assigned.
         return #err("ICP transfer failed: " # debug_show(err));
       };
-      case (#Ok(_)) {};
+      case (#Ok(blockIndex)) { icpTransferBlockIndex := blockIndex };
     };
 
-    // ICP transfer succeeded — assign ownership atomically.
+    // ICP transfer succeeded — assign ownership. If anything fails here,
+    // issue a refund so the player does not lose ICP without getting the plot.
     let player = switch (players.get(caller)) {
       case (?p) { p };
       case (null) {
@@ -614,10 +616,52 @@ mixin (
       };
     };
 
+    // Verify the plot is still unowned before writing (race-condition guard).
+    let freshPlot = switch (plots.get(plotId)) {
+      case (?p) { p };
+      case (null) {
+        // Plot vanished — refund ICP and abort.
+        let refundLedger = actor("ryjl3-tyaaa-aaaaa-aaaba-cai") : actor {
+          icrc1_transfer : ({
+            to : ICRC2Account; amount : Nat; fee : ?Nat;
+            memo : ?Blob; from_subaccount : ?Blob; created_at_time : ?Nat64;
+          }) -> async { #Ok : Nat; #Err : Text }
+        };
+        ignore (await refundLedger.icrc1_transfer({
+          to = { owner = caller; subaccount = null };
+          amount = icpAmt - 10_000; fee = ?10_000;
+          memo = null; from_subaccount = null; created_at_time = null;
+        }));
+        return #err("Purchase failed — ICP refunded. Please try again.");
+      };
+    };
+    switch (freshPlot.owner) {
+      case (?existingOwner) {
+        if (existingOwner != caller) {
+          // Somebody else grabbed the plot between our check and the transfer — refund.
+          let refundLedger2 = actor("ryjl3-tyaaa-aaaaa-aaaba-cai") : actor {
+            icrc1_transfer : ({
+              to : ICRC2Account; amount : Nat; fee : ?Nat;
+              memo : ?Blob; from_subaccount : ?Blob; created_at_time : ?Nat64;
+            }) -> async { #Ok : Nat; #Err : Text }
+          };
+          ignore (await refundLedger2.icrc1_transfer({
+            to = { owner = caller; subaccount = null };
+            amount = icpAmt - 10_000; fee = ?10_000;
+            memo = null; from_subaccount = null; created_at_time = null;
+          }));
+          return #err("Purchase failed — ICP refunded. Please try again.");
+        };
+        // Already owned by caller — idempotent, return success.
+        return #ok("Plot " # plotId # " purchased successfully for " # Nat.toText(icpAmt) # " e8s ICP");
+      };
+      case (null) {};
+    };
+
     let updatedPlayer = { player with plotsOwned = player.plotsOwned + 1 };
     players.add(caller, updatedPlayer);
 
-    let updatedPlot = { plot with owner = ?caller; purchaseTimestamp = ?(Time.now()) };
+    let updatedPlot = { freshPlot with owner = ?caller; purchaseTimestamp = ?(Time.now()) };
     plots.add(plotId, updatedPlot);
 
     plotUpgrades.add(plotId, GameLib.defaultUpgrades(plotId));
@@ -625,6 +669,7 @@ mixin (
     // Store rarity for price lookups.
     plotRarities.add(plotId, rarity);
 
+    ignore icpTransferBlockIndex; // used for audit correlation if needed
     #ok("Plot " # plotId # " purchased successfully for " # Nat.toText(icpAmt) # " e8s ICP");
   };
 

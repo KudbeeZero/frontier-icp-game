@@ -1,27 +1,22 @@
 {
-  "overview": "Frontier: Missile Horizon is a fully on-chain planetary warfare strategy game on the Internet Computer where players purchase land, accumulate tokens, and compete on a global hex-grid map.",
+  "overview": "Frontier: Missile Horizon is a fully on-chain planetary warfare strategy game on the Internet Computer where players purchase land plots, accumulate FRNTR tokens, and upgrade their holdings.",
   "features": [
-    "Purchase hex land plots on a 10,242-tile interactive 3D globe",
-    "Accumulate and claim FRNTR tokens passively from owned land",
-    "Upgrade generators to increase token generation rate",
-    "Purchase survey reports to reveal detailed plot resource data",
-    "Complete missions for on-chain FRNTR rewards",
-    "Tamperproof on-chain audit log records every confirmation and cancellation with principal ID and timestamp",
-    "Confirmation modal required before every irreversible action",
-    "One-time post-action quick-nav toast after each completed transaction",
-    "Live treasury split dashboard showing developer, leaderboard, and liquidity pots",
-    "Admin panel with mint, reset, and audit log query tools"
+    "10,242 interactive hex globe with 8 biomes",
+    "Land purchase with ICP and token accumulation",
+    "Survey reports with on-chain timer enforcement",
+    "Treasury system with 25/25/50 revenue split",
+    "Mission-control inventory grid with live plot stats",
+    "Admin dashboard with economy snapshots and leaderboard management",
+    "On-chain confirmation logging for all player actions"
   ],
   "category": "game",
   "tags": [
     "icp",
-    "blockchain",
     "strategy",
-    "web3",
-    "on-chain",
-    "hex-grid",
-    "defi",
-    "motoko"
+    "blockchain",
+    "game",
+    "nft",
+    "defi"
   ],
-  "last_updated": "2026-06-06T09:42:41.244Z"
+  "last_updated": "2026-06-06T18:13:08.397Z"
 }

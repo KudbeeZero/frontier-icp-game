@@ -1,4 +1,5 @@
 import { useActor } from "@caffeineai/core-infrastructure";
+import { AnimatePresence, motion } from "motion/react";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { createActor } from "../backend";
@@ -52,9 +53,6 @@ const BIOME_ICONS: Record<string, string> = {
 };
 
 export { TIER_DAILY_RATES };
-
-/** Array-indexed upgrade costs (index = destination tier). */
-export const UPGRADE_COSTS = [0, 500, 1_500, 4_000, 10_000, 25_000, 60_000];
 
 type Tab = "stats" | "economy" | "survey" | "upgrade";
 
@@ -150,9 +148,22 @@ export default function PlotInfoPanel() {
     secondsRemaining: number;
     resourcePercentage?: number;
     bonusInfo?: string;
+    remainingSeconds?: number;
+    estimatedReward?: number;
+    isCollectable?: boolean;
+    biome?: string;
+    resourcePct?: number;
   } | null>(null);
   const [surveyLoading, setSurveyLoading] = useState(false);
   const [surveyError, setSurveyError] = useState("");
+  const [surveyTimer, setSurveyTimer] = useState<number>(0);
+  const [surveyCollectConfirmOpen, setSurveyCollectConfirmOpen] =
+    useState(false);
+  const [surveyReportData, setSurveyReportData] = useState<{
+    biome: string;
+    resourcePct: number;
+    rewardE8s: number;
+  } | null>(null);
 
   // Upgrade state
   const [upgradeLoading, setUpgradeLoading] = useState(false);
@@ -227,14 +238,29 @@ export default function PlotInfoPanel() {
       try {
         const res = await actor.getSurveyStatus(String(selectedPlotId));
         if (!cancelled && "ok" in res) {
+          const remaining = Number(
+            res.ok.remainingSeconds ?? res.ok.secondsRemaining ?? 0,
+          );
           setSurveyView({
             status: res.ok.status,
-            secondsRemaining: Number(res.ok.secondsRemaining),
+            secondsRemaining: remaining,
             resourcePercentage: res.ok.result
               ? Number(res.ok.result.resourcePercentage)
               : undefined,
             bonusInfo: res.ok.result?.bonusInfo,
+            remainingSeconds: remaining,
+            estimatedReward: res.ok.estimatedReward
+              ? Number(res.ok.estimatedReward)
+              : undefined,
+            isCollectable: res.ok.isCollectable ?? false,
+            biome: res.ok.biome ?? "",
+            resourcePct: res.ok.resourcePct
+              ? Number(res.ok.resourcePct)
+              : undefined,
           });
+          if (res.ok.status === SurveyStatus.InProgress) {
+            setSurveyTimer(remaining);
+          }
         }
       } catch (_e) {
         // No survey yet — leave null
@@ -267,7 +293,7 @@ export default function PlotInfoPanel() {
   const unclaimedEst = isOwnedByMe ? unclaimedSecs * perSecond : 0;
 
   const nextTier = Math.min(6, currentTier + 1);
-  const upgradeCost = UPGRADE_COSTS[nextTier] ?? 0;
+  const upgradeCost = UPGRADE_COSTS_MAP[nextTier] ?? 0;
   const canAfford = displayBal >= upgradeCost;
   const isMaxTier = currentTier >= 6;
 
@@ -415,6 +441,9 @@ export default function PlotInfoPanel() {
     textTransform: "uppercase" as const,
   };
 
+  // Bottom nav height: 64px on mobile (md:hidden)
+  const BOTTOM_NAV_H = 64;
+
   const panelStyle: React.CSSProperties = {
     background: BG,
     backdropFilter: "blur(22px)",
@@ -427,779 +456,283 @@ export default function PlotInfoPanel() {
     position: "fixed",
     top: 56,
     right: 0,
+    bottom: `calc(${BOTTOM_NAV_H}px + env(safe-area-inset-bottom, 0px))`,
     width: 295,
-    maxHeight: "calc(100vh - 72px)",
-    overflowY: "scroll",
+    maxHeight: `calc(100vh - 56px - ${BOTTOM_NAV_H}px - env(safe-area-inset-bottom, 0px))`,
+    overflowY: "auto",
     overflowX: "hidden",
-    scrollSnapType: "y mandatory",
-    zIndex: 65,
-    transform: isVisible ? "translateX(0)" : "translateX(310px)",
-    transition: "transform 0.38s cubic-bezier(0.22,1,0.36,1)",
+    zIndex: 45,
     padding: 0,
     boxSizing: "border-box",
-    pointerEvents: isVisible ? "auto" : "none",
-    animation: isVisible ? "panelGlowPulse 2s ease-in-out infinite" : "none",
+    animation: "panelGlowPulse 2s ease-in-out infinite",
   };
 
   return (
-    <div style={panelStyle} data-ocid="plot_info.panel">
-      {/* Scan-line overlay */}
-      <div
-        aria-hidden="true"
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundImage:
-            "repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,255,255,0.025) 3px,rgba(0,255,255,0.025) 4px)",
-          pointerEvents: "none",
-          borderRadius: 14,
-          zIndex: 0,
-        }}
-      />
-
-      {/* Floating particles */}
-      {isVisible &&
-        PARTICLES.map((p) => (
+    <AnimatePresence>
+      {isVisible && (
+        <motion.div
+          key="plot-info-panel"
+          data-ocid="plot_info.panel"
+          style={panelStyle}
+          initial={{ x: "100%" }}
+          animate={{ x: 0 }}
+          exit={{ x: "100%" }}
+          transition={{
+            type: "tween",
+            duration: 0.35,
+            ease: [0.22, 1, 0.36, 1],
+          }}
+        >
+          {/* Scan-line overlay */}
           <div
-            key={`${p.top}-${p.left}`}
             aria-hidden="true"
             style={{
               position: "absolute",
-              top: p.top,
-              left: p.left,
-              width: p.size,
-              height: p.size,
-              borderRadius: "50%",
-              background: CYAN,
-              boxShadow: `0 0 ${p.size * 3}px ${CYAN}`,
-              animation: `particleFloat ${p.dur} ${p.delay} ease-in-out infinite`,
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundImage:
+                "repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,255,255,0.025) 3px,rgba(0,255,255,0.025) 4px)",
               pointerEvents: "none",
-              zIndex: 1,
+              borderRadius: 14,
+              zIndex: 0,
             }}
           />
-        ))}
 
-      {/* Content layer */}
-      <div
-        style={{
-          position: "relative",
-          zIndex: 2,
-          padding: "14px 14px 18px",
-          scrollSnapAlign: "start",
-          minHeight: "calc(100vh - 90px)",
-        }}
-      >
-        {/* Close button */}
-        <button
-          type="button"
-          data-ocid="plot_info.close_button"
-          onClick={() => selectPlot(null)}
-          aria-label="Close panel"
-          style={{
-            position: "absolute",
-            top: 10,
-            right: 10,
-            background: "rgba(0,255,204,0.08)",
-            border: `1px solid ${BORDER}`,
-            borderRadius: 6,
-            color: CYAN,
-            fontSize: 14,
-            cursor: "pointer",
-            lineHeight: 1,
-            padding: "3px 7px",
-            transition: "all 0.15s",
-          }}
-        >
-          ×
-        </button>
-
-        {plot && (
-          <>
-            {/* Header: Plot ID + rarity badge */}
-            <div style={{ marginBottom: 10, paddingRight: 28 }}>
+          {/* Floating particles */}
+          {isVisible &&
+            PARTICLES.map((p) => (
               <div
+                key={`${p.top}-${p.left}`}
+                aria-hidden="true"
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  marginBottom: 4,
+                  position: "absolute",
+                  top: p.top,
+                  left: p.left,
+                  width: p.size,
+                  height: p.size,
+                  borderRadius: "50%",
+                  background: CYAN,
+                  boxShadow: `0 0 ${p.size * 3}px ${CYAN}`,
+                  animation: `particleFloat ${p.dur} ${p.delay} ease-in-out infinite`,
+                  pointerEvents: "none",
+                  zIndex: 1,
                 }}
-              >
-                <span
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 700,
-                    color: CYAN,
-                    fontFamily: "monospace",
-                    letterSpacing: 1,
-                  }}
-                >
-                  PLOT #{plot.id}
-                </span>
-                <span
-                  style={{
-                    fontSize: 9,
-                    fontWeight: 700,
-                    color: rarity.color,
-                    background: `${rarity.color}18`,
-                    border: `1px solid ${rarity.color}55`,
-                    borderRadius: 4,
-                    padding: "2px 6px",
-                    letterSpacing: 1,
-                    fontFamily: "monospace",
-                  }}
-                >
-                  {rarity.label}
-                </span>
-              </div>
-              <div
-                style={{
-                  fontSize: 9,
-                  color: "rgba(0,255,204,0.4)",
-                  fontFamily: "monospace",
-                }}
-              >
-                {plot.lat.toFixed(2)}°N · {plot.lng.toFixed(2)}°E
-              </div>
-            </div>
+              />
+            ))}
 
-            {/* Biome badge */}
-            <div
+          {/* Content layer */}
+          <div
+            style={{
+              position: "relative",
+              zIndex: 2,
+              padding: "14px 14px 18px",
+              scrollSnapAlign: "start",
+              minHeight: "calc(100vh - 90px)",
+            }}
+          >
+            {/* Close button */}
+            <button
+              type="button"
+              data-ocid="plot_info.close_button"
+              onClick={() => selectPlot(null)}
+              aria-label="Close panel"
               style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "4px 10px",
+                position: "absolute",
+                top: 10,
+                right: 10,
+                background: "rgba(0,255,204,0.08)",
+                border: `1px solid ${BORDER}`,
                 borderRadius: 6,
-                background: `${biomeColor}18`,
-                border: `1px solid ${biomeColor}66`,
-                marginBottom: 12,
+                color: CYAN,
+                fontSize: 14,
+                cursor: "pointer",
+                lineHeight: 1,
+                padding: "3px 7px",
+                transition: "all 0.15s",
               }}
             >
-              <span style={{ fontSize: 10 }}>{biomeIcon}</span>
-              <span
-                style={{
-                  fontSize: 9,
-                  fontWeight: 700,
-                  color: biomeColor,
-                  letterSpacing: 1.5,
-                  fontFamily: "monospace",
-                  textTransform: "uppercase",
-                }}
-              >
-                {plot.biome}
-              </span>
-            </div>
+              ×
+            </button>
 
-            {/* Tabs */}
-            <div
-              style={{
-                display: "flex",
-                gap: 2,
-                marginBottom: 14,
-                borderBottom: `1px solid ${BORDER}`,
-              }}
-            >
-              {(["stats", "economy", "survey", "upgrade"] as Tab[]).map(
-                (tab) => (
-                  <button
-                    key={tab}
-                    type="button"
-                    data-ocid={`plot_info.${tab}.tab`}
-                    onClick={() => setActiveTab(tab)}
-                    style={{
-                      flex: 1,
-                      background:
-                        activeTab === tab ? `${CYAN}14` : "transparent",
-                      border: "none",
-                      borderBottom:
-                        activeTab === tab
-                          ? `2px solid ${CYAN}`
-                          : "2px solid transparent",
-                      color: activeTab === tab ? CYAN : TEXT_DIM,
-                      fontSize: 8,
-                      fontWeight: 700,
-                      letterSpacing: 1,
-                      fontFamily: "monospace",
-                      textTransform: "uppercase",
-                      cursor: "pointer",
-                      padding: "6px 2px",
-                      transition: "all 0.15s",
-                    }}
-                  >
-                    {tab}
-                  </button>
-                ),
-              )}
-            </div>
-
-            {/* ─── TAB: STATS ─────────────────────────────────────────────── */}
-            {activeTab === "stats" && (
-              <div data-ocid="plot_info.stats.panel">
-                <div style={{ marginBottom: 14 }}>
+            {plot && (
+              <>
+                {/* Header: Plot ID + rarity badge */}
+                <div style={{ marginBottom: 10, paddingRight: 28 }}>
                   <div
                     style={{
                       display: "flex",
-                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: 6,
                       marginBottom: 4,
                     }}
                   >
-                    <span style={labelStyle}>RESOURCE YIELD</span>
                     <span
                       style={{
-                        fontSize: 10,
+                        fontSize: 13,
                         fontWeight: 700,
-                        color: effColor,
+                        color: CYAN,
+                        fontFamily: "monospace",
+                        letterSpacing: 1,
+                      }}
+                    >
+                      PLOT #{plot.id}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 9,
+                        fontWeight: 700,
+                        color: rarity.color,
+                        background: `${rarity.color}18`,
+                        border: `1px solid ${rarity.color}55`,
+                        borderRadius: 4,
+                        padding: "2px 6px",
+                        letterSpacing: 1,
                         fontFamily: "monospace",
                       }}
                     >
-                      {efficiency >= 80
-                        ? "High Yield"
-                        : efficiency >= 65
-                          ? "Med Yield"
-                          : "Low Yield"}{" "}
-                      · {efficiency}%
+                      {rarity.label}
                     </span>
                   </div>
                   <div
                     style={{
-                      height: 5,
-                      background: "rgba(255,255,255,0.07)",
-                      borderRadius: 3,
-                      overflow: "hidden",
+                      fontSize: 9,
+                      color: "rgba(0,255,204,0.4)",
+                      fontFamily: "monospace",
                     }}
                   >
-                    <div
-                      style={{
-                        height: "100%",
-                        width: `${efficiency}%`,
-                        background: `linear-gradient(90deg,${effColor},${effColor}88)`,
-                        borderRadius: 3,
-                        transition: "width 0.5s ease",
-                        boxShadow: `0 0 6px ${effColor}66`,
-                      }}
-                    />
+                    {plot.lat.toFixed(2)}°N · {plot.lng.toFixed(2)}°E
                   </div>
                 </div>
 
+                {/* Biome badge */}
                 <div
                   style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    marginBottom: 10,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "4px 10px",
+                    borderRadius: 6,
+                    background: `${biomeColor}18`,
+                    border: `1px solid ${biomeColor}66`,
+                    marginBottom: 12,
                   }}
                 >
-                  <span style={labelStyle}>EFFICIENCY</span>
+                  <span style={{ fontSize: 10 }}>{biomeIcon}</span>
                   <span
                     style={{
                       fontSize: 9,
-                      color: effColor,
-                      fontFamily: "monospace",
                       fontWeight: 700,
-                    }}
-                  >
-                    {efficiency}%
-                  </span>
-                </div>
-
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    marginBottom: 10,
-                  }}
-                >
-                  <span style={labelStyle}>OWNER</span>
-                  <span
-                    style={{
-                      fontSize: 9,
-                      color: TEXT,
+                      color: biomeColor,
+                      letterSpacing: 1.5,
                       fontFamily: "monospace",
+                      textTransform: "uppercase",
                     }}
                   >
-                    {!plot.owner
-                      ? "UNOWNED"
-                      : plot.isOwnedByMe
-                        ? "YOU"
-                        : `${plot.owner.slice(0, 8)}…${plot.owner.slice(-4)}`}
+                    {plot.biome}
                   </span>
                 </div>
 
+                {/* Tabs */}
                 <div
                   style={{
                     display: "flex",
-                    justifyContent: "space-between",
+                    gap: 2,
                     marginBottom: 14,
+                    borderBottom: `1px solid ${BORDER}`,
                   }}
                 >
-                  <span style={labelStyle}>REGION</span>
-                  <span
-                    style={{
-                      fontSize: 9,
-                      color: TEXT_DIM,
-                      fontFamily: "monospace",
-                    }}
-                  >
-                    {plot.lat >= 0 ? "N" : "S"}
-                    {Math.abs(plot.lat).toFixed(1)}° ·{" "}
-                    {plot.lng >= 0 ? "E" : "W"}
-                    {Math.abs(plot.lng).toFixed(1)}°
-                  </span>
-                </div>
-
-                {/* Sub-parcels locked row */}
-                <div style={{ marginBottom: 14 }}>
-                  <div style={{ ...labelStyle, marginBottom: 6 }}>
-                    SUB-PARCELS
-                  </div>
-                  <div style={{ display: "flex", gap: 4 }}>
-                    {["n", "ne", "se", "s", "sw", "nw", "c"].map((slot) => (
-                      <div
-                        key={`subparcel-${slot}`}
-                        title="Coming Soon"
+                  {(["stats", "economy", "survey", "upgrade"] as Tab[]).map(
+                    (tab) => (
+                      <button
+                        key={tab}
+                        type="button"
+                        data-ocid={`plot_info.${tab}.tab`}
+                        onClick={() => setActiveTab(tab)}
                         style={{
                           flex: 1,
-                          aspectRatio: "1",
-                          background: "rgba(100,100,120,0.12)",
-                          border: "1px solid rgba(100,100,140,0.3)",
-                          borderRadius: 4,
-                          display: "flex",
-                          flexDirection: "column",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: 1,
+                          background:
+                            activeTab === tab ? `${CYAN}14` : "transparent",
+                          border: "none",
+                          borderBottom:
+                            activeTab === tab
+                              ? `2px solid ${CYAN}`
+                              : "2px solid transparent",
+                          color: activeTab === tab ? CYAN : TEXT_DIM,
+                          fontSize: 8,
+                          fontWeight: 700,
+                          letterSpacing: 1,
+                          fontFamily: "monospace",
+                          textTransform: "uppercase",
+                          cursor: "pointer",
+                          padding: "6px 2px",
+                          transition: "all 0.15s",
                         }}
                       >
-                        <span style={{ fontSize: 8 }}>🔒</span>
-                        <span
-                          style={{
-                            fontSize: 5,
-                            color: "rgba(160,160,180,0.5)",
-                            fontFamily: "monospace",
-                          }}
-                        >
-                          SOON
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                        {tab}
+                      </button>
+                    ),
+                  )}
                 </div>
 
-                {!plot.owner && priceE8s !== null && (
-                  <div
-                    data-ocid="plot_info.price_display"
-                    style={{
-                      padding: "8px 10px",
-                      background: "rgba(0,255,204,0.06)",
-                      border: `1px solid ${BORDER}`,
-                      borderRadius: 8,
-                      fontSize: 10,
-                      color: CYAN,
-                      fontFamily: "monospace",
-                      textAlign: "center",
-                      letterSpacing: 0.5,
-                    }}
-                  >
-                    {formatIcpPrice(priceE8s, icpUsdPrice)}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* ─── TAB: ECONOMY ───────────────────────────────────────────── */}
-            {activeTab === "economy" && (
-              <div data-ocid="plot_info.economy.panel">
-                {!isOwnedByMe ? (
-                  <div
-                    style={{
-                      textAlign: "center",
-                      padding: "24px 0",
-                      color: TEXT_DIM,
-                      fontSize: 10,
-                      fontFamily: "monospace",
-                      letterSpacing: 1,
-                    }}
-                  >
-                    Purchase this plot to
-                    <br />
-                    activate token generation
-                  </div>
-                ) : (
-                  <>
-                    <div
-                      style={{
-                        padding: "10px 12px",
-                        background: `${CYAN}0a`,
-                        border: `1px solid ${CYAN}22`,
-                        borderRadius: 8,
-                        marginBottom: 12,
-                      }}
-                    >
-                      <div style={{ ...labelStyle, marginBottom: 4 }}>
-                        GENERATOR TIER
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 12,
-                          fontWeight: 700,
-                          color: CYAN,
-                          fontFamily: "monospace",
-                        }}
-                      >
-                        Tier {currentTier} — {TIER_NAMES[currentTier]}
-                      </div>
-                    </div>
-
+                {/* ─── TAB: STATS ─────────────────────────────────────────────── */}
+                {activeTab === "stats" && (
+                  <div data-ocid="plot_info.stats.panel">
                     <div style={{ marginBottom: 14 }}>
-                      <div style={{ ...labelStyle, marginBottom: 6 }}>
-                        TOKEN GENERATION
-                      </div>
-                      {(
-                        [
-                          {
-                            label: "/SECOND",
-                            val: (dailyRate / 86400).toFixed(8),
-                          },
-                          {
-                            label: "/MINUTE",
-                            val: (dailyRate / 1440).toFixed(6),
-                          },
-                          { label: "/HOUR", val: (dailyRate / 24).toFixed(4) },
-                          { label: "/DAY", val: dailyRate.toFixed(2) },
-                        ] as { label: string; val: string }[]
-                      ).map(({ label, val }) => (
-                        <div
-                          key={label}
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            padding: "4px 0",
-                            borderBottom: "1px solid rgba(0,255,204,0.07)",
-                          }}
-                        >
-                          <span style={labelStyle}>{label}</span>
-                          <span
-                            style={{
-                              fontSize: 10,
-                              fontWeight: 700,
-                              color: TEAL,
-                              fontFamily: "monospace",
-                            }}
-                          >
-                            {val} FRNTR
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div
-                      style={{
-                        padding: "10px 12px",
-                        background: "rgba(0,188,212,0.08)",
-                        border: "1px solid rgba(0,188,212,0.25)",
-                        borderRadius: 8,
-                        marginBottom: 12,
-                      }}
-                    >
                       <div
                         style={{
                           display: "flex",
                           justifyContent: "space-between",
-                          alignItems: "center",
                           marginBottom: 4,
                         }}
                       >
-                        <span style={labelStyle}>UNCLAIMED (EST.)</span>
+                        <span style={labelStyle}>RESOURCE YIELD</span>
                         <span
                           style={{
-                            fontSize: 11,
+                            fontSize: 10,
                             fontWeight: 700,
-                            color: TEAL,
+                            color: effColor,
                             fontFamily: "monospace",
                           }}
                         >
-                          {formatFrntr(unclaimedEst)} FRNTR
+                          {efficiency >= 80
+                            ? "High Yield"
+                            : efficiency >= 65
+                              ? "Med Yield"
+                              : "Low Yield"}{" "}
+                          · {efficiency}%
                         </span>
                       </div>
                       <div
                         style={{
-                          fontSize: 8,
-                          color: CYAN_DIM,
-                          fontFamily: "monospace",
+                          height: 5,
+                          background: "rgba(255,255,255,0.07)",
+                          borderRadius: 3,
+                          overflow: "hidden",
                         }}
                       >
-                        {(dailyRate / 86400).toFixed(8)}/sec
+                        <div
+                          style={{
+                            height: "100%",
+                            width: `${efficiency}%`,
+                            background: `linear-gradient(90deg,${effColor},${effColor}88)`,
+                            borderRadius: 3,
+                            transition: "width 0.5s ease",
+                            boxShadow: `0 0 6px ${effColor}66`,
+                          }}
+                        />
                       </div>
                     </div>
 
-                    {claimSuccess ? (
-                      <div
-                        data-ocid="plot_info.claim.success_state"
-                        style={{
-                          padding: "10px",
-                          background: "rgba(34,197,94,0.1)",
-                          border: "1px solid rgba(34,197,94,0.4)",
-                          borderRadius: 8,
-                          textAlign: "center",
-                          fontSize: 10,
-                          color: "#22c55e",
-                          fontFamily: "monospace",
-                          fontWeight: 700,
-                          letterSpacing: 1,
-                        }}
-                      >
-                        ✓ TOKENS CLAIMED
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        data-ocid="plot_info.claim.button"
-                        onClick={openClaimConfirm}
-                        disabled={claimLoading}
-                        style={{
-                          width: "100%",
-                          padding: "10px",
-                          background: claimLoading
-                            ? "rgba(0,255,204,0.06)"
-                            : `linear-gradient(135deg,${CYAN}22,${TEAL}18)`,
-                          border: `1px solid ${CYAN}55`,
-                          borderRadius: 8,
-                          color: claimLoading ? CYAN_DIM : CYAN,
-                          fontSize: 10,
-                          fontWeight: 700,
-                          letterSpacing: 2,
-                          cursor: claimLoading ? "wait" : "pointer",
-                          fontFamily: "monospace",
-                          transition: "all 0.15s",
-                          boxShadow: claimLoading
-                            ? "none"
-                            : `0 0 12px ${CYAN}22`,
-                        }}
-                      >
-                        {claimLoading ? "CLAIMING..." : "CLAIM TOKENS"}
-                      </button>
-                    )}
-                    {claimError && (
-                      <div
-                        data-ocid="plot_info.claim.error_state"
-                        style={{
-                          fontSize: 9,
-                          color: "#ef4444",
-                          marginTop: 6,
-                          fontFamily: "monospace",
-                          textAlign: "center",
-                        }}
-                      >
-                        {claimError}
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
-
-            {/* ─── TAB: SURVEY ────────────────────────────────────────────── */}
-            {activeTab === "survey" && (
-              <div data-ocid="plot_info.survey.panel">
-                {!isOwnedByMe ? (
-                  <div
-                    style={{
-                      textAlign: "center",
-                      padding: "24px 0",
-                      color: TEXT_DIM,
-                      fontSize: 10,
-                      fontFamily: "monospace",
-                      letterSpacing: 1,
-                    }}
-                  >
-                    Purchase this plot to
-                    <br />
-                    unlock survey features
-                  </div>
-                ) : surveyView === null ? (
-                  <div>
-                    <div
-                      style={{
-                        padding: "12px",
-                        background: "rgba(0,188,212,0.06)",
-                        border: "1px solid rgba(0,188,212,0.2)",
-                        borderRadius: 8,
-                        marginBottom: 14,
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontSize: 10,
-                          fontWeight: 700,
-                          color: TEXT,
-                          fontFamily: "monospace",
-                          marginBottom: 4,
-                        }}
-                      >
-                        SURVEY REPORT
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 9,
-                          color: TEXT_DIM,
-                          fontFamily: "monospace",
-                          lineHeight: 1.5,
-                        }}
-                      >
-                        Unlock detailed resource data and yield predictions for
-                        this plot.
-                      </div>
-                    </div>
                     <div
                       style={{
                         display: "flex",
                         justifyContent: "space-between",
-                        marginBottom: 14,
+                        marginBottom: 10,
                       }}
                     >
-                      <span style={labelStyle}>SURVEY COST</span>
-                      <span
-                        style={{
-                          fontSize: 10,
-                          color: CYAN,
-                          fontFamily: "monospace",
-                          fontWeight: 700,
-                        }}
-                      >
-                        {surveyCost.toFixed(2)} FRNTR
-                      </span>
-                    </div>
-                    {surveyError && (
-                      <div
-                        data-ocid="plot_info.survey.error_state"
-                        style={{
-                          fontSize: 9,
-                          color: "#ef4444",
-                          marginBottom: 8,
-                          fontFamily: "monospace",
-                        }}
-                      >
-                        {surveyError}
-                      </div>
-                    )}
-                    <button
-                      type="button"
-                      data-ocid="plot_info.survey.button"
-                      onClick={openSurveyConfirm}
-                      disabled={surveyLoading || displayBal < surveyCost}
-                      style={{
-                        width: "100%",
-                        padding: "10px",
-                        background:
-                          displayBal >= surveyCost
-                            ? `linear-gradient(135deg,${TEAL}22,${CYAN}18)`
-                            : "rgba(100,100,120,0.1)",
-                        border: `1px solid ${displayBal >= surveyCost ? TEAL : "rgba(100,100,140,0.3)"}`,
-                        borderRadius: 8,
-                        color:
-                          displayBal >= surveyCost
-                            ? TEAL
-                            : "rgba(160,160,180,0.5)",
-                        fontSize: 10,
-                        fontWeight: 700,
-                        letterSpacing: 2,
-                        cursor:
-                          surveyLoading || displayBal < surveyCost
-                            ? "not-allowed"
-                            : "pointer",
-                        fontFamily: "monospace",
-                        transition: "all 0.15s",
-                      }}
-                    >
-                      {surveyLoading
-                        ? "INITIATING..."
-                        : displayBal < surveyCost
-                          ? "INSUFFICIENT FRNTR"
-                          : "PURCHASE SURVEY"}
-                    </button>
-                  </div>
-                ) : surveyView.status === SurveyStatus.InProgress ||
-                  surveyView.secondsRemaining > 0 ? (
-                  <div>
-                    <div
-                      style={{
-                        padding: "12px",
-                        background: "rgba(245,158,11,0.08)",
-                        border: "1px solid rgba(245,158,11,0.25)",
-                        borderRadius: 8,
-                        marginBottom: 14,
-                        textAlign: "center",
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontSize: 11,
-                          fontWeight: 700,
-                          color: "#f59e0b",
-                          fontFamily: "monospace",
-                          marginBottom: 6,
-                        }}
-                      >
-                        SURVEYING...
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 10,
-                          color: TEXT,
-                          fontFamily: "monospace",
-                          marginBottom: 4,
-                        }}
-                      >
-                        ⏱{" "}
-                        {String(
-                          Math.floor(surveyView.secondsRemaining / 60),
-                        ).padStart(2, "0")}
-                        :
-                        {String(surveyView.secondsRemaining % 60).padStart(
-                          2,
-                          "0",
-                        )}{" "}
-                        remaining
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 8,
-                          color: CYAN_DIM,
-                          fontFamily: "monospace",
-                        }}
-                      >
-                        Timer visible — non-functional in testnet
-                      </div>
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        marginBottom: 8,
-                      }}
-                    >
-                      <span style={labelStyle}>BIOME</span>
-                      <span
-                        style={{
-                          fontSize: 9,
-                          color: biomeColor,
-                          fontFamily: "monospace",
-                        }}
-                      >
-                        {plot.biome}
-                      </span>
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        marginBottom: 8,
-                      }}
-                    >
-                      <span style={labelStyle}>RESOURCE %</span>
+                      <span style={labelStyle}>EFFICIENCY</span>
                       <span
                         style={{
                           fontSize: 9,
@@ -1211,293 +744,30 @@ export default function PlotInfoPanel() {
                         {efficiency}%
                       </span>
                     </div>
-                  </div>
-                ) : (
-                  <div>
-                    <div
-                      style={{
-                        padding: "12px",
-                        background: "rgba(34,197,94,0.08)",
-                        border: "1px solid rgba(34,197,94,0.3)",
-                        borderRadius: 8,
-                        marginBottom: 14,
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontSize: 11,
-                          fontWeight: 700,
-                          color: "#22c55e",
-                          fontFamily: "monospace",
-                          marginBottom: 2,
-                        }}
-                      >
-                        ✓ SURVEY COMPLETE
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 8,
-                          color: TEXT_DIM,
-                          fontFamily: "monospace",
-                        }}
-                      >
-                        Detailed resource data unlocked
-                      </div>
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        marginBottom: 8,
-                      }}
-                    >
-                      <span style={labelStyle}>BIOME</span>
-                      <span
-                        style={{
-                          fontSize: 9,
-                          color: biomeColor,
-                          fontFamily: "monospace",
-                        }}
-                      >
-                        {plot.biome}
-                      </span>
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        marginBottom: 8,
-                      }}
-                    >
-                      <span style={labelStyle}>RESOURCE DENSITY</span>
-                      <span
-                        style={{
-                          fontSize: 9,
-                          color: effColor,
-                          fontFamily: "monospace",
-                          fontWeight: 700,
-                        }}
-                      >
-                        {surveyView.resourcePercentage !== undefined
-                          ? `${surveyView.resourcePercentage}%`
-                          : `${efficiency}%`}
-                      </span>
-                    </div>
-                    {surveyView.bonusInfo && (
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          marginBottom: 8,
-                        }}
-                      >
-                        <span style={labelStyle}>SPECIAL</span>
-                        <span
-                          style={{
-                            fontSize: 9,
-                            color: TEAL,
-                            fontFamily: "monospace",
-                          }}
-                        >
-                          {surveyView.bonusInfo}
-                        </span>
-                      </div>
-                    )}
-                    <div
-                      style={{
-                        padding: "10px 12px",
-                        background: "rgba(0,188,212,0.06)",
-                        border: "1px solid rgba(0,188,212,0.2)",
-                        borderRadius: 8,
-                        marginBottom: 12,
-                      }}
-                    >
-                      <div style={{ ...labelStyle, marginBottom: 6 }}>
-                        PREDICTION MODEL
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 9,
-                          color: TEXT_DIM,
-                          fontFamily: "monospace",
-                          lineHeight: 1.5,
-                        }}
-                      >
-                        Projected yield: {Math.floor(efficiency * 12)}–
-                        {Math.floor(efficiency * 18)} FRNTR
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 8,
-                          color: CYAN_DIM,
-                          fontFamily: "monospace",
-                          marginTop: 2,
-                        }}
-                      >
-                        Based on biome · efficiency · tier {currentTier}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      data-ocid="plot_info.survey.collect_button"
-                      title="Available at mainnet"
-                      style={{
-                        width: "100%",
-                        padding: "10px",
-                        background: "rgba(34,197,94,0.08)",
-                        border: "1px solid rgba(34,197,94,0.3)",
-                        borderRadius: 8,
-                        color: "rgba(34,197,94,0.7)",
-                        fontSize: 10,
-                        fontWeight: 700,
-                        letterSpacing: 2,
-                        cursor: "not-allowed",
-                        fontFamily: "monospace",
-                      }}
-                    >
-                      COLLECT REPORT · MAINNET
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
 
-            {/* ─── TAB: UPGRADE ───────────────────────────────────────────── */}
-            {activeTab === "upgrade" && (
-              <div data-ocid="plot_info.upgrade.panel">
-                {!isOwnedByMe ? (
-                  <div
-                    style={{
-                      textAlign: "center",
-                      padding: "24px 0",
-                      color: TEXT_DIM,
-                      fontSize: 10,
-                      fontFamily: "monospace",
-                      letterSpacing: 1,
-                    }}
-                  >
-                    Purchase this plot to
-                    <br />
-                    unlock generator upgrades
-                  </div>
-                ) : isMaxTier ? (
-                  <div
-                    style={{
-                      textAlign: "center",
-                      padding: "24px 0",
-                      color: "#fbbf24",
-                      fontSize: 10,
-                      fontFamily: "monospace",
-                      letterSpacing: 1,
-                    }}
-                  >
-                    ⭐ MAX TIER REACHED
-                    <br />
-                    <span style={{ color: TEXT_DIM, fontSize: 9 }}>
-                      Singularity Drive active
-                    </span>
-                  </div>
-                ) : (
-                  <>
                     <div
                       style={{
-                        padding: "10px 12px",
-                        background: `${CYAN}08`,
-                        border: `1px solid ${CYAN}18`,
-                        borderRadius: 8,
+                        display: "flex",
+                        justifyContent: "space-between",
                         marginBottom: 10,
                       }}
                     >
-                      <div style={{ ...labelStyle, marginBottom: 3 }}>
-                        CURRENT TIER
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 11,
-                          fontWeight: 700,
-                          color: CYAN,
-                          fontFamily: "monospace",
-                        }}
-                      >
-                        Tier {currentTier} — {TIER_NAMES[currentTier]}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 9,
-                          color: TEXT_DIM,
-                          fontFamily: "monospace",
-                          marginTop: 2,
-                        }}
-                      >
-                        {dailyRate} FRNTR/day
-                      </div>
-                    </div>
-
-                    <div
-                      style={{
-                        textAlign: "center",
-                        color: CYAN_DIM,
-                        fontSize: 14,
-                        marginBottom: 6,
-                      }}
-                    >
-                      ↓
-                    </div>
-
-                    <div
-                      style={{
-                        padding: "10px 12px",
-                        background: `${TEAL}0a`,
-                        border: `1px solid ${TEAL}30`,
-                        borderRadius: 8,
-                        marginBottom: 12,
-                      }}
-                    >
-                      <div style={{ ...labelStyle, marginBottom: 3 }}>
-                        NEXT TIER
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 11,
-                          fontWeight: 700,
-                          color: TEAL,
-                          fontFamily: "monospace",
-                        }}
-                      >
-                        Tier {nextTier} — {TIER_NAMES[nextTier]}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 9,
-                          color: TEXT_DIM,
-                          fontFamily: "monospace",
-                          marginTop: 2,
-                        }}
-                      >
-                        {TIER_DAILY_RATES[nextTier]} FRNTR/day · +
-                        {(TIER_DAILY_RATES[nextTier] ?? 0) - dailyRate} bonus
-                      </div>
-                    </div>
-
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        marginBottom: 4,
-                      }}
-                    >
-                      <span style={labelStyle}>UPGRADE COST</span>
+                      <span style={labelStyle}>OWNER</span>
                       <span
                         style={{
-                          fontSize: 10,
-                          fontWeight: 700,
-                          color: canAfford ? TEAL : "#ef4444",
+                          fontSize: 9,
+                          color: TEXT,
                           fontFamily: "monospace",
                         }}
                       >
-                        {upgradeCost.toLocaleString()} FRNTR
+                        {!plot.owner
+                          ? "UNOWNED"
+                          : plot.isOwnedByMe
+                            ? "YOU"
+                            : `${plot.owner.slice(0, 8)}…${plot.owner.slice(-4)}`}
                       </span>
                     </div>
+
                     <div
                       style={{
                         display: "flex",
@@ -1505,159 +775,1087 @@ export default function PlotInfoPanel() {
                         marginBottom: 14,
                       }}
                     >
-                      <span style={labelStyle}>YOUR BALANCE</span>
+                      <span style={labelStyle}>REGION</span>
                       <span
                         style={{
-                          fontSize: 10,
-                          fontWeight: 700,
-                          color: canAfford ? "#22c55e" : "#ef4444",
+                          fontSize: 9,
+                          color: TEXT_DIM,
                           fontFamily: "monospace",
                         }}
                       >
-                        {formatFrntr(displayBal)} FRNTR
+                        {plot.lat >= 0 ? "N" : "S"}
+                        {Math.abs(plot.lat).toFixed(1)}° ·{" "}
+                        {plot.lng >= 0 ? "E" : "W"}
+                        {Math.abs(plot.lng).toFixed(1)}°
                       </span>
                     </div>
 
-                    {!canAfford && (
+                    {/* Sub-parcels locked row */}
+                    <div style={{ marginBottom: 14 }}>
+                      <div style={{ ...labelStyle, marginBottom: 6 }}>
+                        SUB-PARCELS
+                      </div>
+                      <div style={{ display: "flex", gap: 4 }}>
+                        {["n", "ne", "se", "s", "sw", "nw", "c"].map((slot) => (
+                          <div
+                            key={`subparcel-${slot}`}
+                            title="Coming Soon"
+                            style={{
+                              flex: 1,
+                              aspectRatio: "1",
+                              background: "rgba(100,100,120,0.12)",
+                              border: "1px solid rgba(100,100,140,0.3)",
+                              borderRadius: 4,
+                              display: "flex",
+                              flexDirection: "column",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              gap: 1,
+                            }}
+                          >
+                            <span style={{ fontSize: 8 }}>🔒</span>
+                            <span
+                              style={{
+                                fontSize: 5,
+                                color: "rgba(160,160,180,0.5)",
+                                fontFamily: "monospace",
+                              }}
+                            >
+                              SOON
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {!plot.owner && priceE8s !== null && (
                       <div
-                        data-ocid="plot_info.upgrade.insufficient"
+                        data-ocid="plot_info.price_display"
                         style={{
-                          fontSize: 9,
-                          color: "#ef4444",
-                          marginBottom: 8,
+                          padding: "8px 10px",
+                          background: "rgba(0,255,204,0.06)",
+                          border: `1px solid ${BORDER}`,
+                          borderRadius: 8,
+                          fontSize: 10,
+                          color: CYAN,
                           fontFamily: "monospace",
                           textAlign: "center",
-                          letterSpacing: 1,
+                          letterSpacing: 0.5,
                         }}
                       >
-                        INSUFFICIENT FRNTR — need{" "}
-                        {(upgradeCost - displayBal).toLocaleString()} more
+                        {formatIcpPrice(priceE8s, icpUsdPrice)}
                       </div>
                     )}
+                  </div>
+                )}
 
-                    {upgradeStatus === "success" ? (
+                {/* ─── TAB: ECONOMY ───────────────────────────────────────────── */}
+                {activeTab === "economy" && (
+                  <div data-ocid="plot_info.economy.panel">
+                    {!isOwnedByMe ? (
                       <div
-                        data-ocid="plot_info.upgrade.success_state"
                         style={{
-                          padding: "10px",
-                          background: "rgba(34,197,94,0.1)",
-                          border: "1px solid rgba(34,197,94,0.4)",
-                          animation: "upgradeFlash 0.6s ease 3",
-                          borderRadius: 8,
                           textAlign: "center",
+                          padding: "24px 0",
+                          color: TEXT_DIM,
                           fontSize: 10,
-                          color: "#22c55e",
                           fontFamily: "monospace",
-                          fontWeight: 700,
                           letterSpacing: 1,
                         }}
                       >
-                        ✓ UPGRADE COMPLETE
+                        Purchase this plot to
+                        <br />
+                        activate token generation
                       </div>
                     ) : (
-                      <button
-                        type="button"
-                        data-ocid="plot_info.upgrade.button"
-                        onClick={openUpgradeConfirm}
-                        disabled={!canAfford || upgradeLoading}
-                        style={{
-                          width: "100%",
-                          padding: "11px",
-                          background: canAfford
-                            ? `linear-gradient(135deg,${CYAN}20,${TEAL}18)`
-                            : "rgba(100,100,120,0.1)",
-                          border: canAfford
-                            ? `1px solid ${CYAN}55`
-                            : "1px solid rgba(100,100,140,0.25)",
-                          borderRadius: 8,
-                          color: canAfford ? CYAN : "rgba(160,160,180,0.4)",
-                          fontSize: 10,
-                          fontWeight: 700,
-                          letterSpacing: 2,
-                          cursor:
-                            canAfford && !upgradeLoading
-                              ? "pointer"
-                              : "not-allowed",
-                          fontFamily: "monospace",
-                          transition: "all 0.15s",
-                          boxShadow: canAfford ? `0 0 16px ${CYAN}22` : "none",
-                        }}
-                      >
-                        {upgradeLoading
-                          ? "UPGRADING..."
-                          : `UPGRADE TO TIER ${nextTier}`}
-                      </button>
-                    )}
+                      <>
+                        <div
+                          style={{
+                            padding: "10px 12px",
+                            background: `${CYAN}0a`,
+                            border: `1px solid ${CYAN}22`,
+                            borderRadius: 8,
+                            marginBottom: 12,
+                          }}
+                        >
+                          <div style={{ ...labelStyle, marginBottom: 4 }}>
+                            GENERATOR TIER
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 12,
+                              fontWeight: 700,
+                              color: CYAN,
+                              fontFamily: "monospace",
+                            }}
+                          >
+                            Tier {currentTier} — {TIER_NAMES[currentTier]}
+                          </div>
+                        </div>
 
-                    {upgradeStatus === "error" && upgradeError && (
+                        <div style={{ marginBottom: 14 }}>
+                          <div style={{ ...labelStyle, marginBottom: 6 }}>
+                            TOKEN GENERATION
+                          </div>
+                          {(
+                            [
+                              {
+                                label: "/SECOND",
+                                val: (dailyRate / 86400).toFixed(8),
+                              },
+                              {
+                                label: "/MINUTE",
+                                val: (dailyRate / 1440).toFixed(6),
+                              },
+                              {
+                                label: "/HOUR",
+                                val: (dailyRate / 24).toFixed(4),
+                              },
+                              { label: "/DAY", val: dailyRate.toFixed(2) },
+                            ] as { label: string; val: string }[]
+                          ).map(({ label, val }) => (
+                            <div
+                              key={label}
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                padding: "4px 0",
+                                borderBottom: "1px solid rgba(0,255,204,0.07)",
+                              }}
+                            >
+                              <span style={labelStyle}>{label}</span>
+                              <span
+                                style={{
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                  color: TEAL,
+                                  fontFamily: "monospace",
+                                }}
+                              >
+                                {val} FRNTR
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div
+                          style={{
+                            padding: "10px 12px",
+                            background: "rgba(0,188,212,0.08)",
+                            border: "1px solid rgba(0,188,212,0.25)",
+                            borderRadius: 8,
+                            marginBottom: 12,
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              marginBottom: 4,
+                            }}
+                          >
+                            <span style={labelStyle}>UNCLAIMED (EST.)</span>
+                            <span
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 700,
+                                color: TEAL,
+                                fontFamily: "monospace",
+                              }}
+                            >
+                              {formatFrntr(unclaimedEst)} FRNTR
+                            </span>
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 8,
+                              color: CYAN_DIM,
+                              fontFamily: "monospace",
+                            }}
+                          >
+                            {(dailyRate / 86400).toFixed(8)}/sec
+                          </div>
+                        </div>
+
+                        {claimSuccess ? (
+                          <div
+                            data-ocid="plot_info.claim.success_state"
+                            style={{
+                              padding: "10px",
+                              background: "rgba(34,197,94,0.1)",
+                              border: "1px solid rgba(34,197,94,0.4)",
+                              borderRadius: 8,
+                              textAlign: "center",
+                              fontSize: 10,
+                              color: "#22c55e",
+                              fontFamily: "monospace",
+                              fontWeight: 700,
+                              letterSpacing: 1,
+                            }}
+                          >
+                            ✓ TOKENS CLAIMED
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            data-ocid="plot_info.claim.button"
+                            onClick={openClaimConfirm}
+                            disabled={claimLoading}
+                            style={{
+                              width: "100%",
+                              padding: "10px",
+                              background: claimLoading
+                                ? "rgba(0,255,204,0.06)"
+                                : `linear-gradient(135deg,${CYAN}22,${TEAL}18)`,
+                              border: `1px solid ${CYAN}55`,
+                              borderRadius: 8,
+                              color: claimLoading ? CYAN_DIM : CYAN,
+                              fontSize: 10,
+                              fontWeight: 700,
+                              letterSpacing: 2,
+                              cursor: claimLoading ? "wait" : "pointer",
+                              fontFamily: "monospace",
+                              transition: "all 0.15s",
+                              boxShadow: claimLoading
+                                ? "none"
+                                : `0 0 12px ${CYAN}22`,
+                            }}
+                          >
+                            {claimLoading ? "CLAIMING..." : "CLAIM TOKENS"}
+                          </button>
+                        )}
+                        {claimError && (
+                          <div
+                            data-ocid="plot_info.claim.error_state"
+                            style={{
+                              fontSize: 9,
+                              color: "#ef4444",
+                              marginTop: 6,
+                              fontFamily: "monospace",
+                              textAlign: "center",
+                            }}
+                          >
+                            {claimError}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* ─── TAB: SURVEY ────────────────────────────────────────────── */}
+                {activeTab === "survey" && (
+                  <div data-ocid="plot_info.survey.panel">
+                    {!isOwnedByMe ? (
                       <div
-                        data-ocid="plot_info.upgrade.error_state"
                         style={{
-                          fontSize: 9,
-                          color: "#ef4444",
-                          marginTop: 6,
-                          fontFamily: "monospace",
                           textAlign: "center",
+                          padding: "24px 0",
+                          color: TEXT_DIM,
+                          fontSize: 10,
+                          fontFamily: "monospace",
+                          letterSpacing: 1,
                         }}
                       >
-                        {upgradeError}
+                        Purchase this plot to
+                        <br />
+                        unlock survey features
+                      </div>
+                    ) : surveyView === null ? (
+                      <div>
+                        <div
+                          style={{
+                            padding: "12px",
+                            background: "rgba(0,188,212,0.06)",
+                            border: "1px solid rgba(0,188,212,0.2)",
+                            borderRadius: 8,
+                            marginBottom: 14,
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 700,
+                              color: TEXT,
+                              fontFamily: "monospace",
+                              marginBottom: 4,
+                            }}
+                          >
+                            SURVEY REPORT
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 9,
+                              color: TEXT_DIM,
+                              fontFamily: "monospace",
+                              lineHeight: 1.5,
+                            }}
+                          >
+                            Unlock detailed resource data and yield predictions
+                            for this plot.
+                          </div>
+                        </div>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            marginBottom: 14,
+                          }}
+                        >
+                          <span style={labelStyle}>SURVEY COST</span>
+                          <span
+                            style={{
+                              fontSize: 10,
+                              color: CYAN,
+                              fontFamily: "monospace",
+                              fontWeight: 700,
+                            }}
+                          >
+                            {surveyCost.toFixed(2)} FRNTR
+                          </span>
+                        </div>
+                        {surveyError && (
+                          <div
+                            data-ocid="plot_info.survey.error_state"
+                            style={{
+                              fontSize: 9,
+                              color: "#ef4444",
+                              marginBottom: 8,
+                              fontFamily: "monospace",
+                            }}
+                          >
+                            {surveyError}
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          data-ocid="plot_info.survey.button"
+                          onClick={openSurveyConfirm}
+                          disabled={surveyLoading || displayBal < surveyCost}
+                          style={{
+                            width: "100%",
+                            padding: "10px",
+                            background:
+                              displayBal >= surveyCost
+                                ? `linear-gradient(135deg,${TEAL}22,${CYAN}18)`
+                                : "rgba(100,100,120,0.1)",
+                            border: `1px solid ${displayBal >= surveyCost ? TEAL : "rgba(100,100,140,0.3)"}`,
+                            borderRadius: 8,
+                            color:
+                              displayBal >= surveyCost
+                                ? TEAL
+                                : "rgba(160,160,180,0.5)",
+                            fontSize: 10,
+                            fontWeight: 700,
+                            letterSpacing: 2,
+                            cursor:
+                              surveyLoading || displayBal < surveyCost
+                                ? "not-allowed"
+                                : "pointer",
+                            fontFamily: "monospace",
+                            transition: "all 0.15s",
+                          }}
+                        >
+                          {surveyLoading
+                            ? "INITIATING..."
+                            : displayBal < surveyCost
+                              ? "INSUFFICIENT FRNTR"
+                              : "PURCHASE SURVEY"}
+                        </button>
+                      </div>
+                    ) : surveyView.status === SurveyStatus.InProgress ||
+                      surveyView.secondsRemaining > 0 ? (
+                      <div>
+                        <div
+                          style={{
+                            padding: "12px",
+                            background: "rgba(245,158,11,0.08)",
+                            border: "1px solid rgba(245,158,11,0.25)",
+                            borderRadius: 8,
+                            marginBottom: 14,
+                            textAlign: "center",
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              color: "#f59e0b",
+                              fontFamily: "monospace",
+                              marginBottom: 6,
+                            }}
+                          >
+                            SURVEYING...
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 10,
+                              color: TEXT,
+                              fontFamily: "monospace",
+                              marginBottom: 4,
+                            }}
+                          >
+                            ⏱{" "}
+                            {String(Math.floor(surveyTimer / 60)).padStart(
+                              2,
+                              "0",
+                            )}
+                            :{String(surveyTimer % 60).padStart(2, "0")}{" "}
+                            remaining
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 8,
+                              color: CYAN_DIM,
+                              fontFamily: "monospace",
+                            }}
+                          >
+                            {surveyView?.estimatedReward
+                              ? `Est. reward: ~${(surveyView.estimatedReward / 1e8).toFixed(2)} FRNTR`
+                              : "Analyzing plot data..."}
+                          </div>
+                        </div>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            marginBottom: 8,
+                          }}
+                        >
+                          <span style={labelStyle}>BIOME</span>
+                          <span
+                            style={{
+                              fontSize: 9,
+                              color: biomeColor,
+                              fontFamily: "monospace",
+                            }}
+                          >
+                            {plot.biome}
+                          </span>
+                        </div>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            marginBottom: 8,
+                          }}
+                        >
+                          <span style={labelStyle}>RESOURCE %</span>
+                          <span
+                            style={{
+                              fontSize: 9,
+                              color: effColor,
+                              fontFamily: "monospace",
+                              fontWeight: 700,
+                            }}
+                          >
+                            {efficiency}%
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <div
+                          style={{
+                            padding: "12px",
+                            background: "rgba(34,197,94,0.08)",
+                            border: "1px solid rgba(34,197,94,0.3)",
+                            borderRadius: 8,
+                            marginBottom: 14,
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              color: "#22c55e",
+                              fontFamily: "monospace",
+                              marginBottom: 2,
+                            }}
+                          >
+                            ✓ SURVEY COMPLETE
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 8,
+                              color: TEXT_DIM,
+                              fontFamily: "monospace",
+                            }}
+                          >
+                            Detailed resource data unlocked
+                          </div>
+                        </div>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            marginBottom: 8,
+                          }}
+                        >
+                          <span style={labelStyle}>BIOME</span>
+                          <span
+                            style={{
+                              fontSize: 9,
+                              color: biomeColor,
+                              fontFamily: "monospace",
+                            }}
+                          >
+                            {plot.biome}
+                          </span>
+                        </div>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            marginBottom: 8,
+                          }}
+                        >
+                          <span style={labelStyle}>RESOURCE DENSITY</span>
+                          <span
+                            style={{
+                              fontSize: 9,
+                              color: effColor,
+                              fontFamily: "monospace",
+                              fontWeight: 700,
+                            }}
+                          >
+                            {surveyView.resourcePercentage !== undefined
+                              ? `${surveyView.resourcePercentage}%`
+                              : `${efficiency}%`}
+                          </span>
+                        </div>
+                        {surveyView.bonusInfo && (
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              marginBottom: 8,
+                            }}
+                          >
+                            <span style={labelStyle}>SPECIAL</span>
+                            <span
+                              style={{
+                                fontSize: 9,
+                                color: TEAL,
+                                fontFamily: "monospace",
+                              }}
+                            >
+                              {surveyView.bonusInfo}
+                            </span>
+                          </div>
+                        )}
+                        <div
+                          style={{
+                            padding: "10px 12px",
+                            background: "rgba(0,188,212,0.06)",
+                            border: "1px solid rgba(0,188,212,0.2)",
+                            borderRadius: 8,
+                            marginBottom: 12,
+                          }}
+                        >
+                          <div style={{ ...labelStyle, marginBottom: 6 }}>
+                            PREDICTION MODEL
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 9,
+                              color: TEXT_DIM,
+                              fontFamily: "monospace",
+                              lineHeight: 1.5,
+                            }}
+                          >
+                            Projected yield: {Math.floor(efficiency * 12)}–
+                            {Math.floor(efficiency * 18)} FRNTR
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 8,
+                              color: CYAN_DIM,
+                              fontFamily: "monospace",
+                              marginTop: 2,
+                            }}
+                          >
+                            Based on biome · efficiency · tier {currentTier}
+                          </div>
+                        </div>
+                        {surveyView?.isCollectable ? (
+                          <button
+                            type="button"
+                            data-ocid="plot_info.survey.collect_button"
+                            onClick={() => setSurveyCollectConfirmOpen(true)}
+                            style={{
+                              width: "100%",
+                              padding: "10px",
+                              background: "rgba(34,197,94,0.15)",
+                              border: "1px solid rgba(34,197,94,0.6)",
+                              borderRadius: 8,
+                              color: "rgba(34,197,94,1)",
+                              fontSize: 10,
+                              fontWeight: 700,
+                              letterSpacing: 2,
+                              cursor: "pointer",
+                              fontFamily: "monospace",
+                            }}
+                          >
+                            ✓ COLLECT REPORT
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            data-ocid="plot_info.survey.collect_button"
+                            disabled
+                            style={{
+                              width: "100%",
+                              padding: "10px",
+                              background: "rgba(34,197,94,0.08)",
+                              border: "1px solid rgba(34,197,94,0.3)",
+                              borderRadius: 8,
+                              color: "rgba(34,197,94,0.5)",
+                              fontSize: 10,
+                              fontWeight: 700,
+                              letterSpacing: 2,
+                              cursor: "not-allowed",
+                              fontFamily: "monospace",
+                            }}
+                          >
+                            {surveyTimer > 0
+                              ? `READY IN ${String(Math.floor(surveyTimer / 60)).padStart(2, "0")}:${String(surveyTimer % 60).padStart(2, "0")}`
+                              : "PENDING..."}
+                          </button>
+                        )}
+                        {surveyReportData && (
+                          <div
+                            style={{
+                              marginTop: 10,
+                              padding: "10px 12px",
+                              borderRadius: 8,
+                              background: "rgba(0,255,200,0.05)",
+                              border: "1px solid rgba(0,255,200,0.2)",
+                            }}
+                          >
+                            <div
+                              style={{
+                                fontSize: 9,
+                                color: "#67e8f9",
+                                letterSpacing: 1.2,
+                                marginBottom: 6,
+                              }}
+                            >
+                              SURVEY REPORT
+                            </div>
+                            <div
+                              style={{
+                                fontSize: 10,
+                                color: "#e2e8f0",
+                                marginBottom: 4,
+                              }}
+                            >
+                              Biome:{" "}
+                              <span style={{ color: "#a5f3fc" }}>
+                                {surveyReportData.biome}
+                              </span>
+                            </div>
+                            <div
+                              style={{
+                                fontSize: 10,
+                                color: "#e2e8f0",
+                                marginBottom: 4,
+                              }}
+                            >
+                              Resource Richness:
+                            </div>
+                            <div
+                              style={{
+                                height: 6,
+                                borderRadius: 3,
+                                background: "rgba(255,255,255,0.1)",
+                                marginBottom: 8,
+                              }}
+                            >
+                              <div
+                                style={{
+                                  height: "100%",
+                                  borderRadius: 3,
+                                  background:
+                                    "linear-gradient(90deg, #06b6d4, #10b981)",
+                                  width: `${surveyReportData.resourcePct}%`,
+                                }}
+                              />
+                            </div>
+                            <div
+                              style={{
+                                fontSize: 9,
+                                color: "#94a3b8",
+                                letterSpacing: 0.5,
+                              }}
+                            >
+                              MINING ANALYSIS:{" "}
+                              <span style={{ color: "#475569" }}>
+                                COMING SOON
+                              </span>
+                            </div>
+                            <div
+                              style={{
+                                marginTop: 6,
+                                fontSize: 10,
+                                color: "#34d399",
+                              }}
+                            >
+                              Reward: +
+                              {(surveyReportData.rewardE8s / 1e8).toFixed(4)}{" "}
+                              FRNTR
+                            </div>
+                          </div>
+                        )}
+                        {surveyCollectConfirmOpen && (
+                          <ActionConfirmModal
+                            isOpen={surveyCollectConfirmOpen}
+                            actionType="survey"
+                            title="Collect Survey Report"
+                            details={[
+                              {
+                                label: "Plot",
+                                value: String(selectedPlotId || ""),
+                              },
+                              {
+                                label: "Reward",
+                                value: `~${surveyView?.estimatedReward ? (surveyView.estimatedReward / 1e8).toFixed(2) : "?"} FRNTR`,
+                              },
+                            ]}
+                            warningText="Once collected, the survey report is finalized."
+                            onConfirm={async () => {
+                              setSurveyCollectConfirmOpen(false);
+                              try {
+                                const result = await actor!.claimSurveyReward(
+                                  String(selectedPlotId || ""),
+                                );
+                                if ("ok" in result) {
+                                  setSurveyReportData({
+                                    biome: surveyView?.biome || "",
+                                    resourcePct: surveyView?.resourcePct || 0,
+                                    rewardE8s: Number(result.ok.rewardE8s),
+                                  });
+                                }
+                              } catch (e) {
+                                console.error("Survey collect failed", e);
+                              }
+                            }}
+                            onCancel={() => setSurveyCollectConfirmOpen(false)}
+                          />
+                        )}
                       </div>
                     )}
-                  </>
+                  </div>
                 )}
-              </div>
+
+                {/* ─── TAB: UPGRADE ───────────────────────────────────────────── */}
+                {activeTab === "upgrade" && (
+                  <div data-ocid="plot_info.upgrade.panel">
+                    {!isOwnedByMe ? (
+                      <div
+                        style={{
+                          textAlign: "center",
+                          padding: "24px 0",
+                          color: TEXT_DIM,
+                          fontSize: 10,
+                          fontFamily: "monospace",
+                          letterSpacing: 1,
+                        }}
+                      >
+                        Purchase this plot to
+                        <br />
+                        unlock generator upgrades
+                      </div>
+                    ) : isMaxTier ? (
+                      <div
+                        style={{
+                          textAlign: "center",
+                          padding: "24px 0",
+                          color: "#fbbf24",
+                          fontSize: 10,
+                          fontFamily: "monospace",
+                          letterSpacing: 1,
+                        }}
+                      >
+                        ⭐ MAX TIER REACHED
+                        <br />
+                        <span style={{ color: TEXT_DIM, fontSize: 9 }}>
+                          Singularity Drive active
+                        </span>
+                      </div>
+                    ) : (
+                      <>
+                        <div
+                          style={{
+                            padding: "10px 12px",
+                            background: `${CYAN}08`,
+                            border: `1px solid ${CYAN}18`,
+                            borderRadius: 8,
+                            marginBottom: 10,
+                          }}
+                        >
+                          <div style={{ ...labelStyle, marginBottom: 3 }}>
+                            CURRENT TIER
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              color: CYAN,
+                              fontFamily: "monospace",
+                            }}
+                          >
+                            Tier {currentTier} — {TIER_NAMES[currentTier]}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 9,
+                              color: TEXT_DIM,
+                              fontFamily: "monospace",
+                              marginTop: 2,
+                            }}
+                          >
+                            {dailyRate} FRNTR/day
+                          </div>
+                        </div>
+
+                        <div
+                          style={{
+                            textAlign: "center",
+                            color: CYAN_DIM,
+                            fontSize: 14,
+                            marginBottom: 6,
+                          }}
+                        >
+                          ↓
+                        </div>
+
+                        <div
+                          style={{
+                            padding: "10px 12px",
+                            background: `${TEAL}0a`,
+                            border: `1px solid ${TEAL}30`,
+                            borderRadius: 8,
+                            marginBottom: 12,
+                          }}
+                        >
+                          <div style={{ ...labelStyle, marginBottom: 3 }}>
+                            NEXT TIER
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              color: TEAL,
+                              fontFamily: "monospace",
+                            }}
+                          >
+                            Tier {nextTier} — {TIER_NAMES[nextTier]}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 9,
+                              color: TEXT_DIM,
+                              fontFamily: "monospace",
+                              marginTop: 2,
+                            }}
+                          >
+                            {TIER_DAILY_RATES[nextTier]} FRNTR/day · +
+                            {(TIER_DAILY_RATES[nextTier] ?? 0) - dailyRate}{" "}
+                            bonus
+                          </div>
+                        </div>
+
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            marginBottom: 4,
+                          }}
+                        >
+                          <span style={labelStyle}>UPGRADE COST</span>
+                          <span
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 700,
+                              color: canAfford ? TEAL : "#ef4444",
+                              fontFamily: "monospace",
+                            }}
+                          >
+                            {upgradeCost.toLocaleString()} FRNTR
+                          </span>
+                        </div>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            marginBottom: 14,
+                          }}
+                        >
+                          <span style={labelStyle}>YOUR BALANCE</span>
+                          <span
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 700,
+                              color: canAfford ? "#22c55e" : "#ef4444",
+                              fontFamily: "monospace",
+                            }}
+                          >
+                            {formatFrntr(displayBal)} FRNTR
+                          </span>
+                        </div>
+
+                        {!canAfford && (
+                          <div
+                            data-ocid="plot_info.upgrade.insufficient"
+                            style={{
+                              fontSize: 9,
+                              color: "#ef4444",
+                              marginBottom: 8,
+                              fontFamily: "monospace",
+                              textAlign: "center",
+                              letterSpacing: 1,
+                            }}
+                          >
+                            INSUFFICIENT FRNTR — need{" "}
+                            {(upgradeCost - displayBal).toLocaleString()} more
+                          </div>
+                        )}
+
+                        {upgradeStatus === "success" ? (
+                          <div
+                            data-ocid="plot_info.upgrade.success_state"
+                            style={{
+                              padding: "10px",
+                              background: "rgba(34,197,94,0.1)",
+                              border: "1px solid rgba(34,197,94,0.4)",
+                              animation: "upgradeFlash 0.6s ease 3",
+                              borderRadius: 8,
+                              textAlign: "center",
+                              fontSize: 10,
+                              color: "#22c55e",
+                              fontFamily: "monospace",
+                              fontWeight: 700,
+                              letterSpacing: 1,
+                            }}
+                          >
+                            ✓ UPGRADE COMPLETE
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            data-ocid="plot_info.upgrade.button"
+                            onClick={openUpgradeConfirm}
+                            disabled={!canAfford || upgradeLoading}
+                            style={{
+                              width: "100%",
+                              padding: "11px",
+                              background: canAfford
+                                ? `linear-gradient(135deg,${CYAN}20,${TEAL}18)`
+                                : "rgba(100,100,120,0.1)",
+                              border: canAfford
+                                ? `1px solid ${CYAN}55`
+                                : "1px solid rgba(100,100,140,0.25)",
+                              borderRadius: 8,
+                              color: canAfford ? CYAN : "rgba(160,160,180,0.4)",
+                              fontSize: 10,
+                              fontWeight: 700,
+                              letterSpacing: 2,
+                              cursor:
+                                canAfford && !upgradeLoading
+                                  ? "pointer"
+                                  : "not-allowed",
+                              fontFamily: "monospace",
+                              transition: "all 0.15s",
+                              boxShadow: canAfford
+                                ? `0 0 16px ${CYAN}22`
+                                : "none",
+                            }}
+                          >
+                            {upgradeLoading
+                              ? "UPGRADING..."
+                              : `UPGRADE TO TIER ${nextTier}`}
+                          </button>
+                        )}
+
+                        {upgradeStatus === "error" && upgradeError && (
+                          <div
+                            data-ocid="plot_info.upgrade.error_state"
+                            style={{
+                              fontSize: 9,
+                              color: "#ef4444",
+                              marginTop: 6,
+                              fontFamily: "monospace",
+                              textAlign: "center",
+                            }}
+                          >
+                            {upgradeError}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+              </>
             )}
-          </>
-        )}
-      </div>
-      <ActionConfirmModal
-        isOpen={claimConfirmOpen}
-        onConfirm={() => {
-          setClaimConfirmOpen(false);
-          executeClaim();
-        }}
-        onCancel={handleCancelClaim}
-        title="Claim Tokens"
-        actionType="claim"
-        details={[{ label: "Plot", value: plot?.id ? String(plot.id) : "" }]}
-        warningText="This action is permanent and cannot be undone."
-      />
-      <ActionConfirmModal
-        isOpen={surveyConfirmOpen}
-        onConfirm={() => {
-          setSurveyConfirmOpen(false);
-          executeSurvey();
-        }}
-        onCancel={handleCancelSurvey}
-        title="Purchase Survey"
-        actionType="survey"
-        details={[{ label: "Plot", value: plot?.id ? String(plot.id) : "" }]}
-        warningText="Survey cost will be deducted from your balance. Cannot be undone."
-      />
-      <ActionConfirmModal
-        isOpen={upgradeConfirmOpen}
-        onConfirm={() => {
-          setUpgradeConfirmOpen(false);
-          executeUpgrade();
-        }}
-        onCancel={handleCancelUpgrade}
-        title="Upgrade Generator"
-        actionType="upgrade"
-        details={[{ label: "Plot", value: plot?.id ? String(plot.id) : "" }]}
-        warningText="Upgrade cost will be burned. This cannot be undone."
-      />
-      {postActionType && (
-        <PostActionToast
-          actionType={postActionType}
-          message="Action completed."
-          onNavigate={(tab) =>
-            window.dispatchEvent(
-              new CustomEvent("navigate-tab", { detail: tab }),
-            )
-          }
-          onClose={() => setPostActionType(null)}
-        />
+          </div>
+          <ActionConfirmModal
+            isOpen={claimConfirmOpen}
+            onConfirm={() => {
+              setClaimConfirmOpen(false);
+              executeClaim();
+            }}
+            onCancel={handleCancelClaim}
+            title="Claim Tokens"
+            actionType="claim"
+            details={[
+              { label: "Plot", value: plot?.id ? String(plot.id) : "" },
+            ]}
+            warningText="This action is permanent and cannot be undone."
+          />
+          <ActionConfirmModal
+            isOpen={surveyConfirmOpen}
+            onConfirm={() => {
+              setSurveyConfirmOpen(false);
+              executeSurvey();
+            }}
+            onCancel={handleCancelSurvey}
+            title="Purchase Survey"
+            actionType="survey"
+            details={[
+              { label: "Plot", value: plot?.id ? String(plot.id) : "" },
+            ]}
+            warningText="Survey cost will be deducted from your balance. Cannot be undone."
+          />
+          <ActionConfirmModal
+            isOpen={upgradeConfirmOpen}
+            onConfirm={() => {
+              setUpgradeConfirmOpen(false);
+              executeUpgrade();
+            }}
+            onCancel={handleCancelUpgrade}
+            title="Upgrade Generator"
+            actionType="upgrade"
+            details={[
+              { label: "Plot", value: plot?.id ? String(plot.id) : "" },
+            ]}
+            warningText="Upgrade cost will be burned. This cannot be undone."
+          />
+          {postActionType && (
+            <PostActionToast
+              actionType={postActionType}
+              message="Action completed."
+              onNavigate={(tab) =>
+                window.dispatchEvent(
+                  new CustomEvent("navigate-tab", { detail: tab }),
+                )
+              }
+              onClose={() => setPostActionType(null)}
+            />
+          )}
+        </motion.div>
       )}
-    </div>
+    </AnimatePresence>
   );
 }

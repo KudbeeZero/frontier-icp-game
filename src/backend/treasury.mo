@@ -9,6 +9,7 @@ import Array "mo:core/Array";
 import Cycles "mo:core/Cycles";
 import Order "mo:core/Order";
 import Blob "mo:core/Blob";
+import List "mo:core/List";
 
 /// Treasury Canister for Frontier: Missile Horizon
 /// Handles 25/25/50 revenue split on plot purchases and FRNTR fee routing.
@@ -705,6 +706,50 @@ actor {
     adminPrincipal := newAdmin;
     logAudit(caller, 0, "updateAdmin:" # newAdmin.toText());
     #ok;
+  };
+
+  // ---------------------------------------------------------------------------
+  // ADMIN — Test player purge (removes zero-activity leaderboard entries)
+  // ---------------------------------------------------------------------------
+
+  /// Remove leaderboard / username entries where the player has zero FRNTR balance
+  /// and has never performed a real transaction.  Admin only.
+  /// Returns the number of entries removed.
+  public shared ({ caller }) func purgeTestPlayers() : async { #ok : Nat; #err : TreasuryError } {
+    switch (requireAdmin(caller)) {
+      case (#err e) { return #err e };
+      case (#ok) {};
+    };
+    var removed : Nat = 0;
+    // Collect principals to remove: zero local FRNTR balance AND no ledger balance
+    let toRemove = List.empty<Principal>();
+    for ((p, _uname) in usernames.entries()) {
+      let localBal : Nat = switch (playerFrntrBalances.get(p)) {
+        case (?v) v;
+        case null 0;
+      };
+      if (localBal == 0) {
+        // Only mark for removal if frntrLedger not set (can't verify on-chain)
+        // When ledger is set we keep entries to avoid false purges
+        switch (frntrLedger) {
+          case (null) { toRemove.add(p) };
+          case (?_)   { /* ledger set — skip to avoid purging real players */ };
+        };
+      };
+    };
+    for (p in toRemove.vals()) {
+      switch (usernames.get(p)) {
+        case (null) {};
+        case (?uname) {
+          usernameIndex.remove(uname);
+          usernames.remove(p);
+          playerFrntrBalances.remove(p);
+          removed += 1;
+        };
+      };
+    };
+    logAudit(caller, removed, "purgeTestPlayers:removed=" # removed.toText());
+    #ok(removed);
   };
 
   /// Set the FRNTR ICRC-1 ledger canister principal (admin only).

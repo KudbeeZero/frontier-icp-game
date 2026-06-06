@@ -74225,12 +74225,17 @@ const useGameStore = create((set, get) => ({
   accruedFrntSinceSync: 0,
   confirmedIcpBalance: 0,
   accruedIcpSinceSync: 0,
+  // Per-plot unclaimed accrual
+  plotAccruedTokens: {},
   // Claim tracking
   claimCount: 0,
   lastBalanceBoostTime: 0,
   // Global token economy stats
   totalGlobalDailyOutput: 0,
   globalUnclaimedTokens: 0,
+  // Testnet mode: default true so the faucet is visible in dev/testnet
+  testnetMode: true,
+  setTestnetMode: (enabled) => set({ testnetMode: enabled }),
   setFrntrBalance: (e8s) => set((s2) => {
     const confirmed = Number(e8s) / 1e8;
     if (confirmed < s2.confirmedFrntBalance) {
@@ -74248,6 +74253,41 @@ const useGameStore = create((set, get) => ({
     return {
       confirmedFrntBalance: confirmed,
       accruedFrntSinceSync: newAccrued,
+      player: next.player
+    };
+  }),
+  // --------------------------------------------------------------------------
+  // claimPlotTokens — per-plot atomic claim
+  // Moves the accrued tokens for ONE plot from the accrued bucket into the
+  // confirmed bucket. The displayed balance never changes (no flicker).
+  // The optional `amount` param lets callers pass the on-chain confirmed amount;
+  // if absent we use the locally-tracked plotAccruedTokens value.
+  // --------------------------------------------------------------------------
+  claimPlotTokens: (plotId, amount) => set((s2) => {
+    const plotAccrued = s2.plotAccruedTokens[plotId] ?? 0;
+    const toMove = amount !== void 0 ? amount : plotAccrued;
+    if (toMove <= 0) return {};
+    const clamped = Math.min(toMove, s2.accruedFrntSinceSync);
+    const nextConfirmed = s2.confirmedFrntBalance + clamped;
+    const nextAccrued = Math.max(0, s2.accruedFrntSinceSync - clamped);
+    const nextPlotAccrued = { ...s2.plotAccruedTokens, [plotId]: 0 };
+    const nextDisplay = nextConfirmed + nextAccrued;
+    const next = {
+      ...s2,
+      confirmedFrntBalance: nextConfirmed,
+      accruedFrntSinceSync: nextAccrued,
+      plotAccruedTokens: nextPlotAccrued,
+      claimCount: s2.claimCount + 1,
+      lastBalanceBoostTime: Date.now(),
+      player: { ...s2.player, frntBalance: nextDisplay }
+    };
+    saveToStorage(next);
+    return {
+      confirmedFrntBalance: nextConfirmed,
+      accruedFrntSinceSync: nextAccrued,
+      plotAccruedTokens: nextPlotAccrued,
+      claimCount: next.claimCount,
+      lastBalanceBoostTime: next.lastBalanceBoostTime,
       player: next.player
     };
   }),
@@ -74459,17 +74499,24 @@ const useGameStore = create((set, get) => ({
   },
   claimAllFrntr: (amount) => set((s2) => {
     const nextConfirmed = s2.confirmedFrntBalance + amount;
+    const nextAccrued = Math.max(0, s2.accruedFrntSinceSync - amount);
+    const nextPlotAccrued = {};
+    for (const k2 of Object.keys(s2.plotAccruedTokens)) {
+      nextPlotAccrued[k2] = 0;
+    }
+    const nextDisplay = nextConfirmed + nextAccrued;
     const next = {
       ...s2,
       confirmedFrntBalance: nextConfirmed,
-      player: {
-        ...s2.player,
-        frntBalance: nextConfirmed + s2.accruedFrntSinceSync
-      }
+      accruedFrntSinceSync: nextAccrued,
+      plotAccruedTokens: nextPlotAccrued,
+      player: { ...s2.player, frntBalance: nextDisplay }
     };
     saveToStorage(next);
     return {
       confirmedFrntBalance: nextConfirmed,
+      accruedFrntSinceSync: nextAccrued,
+      plotAccruedTokens: nextPlotAccrued,
       player: next.player,
       lastBalanceBoostTime: Date.now()
     };
@@ -74630,20 +74677,33 @@ const useGameStore = create((set, get) => ({
       5: 37,
       6: 55
     };
+    const perPlotIncrement = {};
     let totalFrntr = 0;
     if (serverRate > 0) {
-      totalFrntr = serverRate / 86400;
+      const perPlot = serverRate / 86400 / Math.max(1, state2.player.plotsOwned.length);
+      for (const plotId of state2.player.plotsOwned) {
+        perPlotIncrement[plotId] = perPlot;
+        totalFrntr += perPlot;
+      }
     } else {
       for (const plotId of state2.player.plotsOwned) {
         const tier = state2.generatorTiers[plotId] ?? 0;
-        totalFrntr += (TIER_RATES[tier] ?? 7) / 86400;
+        const inc = (TIER_RATES[tier] ?? 7) / 86400;
+        perPlotIncrement[plotId] = inc;
+        totalFrntr += inc;
       }
     }
     if (totalFrntr === 0) return;
     set((s2) => {
       const nextAccrued = s2.accruedFrntSinceSync + totalFrntr;
+      const nextPlotAccrued = { ...s2.plotAccruedTokens };
+      for (const [plotId, inc] of Object.entries(perPlotIncrement)) {
+        nextPlotAccrued[plotId] = (nextPlotAccrued[plotId] ?? 0) + inc;
+      }
       return {
         accruedFrntSinceSync: nextAccrued,
+        plotAccruedTokens: nextPlotAccrued,
+        // player.frntBalance = confirmed + accrued; confirmed is NEVER touched here
         player: {
           ...s2.player,
           frntBalance: s2.confirmedFrntBalance + nextAccrued
@@ -83116,6 +83176,19 @@ const GeneratorTierInfo = Record({
   "bonusPerDay": Float64,
   "costFRNTR": Nat
 });
+const EconomySnapshot = Record({
+  "trigger": Text,
+  "treasuryLiquidity": Nat,
+  "activePlayers": Nat,
+  "totalPlotsOwned": Nat,
+  "treasuryDev": Nat,
+  "totalFRNTRMined": Nat,
+  "totalFRNTRBurned": Nat,
+  "timestamp": Int,
+  "globalDailyOutput": Nat,
+  "treasuryLeaderboard": Nat,
+  "totalUnclaimedFRNTR": Nat
+});
 const FaucetClaimSummary = Record({
   "principal": Text,
   "lastClaim": Opt(Int),
@@ -83189,7 +83262,12 @@ const SurveyView = Record({
   "result": Opt(SurveyResult),
   "unlockCost": Nat,
   "secondsRemaining": Nat,
-  "plotId": PlotId
+  "estimatedReward": Nat,
+  "plotId": PlotId,
+  "isCollectable": Bool,
+  "resourcePct": Nat,
+  "biome": Text,
+  "remainingSeconds": Int
 });
 const Tokenomics = Record({
   "burnRate": Nat,
@@ -83285,7 +83363,20 @@ Service({
     []
   ),
   "completeSurvey": Func([Text], [Result], []),
+  "convertICPToUSD": Func([Nat], [Nat64], ["query"]),
   "getAdjacentPlots": Func([Text], [Vec(Text)], ["query"]),
+  "getAdminInfo": Func(
+    [],
+    [
+      Record({
+        "adminPrincipal": Text,
+        "testnestMode": Bool,
+        "totalPlots": Nat,
+        "cyclesBalance": Nat
+      })
+    ],
+    ["query"]
+  ),
   "getAdminPrincipal": Func([], [Text], ["query"]),
   "getAllPlotOwners": Func(
     [],
@@ -83309,12 +83400,14 @@ Service({
     ],
     ["query"]
   ),
+  "getCanisterCycles": Func([], [Nat], ["query"]),
   "getCombatLog": Func([Nat], [Vec(CombatEvent)], ["query"]),
   "getCoreGeneratorTiers": Func(
     [],
     [Vec(GeneratorTierInfo)],
     ["query"]
   ),
+  "getEconomySnapshots": Func([], [Vec(EconomySnapshot)], ["query"]),
   "getFaucetClaims": Func(
     [Principal2],
     [FaucetClaimSummary],
@@ -83364,12 +83457,21 @@ Service({
     ],
     ["query"]
   ),
+  "getGlobalDailyOutput": Func([], [Nat], ["query"]),
   "getGlobalStats": Func([], [GlobalStats], ["query"]),
   "getGlobalUnclaimedTokens": Func([], [Nat], ["query"]),
+  "getICPPrice": Func([], [Nat64], ["query"]),
+  "getICPPriceUSD": Func([], [Float64], ["query"]),
   "getIcpBalance": Func([Principal2], [Nat], []),
   "getIcpUsdPrice": Func([], [Float64], []),
   "getIcpUsdPriceCached": Func([], [Float64], ["query"]),
   "getIsAdmin": Func([], [Bool], ["query"]),
+  "getLastSnapshotTime": Func([], [Int], ["query"]),
+  "getLatestEconomySnapshot": Func(
+    [],
+    [Opt(EconomySnapshot)],
+    ["query"]
+  ),
   "getLeaderboard": Func(
     [Nat],
     [
@@ -83545,6 +83647,7 @@ Service({
     [Variant({ "ok": Text, "err": Text })],
     []
   ),
+  "purgeTestPlayers": Func([], [Result], []),
   "resetAllData": Func([], [], []),
   "resetTestState": Func([], [ResetResult], []),
   "setAdminPrincipal": Func([Principal2], [], []),
@@ -83633,6 +83736,19 @@ const idlFactory = ({ IDL: IDL2 }) => {
     "bonusPerDay": IDL2.Float64,
     "costFRNTR": IDL2.Nat
   });
+  const EconomySnapshot2 = IDL2.Record({
+    "trigger": IDL2.Text,
+    "treasuryLiquidity": IDL2.Nat,
+    "activePlayers": IDL2.Nat,
+    "totalPlotsOwned": IDL2.Nat,
+    "treasuryDev": IDL2.Nat,
+    "totalFRNTRMined": IDL2.Nat,
+    "totalFRNTRBurned": IDL2.Nat,
+    "timestamp": IDL2.Int,
+    "globalDailyOutput": IDL2.Nat,
+    "treasuryLeaderboard": IDL2.Nat,
+    "totalUnclaimedFRNTR": IDL2.Nat
+  });
   const FaucetClaimSummary2 = IDL2.Record({
     "principal": IDL2.Text,
     "lastClaim": IDL2.Opt(IDL2.Int),
@@ -83706,7 +83822,12 @@ const idlFactory = ({ IDL: IDL2 }) => {
     "result": IDL2.Opt(SurveyResult2),
     "unlockCost": IDL2.Nat,
     "secondsRemaining": IDL2.Nat,
-    "plotId": PlotId2
+    "estimatedReward": IDL2.Nat,
+    "plotId": PlotId2,
+    "isCollectable": IDL2.Bool,
+    "resourcePct": IDL2.Nat,
+    "biome": IDL2.Text,
+    "remainingSeconds": IDL2.Int
   });
   const Tokenomics2 = IDL2.Record({
     "burnRate": IDL2.Nat,
@@ -83802,7 +83923,20 @@ const idlFactory = ({ IDL: IDL2 }) => {
       []
     ),
     "completeSurvey": IDL2.Func([IDL2.Text], [Result2], []),
+    "convertICPToUSD": IDL2.Func([IDL2.Nat], [IDL2.Nat64], ["query"]),
     "getAdjacentPlots": IDL2.Func([IDL2.Text], [IDL2.Vec(IDL2.Text)], ["query"]),
+    "getAdminInfo": IDL2.Func(
+      [],
+      [
+        IDL2.Record({
+          "adminPrincipal": IDL2.Text,
+          "testnestMode": IDL2.Bool,
+          "totalPlots": IDL2.Nat,
+          "cyclesBalance": IDL2.Nat
+        })
+      ],
+      ["query"]
+    ),
     "getAdminPrincipal": IDL2.Func([], [IDL2.Text], ["query"]),
     "getAllPlotOwners": IDL2.Func(
       [],
@@ -83830,12 +83964,14 @@ const idlFactory = ({ IDL: IDL2 }) => {
       ],
       ["query"]
     ),
+    "getCanisterCycles": IDL2.Func([], [IDL2.Nat], ["query"]),
     "getCombatLog": IDL2.Func([IDL2.Nat], [IDL2.Vec(CombatEvent2)], ["query"]),
     "getCoreGeneratorTiers": IDL2.Func(
       [],
       [IDL2.Vec(GeneratorTierInfo2)],
       ["query"]
     ),
+    "getEconomySnapshots": IDL2.Func([], [IDL2.Vec(EconomySnapshot2)], ["query"]),
     "getFaucetClaims": IDL2.Func(
       [IDL2.Principal],
       [FaucetClaimSummary2],
@@ -83885,12 +84021,21 @@ const idlFactory = ({ IDL: IDL2 }) => {
       ],
       ["query"]
     ),
+    "getGlobalDailyOutput": IDL2.Func([], [IDL2.Nat], ["query"]),
     "getGlobalStats": IDL2.Func([], [GlobalStats2], ["query"]),
     "getGlobalUnclaimedTokens": IDL2.Func([], [IDL2.Nat], ["query"]),
+    "getICPPrice": IDL2.Func([], [IDL2.Nat64], ["query"]),
+    "getICPPriceUSD": IDL2.Func([], [IDL2.Float64], ["query"]),
     "getIcpBalance": IDL2.Func([IDL2.Principal], [IDL2.Nat], []),
     "getIcpUsdPrice": IDL2.Func([], [IDL2.Float64], []),
     "getIcpUsdPriceCached": IDL2.Func([], [IDL2.Float64], ["query"]),
     "getIsAdmin": IDL2.Func([], [IDL2.Bool], ["query"]),
+    "getLastSnapshotTime": IDL2.Func([], [IDL2.Int], ["query"]),
+    "getLatestEconomySnapshot": IDL2.Func(
+      [],
+      [IDL2.Opt(EconomySnapshot2)],
+      ["query"]
+    ),
     "getLeaderboard": IDL2.Func(
       [IDL2.Nat],
       [
@@ -84070,6 +84215,7 @@ const idlFactory = ({ IDL: IDL2 }) => {
       [IDL2.Variant({ "ok": IDL2.Text, "err": IDL2.Text })],
       []
     ),
+    "purgeTestPlayers": IDL2.Func([], [Result2], []),
     "resetAllData": IDL2.Func([], [], []),
     "resetTestState": IDL2.Func([], [ResetResult2], []),
     "setAdminPrincipal": IDL2.Func([IDL2.Principal], [], []),
@@ -84216,6 +84362,20 @@ class Backend {
       return from_candid_Result_n10(this._uploadFile, this._downloadFile, result);
     }
   }
+  async convertICPToUSD(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.convertICPToUSD(arg0);
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.convertICPToUSD(arg0);
+      return result;
+    }
+  }
   async getAdjacentPlots(arg0) {
     if (this.processError) {
       try {
@@ -84227,6 +84387,20 @@ class Backend {
       }
     } else {
       const result = await this.actor.getAdjacentPlots(arg0);
+      return result;
+    }
+  }
+  async getAdminInfo() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getAdminInfo();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getAdminInfo();
       return result;
     }
   }
@@ -84314,6 +84488,20 @@ class Backend {
       return from_candid_variant_n11(this._uploadFile, this._downloadFile, result);
     }
   }
+  async getCanisterCycles() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getCanisterCycles();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getCanisterCycles();
+      return result;
+    }
+  }
   async getCombatLog(arg0) {
     if (this.processError) {
       try {
@@ -84339,6 +84527,20 @@ class Backend {
       }
     } else {
       const result = await this.actor.getCoreGeneratorTiers();
+      return result;
+    }
+  }
+  async getEconomySnapshots() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getEconomySnapshots();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getEconomySnapshots();
       return result;
     }
   }
@@ -84440,6 +84642,20 @@ class Backend {
       return result;
     }
   }
+  async getGlobalDailyOutput() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getGlobalDailyOutput();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getGlobalDailyOutput();
+      return result;
+    }
+  }
   async getGlobalStats() {
     if (this.processError) {
       try {
@@ -84465,6 +84681,34 @@ class Backend {
       }
     } else {
       const result = await this.actor.getGlobalUnclaimedTokens();
+      return result;
+    }
+  }
+  async getICPPrice() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getICPPrice();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getICPPrice();
+      return result;
+    }
+  }
+  async getICPPriceUSD() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getICPPriceUSD();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getICPPriceUSD();
       return result;
     }
   }
@@ -84524,18 +84768,46 @@ class Backend {
       return result;
     }
   }
+  async getLastSnapshotTime() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getLastSnapshotTime();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getLastSnapshotTime();
+      return result;
+    }
+  }
+  async getLatestEconomySnapshot() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getLatestEconomySnapshot();
+        return from_candid_opt_n23(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getLatestEconomySnapshot();
+      return from_candid_opt_n23(this._uploadFile, this._downloadFile, result);
+    }
+  }
   async getLeaderboard(arg0) {
     if (this.processError) {
       try {
         const result = await this.actor.getLeaderboard(arg0);
-        return from_candid_vec_n23(this._uploadFile, this._downloadFile, result);
+        return from_candid_vec_n24(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.getLeaderboard(arg0);
-      return from_candid_vec_n23(this._uploadFile, this._downloadFile, result);
+      return from_candid_vec_n24(this._uploadFile, this._downloadFile, result);
     }
   }
   async getLeaderboardStats() {
@@ -84570,14 +84842,14 @@ class Backend {
     if (this.processError) {
       try {
         const result = await this.actor.getMissions();
-        return from_candid_vec_n25(this._uploadFile, this._downloadFile, result);
+        return from_candid_vec_n26(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.getMissions();
-      return from_candid_vec_n25(this._uploadFile, this._downloadFile, result);
+      return from_candid_vec_n26(this._uploadFile, this._downloadFile, result);
     }
   }
   async getMyAuditLog() {
@@ -84612,42 +84884,42 @@ class Backend {
     if (this.processError) {
       try {
         const result = await this.actor.getPlayerMissions();
-        return from_candid_vec_n30(this._uploadFile, this._downloadFile, result);
+        return from_candid_vec_n31(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.getPlayerMissions();
-      return from_candid_vec_n30(this._uploadFile, this._downloadFile, result);
+      return from_candid_vec_n31(this._uploadFile, this._downloadFile, result);
     }
   }
   async getPlayerState() {
     if (this.processError) {
       try {
         const result = await this.actor.getPlayerState();
-        return from_candid_record_n32(this._uploadFile, this._downloadFile, result);
+        return from_candid_record_n33(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.getPlayerState();
-      return from_candid_record_n32(this._uploadFile, this._downloadFile, result);
+      return from_candid_record_n33(this._uploadFile, this._downloadFile, result);
     }
   }
   async getPlayerStateByPrincipal(arg0) {
     if (this.processError) {
       try {
         const result = await this.actor.getPlayerStateByPrincipal(arg0);
-        return from_candid_record_n32(this._uploadFile, this._downloadFile, result);
+        return from_candid_record_n33(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.getPlayerStateByPrincipal(arg0);
-      return from_candid_record_n32(this._uploadFile, this._downloadFile, result);
+      return from_candid_record_n33(this._uploadFile, this._downloadFile, result);
     }
   }
   async getPlotCount() {
@@ -84752,14 +85024,14 @@ class Backend {
     if (this.processError) {
       try {
         const result = await this.actor.getSubParcels(arg0);
-        return from_candid_vec_n37(this._uploadFile, this._downloadFile, result);
+        return from_candid_vec_n38(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.getSubParcels(arg0);
-      return from_candid_vec_n37(this._uploadFile, this._downloadFile, result);
+      return from_candid_vec_n38(this._uploadFile, this._downloadFile, result);
     }
   }
   async getSurveyCost(arg0) {
@@ -84780,28 +85052,28 @@ class Backend {
     if (this.processError) {
       try {
         const result = await this.actor.getSurveyResult(arg0);
-        return from_candid_variant_n40(this._uploadFile, this._downloadFile, result);
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getSurveyResult(arg0);
-      return from_candid_variant_n40(this._uploadFile, this._downloadFile, result);
-    }
-  }
-  async getSurveyStatus(arg0) {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getSurveyStatus(arg0);
         return from_candid_variant_n41(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
-      const result = await this.actor.getSurveyStatus(arg0);
+      const result = await this.actor.getSurveyResult(arg0);
       return from_candid_variant_n41(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async getSurveyStatus(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getSurveyStatus(arg0);
+        return from_candid_variant_n42(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getSurveyStatus(arg0);
+      return from_candid_variant_n42(this._uploadFile, this._downloadFile, result);
     }
   }
   async getTokenomics() {
@@ -84920,27 +85192,27 @@ class Backend {
     if (this.processError) {
       try {
         const result = await this.actor.launchMissile(arg0, arg1, arg2);
-        return from_candid_variant_n47(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n48(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.launchMissile(arg0, arg1, arg2);
-      return from_candid_variant_n47(this._uploadFile, this._downloadFile, result);
+      return from_candid_variant_n48(this._uploadFile, this._downloadFile, result);
     }
   }
   async logCancelledAction(arg0, arg1, arg2, arg3) {
     if (this.processError) {
       try {
-        const result = await this.actor.logCancelledAction(arg0, to_candid_opt_n48(this._uploadFile, this._downloadFile, arg1), to_candid_opt_n49(this._uploadFile, this._downloadFile, arg2), arg3);
+        const result = await this.actor.logCancelledAction(arg0, to_candid_opt_n49(this._uploadFile, this._downloadFile, arg1), to_candid_opt_n50(this._uploadFile, this._downloadFile, arg2), arg3);
         return result;
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
-      const result = await this.actor.logCancelledAction(arg0, to_candid_opt_n48(this._uploadFile, this._downloadFile, arg1), to_candid_opt_n49(this._uploadFile, this._downloadFile, arg2), arg3);
+      const result = await this.actor.logCancelledAction(arg0, to_candid_opt_n49(this._uploadFile, this._downloadFile, arg1), to_candid_opt_n50(this._uploadFile, this._downloadFile, arg2), arg3);
       return result;
     }
   }
@@ -84948,28 +85220,42 @@ class Backend {
     if (this.processError) {
       try {
         const result = await this.actor.mineResources(arg0);
-        return from_candid_variant_n50(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n51(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.mineResources(arg0);
-      return from_candid_variant_n50(this._uploadFile, this._downloadFile, result);
+      return from_candid_variant_n51(this._uploadFile, this._downloadFile, result);
     }
   }
   async purchasePlot(arg0) {
     if (this.processError) {
       try {
         const result = await this.actor.purchasePlot(arg0);
-        return from_candid_variant_n47(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n48(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.purchasePlot(arg0);
-      return from_candid_variant_n47(this._uploadFile, this._downloadFile, result);
+      return from_candid_variant_n48(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async purgeTestPlayers() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.purgeTestPlayers();
+        return from_candid_Result_n10(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.purgeTestPlayers();
+      return from_candid_Result_n10(this._uploadFile, this._downloadFile, result);
     }
   }
   async resetAllData() {
@@ -84990,14 +85276,14 @@ class Backend {
     if (this.processError) {
       try {
         const result = await this.actor.resetTestState();
-        return from_candid_ResetResult_n53(this._uploadFile, this._downloadFile, result);
+        return from_candid_ResetResult_n54(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.resetTestState();
-      return from_candid_ResetResult_n53(this._uploadFile, this._downloadFile, result);
+      return from_candid_ResetResult_n54(this._uploadFile, this._downloadFile, result);
     }
   }
   async setAdminPrincipal(arg0) {
@@ -85018,14 +85304,14 @@ class Backend {
     if (this.processError) {
       try {
         const result = await this.actor.setApprovedLiquidityCanister(arg0);
-        return from_candid_variant_n54(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n55(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.setApprovedLiquidityCanister(arg0);
-      return from_candid_variant_n54(this._uploadFile, this._downloadFile, result);
+      return from_candid_variant_n55(this._uploadFile, this._downloadFile, result);
     }
   }
   async setFrntrLedger(arg0) {
@@ -85088,98 +85374,98 @@ class Backend {
     if (this.processError) {
       try {
         const result = await this.actor.setUsername(arg0);
-        return from_candid_variant_n54(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n55(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.setUsername(arg0);
-      return from_candid_variant_n54(this._uploadFile, this._downloadFile, result);
+      return from_candid_variant_n55(this._uploadFile, this._downloadFile, result);
     }
   }
   async startSurvey(arg0) {
     if (this.processError) {
       try {
         const result = await this.actor.startSurvey(arg0);
-        return from_candid_variant_n41(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n42(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.startSurvey(arg0);
-      return from_candid_variant_n41(this._uploadFile, this._downloadFile, result);
+      return from_candid_variant_n42(this._uploadFile, this._downloadFile, result);
     }
   }
   async stressBuyPlots(arg0) {
     if (this.processError) {
       try {
         const result = await this.actor.stressBuyPlots(arg0);
-        return from_candid_StressTestResult_n55(this._uploadFile, this._downloadFile, result);
+        return from_candid_StressTestResult_n56(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.stressBuyPlots(arg0);
-      return from_candid_StressTestResult_n55(this._uploadFile, this._downloadFile, result);
+      return from_candid_StressTestResult_n56(this._uploadFile, this._downloadFile, result);
     }
   }
   async stressMintPlots(arg0) {
     if (this.processError) {
       try {
         const result = await this.actor.stressMintPlots(arg0);
-        return from_candid_StressTestResult_n55(this._uploadFile, this._downloadFile, result);
+        return from_candid_StressTestResult_n56(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.stressMintPlots(arg0);
-      return from_candid_StressTestResult_n55(this._uploadFile, this._downloadFile, result);
+      return from_candid_StressTestResult_n56(this._uploadFile, this._downloadFile, result);
     }
   }
   async stressUpgradePlots(arg0) {
     if (this.processError) {
       try {
         const result = await this.actor.stressUpgradePlots(arg0);
-        return from_candid_StressTestResult_n55(this._uploadFile, this._downloadFile, result);
+        return from_candid_StressTestResult_n56(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.stressUpgradePlots(arg0);
-      return from_candid_StressTestResult_n55(this._uploadFile, this._downloadFile, result);
+      return from_candid_StressTestResult_n56(this._uploadFile, this._downloadFile, result);
     }
   }
   async testFaucet() {
     if (this.processError) {
       try {
         const result = await this.actor.testFaucet();
-        return from_candid_variant_n47(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n48(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.testFaucet();
-      return from_candid_variant_n47(this._uploadFile, this._downloadFile, result);
+      return from_candid_variant_n48(this._uploadFile, this._downloadFile, result);
     }
   }
   async testFaucetV2() {
     if (this.processError) {
       try {
         const result = await this.actor.testFaucetV2();
-        return from_candid_FaucetResult_n60(this._uploadFile, this._downloadFile, result);
+        return from_candid_FaucetResult_n61(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.testFaucetV2();
-      return from_candid_FaucetResult_n60(this._uploadFile, this._downloadFile, result);
+      return from_candid_FaucetResult_n61(this._uploadFile, this._downloadFile, result);
     }
   }
   async updateAdminPrincipalAuth(arg0) {
@@ -85200,28 +85486,28 @@ class Backend {
     if (this.processError) {
       try {
         const result = await this.actor.upgradeGenerator(arg0);
-        return from_candid_variant_n62(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n63(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.upgradeGenerator(arg0);
-      return from_candid_variant_n62(this._uploadFile, this._downloadFile, result);
+      return from_candid_variant_n63(this._uploadFile, this._downloadFile, result);
     }
   }
   async withdrawLiquidityPot(arg0, arg1) {
     if (this.processError) {
       try {
         const result = await this.actor.withdrawLiquidityPot(arg0, arg1);
-        return from_candid_variant_n54(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n55(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.withdrawLiquidityPot(arg0, arg1);
-      return from_candid_variant_n54(this._uploadFile, this._downloadFile, result);
+      return from_candid_variant_n55(this._uploadFile, this._downloadFile, result);
     }
   }
 }
@@ -85237,53 +85523,53 @@ function from_candid_CombatEvent_n18(_uploadFile, _downloadFile, value) {
 function from_candid_FaucetClaimSummary_n20(_uploadFile, _downloadFile, value) {
   return from_candid_record_n21(_uploadFile, _downloadFile, value);
 }
-function from_candid_FaucetResult_n60(_uploadFile, _downloadFile, value) {
-  return from_candid_variant_n61(_uploadFile, _downloadFile, value);
+function from_candid_FaucetResult_n61(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n62(_uploadFile, _downloadFile, value);
 }
-function from_candid_GeneratorTier_n66(_uploadFile, _downloadFile, value) {
-  return from_candid_variant_n67(_uploadFile, _downloadFile, value);
+function from_candid_GeneratorTier_n67(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n68(_uploadFile, _downloadFile, value);
 }
-function from_candid_MineResult_n51(_uploadFile, _downloadFile, value) {
-  return from_candid_record_n52(_uploadFile, _downloadFile, value);
+function from_candid_MineResult_n52(_uploadFile, _downloadFile, value) {
+  return from_candid_record_n53(_uploadFile, _downloadFile, value);
 }
-function from_candid_MissionRequirementKind_n28(_uploadFile, _downloadFile, value) {
-  return from_candid_variant_n29(_uploadFile, _downloadFile, value);
+function from_candid_MissionRequirementKind_n29(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n30(_uploadFile, _downloadFile, value);
 }
-function from_candid_Mission_n26(_uploadFile, _downloadFile, value) {
-  return from_candid_record_n27(_uploadFile, _downloadFile, value);
+function from_candid_Mission_n27(_uploadFile, _downloadFile, value) {
+  return from_candid_record_n28(_uploadFile, _downloadFile, value);
 }
-function from_candid_PlotUpgradesView_n63(_uploadFile, _downloadFile, value) {
-  return from_candid_record_n64(_uploadFile, _downloadFile, value);
+function from_candid_PlotUpgradesView_n64(_uploadFile, _downloadFile, value) {
+  return from_candid_record_n65(_uploadFile, _downloadFile, value);
 }
-function from_candid_ResetResult_n53(_uploadFile, _downloadFile, value) {
-  return from_candid_variant_n47(_uploadFile, _downloadFile, value);
+function from_candid_ResetResult_n54(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n48(_uploadFile, _downloadFile, value);
 }
-function from_candid_ResourceType_n35(_uploadFile, _downloadFile, value) {
-  return from_candid_variant_n36(_uploadFile, _downloadFile, value);
+function from_candid_ResourceType_n36(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n37(_uploadFile, _downloadFile, value);
 }
 function from_candid_Result_n10(_uploadFile, _downloadFile, value) {
   return from_candid_variant_n1(_uploadFile, _downloadFile, value);
 }
-function from_candid_StressActionResult_n58(_uploadFile, _downloadFile, value) {
-  return from_candid_record_n59(_uploadFile, _downloadFile, value);
+function from_candid_StressActionResult_n59(_uploadFile, _downloadFile, value) {
+  return from_candid_record_n60(_uploadFile, _downloadFile, value);
 }
-function from_candid_StressTestResult_n55(_uploadFile, _downloadFile, value) {
-  return from_candid_variant_n56(_uploadFile, _downloadFile, value);
+function from_candid_StressTestResult_n56(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n57(_uploadFile, _downloadFile, value);
 }
-function from_candid_SubParcel_n38(_uploadFile, _downloadFile, value) {
-  return from_candid_record_n39(_uploadFile, _downloadFile, value);
+function from_candid_SubParcel_n39(_uploadFile, _downloadFile, value) {
+  return from_candid_record_n40(_uploadFile, _downloadFile, value);
 }
 function from_candid_SurveyResult_n5(_uploadFile, _downloadFile, value) {
   return from_candid_record_n6(_uploadFile, _downloadFile, value);
 }
-function from_candid_SurveyStatus_n44(_uploadFile, _downloadFile, value) {
-  return from_candid_variant_n45(_uploadFile, _downloadFile, value);
+function from_candid_SurveyStatus_n45(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n46(_uploadFile, _downloadFile, value);
 }
-function from_candid_SurveyView_n42(_uploadFile, _downloadFile, value) {
-  return from_candid_record_n43(_uploadFile, _downloadFile, value);
+function from_candid_SurveyView_n43(_uploadFile, _downloadFile, value) {
+  return from_candid_record_n44(_uploadFile, _downloadFile, value);
 }
-function from_candid_UpgradeError_n68(_uploadFile, _downloadFile, value) {
-  return from_candid_variant_n69(_uploadFile, _downloadFile, value);
+function from_candid_UpgradeError_n69(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n70(_uploadFile, _downloadFile, value);
 }
 function from_candid_opt_n16(_uploadFile, _downloadFile, value) {
   return value.length === 0 ? null : value[0];
@@ -85291,10 +85577,13 @@ function from_candid_opt_n16(_uploadFile, _downloadFile, value) {
 function from_candid_opt_n22(_uploadFile, _downloadFile, value) {
   return value.length === 0 ? null : value[0];
 }
-function from_candid_opt_n46(_uploadFile, _downloadFile, value) {
+function from_candid_opt_n23(_uploadFile, _downloadFile, value) {
+  return value.length === 0 ? null : value[0];
+}
+function from_candid_opt_n47(_uploadFile, _downloadFile, value) {
   return value.length === 0 ? null : from_candid_SurveyResult_n5(_uploadFile, _downloadFile, value[0]);
 }
-function from_candid_opt_n65(_uploadFile, _downloadFile, value) {
+function from_candid_opt_n66(_uploadFile, _downloadFile, value) {
   return value.length === 0 ? null : value[0];
 }
 function from_candid_opt_n7(_uploadFile, _downloadFile, value) {
@@ -85333,7 +85622,7 @@ function from_candid_record_n21(_uploadFile, _downloadFile, value) {
     totalClaims: value.totalClaims
   };
 }
-function from_candid_record_n24(_uploadFile, _downloadFile, value) {
+function from_candid_record_n25(_uploadFile, _downloadFile, value) {
   return {
     principal: value.principal,
     username: record_opt_to_undefined(from_candid_opt_n7(_uploadFile, _downloadFile, value.username)),
@@ -85342,24 +85631,24 @@ function from_candid_record_n24(_uploadFile, _downloadFile, value) {
     plotsOwned: value.plotsOwned
   };
 }
-function from_candid_record_n27(_uploadFile, _downloadFile, value) {
+function from_candid_record_n28(_uploadFile, _downloadFile, value) {
   return {
     id: value.id,
     title: value.title,
     description: value.description,
     rewardE8s: value.rewardE8s,
-    requirement: from_candid_MissionRequirementKind_n28(_uploadFile, _downloadFile, value.requirement)
-  };
-}
-function from_candid_record_n31(_uploadFile, _downloadFile, value) {
-  return {
-    mission: from_candid_Mission_n26(_uploadFile, _downloadFile, value.mission),
-    completed: value.completed
+    requirement: from_candid_MissionRequirementKind_n29(_uploadFile, _downloadFile, value.requirement)
   };
 }
 function from_candid_record_n32(_uploadFile, _downloadFile, value) {
   return {
-    resourceBalances: from_candid_vec_n33(_uploadFile, _downloadFile, value.resourceBalances),
+    mission: from_candid_Mission_n27(_uploadFile, _downloadFile, value.mission),
+    completed: value.completed
+  };
+}
+function from_candid_record_n33(_uploadFile, _downloadFile, value) {
+  return {
+    resourceBalances: from_candid_vec_n34(_uploadFile, _downloadFile, value.resourceBalances),
     username: record_opt_to_undefined(from_candid_opt_n7(_uploadFile, _downloadFile, value.username)),
     fuel: value.fuel,
     iron: value.iron,
@@ -85376,7 +85665,13 @@ function from_candid_record_n32(_uploadFile, _downloadFile, value) {
     passiveIncomePerDay: value.passiveIncomePerDay
   };
 }
-function from_candid_record_n39(_uploadFile, _downloadFile, value) {
+function from_candid_record_n4(_uploadFile, _downloadFile, value) {
+  return {
+    report: from_candid_SurveyResult_n5(_uploadFile, _downloadFile, value.report),
+    rewardE8s: value.rewardE8s
+  };
+}
+function from_candid_record_n40(_uploadFile, _downloadFile, value) {
   return {
     subParcelId: value.subParcelId,
     cooldownEnds: value.cooldownEnds,
@@ -85386,37 +85681,27 @@ function from_candid_record_n39(_uploadFile, _downloadFile, value) {
     specialization: value.specialization
   };
 }
-function from_candid_record_n4(_uploadFile, _downloadFile, value) {
-  return {
-    report: from_candid_SurveyResult_n5(_uploadFile, _downloadFile, value.report),
-    rewardE8s: value.rewardE8s
-  };
-}
-function from_candid_record_n43(_uploadFile, _downloadFile, value) {
+function from_candid_record_n44(_uploadFile, _downloadFile, value) {
   return {
     startTime: value.startTime,
-    status: from_candid_SurveyStatus_n44(_uploadFile, _downloadFile, value.status),
-    result: record_opt_to_undefined(from_candid_opt_n46(_uploadFile, _downloadFile, value.result)),
+    status: from_candid_SurveyStatus_n45(_uploadFile, _downloadFile, value.status),
+    result: record_opt_to_undefined(from_candid_opt_n47(_uploadFile, _downloadFile, value.result)),
     unlockCost: value.unlockCost,
     secondsRemaining: value.secondsRemaining,
-    plotId: value.plotId
+    estimatedReward: value.estimatedReward,
+    plotId: value.plotId,
+    isCollectable: value.isCollectable,
+    resourcePct: value.resourcePct,
+    biome: value.biome,
+    remainingSeconds: value.remainingSeconds
   };
 }
-function from_candid_record_n52(_uploadFile, _downloadFile, value) {
+function from_candid_record_n53(_uploadFile, _downloadFile, value) {
   return {
     efficiency: value.efficiency,
     plotId: value.plotId,
-    resourceYields: from_candid_vec_n33(_uploadFile, _downloadFile, value.resourceYields),
+    resourceYields: from_candid_vec_n34(_uploadFile, _downloadFile, value.resourceYields),
     frntRate: value.frntRate
-  };
-}
-function from_candid_record_n59(_uploadFile, _downloadFile, value) {
-  return {
-    ok: value.ok,
-    action: value.action,
-    index: value.index,
-    errorMsg: record_opt_to_undefined(from_candid_opt_n7(_uploadFile, _downloadFile, value.errorMsg)),
-    durationMs: value.durationMs
   };
 }
 function from_candid_record_n6(_uploadFile, _downloadFile, value) {
@@ -85426,14 +85711,23 @@ function from_candid_record_n6(_uploadFile, _downloadFile, value) {
     biome: from_candid_Biome_n8(_uploadFile, _downloadFile, value.biome)
   };
 }
-function from_candid_record_n64(_uploadFile, _downloadFile, value) {
+function from_candid_record_n60(_uploadFile, _downloadFile, value) {
+  return {
+    ok: value.ok,
+    action: value.action,
+    index: value.index,
+    errorMsg: record_opt_to_undefined(from_candid_opt_n7(_uploadFile, _downloadFile, value.errorMsg)),
+    durationMs: value.durationMs
+  };
+}
+function from_candid_record_n65(_uploadFile, _downloadFile, value) {
   return {
     tierName: value.tierName,
     plotId: value.plotId,
-    installedAt: record_opt_to_undefined(from_candid_opt_n65(_uploadFile, _downloadFile, value.installedAt)),
+    installedAt: record_opt_to_undefined(from_candid_opt_n66(_uploadFile, _downloadFile, value.installedAt)),
     bonusPerDay: value.bonusPerDay,
     nextTierCost: record_opt_to_undefined(from_candid_opt_n16(_uploadFile, _downloadFile, value.nextTierCost)),
-    generatorTier: from_candid_GeneratorTier_n66(_uploadFile, _downloadFile, value.generatorTier)
+    generatorTier: from_candid_GeneratorTier_n67(_uploadFile, _downloadFile, value.generatorTier)
   };
 }
 function from_candid_tuple_n13(_uploadFile, _downloadFile, value) {
@@ -85442,9 +85736,9 @@ function from_candid_tuple_n13(_uploadFile, _downloadFile, value) {
     from_candid_ActionAuditEntry_n14(_uploadFile, _downloadFile, value[1])
   ];
 }
-function from_candid_tuple_n34(_uploadFile, _downloadFile, value) {
+function from_candid_tuple_n35(_uploadFile, _downloadFile, value) {
   return [
-    from_candid_ResourceType_n35(_uploadFile, _downloadFile, value[0]),
+    from_candid_ResourceType_n36(_uploadFile, _downloadFile, value[0]),
     value[1]
   ];
 }
@@ -85475,7 +85769,16 @@ function from_candid_variant_n2(_uploadFile, _downloadFile, value) {
     err: value.err
   } : value;
 }
-function from_candid_variant_n29(_uploadFile, _downloadFile, value) {
+function from_candid_variant_n3(_uploadFile, _downloadFile, value) {
+  return "ok" in value ? {
+    __kind__: "ok",
+    ok: from_candid_record_n4(_uploadFile, _downloadFile, value.ok)
+  } : "err" in value ? {
+    __kind__: "err",
+    err: value.err
+  } : value;
+}
+function from_candid_variant_n30(_uploadFile, _downloadFile, value) {
   return "purchasePlots" in value ? {
     __kind__: "purchasePlots",
     purchasePlots: value.purchasePlots
@@ -85496,19 +85799,10 @@ function from_candid_variant_n29(_uploadFile, _downloadFile, value) {
     claimTokens: value.claimTokens
   } : value;
 }
-function from_candid_variant_n3(_uploadFile, _downloadFile, value) {
-  return "ok" in value ? {
-    __kind__: "ok",
-    ok: from_candid_record_n4(_uploadFile, _downloadFile, value.ok)
-  } : "err" in value ? {
-    __kind__: "err",
-    err: value.err
-  } : value;
-}
-function from_candid_variant_n36(_uploadFile, _downloadFile, value) {
+function from_candid_variant_n37(_uploadFile, _downloadFile, value) {
   return "RareEarth" in value ? "RareEarth" : "Fuel" in value ? "Fuel" : "Iron" in value ? "Iron" : "Crystal" in value ? "Crystal" : value;
 }
-function from_candid_variant_n40(_uploadFile, _downloadFile, value) {
+function from_candid_variant_n41(_uploadFile, _downloadFile, value) {
   return "ok" in value ? {
     __kind__: "ok",
     ok: from_candid_SurveyResult_n5(_uploadFile, _downloadFile, value.ok)
@@ -85517,19 +85811,19 @@ function from_candid_variant_n40(_uploadFile, _downloadFile, value) {
     err: value.err
   } : value;
 }
-function from_candid_variant_n41(_uploadFile, _downloadFile, value) {
+function from_candid_variant_n42(_uploadFile, _downloadFile, value) {
   return "ok" in value ? {
     __kind__: "ok",
-    ok: from_candid_SurveyView_n42(_uploadFile, _downloadFile, value.ok)
+    ok: from_candid_SurveyView_n43(_uploadFile, _downloadFile, value.ok)
   } : "err" in value ? {
     __kind__: "err",
     err: value.err
   } : value;
 }
-function from_candid_variant_n45(_uploadFile, _downloadFile, value) {
+function from_candid_variant_n46(_uploadFile, _downloadFile, value) {
   return "Locked" in value ? "Locked" : "InProgress" in value ? "InProgress" : "Completed" in value ? "Completed" : value;
 }
-function from_candid_variant_n47(_uploadFile, _downloadFile, value) {
+function from_candid_variant_n48(_uploadFile, _downloadFile, value) {
   return "ok" in value ? {
     __kind__: "ok",
     ok: value.ok
@@ -85538,16 +85832,16 @@ function from_candid_variant_n47(_uploadFile, _downloadFile, value) {
     err: value.err
   } : value;
 }
-function from_candid_variant_n50(_uploadFile, _downloadFile, value) {
+function from_candid_variant_n51(_uploadFile, _downloadFile, value) {
   return "ok" in value ? {
     __kind__: "ok",
-    ok: from_candid_MineResult_n51(_uploadFile, _downloadFile, value.ok)
+    ok: from_candid_MineResult_n52(_uploadFile, _downloadFile, value.ok)
   } : "err" in value ? {
     __kind__: "err",
     err: value.err
   } : value;
 }
-function from_candid_variant_n54(_uploadFile, _downloadFile, value) {
+function from_candid_variant_n55(_uploadFile, _downloadFile, value) {
   return "ok" in value ? {
     __kind__: "ok",
     ok: value.ok
@@ -85556,19 +85850,10 @@ function from_candid_variant_n54(_uploadFile, _downloadFile, value) {
     err: value.err
   } : value;
 }
-function from_candid_variant_n56(_uploadFile, _downloadFile, value) {
+function from_candid_variant_n57(_uploadFile, _downloadFile, value) {
   return "ok" in value ? {
     __kind__: "ok",
-    ok: from_candid_vec_n57(_uploadFile, _downloadFile, value.ok)
-  } : "err" in value ? {
-    __kind__: "err",
-    err: value.err
-  } : value;
-}
-function from_candid_variant_n61(_uploadFile, _downloadFile, value) {
-  return "ok" in value ? {
-    __kind__: "ok",
-    ok: value.ok
+    ok: from_candid_vec_n58(_uploadFile, _downloadFile, value.ok)
   } : "err" in value ? {
     __kind__: "err",
     err: value.err
@@ -85577,16 +85862,25 @@ function from_candid_variant_n61(_uploadFile, _downloadFile, value) {
 function from_candid_variant_n62(_uploadFile, _downloadFile, value) {
   return "ok" in value ? {
     __kind__: "ok",
-    ok: from_candid_PlotUpgradesView_n63(_uploadFile, _downloadFile, value.ok)
+    ok: value.ok
   } : "err" in value ? {
     __kind__: "err",
-    err: from_candid_UpgradeError_n68(_uploadFile, _downloadFile, value.err)
+    err: value.err
   } : value;
 }
-function from_candid_variant_n67(_uploadFile, _downloadFile, value) {
+function from_candid_variant_n63(_uploadFile, _downloadFile, value) {
+  return "ok" in value ? {
+    __kind__: "ok",
+    ok: from_candid_PlotUpgradesView_n64(_uploadFile, _downloadFile, value.ok)
+  } : "err" in value ? {
+    __kind__: "err",
+    err: from_candid_UpgradeError_n69(_uploadFile, _downloadFile, value.err)
+  } : value;
+}
+function from_candid_variant_n68(_uploadFile, _downloadFile, value) {
   return "TierIII" in value ? "TierIII" : "None" in value ? "None" : "TierII" in value ? "TierII" : "TierIV" in value ? "TierIV" : "TierVI" in value ? "TierVI" : "TierI" in value ? "TierI" : "TierV" in value ? "TierV" : value;
 }
-function from_candid_variant_n69(_uploadFile, _downloadFile, value) {
+function from_candid_variant_n70(_uploadFile, _downloadFile, value) {
   return "SubParcelLocked" in value ? "SubParcelLocked" : "PlotNotFound" in value ? "PlotNotFound" : "InvalidTier" in value ? "InvalidTier" : "NotOwner" in value ? "NotOwner" : "AlreadyMaxTier" in value ? "AlreadyMaxTier" : "InsufficientFRNTR" in value ? "InsufficientFRNTR" : value;
 }
 function from_candid_variant_n9(_uploadFile, _downloadFile, value) {
@@ -85598,28 +85892,28 @@ function from_candid_vec_n12(_uploadFile, _downloadFile, value) {
 function from_candid_vec_n17(_uploadFile, _downloadFile, value) {
   return value.map((x3) => from_candid_CombatEvent_n18(_uploadFile, _downloadFile, x3));
 }
-function from_candid_vec_n23(_uploadFile, _downloadFile, value) {
-  return value.map((x3) => from_candid_record_n24(_uploadFile, _downloadFile, x3));
+function from_candid_vec_n24(_uploadFile, _downloadFile, value) {
+  return value.map((x3) => from_candid_record_n25(_uploadFile, _downloadFile, x3));
 }
-function from_candid_vec_n25(_uploadFile, _downloadFile, value) {
-  return value.map((x3) => from_candid_Mission_n26(_uploadFile, _downloadFile, x3));
+function from_candid_vec_n26(_uploadFile, _downloadFile, value) {
+  return value.map((x3) => from_candid_Mission_n27(_uploadFile, _downloadFile, x3));
 }
-function from_candid_vec_n30(_uploadFile, _downloadFile, value) {
-  return value.map((x3) => from_candid_record_n31(_uploadFile, _downloadFile, x3));
+function from_candid_vec_n31(_uploadFile, _downloadFile, value) {
+  return value.map((x3) => from_candid_record_n32(_uploadFile, _downloadFile, x3));
 }
-function from_candid_vec_n33(_uploadFile, _downloadFile, value) {
-  return value.map((x3) => from_candid_tuple_n34(_uploadFile, _downloadFile, x3));
+function from_candid_vec_n34(_uploadFile, _downloadFile, value) {
+  return value.map((x3) => from_candid_tuple_n35(_uploadFile, _downloadFile, x3));
 }
-function from_candid_vec_n37(_uploadFile, _downloadFile, value) {
-  return value.map((x3) => from_candid_SubParcel_n38(_uploadFile, _downloadFile, x3));
+function from_candid_vec_n38(_uploadFile, _downloadFile, value) {
+  return value.map((x3) => from_candid_SubParcel_n39(_uploadFile, _downloadFile, x3));
 }
-function from_candid_vec_n57(_uploadFile, _downloadFile, value) {
-  return value.map((x3) => from_candid_StressActionResult_n58(_uploadFile, _downloadFile, x3));
-}
-function to_candid_opt_n48(_uploadFile, _downloadFile, value) {
-  return value === null ? candid_none() : candid_some(value);
+function from_candid_vec_n58(_uploadFile, _downloadFile, value) {
+  return value.map((x3) => from_candid_StressActionResult_n59(_uploadFile, _downloadFile, x3));
 }
 function to_candid_opt_n49(_uploadFile, _downloadFile, value) {
+  return value === null ? candid_none() : candid_some(value);
+}
+function to_candid_opt_n50(_uploadFile, _downloadFile, value) {
   return value === null ? candid_none() : candid_some(value);
 }
 function createActor(canisterId, _uploadFile, _downloadFile, options = {}) {
@@ -85636,18 +85930,18 @@ function createActor(canisterId, _uploadFile, _downloadFile, options = {}) {
   });
   return new Backend(actor, _uploadFile, _downloadFile, options.processError);
 }
-const CYAN$g = "#00ffcc";
-const GOLD$6 = "#ffd700";
+const CYAN$h = "#00ffcc";
+const GOLD$7 = "#ffd700";
 const BG = "rgba(0,10,20,0.92)";
-const BORDER$e = "rgba(0,255,204,0.28)";
+const BORDER$f = "rgba(0,255,204,0.28)";
 const TEXT$9 = "#e0f4ff";
-const TEXT_DIM$9 = "rgba(224,244,255,0.55)";
+const TEXT_DIM$a = "rgba(224,244,255,0.55)";
 const ACTION_COLORS = {
-  purchase: CYAN$g,
-  upgrade: GOLD$6,
+  purchase: CYAN$h,
+  upgrade: GOLD$7,
   claim: "#22c55e",
   survey: "#a78bfa",
-  mission: GOLD$6
+  mission: GOLD$7
 };
 const ACTION_LABELS = {
   purchase: "CONFIRM PURCHASE",
@@ -85670,19 +85964,43 @@ function _ActionConfirmModal({
   warningText,
   isLoading = false
 }) {
+  const overlayRef = reactExports.useRef(null);
+  reactExports.useEffect(() => {
+    if (!isOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [isOpen]);
+  reactExports.useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e) => {
+      if (e.key === "Escape") onCancel();
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [isOpen, onCancel]);
   if (!isOpen) return null;
-  const accentColor = ACTION_COLORS[actionType] ?? CYAN$g;
+  const accentColor = ACTION_COLORS[actionType] ?? CYAN$h;
   const headerLabel = ACTION_LABELS[actionType] ?? "CONFIRM ACTION";
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+  const modal = /* @__PURE__ */ jsxRuntimeExports.jsx(
     "dialog",
     {
+      ref: overlayRef,
       "data-ocid": "action_confirm.dialog",
-      open: true,
       "aria-labelledby": "action-confirm-title",
+      onClick: (e) => {
+        if (e.target === overlayRef.current) onCancel();
+      },
+      onKeyDown: (e) => {
+        if (e.key === "Escape") onCancel();
+      },
+      open: true,
       style: {
         position: "fixed",
         inset: 0,
-        zIndex: 9e3,
+        zIndex: 99999,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -85694,14 +86012,9 @@ function _ActionConfirmModal({
         margin: 0,
         maxWidth: "100vw",
         maxHeight: "100vh",
-        width: "100vw",
-        height: "100vh"
-      },
-      onClick: (e) => {
-        if (e.target === e.currentTarget) onCancel();
-      },
-      onKeyDown: (e) => {
-        if (e.key === "Escape") onCancel();
+        width: "100%",
+        height: "100%",
+        overflow: "visible"
       },
       children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
         "div",
@@ -85710,14 +86023,16 @@ function _ActionConfirmModal({
             background: BG,
             backdropFilter: "blur(24px)",
             WebkitBackdropFilter: "blur(24px)",
-            border: `1px solid ${BORDER$e}`,
+            border: `1px solid ${BORDER$f}`,
             boxShadow: `0 0 40px ${accentColor}22, 0 0 80px rgba(0,0,0,0.6), inset 0 0 30px rgba(0,255,204,0.03)`,
             borderRadius: 14,
             width: "100%",
-            maxWidth: 380,
+            maxWidth: 400,
             overflow: "hidden",
             position: "relative"
           },
+          onClick: (e) => e.stopPropagation(),
+          onKeyDown: (e) => e.stopPropagation(),
           children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               "div",
@@ -85783,7 +86098,7 @@ function _ActionConfirmModal({
                     gap: "6px 12px",
                     padding: "10px 12px",
                     background: "rgba(0,255,204,0.03)",
-                    border: `1px solid ${BORDER$e}`,
+                    border: `1px solid ${BORDER$f}`,
                     borderRadius: 8,
                     marginBottom: 12
                   },
@@ -85793,7 +86108,7 @@ function _ActionConfirmModal({
                       {
                         style: {
                           fontSize: 7,
-                          color: TEXT_DIM$9,
+                          color: TEXT_DIM$a,
                           letterSpacing: 1,
                           textTransform: "uppercase",
                           fontFamily: "monospace",
@@ -85837,7 +86152,7 @@ function _ActionConfirmModal({
                       {
                         style: {
                           fontSize: 8,
-                          color: TEXT_DIM$9,
+                          color: TEXT_DIM$a,
                           letterSpacing: 1,
                           textTransform: "uppercase",
                           fontFamily: "monospace"
@@ -85909,7 +86224,7 @@ function _ActionConfirmModal({
                       background: "rgba(255,255,255,0.04)",
                       border: "1px solid rgba(255,255,255,0.12)",
                       borderRadius: 8,
-                      color: isLoading ? "rgba(255,255,255,0.3)" : TEXT_DIM$9,
+                      color: isLoading ? "rgba(255,255,255,0.3)" : TEXT_DIM$a,
                       fontSize: 9,
                       fontWeight: 700,
                       letterSpacing: 1.5,
@@ -85952,6 +86267,7 @@ function _ActionConfirmModal({
       )
     }
   );
+  return reactDomExports.createPortal(modal, document.body);
 }
 function PotCard({
   label,
@@ -86296,8 +86612,8 @@ function LiquiditySeedingPanel() {
     )
   ] });
 }
-const CYAN$f = "#00ffcc";
-const TEXT_DIM$8 = "rgba(224,244,255,0.55)";
+const CYAN$g = "#00ffcc";
+const TEXT_DIM$9 = "rgba(224,244,255,0.55)";
 const SHOWN_KEY = "shown_toasts";
 const MESSAGES = {
   purchase: "Plot acquired! View your new land.",
@@ -86411,17 +86727,17 @@ function _PostActionToast({
       "aria-live": "polite",
       style: {
         position: "fixed",
-        bottom: 86,
+        bottom: 72,
         right: 14,
-        zIndex: 8500,
+        zIndex: 9e3,
         width: 290,
         background: "rgba(0,10,22,0.92)",
         backdropFilter: "blur(20px)",
         WebkitBackdropFilter: "blur(20px)",
-        border: `1px solid ${CYAN$f}44`,
-        borderLeft: `3px solid ${CYAN$f}`,
+        border: `1px solid ${CYAN$g}44`,
+        borderLeft: `3px solid ${CYAN$g}`,
         borderRadius: 10,
-        boxShadow: `0 0 24px ${CYAN$f}18, 0 4px 32px rgba(0,0,0,0.55)`,
+        boxShadow: `0 0 24px ${CYAN$g}18, 0 4px 32px rgba(0,0,0,0.55)`,
         animation: sliding ? "slideOutToRight 0.35s cubic-bezier(0.4,0,1,1) forwards" : "slideInFromRight 0.38s cubic-bezier(0.22,1,0.36,1) forwards",
         overflow: "hidden"
       },
@@ -86431,7 +86747,7 @@ function _PostActionToast({
           {
             style: {
               height: 1,
-              background: `linear-gradient(90deg, ${CYAN$f}, transparent)`
+              background: `linear-gradient(90deg, ${CYAN$g}, transparent)`
             }
           }
         ),
@@ -86462,7 +86778,7 @@ function _PostActionToast({
                           style: {
                             fontSize: 10,
                             fontWeight: 700,
-                            color: CYAN$f,
+                            color: CYAN$g,
                             letterSpacing: 0.5
                           },
                           children: msg
@@ -86481,7 +86797,7 @@ function _PostActionToast({
                     style: {
                       background: "transparent",
                       border: "none",
-                      color: TEXT_DIM$8,
+                      color: TEXT_DIM$9,
                       fontSize: 14,
                       cursor: "pointer",
                       lineHeight: 1,
@@ -86513,9 +86829,9 @@ function _PostActionToast({
                       flex: 1,
                       padding: "5px 4px",
                       background: "rgba(0,255,204,0.07)",
-                      border: `1px solid ${CYAN$f}33`,
+                      border: `1px solid ${CYAN$g}33`,
                       borderRadius: 6,
-                      color: CYAN$f,
+                      color: CYAN$g,
                       fontSize: 7.5,
                       fontWeight: 700,
                       letterSpacing: 0.8,
@@ -86536,9 +86852,9 @@ function _PostActionToast({
                       flex: 1,
                       padding: "5px 4px",
                       background: "rgba(0,255,204,0.07)",
-                      border: `1px solid ${CYAN$f}33`,
+                      border: `1px solid ${CYAN$g}33`,
                       borderRadius: 6,
-                      color: CYAN$f,
+                      color: CYAN$g,
                       fontSize: 7.5,
                       fontWeight: 700,
                       letterSpacing: 0.8,
@@ -86559,9 +86875,9 @@ function _PostActionToast({
                       flex: 1,
                       padding: "5px 4px",
                       background: "rgba(0,255,204,0.07)",
-                      border: `1px solid ${CYAN$f}33`,
+                      border: `1px solid ${CYAN$g}33`,
                       borderRadius: 6,
-                      color: CYAN$f,
+                      color: CYAN$g,
                       fontSize: 7.5,
                       fontWeight: 700,
                       letterSpacing: 0.8,
@@ -86590,7 +86906,7 @@ function _PostActionToast({
                 {
                   style: {
                     height: "100%",
-                    background: CYAN$f,
+                    background: CYAN$g,
                     borderRadius: 1,
                     animation: "toastProgress 8s linear forwards"
                   }
@@ -86604,25 +86920,170 @@ function _PostActionToast({
     }
   );
 }
-function efficiencyColor(eff) {
-  if (eff >= 85) return "text-green-400";
-  if (eff >= 70) return "text-amber-400";
-  return "text-red-400";
+function effColor(eff) {
+  if (eff >= 90) return "#4ade80";
+  if (eff >= 75) return "#fbbf24";
+  return "#f87171";
 }
-function UnclaimedCounter({
+function rarityLabel(biome, tier) {
+  if (biome === "AsteroidImpact")
+    return { label: "LEGENDARY", color: "#e040fb" };
+  if (biome === "Volcanic") return { label: "EPIC", color: "#ff6b35" };
+  if (biome === "Tropical" || biome === "Arctic")
+    return { label: "RARE", color: "#00bcd4" };
+  if (tier >= 4) return { label: "ELITE", color: "#ffd700" };
+  return { label: "COMMON", color: "rgba(224,244,255,0.38)" };
+}
+function fmtNum(n, dec = 2) {
+  return n.toLocaleString(void 0, {
+    minimumFractionDigits: dec,
+    maximumFractionDigits: dec
+  });
+}
+function UnclaimedTicker({
   plotId,
   tier
 }) {
-  const perSecond = TIER_DAILY_RATES[tier] / 86400;
-  const [unclaimed, setUnclaimed] = reactExports.useState(0);
+  const perSec = TIER_DAILY_RATES[tier] / 86400;
+  const [val, setVal] = reactExports.useState(0);
   reactExports.useEffect(() => {
-    setUnclaimed(0);
-    const id2 = setInterval(() => setUnclaimed((v2) => v2 + perSecond), 1e3);
+    setVal(0);
+    if (perSec === 0) return;
+    const id2 = setInterval(() => setVal((v2) => v2 + perSec), 1e3);
     return () => clearInterval(id2);
   }, [plotId]);
-  return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-amber-400", children: unclaimed.toFixed(6) });
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "span",
+    {
+      className: "font-mono",
+      style: { color: "#ffd700", fontSize: 11, fontWeight: 700 },
+      children: val.toFixed(6)
+    }
+  );
 }
-function PlotCard({ plotId, index: index2 }) {
+function GlobalTicker({ plotsOwned }) {
+  const generatorTiers = useGameStore((s2) => s2.generatorTiers);
+  const [val, setVal] = reactExports.useState(0);
+  const key = plotsOwned.join(",");
+  reactExports.useEffect(() => {
+    setVal(0);
+    const perSec = plotsOwned.reduce((sum, id22) => {
+      const tier = generatorTiers[id22] ?? 0;
+      return sum + TIER_DAILY_RATES[tier] / 86400;
+    }, 0);
+    if (perSec === 0) return;
+    const id2 = setInterval(() => setVal((v2) => v2 + perSec), 1e3);
+    return () => clearInterval(id2);
+  }, [key]);
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "span",
+    {
+      className: "font-mono font-bold tabular-nums",
+      style: { color: "#ffd700", fontSize: 13 },
+      children: val.toFixed(4)
+    }
+  );
+}
+const ScanLines = () => /* @__PURE__ */ jsxRuntimeExports.jsx(
+  "div",
+  {
+    "aria-hidden": "true",
+    style: {
+      position: "absolute",
+      inset: 0,
+      backgroundImage: "repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,255,255,0.018) 2px,rgba(0,255,255,0.018) 3px)",
+      pointerEvents: "none",
+      borderRadius: "inherit"
+    }
+  }
+);
+function TierPips({ tier }) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex gap-0.5 mt-1", children: [0, 1, 2, 3, 4, 5, 6].map((t) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "div",
+    {
+      style: {
+        height: 2,
+        flex: 1,
+        borderRadius: 1,
+        transition: "background 0.4s",
+        background: t < tier ? "rgba(0,255,204,0.35)" : t === tier ? tier === 6 ? "linear-gradient(90deg,#ffd700,#ff6b35)" : "linear-gradient(90deg,#00ffcc,#ffd700)" : "rgba(255,255,255,0.06)",
+        boxShadow: t === tier && tier > 0 ? "0 0 4px rgba(0,255,204,0.7)" : "none"
+      }
+    },
+    t
+  )) });
+}
+function SubParcelSlots() {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-1 mt-2", children: [
+    Array.from({ length: 7 }).map((_2, i2) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "div",
+      {
+        title: "COMING SOON",
+        style: {
+          width: 14,
+          height: 14,
+          borderRadius: 2,
+          background: "rgba(0,255,204,0.04)",
+          border: "1px solid rgba(0,255,204,0.12)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center"
+        },
+        children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "svg",
+          {
+            width: "6",
+            height: "6",
+            viewBox: "0 0 6 6",
+            fill: "none",
+            "aria-hidden": "true",
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "rect",
+                {
+                  x: "1",
+                  y: "1",
+                  width: "4",
+                  height: "4",
+                  rx: "0.5",
+                  stroke: "rgba(0,255,204,0.3)",
+                  strokeWidth: "1"
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "line",
+                {
+                  x1: "3",
+                  y1: "1",
+                  x2: "3",
+                  y2: "5",
+                  stroke: "rgba(0,255,204,0.2)",
+                  strokeWidth: "0.5"
+                }
+              )
+            ]
+          }
+        )
+      },
+      i2
+    )),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "span",
+      {
+        style: {
+          fontSize: 7,
+          color: "rgba(0,255,204,0.3)",
+          fontWeight: 700,
+          letterSpacing: "0.12em",
+          alignSelf: "center",
+          marginLeft: 2
+        },
+        children: "SOON™"
+      }
+    )
+  ] });
+}
+function PlotTile({ plotId, index: index2 }) {
   const plot = useGameStore(
     (s2) => s2.plots.find((p2) => String(p2.id) === plotId)
   );
@@ -86630,11 +87091,11 @@ function PlotCard({ plotId, index: index2 }) {
   const spendFrntr = useGameStore((s2) => s2.spendFrntr);
   const setFrntrBalance = useGameStore((s2) => s2.setFrntrBalance);
   const incrementClaimCount = useGameStore((s2) => s2.incrementClaimCount);
-  const player = useGameStore((s2) => s2.player);
   const { actor } = useActor(createActor);
-  const [upgradeOpen, setUpgradeOpen] = reactExports.useState(false);
   const [claiming, setClaiming] = reactExports.useState(false);
   const [upgrading, setUpgrading] = reactExports.useState(false);
+  const [upgradeOpen, setUpgradeOpen] = reactExports.useState(false);
+  const [hovered, setHovered] = reactExports.useState(false);
   const [confirmOpen, setConfirmOpen] = reactExports.useState(false);
   const [confirmPending, setConfirmPending] = reactExports.useState(null);
   const [confirmTitle, setConfirmTitle] = reactExports.useState("");
@@ -86646,7 +87107,29 @@ function PlotCard({ plotId, index: index2 }) {
   const [postActionType, setPostActionType] = reactExports.useState(
     null
   );
-  function openConfirmModal(title, actionType, details, costLabel, warning2, fn) {
+  const cardRef = reactExports.useRef(null);
+  reactExports.useEffect(() => {
+    if (!upgradeOpen) return;
+    function outside(e) {
+      if (cardRef.current && !cardRef.current.contains(e.target))
+        setUpgradeOpen(false);
+    }
+    document.addEventListener("mousedown", outside);
+    return () => document.removeEventListener("mousedown", outside);
+  }, [upgradeOpen]);
+  if (!plot) return null;
+  const tier = generatorTiers[plotId] ?? 0;
+  const dailyRate = TIER_DAILY_RATES[tier];
+  const hourlyRate = dailyRate / 24;
+  const minRate = dailyRate / 1440;
+  const biomeColor = BIOME_DOT[plot.biome] ?? BIOME_DOT.Forest ?? "#00ffcc";
+  const nextTier = Math.min(6, tier + 1);
+  const upgradeCost = tier < 6 ? UPGRADE_COSTS[nextTier] ?? null : null;
+  const nextDailyRate = tier < 6 ? TIER_DAILY_RATES[nextTier] : null;
+  const rarity = rarityLabel(plot.biome, tier);
+  const biomeName = plot.biome.replace("AsteroidImpact", "Asteroid Impact").replace("DeepOcean", "Deep Ocean");
+  const plotLabel = `#${String(plot.id).padStart(4, "0").toUpperCase()}`;
+  function openConfirm(title, actionType, details, costLabel, warning2, fn) {
     setConfirmTitle(title);
     setConfirmActionType(actionType);
     setConfirmDetails(details);
@@ -86655,41 +87138,6 @@ function PlotCard({ plotId, index: index2 }) {
     setConfirmPending(() => fn);
     setConfirmOpen(true);
   }
-  async function handleConfirmAction() {
-    if (!confirmPending) return;
-    setConfirmLoading(true);
-    try {
-      await confirmPending();
-    } finally {
-      setConfirmLoading(false);
-      setConfirmOpen(false);
-      setConfirmPending(null);
-    }
-  }
-  function handleCancelConfirm() {
-    setConfirmOpen(false);
-    setConfirmPending(null);
-    actor == null ? void 0 : actor.logCancelledAction(
-      confirmTitle,
-      plotId,
-      null,
-      "User cancelled from inventory"
-    ).catch(() => {
-    });
-  }
-  if (!plot) return null;
-  const tier = generatorTiers[plotId] ?? 0;
-  const dailyRate = TIER_DAILY_RATES[tier];
-  const hourlyRate = (dailyRate / 24).toFixed(2);
-  const minRate = (dailyRate / 1440).toFixed(4);
-  const biomeColor = BIOME_DOT[plot.biome] ?? "#00ffcc";
-  const plotTitle = `Plot #${String(plot.id).slice(0, 8).toUpperCase()}`;
-  const nextTier = tier + 1;
-  const upgradeCost = tier < 6 ? UPGRADE_COSTS[nextTier] : null;
-  const nextDailyRate = tier < 6 ? TIER_DAILY_RATES[nextTier] : null;
-  const surveyed = !!plot.surveyed;
-  const isLoggedIn = !!player.principal;
-  const tierProgress = tier / 6 * 100;
   const executeClaim = async () => {
     if (!actor || claiming) return;
     setClaiming(true);
@@ -86702,7 +87150,7 @@ function PlotCard({ plotId, index: index2 }) {
           if (state2) setFrntrBalance(BigInt(state2.frntBalance));
         } catch {
         }
-        ue.success(`Tokens claimed from ${plotTitle}`);
+        ue.success(`Claimed from Plot ${plotLabel}`);
         setPostActionType("claim");
       } else {
         ue.error(`Claim failed: ${JSON.stringify(res.err)}`);
@@ -86714,16 +87162,16 @@ function PlotCard({ plotId, index: index2 }) {
     }
   };
   const handleClaim = () => {
-    openConfirmModal(
-      "Claim Tokens",
+    openConfirm(
+      `Claim Tokens — Plot ${plotLabel}`,
       "claim",
       [
-        { label: "Plot", value: plotTitle },
+        { label: "Plot ID", value: plotLabel },
         { label: "Daily Rate", value: `${dailyRate} FRNTR/day` },
-        { label: "Est. Unclaimed", value: "See ticker above" }
+        { label: "Hourly Rate", value: `${fmtNum(hourlyRate, 2)} FRNTR/hr` }
       ],
       "",
-      "Claimed tokens are transferred on-chain. This action cannot be reversed.",
+      "Claimed tokens are transferred on-chain to your wallet balance. Cannot be reversed.",
       executeClaim
     );
   };
@@ -86734,7 +87182,7 @@ function PlotCard({ plotId, index: index2 }) {
       const res = await actor.upgradeGenerator(String(plot.id));
       if ("ok" in res) {
         spendFrntr(upgradeCost);
-        ue.success(`${plotTitle} upgraded to ${TIER_NAMES[nextTier]}`);
+        ue.success(`Plot ${plotLabel} → ${TIER_NAMES[nextTier]}`);
         setUpgradeOpen(false);
         setPostActionType("upgrade");
       } else {
@@ -86748,420 +87196,680 @@ function PlotCard({ plotId, index: index2 }) {
   };
   const handleUpgrade = () => {
     if (upgradeCost === null) return;
-    openConfirmModal(
-      "Upgrade Generator",
+    openConfirm(
+      `Upgrade Generator — Plot ${plotLabel}`,
       "upgrade",
       [
-        { label: "Plot", value: plotTitle },
         { label: "Current Tier", value: TIER_NAMES[tier] },
         { label: "Next Tier", value: TIER_NAMES[nextTier] },
-        { label: "New Rate", value: `${nextDailyRate} FRNTR/day` }
+        { label: "New Daily Rate", value: `${nextDailyRate} FRNTR/day` },
+        {
+          label: "Rate Increase",
+          value: `+${(nextDailyRate ?? 0) - dailyRate} FRNTR/day`
+        }
       ],
       `${upgradeCost.toLocaleString()} FRNTR`,
-      "Upgrading burns FRNTR permanently from your balance and the total supply.",
+      "Upgrades permanently burn FRNTR from your balance. This cannot be undone.",
       executeUpgrade
     );
   };
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-    motion.div,
-    {
-      "data-ocid": `inventory.item.${index2}`,
-      initial: { opacity: 0, y: 12 },
-      animate: { opacity: 1, y: 0 },
-      transition: { duration: 0.25, delay: index2 * 0.04 },
-      className: "relative overflow-hidden rounded-xl",
-      style: {
-        background: "rgba(0,20,40,0.55)",
-        border: "1px solid rgba(0,255,204,0.15)",
-        boxShadow: tier > 0 ? "0 0 20px rgba(0,255,204,0.06)" : "none"
-      },
-      children: [
-        tier > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "div",
-          {
-            className: "absolute top-0 left-0 h-0.5 transition-all duration-700",
-            style: {
-              width: `${tierProgress}%`,
-              background: "linear-gradient(90deg, #00ffcc, #ffd700)"
-            }
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-3", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 mb-3", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "div",
-              {
-                className: "w-2.5 h-2.5 rounded-full flex-shrink-0",
-                style: {
-                  background: biomeColor,
-                  boxShadow: `0 0 6px ${biomeColor}99`
-                }
-              }
-            ),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 min-w-0", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "div",
-                {
-                  className: "text-xs font-bold font-mono tracking-wide",
-                  style: { color: "#e0f4ff" },
-                  children: plotTitle
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "div",
-                {
-                  className: "text-[10px] font-medium",
-                  style: { color: "rgba(224,244,255,0.5)" },
-                  children: plot.biome
-                }
-              )
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "span",
-              {
-                className: "px-2 py-0.5 rounded text-[10px] font-bold tracking-wider",
-                style: {
-                  background: tier > 0 ? "rgba(0,255,204,0.12)" : "rgba(255,255,255,0.05)",
-                  border: `1px solid ${tier > 0 ? "rgba(0,255,204,0.3)" : "rgba(255,255,255,0.08)"}`,
-                  color: tier > 0 ? "#00ffcc" : "rgba(224,244,255,0.45)"
-                },
-                children: TIER_NAMES[tier]
-              }
-            ),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "span",
-              {
-                className: "px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider",
-                style: {
-                  background: surveyed ? "rgba(0,255,100,0.1)" : "rgba(255,255,255,0.04)",
-                  border: `1px solid ${surveyed ? "rgba(0,255,100,0.25)" : "rgba(255,255,255,0.08)"}`,
-                  color: surveyed ? "#00ff64" : "rgba(224,244,255,0.4)"
-                },
-                children: surveyed ? "SURVEYED" : "UNSRVY"
-              }
-            )
-          ] }),
+  const glowAlpha = hovered ? 0.45 : tier > 3 ? 0.22 : tier > 0 ? 0.14 : 0.08;
+  const borderColor = tier > 3 ? `rgba(255,215,0,${hovered ? 0.55 : 0.22})` : `rgba(0,255,204,${glowAlpha})`;
+  const shadowColor = tier > 3 ? "rgba(255,215,0,0.12)" : "rgba(0,255,204,0.1)";
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      motion.div,
+      {
+        ref: cardRef,
+        "data-ocid": `inventory.item.${index2}`,
+        initial: { opacity: 0, y: 16, scale: 0.97 },
+        animate: { opacity: 1, y: 0, scale: 1 },
+        transition: { duration: 0.3, delay: Math.min(index2 * 0.05, 0.6) },
+        whileHover: { y: -2 },
+        onHoverStart: () => setHovered(true),
+        onHoverEnd: () => setHovered(false),
+        style: {
+          position: "relative",
+          overflow: "hidden",
+          borderRadius: 12,
+          background: "rgba(0,10,22,0.88)",
+          border: `1px solid ${borderColor}`,
+          boxShadow: hovered ? `0 0 28px ${shadowColor}, 0 4px 20px rgba(0,0,0,0.4), inset 0 1px 0 rgba(0,255,204,0.12)` : `0 0 12px ${shadowColor}, inset 0 1px 0 rgba(0,255,204,0.06)`,
+          transition: "border-color 0.25s, box-shadow 0.25s",
+          cursor: "default",
+          minWidth: 0
+        },
+        children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(ScanLines, {}),
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             "div",
             {
-              className: "grid grid-cols-3 gap-1.5 mb-3 px-2.5 py-2 rounded-lg",
               style: {
-                background: "rgba(0,255,204,0.03)",
-                border: "1px solid rgba(0,255,204,0.07)"
-              },
-              children: [
-                { label: "FRNTR/MIN", value: minRate },
-                { label: "FRNTR/HR", value: hourlyRate },
-                { label: "FRNTR/DAY", value: String(dailyRate) }
-              ].map(({ label, value }) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-center", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "div",
-                  {
-                    className: "text-[8px] mb-0.5",
-                    style: { color: "rgba(224,244,255,0.4)" },
-                    children: label
-                  }
-                ),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[11px] font-bold font-mono text-amber-400", children: value })
-              ] }, label))
+                height: 2,
+                background: tier > 3 ? "linear-gradient(90deg,transparent,#ffd700 40%,#ff6b35 70%,transparent)" : `linear-gradient(90deg,transparent,${biomeColor} 40%,#00ffcc 70%,transparent)`
+              }
             }
           ),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "div",
-            {
-              className: "flex items-center justify-between mb-3 px-2.5 py-1.5 rounded-lg",
-              style: {
-                background: "rgba(255,215,0,0.04)",
-                border: "1px solid rgba(255,215,0,0.1)"
-              },
-              children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "span",
-                  {
-                    className: "text-[9px] font-semibold tracking-widest",
-                    style: { color: "rgba(224,244,255,0.45)" },
-                    children: "ACCUMULATING"
-                  }
-                ),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1", children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(UnclaimedCounter, { plotId, tier }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "span",
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { padding: "10px 12px 12px", position: "relative" }, children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "div",
+              {
+                style: {
+                  display: "flex",
+                  alignItems: "flex-start",
+                  justifyContent: "space-between",
+                  marginBottom: 8
+                },
+                children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "div",
                     {
-                      className: "text-[8px] font-bold",
-                      style: { color: "rgba(255,215,0,0.55)" },
-                      children: "FRNTR"
+                      style: {
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        minWidth: 0
+                      },
+                      children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "div",
+                          {
+                            style: {
+                              width: 8,
+                              height: 8,
+                              borderRadius: "50%",
+                              flexShrink: 0,
+                              background: biomeColor,
+                              boxShadow: `0 0 8px ${biomeColor}cc`
+                            }
+                          }
+                        ),
+                        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { minWidth: 0 }, children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                            "div",
+                            {
+                              style: {
+                                fontFamily: "monospace",
+                                fontSize: 12,
+                                fontWeight: 800,
+                                color: "#e0f4ff",
+                                letterSpacing: "0.08em",
+                                lineHeight: 1
+                              },
+                              children: [
+                                "PLOT ",
+                                plotLabel
+                              ]
+                            }
+                          ),
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                            "div",
+                            {
+                              style: {
+                                fontSize: 9,
+                                color: biomeColor,
+                                fontWeight: 600,
+                                marginTop: 1
+                              },
+                              children: [
+                                biomeName,
+                                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                  "span",
+                                  {
+                                    style: { color: "rgba(224,244,255,0.28)", margin: "0 4px" },
+                                    children: "·"
+                                  }
+                                ),
+                                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                                  "span",
+                                  {
+                                    style: {
+                                      color: "rgba(224,244,255,0.3)",
+                                      fontFamily: "monospace"
+                                    },
+                                    children: [
+                                      plot.lat.toFixed(1),
+                                      "°, ",
+                                      plot.lng.toFixed(1),
+                                      "°"
+                                    ]
+                                  }
+                                )
+                              ]
+                            }
+                          )
+                        ] })
+                      ]
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "div",
+                    {
+                      style: {
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "flex-end",
+                        gap: 3,
+                        flexShrink: 0,
+                        marginLeft: 6
+                      },
+                      children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                          "span",
+                          {
+                            style: {
+                              fontSize: 8,
+                              fontWeight: 700,
+                              letterSpacing: "0.14em",
+                              padding: "2px 6px",
+                              borderRadius: 4,
+                              background: tier > 0 ? "rgba(0,255,204,0.1)" : "rgba(255,255,255,0.04)",
+                              border: `1px solid ${tier > 0 ? "rgba(0,255,204,0.3)" : "rgba(255,255,255,0.08)"}`,
+                              color: tier > 0 ? "#00ffcc" : "rgba(224,244,255,0.4)"
+                            },
+                            children: [
+                              "T",
+                              tier,
+                              " · ",
+                              TIER_NAMES[tier].toUpperCase()
+                            ]
+                          }
+                        ),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "span",
+                          {
+                            style: {
+                              fontSize: 7,
+                              fontWeight: 700,
+                              letterSpacing: "0.12em",
+                              padding: "2px 5px",
+                              borderRadius: 3,
+                              background: `${rarity.color}18`,
+                              border: `1px solid ${rarity.color}40`,
+                              color: rarity.color
+                            },
+                            children: rarity.label
+                          }
+                        )
+                      ]
                     }
                   )
-                ] })
-              ]
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mb-3", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between mb-1", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "span",
-                {
-                  className: "text-[8px] tracking-widest",
-                  style: { color: "rgba(224,244,255,0.4)" },
-                  children: "EFFICIENCY"
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                "span",
-                {
-                  className: `text-[10px] font-bold font-mono ${efficiencyColor(plot.efficiency)}`,
-                  children: [
-                    plot.efficiency,
-                    "%"
-                  ]
-                }
-              )
-            ] }),
+                ]
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(TierPips, { tier }),
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               "div",
               {
-                className: "h-0.5 rounded-full",
-                style: { background: "rgba(255,255,255,0.08)" },
-                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                style: {
+                  display: "grid",
+                  gridTemplateColumns: "repeat(3, 1fr)",
+                  gap: 4,
+                  margin: "10px 0 8px"
+                },
+                children: [
+                  { label: "/MIN", value: fmtNum(minRate, 4) },
+                  { label: "/HOUR", value: fmtNum(hourlyRate, 2) },
+                  { label: "/DAY", value: String(dailyRate) }
+                ].map(({ label, value }) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
                   "div",
                   {
-                    className: "h-0.5 rounded-full transition-all duration-500",
                     style: {
-                      width: `${plot.efficiency}%`,
-                      background: plot.efficiency >= 85 ? "linear-gradient(90deg, #22c55e, #4ade80)" : plot.efficiency >= 70 ? "linear-gradient(90deg, #f59e0b, #fbbf24)" : "linear-gradient(90deg, #ef4444, #f87171)"
-                    }
-                  }
-                )
-              }
-            )
-          ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-wrap gap-1 mb-3", children: [1, 2, 3, 4, 5, 6, 7].map((n) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "span",
-            {
-              className: "px-1.5 py-0.5 rounded text-[8px] font-medium",
-              style: {
-                background: "rgba(255,255,255,0.03)",
-                border: "1px solid rgba(255,255,255,0.07)",
-                color: "rgba(224,244,255,0.35)"
-              },
-              children: [
-                "SUB-",
-                n,
-                ": SOON"
-              ]
-            },
-            n
-          )) }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "div",
-            {
-              className: "flex gap-2",
-              style: { marginBottom: upgradeOpen ? 8 : 0 },
-              children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "button",
-                  {
-                    type: "button",
-                    "data-ocid": `inventory.claim_button.${index2}`,
-                    onClick: handleClaim,
-                    disabled: !isLoggedIn || claiming,
-                    className: "flex-1 py-2 rounded-lg text-[9px] font-bold tracking-widest uppercase transition-all duration-200",
-                    style: {
-                      background: "rgba(0,255,204,0.08)",
-                      border: "1px solid rgba(0,255,204,0.22)",
-                      color: isLoggedIn && !claiming ? "#00ffcc" : "rgba(224,244,255,0.35)",
-                      cursor: isLoggedIn && !claiming ? "pointer" : "not-allowed",
-                      opacity: isLoggedIn && !claiming ? 1 : 0.45
+                      background: "rgba(0,255,204,0.04)",
+                      border: "1px solid rgba(0,255,204,0.1)",
+                      borderRadius: 6,
+                      padding: "5px 6px",
+                      textAlign: "center"
                     },
-                    children: claiming ? "CLAIMING..." : "CLAIM"
-                  }
-                ),
-                upgradeCost !== null && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "div",
+                        {
+                          style: {
+                            fontFamily: "monospace",
+                            fontSize: 11,
+                            fontWeight: 700,
+                            color: "#00ffcc",
+                            lineHeight: 1
+                          },
+                          children: value
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                        "div",
+                        {
+                          style: {
+                            fontSize: 7,
+                            color: "rgba(0,255,204,0.45)",
+                            letterSpacing: "0.12em",
+                            marginTop: 2
+                          },
+                          children: [
+                            "FRNTR",
+                            label
+                          ]
+                        }
+                      )
+                    ]
+                  },
+                  label
+                ))
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { marginBottom: 8 }, children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "div",
+                {
+                  style: {
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginBottom: 3
+                  },
+                  children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "span",
+                      {
+                        style: {
+                          fontSize: 7.5,
+                          color: "rgba(224,244,255,0.38)",
+                          letterSpacing: "0.12em"
+                        },
+                        children: "EFFICIENCY"
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "span",
+                      {
+                        style: {
+                          fontSize: 8,
+                          fontFamily: "monospace",
+                          fontWeight: 700,
+                          color: effColor(plot.efficiency)
+                        },
+                        children: [
+                          plot.efficiency,
+                          "%"
+                        ]
+                      }
+                    )
+                  ]
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "div",
+                {
+                  style: {
+                    height: 3,
+                    borderRadius: 2,
+                    background: "rgba(255,255,255,0.06)",
+                    overflow: "hidden"
+                  },
+                  children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        height: "100%",
+                        width: `${plot.efficiency}%`,
+                        borderRadius: 2,
+                        background: effColor(plot.efficiency),
+                        boxShadow: `0 0 6px ${effColor(plot.efficiency)}88`,
+                        transition: "width 0.5s"
+                      }
+                    }
+                  )
+                }
+              )
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "div",
+              {
+                style: {
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  background: "rgba(255,215,0,0.05)",
+                  border: "1px solid rgba(255,215,0,0.12)",
+                  borderRadius: 6,
+                  padding: "5px 8px",
+                  marginBottom: 8
+                },
+                children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "div",
+                      {
+                        style: {
+                          fontSize: 7,
+                          color: "rgba(224,244,255,0.35)",
+                          letterSpacing: "0.14em",
+                          marginBottom: 1
+                        },
+                        children: "UNCLAIMED"
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 7, color: "rgba(255,215,0,0.4)" }, children: "Claim to add to wallet" })
+                  ] }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { textAlign: "right" }, children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(UnclaimedTicker, { plotId, tier }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "div",
+                      {
+                        style: {
+                          fontSize: 7,
+                          color: "rgba(255,215,0,0.4)",
+                          letterSpacing: "0.1em"
+                        },
+                        children: "FRNTR"
+                      }
+                    )
+                  ] })
+                ]
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", gap: 6 }, children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "button",
+                {
+                  type: "button",
+                  "data-ocid": `inventory.claim_button.${index2}`,
+                  onClick: handleClaim,
+                  disabled: !actor || claiming,
+                  style: {
+                    flex: 1,
+                    padding: "7px 0",
+                    borderRadius: 7,
+                    fontSize: 9,
+                    fontWeight: 700,
+                    letterSpacing: "0.15em",
+                    cursor: actor && !claiming ? "pointer" : "not-allowed",
+                    background: actor && !claiming ? "rgba(0,255,204,0.1)" : "rgba(255,255,255,0.03)",
+                    border: `1px solid ${actor && !claiming ? "rgba(0,255,204,0.35)" : "rgba(255,255,255,0.07)"}`,
+                    color: actor && !claiming ? "#00ffcc" : "rgba(224,244,255,0.25)",
+                    boxShadow: actor && !claiming && hovered ? "0 0 10px rgba(0,255,204,0.2)" : "none",
+                    transition: "all 0.2s"
+                  },
+                  children: claiming ? "CLAIMING…" : "CLAIM"
+                }
+              ),
+              tier < 6 ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { flex: 1, position: "relative" }, children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "button",
                   {
                     type: "button",
                     "data-ocid": `inventory.upgrade_button.${index2}`,
                     onClick: () => setUpgradeOpen((v2) => !v2),
-                    disabled: !isLoggedIn,
-                    className: "flex-1 py-2 rounded-lg text-[9px] font-bold tracking-wider uppercase transition-all duration-200",
+                    disabled: !actor || upgrading,
                     style: {
-                      background: upgradeOpen ? "rgba(255,215,0,0.14)" : "rgba(255,215,0,0.06)",
-                      border: `1px solid ${upgradeOpen ? "rgba(255,215,0,0.45)" : "rgba(255,215,0,0.2)"}`,
-                      color: isLoggedIn ? "#ffd700" : "rgba(224,244,255,0.35)",
-                      cursor: isLoggedIn ? "pointer" : "not-allowed",
-                      opacity: isLoggedIn ? 1 : 0.45
+                      width: "100%",
+                      padding: "7px 0",
+                      borderRadius: 7,
+                      fontSize: 9,
+                      fontWeight: 700,
+                      letterSpacing: "0.15em",
+                      cursor: actor && !upgrading ? "pointer" : "not-allowed",
+                      background: actor && !upgrading ? "rgba(255,215,0,0.08)" : "rgba(255,255,255,0.03)",
+                      border: `1px solid ${actor && !upgrading ? "rgba(255,215,0,0.3)" : "rgba(255,255,255,0.07)"}`,
+                      color: actor && !upgrading ? "#ffd700" : "rgba(224,244,255,0.25)",
+                      transition: "all 0.2s"
                     },
-                    children: upgradeOpen ? "CANCEL" : "UPGRADE"
+                    children: upgrading ? "UPGRADING…" : "UPGRADE"
                   }
-                )
-              ]
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(AnimatePresence, { children: upgradeOpen && upgradeCost !== null && nextDailyRate !== null && /* @__PURE__ */ jsxRuntimeExports.jsx(
-            motion.div,
-            {
-              initial: { opacity: 0, height: 0 },
-              animate: { opacity: 1, height: "auto" },
-              exit: { opacity: 0, height: 0 },
-              transition: { duration: 0.2 },
-              className: "overflow-hidden mt-2",
-              children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                "div",
-                {
-                  className: "p-3 rounded-lg",
-                  style: {
-                    background: "rgba(255,215,0,0.05)",
-                    border: "1px solid rgba(255,215,0,0.2)"
-                  },
-                  children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                      "div",
-                      {
-                        className: "text-[9px] mb-2",
-                        style: { color: "rgba(224,244,255,0.5)" },
-                        children: [
-                          "Cost:",
-                          " ",
-                          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-mono font-bold text-amber-400", children: [
-                            upgradeCost.toLocaleString(),
-                            " FRNTR"
-                          ] }),
-                          " · ",
-                          "New rate:",
-                          " ",
-                          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-mono font-bold text-amber-400", children: [
-                            nextDailyRate,
-                            " FRNTR/day"
-                          ] })
-                        ]
-                      }
-                    ),
-                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-2", children: [
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(AnimatePresence, { children: upgradeOpen && upgradeCost !== null && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  motion.div,
+                  {
+                    initial: { opacity: 0, y: 6, scale: 0.97 },
+                    animate: { opacity: 1, y: 0, scale: 1 },
+                    exit: { opacity: 0, y: 4, scale: 0.97 },
+                    transition: { duration: 0.18 },
+                    style: {
+                      position: "absolute",
+                      bottom: "calc(100% + 6px)",
+                      right: 0,
+                      width: 190,
+                      background: "rgba(0,10,22,0.97)",
+                      border: "1px solid rgba(255,215,0,0.28)",
+                      borderRadius: 10,
+                      boxShadow: "0 0 32px rgba(255,215,0,0.12), 0 8px 24px rgba(0,0,0,0.6)",
+                      padding: "12px 14px",
+                      zIndex: 55
+                    },
+                    children: [
                       /* @__PURE__ */ jsxRuntimeExports.jsx(
-                        "button",
+                        "div",
                         {
-                          type: "button",
-                          "data-ocid": `inventory.confirm_button.${index2}`,
-                          onClick: handleUpgrade,
-                          disabled: upgrading,
-                          className: "flex-1 py-1.5 rounded-lg text-[9px] font-bold tracking-wider uppercase transition-all duration-200",
                           style: {
-                            background: "rgba(255,215,0,0.15)",
-                            border: "1px solid rgba(255,215,0,0.4)",
-                            color: "#ffd700",
-                            cursor: upgrading ? "not-allowed" : "pointer",
-                            opacity: upgrading ? 0.5 : 1
-                          },
-                          children: upgrading ? "UPGRADING..." : "CONFIRM UPGRADE"
+                            height: 2,
+                            marginBottom: 10,
+                            background: "linear-gradient(90deg,transparent,#ffd700,transparent)"
+                          }
                         }
                       ),
                       /* @__PURE__ */ jsxRuntimeExports.jsx(
-                        "button",
+                        "div",
                         {
-                          type: "button",
-                          "data-ocid": `inventory.cancel_button.${index2}`,
-                          onClick: () => setUpgradeOpen(false),
-                          className: "flex-1 py-1.5 rounded-lg text-[9px] font-bold tracking-wider uppercase",
                           style: {
-                            background: "rgba(255,255,255,0.04)",
-                            border: "1px solid rgba(255,255,255,0.1)",
-                            color: "rgba(224,244,255,0.45)",
-                            cursor: "pointer"
+                            fontSize: 8,
+                            color: "rgba(255,215,0,0.6)",
+                            letterSpacing: "0.18em",
+                            marginBottom: 8
                           },
-                          children: "CANCEL"
+                          children: "UPGRADE GENERATOR"
                         }
-                      )
-                    ] })
-                  ]
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "div",
+                        {
+                          style: {
+                            display: "grid",
+                            gridTemplateColumns: "1fr 1fr",
+                            gap: "6px 8px",
+                            marginBottom: 10
+                          },
+                          children: [
+                            { l: "FROM", v: TIER_NAMES[tier] },
+                            { l: "TO", v: TIER_NAMES[nextTier] },
+                            { l: "DAILY RATE", v: `${nextDailyRate} FRNTR` },
+                            { l: "COST", v: `${upgradeCost.toLocaleString()}` }
+                          ].map(({ l: l2, v: v2 }) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsx(
+                              "div",
+                              {
+                                style: {
+                                  fontSize: 7,
+                                  color: "rgba(224,244,255,0.3)",
+                                  letterSpacing: "0.1em"
+                                },
+                                children: l2
+                              }
+                            ),
+                            /* @__PURE__ */ jsxRuntimeExports.jsx(
+                              "div",
+                              {
+                                style: {
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                  color: "#ffd700",
+                                  fontFamily: "monospace"
+                                },
+                                children: v2
+                              }
+                            )
+                          ] }, l2))
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                        "div",
+                        {
+                          style: {
+                            fontSize: 7.5,
+                            color: "rgba(224,244,255,0.35)",
+                            marginBottom: 10,
+                            lineHeight: 1.4
+                          },
+                          children: [
+                            "Burns ",
+                            upgradeCost.toLocaleString(),
+                            " FRNTR from supply. Cannot be undone."
+                          ]
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", gap: 6 }, children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "button",
+                          {
+                            type: "button",
+                            "data-ocid": `inventory.upgrade_cancel.${index2}`,
+                            onClick: () => setUpgradeOpen(false),
+                            style: {
+                              flex: 1,
+                              padding: "6px 0",
+                              borderRadius: 6,
+                              fontSize: 8,
+                              fontWeight: 700,
+                              letterSpacing: "0.12em",
+                              cursor: "pointer",
+                              background: "rgba(255,255,255,0.04)",
+                              border: "1px solid rgba(255,255,255,0.08)",
+                              color: "rgba(224,244,255,0.4)"
+                            },
+                            children: "CANCEL"
+                          }
+                        ),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "button",
+                          {
+                            type: "button",
+                            "data-ocid": `inventory.upgrade_confirm.${index2}`,
+                            onClick: handleUpgrade,
+                            disabled: upgrading,
+                            style: {
+                              flex: 1.5,
+                              padding: "6px 0",
+                              borderRadius: 6,
+                              fontSize: 8,
+                              fontWeight: 700,
+                              letterSpacing: "0.12em",
+                              cursor: "pointer",
+                              background: "rgba(255,215,0,0.12)",
+                              border: "1px solid rgba(255,215,0,0.4)",
+                              color: "#ffd700",
+                              boxShadow: "0 0 10px rgba(255,215,0,0.15)"
+                            },
+                            children: "UPGRADE ↑"
+                          }
+                        )
+                      ] })
+                    ]
+                  }
+                ) })
+              ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "div",
+                {
+                  style: {
+                    flex: 1,
+                    padding: "7px 0",
+                    borderRadius: 7,
+                    fontSize: 9,
+                    fontWeight: 700,
+                    letterSpacing: "0.12em",
+                    textAlign: "center",
+                    background: "linear-gradient(135deg,rgba(255,215,0,0.08),rgba(255,107,53,0.08))",
+                    border: "1px solid rgba(255,215,0,0.22)",
+                    color: "#ffd700"
+                  },
+                  children: "MAX TIER ✦"
                 }
               )
-            }
-          ) })
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          _ActionConfirmModal,
-          {
-            isOpen: confirmOpen,
-            onConfirm: handleConfirmAction,
-            onCancel: handleCancelConfirm,
-            title: confirmTitle,
-            actionType: confirmActionType,
-            details: confirmDetails,
-            costLabel: confirmCostLabel,
-            warningText: confirmWarning,
-            isLoading: confirmLoading
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(SubParcelSlots, {})
+          ] })
+        ]
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      _ActionConfirmModal,
+      {
+        isOpen: confirmOpen,
+        onConfirm: async () => {
+          setConfirmLoading(true);
+          try {
+            if (confirmPending) await confirmPending();
+          } finally {
+            setConfirmLoading(false);
+            setConfirmOpen(false);
+            setConfirmPending(null);
           }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          _PostActionToast,
-          {
-            actionType: postActionType,
-            onNavigate: (tab) => {
-              window.dispatchEvent(
-                new CustomEvent("navigate-tab", { detail: { tab } })
-              );
-            },
-            onDismiss: () => setPostActionType(null)
-          }
-        )
-      ]
-    }
-  );
+        },
+        onCancel: () => {
+          setConfirmOpen(false);
+          setConfirmPending(null);
+          actor == null ? void 0 : actor.logCancelledAction(
+            confirmTitle,
+            plotId,
+            null,
+            "User cancelled from inventory tile"
+          ).catch(() => {
+          });
+        },
+        title: confirmTitle,
+        actionType: confirmActionType,
+        details: confirmDetails,
+        costLabel: confirmCostLabel,
+        warningText: confirmWarning,
+        isLoading: confirmLoading
+      }
+    ),
+    postActionType && /* @__PURE__ */ jsxRuntimeExports.jsx(
+      _PostActionToast,
+      {
+        actionType: postActionType,
+        onNavigate: () => {
+        },
+        onDismiss: () => setPostActionType(null)
+      }
+    )
+  ] });
 }
-function GlobalUnclaimedCounter({ plotsOwned }) {
+function InventoryHeader() {
+  const plotsOwned = useGameStore((s2) => s2.player.plotsOwned);
   const generatorTiers = useGameStore((s2) => s2.generatorTiers);
-  const [total, setTotal] = reactExports.useState(0);
-  reactExports.useEffect(() => {
-    setTotal(0);
-    const perSecond = plotsOwned.reduce((sum, id22) => {
-      const tier = generatorTiers[id22] ?? 0;
-      return sum + TIER_DAILY_RATES[tier] / 86400;
-    }, 0);
-    if (perSecond === 0) return;
-    const id2 = setInterval(() => setTotal((v2) => v2 + perSecond), 1e3);
-    return () => clearInterval(id2);
-  }, [plotsOwned.join(",")]);
-  return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-amber-400 font-bold text-sm", children: total.toFixed(6) });
-}
-function BalanceHeader() {
   const confirmedFrntBalance = useGameStore((s2) => s2.confirmedFrntBalance);
   const accruedFrntSinceSync = useGameStore((s2) => s2.accruedFrntSinceSync);
-  const plotsOwned = useGameStore((s2) => s2.player.plotsOwned);
   const setFrntrBalance = useGameStore((s2) => s2.setFrntrBalance);
   const incrementClaimCount = useGameStore((s2) => s2.incrementClaimCount);
   const { actor } = useActor(createActor);
   const [claimingAll, setClaimingAll] = reactExports.useState(false);
-  const totalBalance = confirmedFrntBalance + accruedFrntSinceSync;
-  const plotCount = plotsOwned.length;
-  const fmtFrntr2 = (n) => n >= 1e6 ? n.toLocaleString(void 0, { maximumFractionDigits: 2 }) : n >= 1e3 ? n.toLocaleString(void 0, { maximumFractionDigits: 4 }) : n.toLocaleString(void 0, {
-    minimumFractionDigits: 8,
-    maximumFractionDigits: 8
+  const totalDailyRate = plotsOwned.reduce((sum, id2) => {
+    const tier = generatorTiers[id2] ?? 0;
+    return sum + TIER_DAILY_RATES[tier];
+  }, 0);
+  const fmt = (n) => n >= 1e6 ? `${(n / 1e6).toFixed(3)}M` : n >= 1e3 ? n.toLocaleString(void 0, { maximumFractionDigits: 2 }) : n.toLocaleString(void 0, {
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 4
   });
   const handleClaimAll = async () => {
     if (!actor || claimingAll || plotsOwned.length === 0) return;
     setClaimingAll(true);
-    let successCount = 0;
+    let ok = 0;
     try {
-      for (const plotId of plotsOwned) {
+      for (const id2 of plotsOwned) {
         try {
-          const res = await actor.claimAccumulatedTokens(plotId);
-          if ("ok" in res) successCount++;
+          const res = await actor.claimAccumulatedTokens(id2);
+          if ("ok" in res) ok++;
         } catch {
         }
       }
-      if (successCount > 0) {
+      if (ok > 0) {
         incrementClaimCount();
         try {
           const state2 = await actor.getPlayerState();
           if (state2) setFrntrBalance(BigInt(state2.frntBalance));
         } catch {
         }
-        ue.success(
-          `Claimed tokens from ${successCount} plot${successCount !== 1 ? "s" : ""}`
-        );
+        ue.success(`Claimed from ${ok} plot${ok !== 1 ? "s" : ""}`);
       } else {
-        ue.error("No tokens available to claim yet.");
+        ue.info("No tokens to claim yet.");
       }
     } catch {
       ue.error("Claim All failed");
@@ -87172,121 +87880,236 @@ function BalanceHeader() {
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     motion.div,
     {
-      "data-ocid": "inventory.balance_header",
-      initial: { opacity: 0, y: -8 },
+      "data-ocid": "inventory.header",
+      initial: { opacity: 0, y: -10 },
       animate: { opacity: 1, y: 0 },
-      className: "rounded-xl mb-3 overflow-hidden",
       style: {
-        background: "rgba(0,20,40,0.70)",
-        backdropFilter: "blur(16px)",
-        WebkitBackdropFilter: "blur(16px)",
-        border: "1px solid rgba(0,255,204,0.18)"
+        marginBottom: 10,
+        borderRadius: 12,
+        overflow: "hidden",
+        background: "rgba(0,10,22,0.9)",
+        border: "1px solid rgba(0,255,204,0.2)",
+        boxShadow: "0 0 32px rgba(0,255,204,0.06), inset 0 1px 0 rgba(0,255,204,0.1)"
       },
       children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           "div",
           {
-            className: "h-0.5 w-full",
             style: {
-              background: "linear-gradient(90deg, #00ffcc, #ffd700, #00ffcc)"
+              height: 2,
+              background: "linear-gradient(90deg,transparent,#00ffcc 35%,#ffd700 65%,transparent)"
             }
           }
         ),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-3.5", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start justify-between gap-3 mb-3", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 min-w-0", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "div",
-                {
-                  className: "text-[9px] font-bold tracking-widest uppercase mb-1",
-                  style: { color: "#00ffcc" },
-                  children: "FRNTR BALANCE"
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "div",
-                {
-                  "data-ocid": "inventory.frntr_counter",
-                  className: "font-mono font-black leading-none",
-                  style: {
-                    fontSize: 26,
-                    color: "#ffd700",
-                    textShadow: "0 0 16px rgba(255,215,0,0.3)"
-                  },
-                  children: fmtFrntr2(totalBalance)
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                "div",
-                {
-                  className: "text-[8px] mt-1",
-                  style: { color: "rgba(224,244,255,0.45)" },
-                  children: [
-                    "FRNTR  ·  ",
-                    plotCount,
-                    " PLOT",
-                    plotCount !== 1 ? "S" : "",
-                    " ACTIVE"
-                  ]
-                }
-              )
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "button",
-              {
-                type: "button",
-                "data-ocid": "inventory.claim_all_button",
-                onClick: handleClaimAll,
-                disabled: !actor || claimingAll || plotCount === 0,
-                className: "flex-shrink-0 px-3 py-2 rounded-lg text-[9px] font-bold tracking-widest uppercase transition-all duration-200",
-                style: {
-                  background: actor && !claimingAll && plotCount > 0 ? "rgba(0,255,204,0.12)" : "rgba(255,255,255,0.04)",
-                  border: `1px solid ${actor && !claimingAll && plotCount > 0 ? "rgba(0,255,204,0.35)" : "rgba(255,255,255,0.08)"}`,
-                  color: actor && !claimingAll && plotCount > 0 ? "#00ffcc" : "rgba(224,244,255,0.35)",
-                  cursor: actor && !claimingAll && plotCount > 0 ? "pointer" : "not-allowed"
-                },
-                children: claimingAll ? "CLAIMING..." : "CLAIM ALL"
-              }
-            )
-          ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { padding: "12px 14px" }, children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs(
             "div",
             {
-              className: "flex items-center justify-between rounded-lg px-2.5 py-2",
               style: {
-                background: "rgba(255,215,0,0.04)",
-                border: "1px solid rgba(255,215,0,0.1)"
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 12,
+                marginBottom: 10
               },
               children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { flex: 1, minWidth: 0 }, children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx(
                     "div",
                     {
-                      className: "text-[8px] font-bold tracking-widest uppercase mb-0.5",
-                      style: { color: "rgba(224,244,255,0.4)" },
-                      children: "ACCUMULATING ACROSS ALL PLOTS"
+                      style: {
+                        fontSize: 7.5,
+                        color: "#00ffcc",
+                        letterSpacing: "0.2em",
+                        fontWeight: 700,
+                        marginBottom: 2
+                      },
+                      children: "⬡ WALLET BALANCE"
                     }
                   ),
                   /* @__PURE__ */ jsxRuntimeExports.jsx(
                     "div",
                     {
-                      className: "text-[8px]",
-                      style: { color: "rgba(224,244,255,0.35)" },
-                      children: "Since last sync — claim to add to your balance"
+                      "data-ocid": "inventory.confirmed_balance",
+                      style: {
+                        fontFamily: "monospace",
+                        fontWeight: 900,
+                        fontSize: 24,
+                        color: "#e0f4ff",
+                        lineHeight: 1,
+                        textShadow: "0 0 20px rgba(0,255,204,0.2)"
+                      },
+                      children: fmt(confirmedFrntBalance)
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        fontSize: 7.5,
+                        color: "rgba(224,244,255,0.35)",
+                        marginTop: 2
+                      },
+                      children: "FRNTR · CONFIRMED ON-CHAIN"
                     }
                   )
                 ] }),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1 flex-shrink-0", children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(GlobalUnclaimedCounter, { plotsOwned }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "span",
-                    {
-                      className: "text-[8px] font-bold",
-                      style: { color: "rgba(255,215,0,0.55)" },
-                      children: "FRNTR"
-                    }
-                  )
-                ] })
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "div",
+                  {
+                    style: {
+                      flexShrink: 0,
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "flex-end",
+                      gap: 4
+                    },
+                    children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "button",
+                        {
+                          type: "button",
+                          "data-ocid": "inventory.claim_all_button",
+                          onClick: handleClaimAll,
+                          disabled: !actor || claimingAll || plotsOwned.length === 0,
+                          style: {
+                            padding: "8px 14px",
+                            borderRadius: 8,
+                            fontSize: 9,
+                            fontWeight: 700,
+                            letterSpacing: "0.18em",
+                            cursor: actor && !claimingAll && plotsOwned.length > 0 ? "pointer" : "not-allowed",
+                            background: actor && !claimingAll && plotsOwned.length > 0 ? "linear-gradient(135deg,rgba(0,255,204,0.15),rgba(0,255,204,0.07))" : "rgba(255,255,255,0.03)",
+                            border: `1px solid ${actor && !claimingAll && plotsOwned.length > 0 ? "rgba(0,255,204,0.4)" : "rgba(255,255,255,0.07)"}`,
+                            color: actor && !claimingAll && plotsOwned.length > 0 ? "#00ffcc" : "rgba(224,244,255,0.25)",
+                            boxShadow: actor && !claimingAll && plotsOwned.length > 0 ? "0 0 12px rgba(0,255,204,0.15)" : "none",
+                            transition: "all 0.2s"
+                          },
+                          children: claimingAll ? "CLAIMING…" : "⬡ CLAIM ALL"
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { fontSize: 7.5, color: "rgba(224,244,255,0.3)" }, children: [
+                        plotsOwned.length,
+                        " PLOT",
+                        plotsOwned.length !== 1 ? "S" : ""
+                      ] })
+                    ]
+                  }
+                )
+              ]
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              style: {
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr 1fr",
+                gap: 6
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "div",
+                  {
+                    style: {
+                      background: "rgba(0,255,204,0.04)",
+                      border: "1px solid rgba(0,255,204,0.1)",
+                      borderRadius: 8,
+                      padding: "6px 8px"
+                    },
+                    children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "div",
+                        {
+                          style: {
+                            fontSize: 7,
+                            color: "rgba(224,244,255,0.35)",
+                            letterSpacing: "0.12em",
+                            marginBottom: 2
+                          },
+                          children: "TOTAL DAILY"
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "div",
+                        {
+                          style: {
+                            fontFamily: "monospace",
+                            fontWeight: 700,
+                            fontSize: 12,
+                            color: "#00ffcc"
+                          },
+                          children: totalDailyRate.toLocaleString()
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 7, color: "rgba(0,255,204,0.4)" }, children: "FRNTR/DAY" })
+                    ]
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "div",
+                  {
+                    style: {
+                      background: "rgba(255,215,0,0.04)",
+                      border: "1px solid rgba(255,215,0,0.1)",
+                      borderRadius: 8,
+                      padding: "6px 8px"
+                    },
+                    children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "div",
+                        {
+                          style: {
+                            fontSize: 7,
+                            color: "rgba(224,244,255,0.35)",
+                            letterSpacing: "0.12em",
+                            marginBottom: 2
+                          },
+                          children: "UNCLAIMED"
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(GlobalTicker, { plotsOwned }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 7, color: "rgba(255,215,0,0.4)" }, children: "FRNTR" })
+                    ]
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "div",
+                  {
+                    style: {
+                      background: "rgba(0,255,204,0.03)",
+                      border: "1px solid rgba(0,255,204,0.08)",
+                      borderRadius: 8,
+                      padding: "6px 8px"
+                    },
+                    children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "div",
+                        {
+                          style: {
+                            fontSize: 7,
+                            color: "rgba(224,244,255,0.35)",
+                            letterSpacing: "0.12em",
+                            marginBottom: 2
+                          },
+                          children: "SINCE SYNC"
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "div",
+                        {
+                          style: {
+                            fontFamily: "monospace",
+                            fontWeight: 700,
+                            fontSize: 12,
+                            color: "rgba(0,255,204,0.8)"
+                          },
+                          children: fmt(accruedFrntSinceSync)
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 7, color: "rgba(0,255,204,0.35)" }, children: "FRNTR" })
+                    ]
+                  }
+                )
               ]
             }
           )
@@ -87295,63 +88118,1103 @@ function BalanceHeader() {
     }
   );
 }
+function InventorySummary({ plots }) {
+  const generatorTiers = useGameStore((s2) => s2.generatorTiers);
+  if (plots.length === 0) return null;
+  let avgEff = 0;
+  for (const p2 of plots) avgEff += p2.efficiency;
+  avgEff /= plots.length;
+  const topTier = Math.max(
+    ...plots.map((p2) => generatorTiers[String(p2.id)] ?? 0),
+    0
+  );
+  const upgraded = plots.filter(
+    (p2) => (generatorTiers[String(p2.id)] ?? 0) > 0
+  ).length;
+  const stats = [
+    {
+      label: "AVG EFF",
+      value: `${avgEff.toFixed(1)}%`,
+      color: avgEff >= 90 ? "#4ade80" : avgEff >= 75 ? "#fbbf24" : "#f87171"
+    },
+    {
+      label: "TOP TIER",
+      value: topTier === 0 ? "OUTPOST" : `T${topTier}`,
+      color: topTier > 0 ? "#00ffcc" : "rgba(224,244,255,0.45)"
+    },
+    {
+      label: "UPGRADED",
+      value: `${upgraded}/${plots.length}`,
+      color: upgraded > 0 ? "#ffd700" : "rgba(224,244,255,0.4)"
+    }
+  ];
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "div",
+    {
+      style: {
+        marginBottom: 10,
+        borderRadius: 8,
+        padding: "6px 10px",
+        background: "rgba(0,8,18,0.7)",
+        border: "1px solid rgba(0,255,204,0.08)",
+        display: "grid",
+        gridTemplateColumns: "repeat(3, 1fr)",
+        gap: 8
+      },
+      children: stats.map(({ label, value, color: color2 }) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { textAlign: "center" }, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "div",
+          {
+            style: {
+              fontSize: 7,
+              color: "rgba(224,244,255,0.3)",
+              letterSpacing: "0.12em"
+            },
+            children: label
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "div",
+          {
+            style: {
+              fontSize: 11,
+              fontFamily: "monospace",
+              fontWeight: 700,
+              color: color2,
+              marginTop: 1
+            },
+            children: value
+          }
+        )
+      ] }, label))
+    }
+  );
+}
+function EmptyState() {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    motion.div,
+    {
+      "data-ocid": "inventory.empty_state",
+      initial: { opacity: 0, scale: 0.97 },
+      animate: { opacity: 1, scale: 1 },
+      transition: { duration: 0.4 },
+      style: {
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        textAlign: "center",
+        padding: "40px 24px",
+        gap: 12
+      },
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "svg",
+          {
+            width: "48",
+            height: "48",
+            viewBox: "0 0 48 48",
+            fill: "none",
+            "aria-hidden": "true",
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "polygon",
+                {
+                  points: "24,2 44,13 44,35 24,46 4,35 4,13",
+                  stroke: "rgba(0,255,204,0.3)",
+                  strokeWidth: "1.5",
+                  fill: "rgba(0,255,204,0.04)"
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "polygon",
+                {
+                  points: "24,10 38,18 38,30 24,38 10,30 10,18",
+                  stroke: "rgba(0,255,204,0.15)",
+                  strokeWidth: "1",
+                  fill: "rgba(0,255,204,0.02)"
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "text",
+                {
+                  x: "24",
+                  y: "28",
+                  textAnchor: "middle",
+                  fontSize: "14",
+                  fill: "rgba(0,255,204,0.5)",
+                  fontFamily: "monospace",
+                  children: "?"
+                }
+              )
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "div",
+          {
+            style: {
+              fontSize: 12,
+              fontWeight: 800,
+              color: "#e0f4ff",
+              letterSpacing: "0.2em"
+            },
+            children: "NO ASSETS ACQUIRED"
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "div",
+          {
+            style: {
+              fontSize: 10,
+              color: "rgba(224,244,255,0.4)",
+              maxWidth: 260,
+              lineHeight: 1.6
+            },
+            children: "Purchase your first hexagonal territory on the globe to begin generating FRNTR passively. Each plot generates tokens every second."
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "div",
+          {
+            "data-ocid": "inventory.go_to_globe_button",
+            style: {
+              marginTop: 4,
+              padding: "8px 18px",
+              borderRadius: 8,
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: "0.18em",
+              background: "rgba(0,255,204,0.08)",
+              border: "1px solid rgba(0,255,204,0.25)",
+              color: "#00ffcc",
+              cursor: "pointer",
+              boxShadow: "0 0 16px rgba(0,255,204,0.1)"
+            },
+            children: "→ SELECT A HEX ON THE GLOBE"
+          }
+        )
+      ]
+    }
+  );
+}
 function Inventory() {
   const plotsOwned = useGameStore((s2) => s2.player.plotsOwned);
+  const allPlots = useGameStore((s2) => s2.plots);
   const player = useGameStore((s2) => s2.player);
+  const ownedPlotData = plotsOwned.map((id2) => allPlots.find((p2) => String(p2.id) === id2)).filter((p2) => !!p2);
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "div",
     {
       "data-ocid": "inventory.page",
-      className: "flex flex-col h-full overflow-y-auto",
-      style: { padding: "12px 12px 4px" },
+      style: {
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        overflowY: "auto",
+        padding: "12px 12px 16px",
+        scrollbarWidth: "thin",
+        scrollbarColor: "rgba(0,255,204,0.2) transparent"
+      },
       children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(BalanceHeader, {}),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(InventoryHeader, {}),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(InventorySummary, { plots: ownedPlotData }),
         player.isAdmin && /* @__PURE__ */ jsxRuntimeExports.jsx(LiquiditySeedingPanel, {}),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        plotsOwned.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs(
           "div",
           {
-            className: "flex items-center justify-between mb-2.5",
-            style: { color: "#00ffcc" },
+            style: {
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              marginBottom: 8
+            },
             children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[9px] font-bold tracking-widest uppercase", children: "OWNED PLOTS" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "div",
+                {
+                  style: {
+                    width: 3,
+                    height: 12,
+                    borderRadius: 2,
+                    background: "linear-gradient(180deg,#00ffcc,#0088aa)"
+                  }
+                }
+              ),
               /* @__PURE__ */ jsxRuntimeExports.jsx(
                 "span",
                 {
-                  className: "text-[10px] font-extrabold font-mono",
-                  style: { color: "#e0f4ff" },
+                  style: {
+                    fontSize: 8.5,
+                    fontWeight: 700,
+                    color: "#00ffcc",
+                    letterSpacing: "0.22em"
+                  },
+                  children: "OWNED TERRITORIES"
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "span",
+                {
+                  style: {
+                    fontSize: 9,
+                    fontFamily: "monospace",
+                    fontWeight: 700,
+                    padding: "1px 7px",
+                    borderRadius: 4,
+                    background: "rgba(0,255,204,0.08)",
+                    border: "1px solid rgba(0,255,204,0.18)",
+                    color: "#e0f4ff",
+                    marginLeft: "auto"
+                  },
                   children: plotsOwned.length
                 }
               )
             ]
           }
         ),
-        plotsOwned.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        plotsOwned.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx(EmptyState, {}) : /* @__PURE__ */ jsxRuntimeExports.jsx(
           "div",
           {
-            "data-ocid": "inventory.empty_state",
-            className: "flex-1 flex flex-col items-center justify-center text-center gap-2.5 px-5 py-8",
-            style: { color: "rgba(224,244,255,0.45)" },
+            "data-ocid": "inventory.list",
+            style: {
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+              gap: 10,
+              paddingBottom: 16
+            },
+            children: plotsOwned.map((plotId, idx) => /* @__PURE__ */ jsxRuntimeExports.jsx(PlotTile, { plotId, index: idx + 1 }, plotId))
+          }
+        )
+      ]
+    }
+  );
+}
+function useLeaderboardPrizes() {
+  const { actor, isFetching } = useActor(createActor);
+  return useQuery({
+    queryKey: ["leaderboard-prizes"],
+    queryFn: async () => {
+      if (!actor) {
+        return {
+          leaderboardPot: 0,
+          devPot: 0,
+          liquidityPot: 0,
+          totalPlotsOwned: 0,
+          nextPayoutMilestone: 1500,
+          plotsUntilPayout: 1500,
+          prizeDistribution: { first: 50, second: 30, third: 20 },
+          activePlayers: 0,
+          totalFRNTRMined: 0,
+          totalFRNTRBurned: 0
+        };
+      }
+      const [treasury, stats] = await Promise.all([
+        actor.getTreasuryState(),
+        actor.getLeaderboardStats()
+      ]);
+      const leaderboardPot = Number(treasury.leaderboard) / 1e8;
+      const devPot = Number(treasury.developer) / 1e8;
+      const liquidityPot = Number(treasury.liquidity) / 1e8;
+      const totalPlotsOwned = Number(stats.totalPlotsOwned);
+      const nextPayoutMilestone = (Math.floor(totalPlotsOwned / 1500) + 1) * 1500;
+      const plotsUntilPayout = nextPayoutMilestone - totalPlotsOwned;
+      return {
+        leaderboardPot,
+        devPot,
+        liquidityPot,
+        totalPlotsOwned,
+        nextPayoutMilestone,
+        plotsUntilPayout,
+        prizeDistribution: { first: 50, second: 30, third: 20 },
+        activePlayers: Number(stats.activePlayers),
+        totalFRNTRMined: Number(stats.totalFRNTRMined),
+        totalFRNTRBurned: Number(stats.totalFRNTRBurned)
+      };
+    },
+    enabled: !!actor && !isFetching,
+    staleTime: 3e4,
+    // refresh every 30s
+    refetchInterval: 3e4
+  });
+}
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const toKebabCase = (string) => string.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
+const toCamelCase = (string) => string.replace(
+  /^([A-Z])|[\s-_]+(\w)/g,
+  (match, p1, p2) => p2 ? p2.toUpperCase() : p1.toLowerCase()
+);
+const toPascalCase$1 = (string) => {
+  const camelCase = toCamelCase(string);
+  return camelCase.charAt(0).toUpperCase() + camelCase.slice(1);
+};
+const mergeClasses = (...classes) => classes.filter((className, index2, array) => {
+  return Boolean(className) && className.trim() !== "" && array.indexOf(className) === index2;
+}).join(" ").trim();
+const hasA11yProp = (props) => {
+  for (const prop in props) {
+    if (prop.startsWith("aria-") || prop === "role" || prop === "title") {
+      return true;
+    }
+  }
+};
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+var defaultAttributes = {
+  xmlns: "http://www.w3.org/2000/svg",
+  width: 24,
+  height: 24,
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 2,
+  strokeLinecap: "round",
+  strokeLinejoin: "round"
+};
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const Icon = reactExports.forwardRef(
+  ({
+    color: color2 = "currentColor",
+    size = 24,
+    strokeWidth = 2,
+    absoluteStrokeWidth,
+    className = "",
+    children,
+    iconNode,
+    ...rest
+  }, ref) => reactExports.createElement(
+    "svg",
+    {
+      ref,
+      ...defaultAttributes,
+      width: size,
+      height: size,
+      stroke: color2,
+      strokeWidth: absoluteStrokeWidth ? Number(strokeWidth) * 24 / Number(size) : strokeWidth,
+      className: mergeClasses("lucide", className),
+      ...!children && !hasA11yProp(rest) && { "aria-hidden": "true" },
+      ...rest
+    },
+    [
+      ...iconNode.map(([tag, attrs]) => reactExports.createElement(tag, attrs)),
+      ...Array.isArray(children) ? children : [children]
+    ]
+  )
+);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const createLucideIcon = (iconName, iconNode) => {
+  const Component2 = reactExports.forwardRef(
+    ({ className, ...props }, ref) => reactExports.createElement(Icon, {
+      ref,
+      iconNode,
+      className: mergeClasses(
+        `lucide-${toKebabCase(toPascalCase$1(iconName))}`,
+        `lucide-${iconName}`,
+        className
+      ),
+      ...props
+    })
+  );
+  Component2.displayName = toPascalCase$1(iconName);
+  return Component2;
+};
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$l = [
+  ["path", { d: "M12 7v14", key: "1akyts" }],
+  [
+    "path",
+    {
+      d: "M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z",
+      key: "ruj8y"
+    }
+  ]
+];
+const BookOpen = createLucideIcon("book-open", __iconNode$l);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$k = [["path", { d: "m6 9 6 6 6-6", key: "qrunsl" }]];
+const ChevronDown = createLucideIcon("chevron-down", __iconNode$k);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$j = [["path", { d: "m9 18 6-6-6-6", key: "mthhwq" }]];
+const ChevronRight = createLucideIcon("chevron-right", __iconNode$j);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$i = [["path", { d: "m18 15-6-6-6 6", key: "153udz" }]];
+const ChevronUp = createLucideIcon("chevron-up", __iconNode$i);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$h = [
+  ["path", { d: "M21.801 10A10 10 0 1 1 17 3.335", key: "yps3ct" }],
+  ["path", { d: "m9 11 3 3L22 4", key: "1pflzl" }]
+];
+const CircleCheckBig = createLucideIcon("circle-check-big", __iconNode$h);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$g = [["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }]];
+const Circle = createLucideIcon("circle", __iconNode$g);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$f = [
+  [
+    "path",
+    {
+      d: "M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z",
+      key: "96xj49"
+    }
+  ]
+];
+const Flame = createLucideIcon("flame", __iconNode$f);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$e = [
+  [
+    "path",
+    {
+      d: "M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2",
+      key: "18mbvz"
+    }
+  ],
+  ["path", { d: "M6.453 15h11.094", key: "3shlmq" }],
+  ["path", { d: "M8.5 2h7", key: "csnxdl" }]
+];
+const FlaskConical = createLucideIcon("flask-conical", __iconNode$e);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$d = [
+  ["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }],
+  ["path", { d: "M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20", key: "13o1zl" }],
+  ["path", { d: "M2 12h20", key: "9i4pu4" }]
+];
+const Globe = createLucideIcon("globe", __iconNode$d);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$c = [
+  ["rect", { width: "7", height: "9", x: "3", y: "3", rx: "1", key: "10lvy0" }],
+  ["rect", { width: "7", height: "5", x: "14", y: "3", rx: "1", key: "16une8" }],
+  ["rect", { width: "7", height: "9", x: "14", y: "12", rx: "1", key: "1hutg5" }],
+  ["rect", { width: "7", height: "5", x: "3", y: "16", rx: "1", key: "ldoo1y" }]
+];
+const LayoutDashboard = createLucideIcon("layout-dashboard", __iconNode$c);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$b = [
+  [
+    "path",
+    {
+      d: "M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z",
+      key: "169xi5"
+    }
+  ],
+  ["path", { d: "M15 5.764v15", key: "1pn4in" }],
+  ["path", { d: "M9 3.236v15", key: "1uimfh" }]
+];
+const Map$1 = createLucideIcon("map", __iconNode$b);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$a = [
+  [
+    "path",
+    {
+      d: "M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z",
+      key: "1a0edw"
+    }
+  ],
+  ["path", { d: "M12 22V12", key: "d0xqtd" }],
+  ["polyline", { points: "3.29 7 12 12 20.71 7", key: "ousv84" }],
+  ["path", { d: "m7.5 4.27 9 5.15", key: "1c824w" }]
+];
+const Package = createLucideIcon("package", __iconNode$a);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$9 = [
+  ["path", { d: "M4.9 19.1C1 15.2 1 8.8 4.9 4.9", key: "1vaf9d" }],
+  ["path", { d: "M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5", key: "u1ii0m" }],
+  ["circle", { cx: "12", cy: "12", r: "2", key: "1c9p78" }],
+  ["path", { d: "M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5", key: "1j5fej" }],
+  ["path", { d: "M19.1 4.9C23 8.8 23 15.1 19.1 19", key: "10b0cb" }]
+];
+const Radio = createLucideIcon("radio", __iconNode$9);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$8 = [
+  ["path", { d: "M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8", key: "v9h5vc" }],
+  ["path", { d: "M21 3v5h-5", key: "1q7to0" }],
+  ["path", { d: "M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16", key: "3uifl3" }],
+  ["path", { d: "M8 16H3v5", key: "1cv678" }]
+];
+const RefreshCw = createLucideIcon("refresh-cw", __iconNode$8);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$7 = [
+  ["path", { d: "M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8", key: "1357e3" }],
+  ["path", { d: "M3 3v5h5", key: "1xhq8a" }]
+];
+const RotateCcw = createLucideIcon("rotate-ccw", __iconNode$7);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$6 = [
+  [
+    "path",
+    {
+      d: "M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z",
+      key: "oel41y"
+    }
+  ]
+];
+const Shield = createLucideIcon("shield", __iconNode$6);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$5 = [
+  ["polyline", { points: "14.5 17.5 3 6 3 3 6 3 17.5 14.5", key: "1hfsw2" }],
+  ["line", { x1: "13", x2: "19", y1: "19", y2: "13", key: "1vrmhu" }],
+  ["line", { x1: "16", x2: "20", y1: "16", y2: "20", key: "1bron3" }],
+  ["line", { x1: "19", x2: "21", y1: "21", y2: "19", key: "13pww6" }]
+];
+const Sword = createLucideIcon("sword", __iconNode$5);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$4 = [
+  ["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }],
+  ["circle", { cx: "12", cy: "12", r: "6", key: "1vlfrh" }],
+  ["circle", { cx: "12", cy: "12", r: "2", key: "1c9p78" }]
+];
+const Target = createLucideIcon("target", __iconNode$4);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$3 = [
+  ["path", { d: "M16 7h6v6", key: "box55l" }],
+  ["path", { d: "m22 7-8.5 8.5-5-5L2 17", key: "1t1m79" }]
+];
+const TrendingUp = createLucideIcon("trending-up", __iconNode$3);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$2 = [
+  ["path", { d: "M6 9H4.5a2.5 2.5 0 0 1 0-5H6", key: "17hqa7" }],
+  ["path", { d: "M18 9h1.5a2.5 2.5 0 0 0 0-5H18", key: "lmptdp" }],
+  ["path", { d: "M4 22h16", key: "57wxv0" }],
+  ["path", { d: "M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22", key: "1nw9bq" }],
+  ["path", { d: "M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22", key: "1np0yb" }],
+  ["path", { d: "M18 2H6v7a6 6 0 0 0 12 0V2Z", key: "u46fv3" }]
+];
+const Trophy = createLucideIcon("trophy", __iconNode$2);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$1 = [
+  ["path", { d: "M18 6 6 18", key: "1bl5f8" }],
+  ["path", { d: "m6 6 12 12", key: "d8bk6v" }]
+];
+const X$1 = createLucideIcon("x", __iconNode$1);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode = [
+  [
+    "path",
+    {
+      d: "M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z",
+      key: "1xq2db"
+    }
+  ]
+];
+const Zap = createLucideIcon("zap", __iconNode);
+const CYAN$f = "#00ffcc";
+const GOLD$6 = "#ffd700";
+const AMBER$1 = "#f59e0b";
+const BORDER$e = "rgba(0,255,204,0.18)";
+const PANEL$1 = "rgba(0,20,40,0.72)";
+const TEXT_DIM$8 = "rgba(224,244,255,0.45)";
+function useCountUp(target, duration = 1500) {
+  const [display, setDisplay] = reactExports.useState(target);
+  const prev = reactExports.useRef(target);
+  reactExports.useEffect(() => {
+    const start = prev.current;
+    const end = target;
+    const startTime = performance.now();
+    const tick = (now2) => {
+      const elapsed = now2 - startTime;
+      const progress2 = Math.min(elapsed / duration, 1);
+      const eased = 1 - (1 - progress2) ** 3;
+      setDisplay(start + (end - start) * eased);
+      if (progress2 < 1) requestAnimationFrame(tick);
+      else prev.current = end;
+    };
+    requestAnimationFrame(tick);
+  }, [target, duration]);
+  return display;
+}
+function LeaderboardPrizes() {
+  const { data, isLoading } = useLeaderboardPrizes();
+  const leaderboardPot = (data == null ? void 0 : data.leaderboardPot) ?? 0;
+  const totalPlotsOwned = (data == null ? void 0 : data.totalPlotsOwned) ?? 0;
+  const nextPayoutMilestone = (data == null ? void 0 : data.nextPayoutMilestone) ?? 1500;
+  const plotsUntilPayout = (data == null ? void 0 : data.plotsUntilPayout) ?? 1500;
+  const prizeDistribution = (data == null ? void 0 : data.prizeDistribution) ?? {
+    first: 50,
+    second: 30,
+    third: 20
+  };
+  const activePlayers = (data == null ? void 0 : data.activePlayers) ?? 0;
+  const animatedPot = useCountUp(leaderboardPot);
+  const progress2 = Math.min(
+    totalPlotsOwned % 1500 / Math.max(nextPayoutMilestone % 1500 || 1500, 1),
+    1
+  );
+  const prizeRows = [
+    {
+      place: 1,
+      label: "1ST PLACE",
+      pct: prizeDistribution.first,
+      color: GOLD$6,
+      medal: "🥇"
+    },
+    {
+      place: 2,
+      label: "2ND PLACE",
+      pct: prizeDistribution.second,
+      color: "#c0c0c0",
+      medal: "🥈"
+    },
+    {
+      place: 3,
+      label: "3RD PLACE",
+      pct: prizeDistribution.third,
+      color: AMBER$1,
+      medal: "🥉"
+    }
+  ];
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    motion.div,
+    {
+      initial: { opacity: 0, y: 8 },
+      animate: { opacity: 1, y: 0 },
+      transition: { duration: 0.35, delay: 0.15 },
+      "data-ocid": "leaderboard.prizes_section",
+      className: "mt-6",
+      style: {
+        background: PANEL$1,
+        backdropFilter: "blur(16px)",
+        WebkitBackdropFilter: "blur(16px)",
+        border: `1px solid ${BORDER$e}`,
+        borderRadius: 12,
+        overflow: "hidden"
+      },
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            style: {
+              background: "rgba(255,215,0,0.06)",
+              borderBottom: "1px solid rgba(255,215,0,0.15)",
+              padding: "14px 18px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between"
+            },
             children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-3xl", children: "🌍" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 10 }, children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(Trophy, { size: 16, style: { color: GOLD$6 } }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        fontSize: 12,
+                        fontWeight: 800,
+                        letterSpacing: 3,
+                        color: GOLD$6,
+                        textTransform: "uppercase"
+                      },
+                      children: "LEADERBOARD GRAND PRIZE POOL"
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        fontSize: 8,
+                        color: TEXT_DIM$8,
+                        letterSpacing: 1.5,
+                        marginTop: 2
+                      },
+                      children: "AWARDED EVERY 1,500 PLOTS MINTED"
+                    }
+                  )
+                ] })
+              ] }),
+              activePlayers > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs(
                 "div",
                 {
-                  className: "text-[11px] font-bold tracking-widest",
-                  style: { color: "#e0f4ff" },
-                  children: "NO PLOTS OWNED YET"
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "div",
-                {
-                  className: "text-[9px] max-w-[260px] leading-relaxed",
-                  style: { color: "rgba(224,244,255,0.45)" },
-                  children: "Purchase your first plot on the globe to start earning FRNTR tokens and resources passively."
+                  style: {
+                    fontSize: 8,
+                    color: CYAN$f,
+                    letterSpacing: 1.5,
+                    fontFamily: "monospace",
+                    fontWeight: 700
+                  },
+                  children: [
+                    activePlayers.toLocaleString(),
+                    " ACTIVE PLAYERS"
+                  ]
                 }
               )
             ]
           }
-        ) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-col gap-2.5 pb-3", children: plotsOwned.map((plotId, idx) => /* @__PURE__ */ jsxRuntimeExports.jsx(PlotCard, { plotId, index: idx + 1 }, plotId)) })
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { padding: "16px 18px" }, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              style: {
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 14
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        fontSize: 8,
+                        color: TEXT_DIM$8,
+                        letterSpacing: 1.5,
+                        marginBottom: 3
+                      },
+                      children: "CURRENT POT"
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        fontSize: 22,
+                        fontWeight: 900,
+                        fontFamily: "monospace",
+                        color: GOLD$6,
+                        textShadow: `0 0 12px ${GOLD$6}55`
+                      },
+                      children: isLoading ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 13, color: TEXT_DIM$8 }, children: "LOADING..." }) : leaderboardPot > 0 ? `${animatedPot.toFixed(4)} ICP` : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 14, color: TEXT_DIM$8 }, children: "0.0000 ICP" })
+                    }
+                  )
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { textAlign: "right" }, children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        fontSize: 8,
+                        color: TEXT_DIM$8,
+                        letterSpacing: 1.5,
+                        marginBottom: 3
+                      },
+                      children: "NEXT PAYOUT IN"
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "div",
+                    {
+                      style: {
+                        fontSize: 16,
+                        fontWeight: 900,
+                        fontFamily: "monospace",
+                        color: CYAN$f
+                      },
+                      children: [
+                        plotsUntilPayout.toLocaleString(),
+                        " PLOTS"
+                      ]
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "div",
+                    {
+                      style: {
+                        fontSize: 8,
+                        color: TEXT_DIM$8,
+                        fontFamily: "monospace",
+                        marginTop: 2
+                      },
+                      children: [
+                        "AT ",
+                        nextPayoutMilestone.toLocaleString(),
+                        " MINTED"
+                      ]
+                    }
+                  )
+                ] })
+              ]
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { marginBottom: 16 }, children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "div",
+              {
+                style: {
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginBottom: 4
+                },
+                children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { style: { fontSize: 8, color: TEXT_DIM$8, letterSpacing: 1 }, children: [
+                    "PROGRESS TO PAYOUT — ",
+                    totalPlotsOwned.toLocaleString(),
+                    " /",
+                    " ",
+                    nextPayoutMilestone.toLocaleString(),
+                    " PLOTS MINTED"
+                  ] }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "span",
+                    {
+                      style: {
+                        fontSize: 8,
+                        fontWeight: 700,
+                        color: CYAN$f,
+                        fontFamily: "monospace"
+                      },
+                      children: [
+                        (progress2 * 100).toFixed(1),
+                        "%"
+                      ]
+                    }
+                  )
+                ]
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "div",
+              {
+                style: {
+                  height: 6,
+                  background: "rgba(255,255,255,0.07)",
+                  borderRadius: 3,
+                  overflow: "hidden"
+                },
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      height: "100%",
+                      width: `${progress2 * 100}%`,
+                      background: `linear-gradient(90deg, ${CYAN$f}, ${GOLD$6})`,
+                      borderRadius: 3,
+                      transition: "width 0.6s ease",
+                      boxShadow: `0 0 8px ${CYAN$f}55`
+                    }
+                  }
+                )
+              }
+            )
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { marginBottom: 14 }, children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "div",
+              {
+                style: {
+                  fontSize: 9,
+                  fontWeight: 700,
+                  letterSpacing: 2,
+                  color: CYAN$f,
+                  textTransform: "uppercase",
+                  marginBottom: 10
+                },
+                children: "PRIZE DISTRIBUTION"
+              }
+            ),
+            prizeRows.map((row) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "div",
+              {
+                "data-ocid": `leaderboard.prize_row.${row.place}`,
+                style: {
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "8px 12px",
+                  marginBottom: 6,
+                  background: "rgba(255,255,255,0.03)",
+                  border: "1px solid rgba(255,255,255,0.07)",
+                  borderRadius: 8
+                },
+                children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 14 }, children: row.medal }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "span",
+                      {
+                        style: {
+                          fontSize: 10,
+                          fontWeight: 700,
+                          color: row.color,
+                          letterSpacing: 1
+                        },
+                        children: row.label
+                      }
+                    )
+                  ] }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { textAlign: "right" }, children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "div",
+                      {
+                        style: {
+                          fontSize: 12,
+                          fontWeight: 900,
+                          fontFamily: "monospace",
+                          color: row.color
+                        },
+                        children: [
+                          row.pct,
+                          "%"
+                        ]
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "div",
+                      {
+                        style: {
+                          fontSize: 8,
+                          color: TEXT_DIM$8,
+                          fontFamily: "monospace"
+                        },
+                        children: leaderboardPot > 0 ? `${(animatedPot * (row.pct / 100)).toFixed(4)} ICP` : "—"
+                      }
+                    )
+                  ] })
+                ]
+              },
+              row.place
+            ))
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              "data-ocid": "leaderboard.prizes_coming_soon",
+              style: {
+                textAlign: "center",
+                padding: "10px",
+                background: "rgba(0,255,204,0.04)",
+                border: `1px solid ${BORDER$e}`,
+                borderRadius: 8,
+                fontSize: 9,
+                color: TEXT_DIM$8,
+                letterSpacing: 1.5
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$f }, children: "⚡" }),
+                " FULL RANKINGS & MORE PRIZE TIERS COMING SOON"
+              ]
+            }
+          )
+        ] })
       ]
     }
   );
@@ -89841,393 +91704,6 @@ function Skeleton2({ className, ...props }) {
     }
   );
 }
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const toKebabCase = (string) => string.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
-const toCamelCase = (string) => string.replace(
-  /^([A-Z])|[\s-_]+(\w)/g,
-  (match, p1, p2) => p2 ? p2.toUpperCase() : p1.toLowerCase()
-);
-const toPascalCase$1 = (string) => {
-  const camelCase = toCamelCase(string);
-  return camelCase.charAt(0).toUpperCase() + camelCase.slice(1);
-};
-const mergeClasses = (...classes) => classes.filter((className, index2, array) => {
-  return Boolean(className) && className.trim() !== "" && array.indexOf(className) === index2;
-}).join(" ").trim();
-const hasA11yProp = (props) => {
-  for (const prop in props) {
-    if (prop.startsWith("aria-") || prop === "role" || prop === "title") {
-      return true;
-    }
-  }
-};
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-var defaultAttributes = {
-  xmlns: "http://www.w3.org/2000/svg",
-  width: 24,
-  height: 24,
-  viewBox: "0 0 24 24",
-  fill: "none",
-  stroke: "currentColor",
-  strokeWidth: 2,
-  strokeLinecap: "round",
-  strokeLinejoin: "round"
-};
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const Icon = reactExports.forwardRef(
-  ({
-    color: color2 = "currentColor",
-    size = 24,
-    strokeWidth = 2,
-    absoluteStrokeWidth,
-    className = "",
-    children,
-    iconNode,
-    ...rest
-  }, ref) => reactExports.createElement(
-    "svg",
-    {
-      ref,
-      ...defaultAttributes,
-      width: size,
-      height: size,
-      stroke: color2,
-      strokeWidth: absoluteStrokeWidth ? Number(strokeWidth) * 24 / Number(size) : strokeWidth,
-      className: mergeClasses("lucide", className),
-      ...!children && !hasA11yProp(rest) && { "aria-hidden": "true" },
-      ...rest
-    },
-    [
-      ...iconNode.map(([tag, attrs]) => reactExports.createElement(tag, attrs)),
-      ...Array.isArray(children) ? children : [children]
-    ]
-  )
-);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const createLucideIcon = (iconName, iconNode) => {
-  const Component2 = reactExports.forwardRef(
-    ({ className, ...props }, ref) => reactExports.createElement(Icon, {
-      ref,
-      iconNode,
-      className: mergeClasses(
-        `lucide-${toKebabCase(toPascalCase$1(iconName))}`,
-        `lucide-${iconName}`,
-        className
-      ),
-      ...props
-    })
-  );
-  Component2.displayName = toPascalCase$1(iconName);
-  return Component2;
-};
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$l = [
-  ["path", { d: "M12 7v14", key: "1akyts" }],
-  [
-    "path",
-    {
-      d: "M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z",
-      key: "ruj8y"
-    }
-  ]
-];
-const BookOpen = createLucideIcon("book-open", __iconNode$l);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$k = [["path", { d: "m6 9 6 6 6-6", key: "qrunsl" }]];
-const ChevronDown = createLucideIcon("chevron-down", __iconNode$k);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$j = [["path", { d: "m9 18 6-6-6-6", key: "mthhwq" }]];
-const ChevronRight = createLucideIcon("chevron-right", __iconNode$j);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$i = [["path", { d: "m18 15-6-6-6 6", key: "153udz" }]];
-const ChevronUp = createLucideIcon("chevron-up", __iconNode$i);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$h = [
-  ["path", { d: "M21.801 10A10 10 0 1 1 17 3.335", key: "yps3ct" }],
-  ["path", { d: "m9 11 3 3L22 4", key: "1pflzl" }]
-];
-const CircleCheckBig = createLucideIcon("circle-check-big", __iconNode$h);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$g = [["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }]];
-const Circle = createLucideIcon("circle", __iconNode$g);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$f = [
-  [
-    "path",
-    {
-      d: "M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z",
-      key: "96xj49"
-    }
-  ]
-];
-const Flame = createLucideIcon("flame", __iconNode$f);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$e = [
-  [
-    "path",
-    {
-      d: "M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2",
-      key: "18mbvz"
-    }
-  ],
-  ["path", { d: "M6.453 15h11.094", key: "3shlmq" }],
-  ["path", { d: "M8.5 2h7", key: "csnxdl" }]
-];
-const FlaskConical = createLucideIcon("flask-conical", __iconNode$e);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$d = [
-  ["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }],
-  ["path", { d: "M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20", key: "13o1zl" }],
-  ["path", { d: "M2 12h20", key: "9i4pu4" }]
-];
-const Globe = createLucideIcon("globe", __iconNode$d);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$c = [
-  ["rect", { width: "7", height: "9", x: "3", y: "3", rx: "1", key: "10lvy0" }],
-  ["rect", { width: "7", height: "5", x: "14", y: "3", rx: "1", key: "16une8" }],
-  ["rect", { width: "7", height: "9", x: "14", y: "12", rx: "1", key: "1hutg5" }],
-  ["rect", { width: "7", height: "5", x: "3", y: "16", rx: "1", key: "ldoo1y" }]
-];
-const LayoutDashboard = createLucideIcon("layout-dashboard", __iconNode$c);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$b = [
-  [
-    "path",
-    {
-      d: "M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z",
-      key: "169xi5"
-    }
-  ],
-  ["path", { d: "M15 5.764v15", key: "1pn4in" }],
-  ["path", { d: "M9 3.236v15", key: "1uimfh" }]
-];
-const Map$1 = createLucideIcon("map", __iconNode$b);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$a = [
-  [
-    "path",
-    {
-      d: "M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z",
-      key: "1a0edw"
-    }
-  ],
-  ["path", { d: "M12 22V12", key: "d0xqtd" }],
-  ["polyline", { points: "3.29 7 12 12 20.71 7", key: "ousv84" }],
-  ["path", { d: "m7.5 4.27 9 5.15", key: "1c824w" }]
-];
-const Package = createLucideIcon("package", __iconNode$a);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$9 = [
-  ["path", { d: "M4.9 19.1C1 15.2 1 8.8 4.9 4.9", key: "1vaf9d" }],
-  ["path", { d: "M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5", key: "u1ii0m" }],
-  ["circle", { cx: "12", cy: "12", r: "2", key: "1c9p78" }],
-  ["path", { d: "M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5", key: "1j5fej" }],
-  ["path", { d: "M19.1 4.9C23 8.8 23 15.1 19.1 19", key: "10b0cb" }]
-];
-const Radio = createLucideIcon("radio", __iconNode$9);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$8 = [
-  ["path", { d: "M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8", key: "v9h5vc" }],
-  ["path", { d: "M21 3v5h-5", key: "1q7to0" }],
-  ["path", { d: "M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16", key: "3uifl3" }],
-  ["path", { d: "M8 16H3v5", key: "1cv678" }]
-];
-const RefreshCw = createLucideIcon("refresh-cw", __iconNode$8);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$7 = [
-  ["path", { d: "M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8", key: "1357e3" }],
-  ["path", { d: "M3 3v5h5", key: "1xhq8a" }]
-];
-const RotateCcw = createLucideIcon("rotate-ccw", __iconNode$7);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$6 = [
-  [
-    "path",
-    {
-      d: "M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z",
-      key: "oel41y"
-    }
-  ]
-];
-const Shield = createLucideIcon("shield", __iconNode$6);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$5 = [
-  ["polyline", { points: "14.5 17.5 3 6 3 3 6 3 17.5 14.5", key: "1hfsw2" }],
-  ["line", { x1: "13", x2: "19", y1: "19", y2: "13", key: "1vrmhu" }],
-  ["line", { x1: "16", x2: "20", y1: "16", y2: "20", key: "1bron3" }],
-  ["line", { x1: "19", x2: "21", y1: "21", y2: "19", key: "13pww6" }]
-];
-const Sword = createLucideIcon("sword", __iconNode$5);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$4 = [
-  ["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }],
-  ["circle", { cx: "12", cy: "12", r: "6", key: "1vlfrh" }],
-  ["circle", { cx: "12", cy: "12", r: "2", key: "1c9p78" }]
-];
-const Target = createLucideIcon("target", __iconNode$4);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$3 = [
-  ["path", { d: "M16 7h6v6", key: "box55l" }],
-  ["path", { d: "m22 7-8.5 8.5-5-5L2 17", key: "1t1m79" }]
-];
-const TrendingUp = createLucideIcon("trending-up", __iconNode$3);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$2 = [
-  ["path", { d: "M6 9H4.5a2.5 2.5 0 0 1 0-5H6", key: "17hqa7" }],
-  ["path", { d: "M18 9h1.5a2.5 2.5 0 0 0 0-5H18", key: "lmptdp" }],
-  ["path", { d: "M4 22h16", key: "57wxv0" }],
-  ["path", { d: "M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22", key: "1nw9bq" }],
-  ["path", { d: "M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22", key: "1np0yb" }],
-  ["path", { d: "M18 2H6v7a6 6 0 0 0 12 0V2Z", key: "u46fv3" }]
-];
-const Trophy = createLucideIcon("trophy", __iconNode$2);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$1 = [
-  ["path", { d: "M18 6 6 18", key: "1bl5f8" }],
-  ["path", { d: "m6 6 12 12", key: "d8bk6v" }]
-];
-const X$1 = createLucideIcon("x", __iconNode$1);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode = [
-  [
-    "path",
-    {
-      d: "M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z",
-      key: "1xq2db"
-    }
-  ]
-];
-const Zap = createLucideIcon("zap", __iconNode);
 const CYAN$e = "#00ffcc";
 const GOLD$5 = "#ffd700";
 const AMBER = "#f59e0b";
@@ -90272,347 +91748,11 @@ function SortIcon({
     return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { opacity: 0.2, fontSize: 10 }, children: "↕" });
   return dir === "asc" ? /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronUp, { size: 11, style: { color: CYAN$e } }) : /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronDown, { size: 11, style: { color: CYAN$e } });
 }
-function useCountUp(target, duration = 1500) {
-  const [display, setDisplay] = reactExports.useState(target);
-  const prev = reactExports.useRef(target);
-  reactExports.useEffect(() => {
-    const start = prev.current;
-    const end = target;
-    const startTime = performance.now();
-    const tick = (now2) => {
-      const elapsed = now2 - startTime;
-      const progress2 = Math.min(elapsed / duration, 1);
-      const eased = 1 - (1 - progress2) ** 3;
-      setDisplay(start + (end - start) * eased);
-      if (progress2 < 1) requestAnimationFrame(tick);
-      else prev.current = end;
-    };
-    requestAnimationFrame(tick);
-  }, [target, duration]);
-  return display;
-}
-function GrandPrizes({
-  leaderboardPot,
-  totalPlotsOwned
-}) {
-  const animatedPot = useCountUp(leaderboardPot);
-  const progress2 = Math.min(totalPlotsOwned % 1500 / 1500, 1);
-  const plotsUntilPayout = 1500 - totalPlotsOwned % 1500;
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-    motion.div,
-    {
-      initial: { opacity: 0, y: 8 },
-      animate: { opacity: 1, y: 0 },
-      transition: { duration: 0.35, delay: 0.3 },
-      "data-ocid": "leaderboard.prizes_section",
-      className: "mt-6",
-      style: {
-        background: PANEL,
-        backdropFilter: "blur(16px)",
-        WebkitBackdropFilter: "blur(16px)",
-        border: `1px solid ${BORDER$d}`,
-        borderRadius: 12,
-        overflow: "hidden"
-      },
-      children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs(
-          "div",
-          {
-            style: {
-              background: "rgba(255,215,0,0.06)",
-              borderBottom: "1px solid rgba(255,215,0,0.15)",
-              padding: "14px 18px",
-              display: "flex",
-              alignItems: "center",
-              gap: 10
-            },
-            children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(Trophy, { size: 16, style: { color: GOLD$5 } }),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "div",
-                  {
-                    style: {
-                      fontSize: 12,
-                      fontWeight: 800,
-                      letterSpacing: 3,
-                      color: GOLD$5,
-                      textTransform: "uppercase"
-                    },
-                    children: "LEADERBOARD GRAND PRIZE POOL"
-                  }
-                ),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "div",
-                  {
-                    style: {
-                      fontSize: 8,
-                      color: TEXT_DIM$7,
-                      letterSpacing: 1.5,
-                      marginTop: 2
-                    },
-                    children: "AWARDED EVERY 1,500 PLOTS MINTED"
-                  }
-                )
-              ] })
-            ]
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { padding: "16px 18px" }, children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "div",
-            {
-              style: {
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 14
-              },
-              children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "div",
-                    {
-                      style: {
-                        fontSize: 8,
-                        color: TEXT_DIM$7,
-                        letterSpacing: 1.5,
-                        marginBottom: 3
-                      },
-                      children: "CURRENT POT"
-                    }
-                  ),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "div",
-                    {
-                      style: {
-                        fontSize: 22,
-                        fontWeight: 900,
-                        fontFamily: "monospace",
-                        color: GOLD$5,
-                        textShadow: `0 0 12px ${GOLD$5}55`
-                      },
-                      children: leaderboardPot > 0 ? `${animatedPot.toFixed(4)} ICP` : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 14, color: TEXT_DIM$7 }, children: "Loading..." })
-                    }
-                  )
-                ] }),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { textAlign: "right" }, children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "div",
-                    {
-                      style: {
-                        fontSize: 8,
-                        color: TEXT_DIM$7,
-                        letterSpacing: 1.5,
-                        marginBottom: 3
-                      },
-                      children: "NEXT PAYOUT IN"
-                    }
-                  ),
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                    "div",
-                    {
-                      style: {
-                        fontSize: 16,
-                        fontWeight: 900,
-                        fontFamily: "monospace",
-                        color: CYAN$e
-                      },
-                      children: [
-                        plotsUntilPayout.toLocaleString(),
-                        " PLOTS"
-                      ]
-                    }
-                  )
-                ] })
-              ]
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { marginBottom: 16 }, children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs(
-              "div",
-              {
-                style: {
-                  display: "flex",
-                  justifyContent: "space-between",
-                  marginBottom: 4
-                },
-                children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 8, color: TEXT_DIM$7, letterSpacing: 1 }, children: "PROGRESS TO PAYOUT" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                    "span",
-                    {
-                      style: {
-                        fontSize: 8,
-                        fontWeight: 700,
-                        color: CYAN$e,
-                        fontFamily: "monospace"
-                      },
-                      children: [
-                        (progress2 * 100).toFixed(1),
-                        "%"
-                      ]
-                    }
-                  )
-                ]
-              }
-            ),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "div",
-              {
-                style: {
-                  height: 6,
-                  background: "rgba(255,255,255,0.07)",
-                  borderRadius: 3,
-                  overflow: "hidden"
-                },
-                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "div",
-                  {
-                    style: {
-                      height: "100%",
-                      width: `${progress2 * 100}%`,
-                      background: `linear-gradient(90deg, ${CYAN$e}, ${GOLD$5})`,
-                      borderRadius: 3,
-                      transition: "width 0.6s ease",
-                      boxShadow: `0 0 8px ${CYAN$e}55`
-                    }
-                  }
-                )
-              }
-            )
-          ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { marginBottom: 14 }, children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "div",
-              {
-                style: {
-                  fontSize: 9,
-                  fontWeight: 700,
-                  letterSpacing: 2,
-                  color: CYAN$e,
-                  textTransform: "uppercase",
-                  marginBottom: 10
-                },
-                children: "PRIZE DISTRIBUTION"
-              }
-            ),
-            [
-              { place: 1, label: "1ST PLACE", pct: 50, color: GOLD$5, medal: "🥇" },
-              {
-                place: 2,
-                label: "2ND PLACE",
-                pct: 30,
-                color: "#c0c0c0",
-                medal: "🥈"
-              },
-              {
-                place: 3,
-                label: "3RD PLACE",
-                pct: 20,
-                color: AMBER,
-                medal: "🥉"
-              }
-            ].map((row) => {
-              leaderboardPot * (row.pct / 100);
-              return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                "div",
-                {
-                  "data-ocid": `leaderboard.prize_row.${row.place}`,
-                  style: {
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "8px 12px",
-                    marginBottom: 6,
-                    background: "rgba(255,255,255,0.03)",
-                    border: "1px solid rgba(255,255,255,0.07)",
-                    borderRadius: 8
-                  },
-                  children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [
-                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 14 }, children: row.medal }),
-                      /* @__PURE__ */ jsxRuntimeExports.jsx(
-                        "span",
-                        {
-                          style: {
-                            fontSize: 10,
-                            fontWeight: 700,
-                            color: row.color,
-                            letterSpacing: 1
-                          },
-                          children: row.label
-                        }
-                      )
-                    ] }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { textAlign: "right" }, children: [
-                      /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                        "div",
-                        {
-                          style: {
-                            fontSize: 12,
-                            fontWeight: 900,
-                            fontFamily: "monospace",
-                            color: row.color
-                          },
-                          children: [
-                            row.pct,
-                            "%"
-                          ]
-                        }
-                      ),
-                      /* @__PURE__ */ jsxRuntimeExports.jsx(
-                        "div",
-                        {
-                          style: {
-                            fontSize: 8,
-                            color: TEXT_DIM$7,
-                            fontFamily: "monospace"
-                          },
-                          children: leaderboardPot > 0 ? `${(animatedPot * (row.pct / 100)).toFixed(4)} ICP` : "—"
-                        }
-                      )
-                    ] })
-                  ]
-                },
-                row.place
-              );
-            })
-          ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "div",
-            {
-              "data-ocid": "leaderboard.prizes_coming_soon",
-              style: {
-                textAlign: "center",
-                padding: "10px",
-                background: "rgba(0,255,204,0.04)",
-                border: `1px solid ${BORDER$d}`,
-                borderRadius: 8,
-                fontSize: 9,
-                color: TEXT_DIM$7,
-                letterSpacing: 1.5
-              },
-              children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$e }, children: "⚡" }),
-                " FULL RANKINGS & MORE PRIZE TIERS COMING SOON"
-              ]
-            }
-          )
-        ] })
-      ]
-    }
-  );
-}
 function Leaderboard() {
   const leaderboard = useGameStore((s2) => s2.leaderboard);
   const player = useGameStore((s2) => s2.player);
   const rankStats = useGameStore((s2) => s2.rankStats);
-  const treasuryState = useGameStore((s2) => s2.treasuryState);
-  const globalStats = useGameStore((s2) => s2.globalStats);
   const { actor, isFetching } = useActor(createActor);
-  const leaderboardPot = Number(treasuryState.leaderboard) / 1e8;
-  const totalPlotsOwned = (globalStats == null ? void 0 : globalStats.totalPlotsOwned) ?? 0;
   const [sortKey, setSortKey] = reactExports.useState("score");
   const [sortDir, setSortDir] = reactExports.useState("desc");
   const [pageTab, setPageTab] = reactExports.useState("rankings");
@@ -91321,16 +92461,46 @@ function Leaderboard() {
             }
           )
         ] }),
-        pageTab === "prizes" && /* @__PURE__ */ jsxRuntimeExports.jsx(
-          GrandPrizes,
-          {
-            leaderboardPot,
-            totalPlotsOwned
-          }
-        )
+        pageTab === "prizes" && /* @__PURE__ */ jsxRuntimeExports.jsx(LeaderboardPrizes, {})
       ] })
     }
   );
+}
+function formatCycles(cycles) {
+  const n = Number(cycles);
+  if (n >= 1e12) return `${(n / 1e12).toFixed(2)}T`;
+  if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`;
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
+  return n.toLocaleString();
+}
+const CYCLES_WARNING = 1000000000000n;
+const CYCLES_CRITICAL = 100000000000n;
+function useCanisterCycles() {
+  const { actor, isFetching } = useActor(createActor);
+  const [cycles, setCycles] = reactExports.useState(null);
+  const [loading2, setLoading] = reactExports.useState(true);
+  reactExports.useEffect(() => {
+    if (!actor || isFetching) return;
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const result = await actor.getCanisterCycles();
+        if (!cancelled) setCycles(result);
+      } catch {
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [actor, isFetching]);
+  return {
+    cycles,
+    cyclesFormatted: cycles !== null ? formatCycles(cycles) : "—",
+    loading: loading2
+  };
 }
 function applyConfirmedFrntrBalance(rawE8s) {
   useGameStore.getState().setFrntrBalance(rawE8s);
@@ -91625,10 +92795,18 @@ function AdminButton({
 function AdminPanel() {
   const player = useGameStore((s2) => s2.player);
   const { actor } = useActor(createActor);
+  const {
+    cycles,
+    cyclesFormatted,
+    loading: cyclesLoading
+  } = useCanisterCycles();
   const [mintLoading, setMintLoading] = reactExports.useState(false);
   const [resetLoading, setResetLoading] = reactExports.useState(false);
   const [reseedLoading, setReseedLoading] = reactExports.useState(false);
   const [showConfirm, setShowConfirm] = reactExports.useState(false);
+  const [showPurgeConfirm, setShowPurgeConfirm] = reactExports.useState(false);
+  const [purgeResult, setPurgeResult] = reactExports.useState(null);
+  const [isPurging, setIsPurging] = reactExports.useState(false);
   if (!player.isAdmin) return null;
   async function handleMintToSelf() {
     if (!actor) {
@@ -91695,6 +92873,26 @@ function AdminPanel() {
       setResetLoading(false);
     }
   }
+  const handlePurgeTestPlayers = async () => {
+    if (!actor) {
+      setPurgeResult("Error: Actor not ready");
+      return;
+    }
+    setIsPurging(true);
+    setShowPurgeConfirm(false);
+    try {
+      const result = await actor.purgeTestPlayers();
+      if (result.__kind__ === "ok") {
+        setPurgeResult(`Removed ${Number(result.ok)} test entries`);
+      } else {
+        setPurgeResult(`Error: ${result.err}`);
+      }
+    } catch (e) {
+      setPurgeResult(`Error: ${String(e)}`);
+    } finally {
+      setIsPurging(false);
+    }
+  };
   async function handleReseedPlots() {
     if (!actor) {
       ue.error("Actor not ready");
@@ -91781,6 +92979,115 @@ function AdminPanel() {
           )
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { height: 1, background: BORDER$c } }),
+        (() => {
+          const isCritical = cycles !== null && cycles < CYCLES_CRITICAL;
+          const isWarning = cycles !== null && cycles >= CYCLES_CRITICAL && cycles < CYCLES_WARNING;
+          const accentColor = isCritical ? "#ff4444" : isWarning ? "#ffcc00" : CYAN$d;
+          const bgColor = isCritical ? "rgba(255,68,68,0.08)" : isWarning ? "rgba(255,204,0,0.07)" : "rgba(0,255,204,0.04)";
+          const borderColor = isCritical ? "rgba(255,68,68,0.35)" : isWarning ? "rgba(255,204,0,0.35)" : BORDER$c;
+          return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              "data-ocid": "admin.cycles_card",
+              style: {
+                padding: "10px 12px",
+                borderRadius: 8,
+                background: bgColor,
+                border: `1px solid ${borderColor}`,
+                display: "flex",
+                flexDirection: "column",
+                gap: 4,
+                backdropFilter: "blur(8px)"
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "div",
+                  {
+                    style: {
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 8
+                    },
+                    children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "span",
+                        {
+                          style: {
+                            fontSize: 7,
+                            color: TEXT_DIM$6,
+                            letterSpacing: 1.5,
+                            textTransform: "uppercase"
+                          },
+                          children: "CANISTER CYCLES"
+                        }
+                      ),
+                      (isCritical || isWarning) && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "span",
+                        {
+                          style: {
+                            fontSize: 7,
+                            fontWeight: 700,
+                            letterSpacing: 1.5,
+                            color: accentColor,
+                            textTransform: "uppercase",
+                            padding: "1px 6px",
+                            borderRadius: 6,
+                            background: isCritical ? "rgba(255,68,68,0.15)" : "rgba(255,204,0,0.12)",
+                            border: `1px solid ${accentColor}55`
+                          },
+                          children: isCritical ? "⚠ CRITICAL" : "⚠ LOW"
+                        }
+                      )
+                    ]
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    "data-ocid": "admin.cycles_value",
+                    style: {
+                      fontSize: 20,
+                      fontWeight: 900,
+                      color: accentColor,
+                      letterSpacing: 1,
+                      fontFamily: "monospace",
+                      textShadow: `0 0 10px ${accentColor}99`,
+                      lineHeight: 1.1
+                    },
+                    children: cyclesLoading ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 11, color: TEXT_DIM$6 }, children: "Loading…" }) : cyclesFormatted
+                  }
+                ),
+                isCritical && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    "data-ocid": "admin.cycles_warning",
+                    style: {
+                      fontSize: 8,
+                      color: "#ff8888",
+                      letterSpacing: 0.3,
+                      marginTop: 2
+                    },
+                    children: "⚠ Critical — top up canister cycles immediately."
+                  }
+                ),
+                isWarning && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    "data-ocid": "admin.cycles_warning",
+                    style: {
+                      fontSize: 8,
+                      color: "#ffdd66",
+                      letterSpacing: 0.3,
+                      marginTop: 2
+                    },
+                    children: "⚠ Below 1T cycles — consider topping up soon."
+                  }
+                )
+              ]
+            }
+          );
+        })(),
         /* @__PURE__ */ jsxRuntimeExports.jsxs(
           "div",
           {
@@ -91927,6 +93234,71 @@ function AdminPanel() {
             }
           )
         ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { marginBottom: 12 }, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
+            {
+              style: {
+                fontSize: 9,
+                color: TEXT_DIM$6,
+                letterSpacing: 1.5,
+                textTransform: "uppercase",
+                marginBottom: 6
+              },
+              children: "LEADERBOARD MAINTENANCE"
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              type: "button",
+              onClick: () => setShowPurgeConfirm(true),
+              disabled: isPurging,
+              style: {
+                width: "100%",
+                padding: "8px 12px",
+                borderRadius: 6,
+                background: "rgba(220,38,38,0.1)",
+                border: "1px solid rgba(220,38,38,0.4)",
+                color: "#f87171",
+                fontSize: 10,
+                letterSpacing: 0.8,
+                cursor: isPurging ? "not-allowed" : "pointer",
+                opacity: isPurging ? 0.5 : 1
+              },
+              children: isPurging ? "PURGING..." : "PURGE TEST PLAYERS"
+            }
+          ),
+          purgeResult && /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
+            {
+              style: {
+                marginTop: 6,
+                fontSize: 9,
+                color: purgeResult.startsWith("Error") ? "#f87171" : "#34d399",
+                letterSpacing: 0.5
+              },
+              children: purgeResult
+            }
+          )
+        ] }),
+        showPurgeConfirm && /* @__PURE__ */ jsxRuntimeExports.jsx(
+          _ActionConfirmModal,
+          {
+            isOpen: showPurgeConfirm,
+            actionType: "purchase",
+            title: "Purge Test Players",
+            details: [
+              {
+                label: "Action",
+                value: "Remove all test/placeholder leaderboard entries"
+              }
+            ],
+            warningText: "This cannot be undone. All test player entries will be permanently removed.",
+            onConfirm: handlePurgeTestPlayers,
+            onCancel: () => setShowPurgeConfirm(false)
+          }
+        ),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           "div",
           {
@@ -91975,7 +93347,7 @@ function BottomNav({ activeTab, onTabClick }) {
         bottom: 0,
         left: 0,
         right: 0,
-        zIndex: 50,
+        zIndex: 30,
         paddingBottom: "env(safe-area-inset-bottom)",
         background: "rgba(2,10,20,0.97)",
         borderTop: `1px solid ${BORDER_TOP}`,
@@ -92099,9 +93471,9 @@ function BottomSheet({
       "div",
       {
         "data-ocid": "bottom_sheet.panel",
-        className: "fixed left-0 right-0 z-[70] flex flex-col",
+        className: "fixed left-0 right-0 z-[50] flex flex-col",
         style: {
-          bottom: "calc(64px + env(safe-area-inset-bottom))",
+          bottom: "calc(56px + env(safe-area-inset-bottom))",
           height,
           background: "rgba(4,12,24,0.97)",
           borderTop: `1px solid ${BORDER$b}`,
@@ -92754,12 +94126,32 @@ function CommandCenter() {
             changed = true;
           }
           if (current.completed && !current.claimed) {
-            addFrntr(m2.reward);
-            ue.success(`Mission complete! +${m2.reward} FRNTR`, {
-              duration: 4e3
-            });
             next[m2.id] = { completed: true, claimed: true };
             changed = true;
+            (async () => {
+              if (!actor) {
+                ue.error("Not connected — mission reward not credited", {
+                  duration: 5e3
+                });
+                return;
+              }
+              try {
+                const result = await actor.completeMission(m2.id);
+                if (result.__kind__ === "ok") {
+                  setFrntrBalance(result.ok);
+                  ue.success(`Mission complete! +${m2.reward} FRNTR`, {
+                    duration: 4e3
+                  });
+                } else {
+                  ue.error(`Mission failed: ${result.err}`, {
+                    duration: 5e3
+                  });
+                }
+              } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                ue.error(`Mission error: ${msg}`, { duration: 5e3 });
+              }
+            })();
           }
         }
         if (changed) saveMissions(next);
@@ -92767,7 +94159,7 @@ function CommandCenter() {
       });
     }, 2e3);
     return () => clearInterval(interval);
-  }, [MISSION_DEFS, addFrntr, saveMissions]);
+  }, [MISSION_DEFS, actor, setFrntrBalance, saveMissions]);
   reactExports.useEffect(() => {
     const interval = setInterval(() => {
       useGameStore.getState().tickPassiveIncome();
@@ -93297,8 +94689,10 @@ function FaucetOverlay() {
   const { isAuthenticated } = useInternetIdentity();
   const { actor, isFetching } = useActor(createActor);
   const mintTestTokens = useGameStore((s2) => s2.mintTestTokens);
+  const testnetMode = useGameStore((s2) => s2.testnetMode);
   const { refetch: refetchIcp } = useIcpBalance();
   const [loading2, setLoading] = reactExports.useState(false);
+  if (!testnetMode) return null;
   const isReady = isAuthenticated && !!actor && !isFetching;
   const handleFaucet = async () => {
     if (loading2) return;
@@ -106184,7 +107578,7 @@ function actionBtnStyle(color2, bg) {
 }
 function SurveyReport({ plot, isOwnPlot: _isOwnPlot }) {
   const effPct = plot.efficiency;
-  const effColor = effPct > 80 ? "#22c55e" : effPct >= 60 ? "#f59e0b" : "#ef4444";
+  const effColor2 = effPct > 80 ? "#22c55e" : effPct >= 60 ? "#f59e0b" : "#ef4444";
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { marginBottom: 14 }, children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx(
       "div",
@@ -106228,9 +107622,9 @@ function SurveyReport({ plot, isOwnPlot: _isOwnPlot }) {
                 style: {
                   fontSize: 9,
                   fontWeight: 700,
-                  color: effColor,
+                  color: effColor2,
                   fontFamily: "monospace",
-                  textShadow: `0 0 6px ${effColor}88`
+                  textShadow: `0 0 6px ${effColor2}88`
                 },
                 children: [
                   effPct,
@@ -106257,7 +107651,7 @@ function SurveyReport({ plot, isOwnPlot: _isOwnPlot }) {
               style: {
                 height: "100%",
                 width: `${effPct}%`,
-                background: `linear-gradient(90deg, ${effColor}, ${effColor}aa)`,
+                background: `linear-gradient(90deg, ${effColor2}, ${effColor2}aa)`,
                 borderRadius: 2,
                 transition: "width 0.4s ease"
               }
@@ -106858,6 +108252,69 @@ function MapBottomSheet({
     )
   ] });
 }
+function useMissions() {
+  const { actor } = useActor(createActor);
+  const { isAuthenticated } = useInternetIdentity();
+  const confirmedFrntBalance = useGameStore((s2) => s2.confirmedFrntBalance);
+  const setFrntrBalance = useGameStore((s2) => s2.setFrntrBalance);
+  const [playerMissions, setPlayerMissions] = reactExports.useState([]);
+  const [loading2, setLoading] = reactExports.useState(false);
+  const [error, setError] = reactExports.useState(null);
+  const completedMissionIds = playerMissions.filter((pm) => pm.completed).map((pm) => pm.mission.id);
+  const loadMissions = reactExports.useCallback(async () => {
+    if (!actor || !isAuthenticated) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await actor.getPlayerMissions();
+      setPlayerMissions(result);
+    } catch (e) {
+      setError("Failed to load missions. Please try again.");
+      console.error("useMissions load error:", e);
+    } finally {
+      setLoading(false);
+    }
+  }, [actor, isAuthenticated]);
+  const completeMission = reactExports.useCallback(
+    async (missionId, rewardE8s) => {
+      if (!actor) {
+        ue.error("Not connected to canister");
+        return false;
+      }
+      try {
+        const res = await actor.completeMission(missionId);
+        if ("ok" in res) {
+          const rewardFrntr = Number(res.ok) / 1e8;
+          ue.success(
+            `Mission complete! +${rewardFrntr.toFixed(2)} FRNTR minted to your wallet`,
+            { duration: 5e3 }
+          );
+          const rewardAmount = Number(rewardE8s);
+          setFrntrBalance(
+            BigInt(Math.round(confirmedFrntBalance * 1e8 + rewardAmount))
+          );
+          await loadMissions();
+          return true;
+        }
+        ue.error(res.err || "Failed to claim reward", { duration: 5e3 });
+        return false;
+      } catch (e) {
+        ue.error("Claim failed. Please try again.");
+        console.error("useMissions complete error:", e);
+        return false;
+      }
+    },
+    [actor, confirmedFrntBalance, setFrntrBalance, loadMissions]
+  );
+  return {
+    playerMissions,
+    completedMissionIds,
+    loading: loading2,
+    error,
+    loadMissions,
+    completeMission
+  };
+}
 const CYAN$5 = "#00ffcc";
 const GOLD$3 = "#ffd700";
 const BORDER$5 = "rgba(0,255,204,0.22)";
@@ -106969,38 +108426,28 @@ const COMING_SOON_MISSIONS = [
   }
 ];
 function MissionsTab() {
-  const { actor } = useActor(createActor);
   const { isAuthenticated } = useInternetIdentity();
   const player = useGameStore((s2) => s2.player);
   const generatorTiers = useGameStore((s2) => s2.generatorTiers);
   const confirmedFrntBalance = useGameStore((s2) => s2.confirmedFrntBalance);
   const accruedFrntSinceSync = useGameStore((s2) => s2.accruedFrntSinceSync);
-  const setFrntrBalance = useGameStore((s2) => s2.setFrntrBalance);
   const frntBalance = confirmedFrntBalance + accruedFrntSinceSync;
   const plotsOwned = player.plotsOwned;
   const claimCount = useGameStore((s2) => s2.totalFRNTRBurned > 0 ? 1 : 0);
-  const [playerMissions, setPlayerMissions] = reactExports.useState([]);
-  const [loading2, setLoading] = reactExports.useState(false);
+  const {
+    playerMissions,
+    completedMissionIds,
+    loading: loading2,
+    error,
+    loadMissions,
+    completeMission
+  } = useMissions();
   const [claiming, setClaiming] = reactExports.useState(null);
-  const [error, setError] = reactExports.useState(null);
   const [missionConfirmOpen, setMissionConfirmOpen] = reactExports.useState(false);
   const [pendingMissionId, setPendingMissionId] = reactExports.useState(null);
   const [pendingReward, setPendingReward] = reactExports.useState(0n);
   const [postMissionType, setPostMissionType] = reactExports.useState(null);
-  const loadMissions = reactExports.useCallback(async () => {
-    if (!actor || !isAuthenticated) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await actor.getPlayerMissions();
-      setPlayerMissions(result);
-    } catch (e) {
-      setError("Failed to load missions. Please try again.");
-      console.error("MissionsTab load error:", e);
-    } finally {
-      setLoading(false);
-    }
-  }, [actor, isAuthenticated]);
+  const [filterMode, setFilterMode] = reactExports.useState("all");
   reactExports.useEffect(() => {
     loadMissions();
   }, [loadMissions]);
@@ -107011,55 +108458,21 @@ function MissionsTab() {
   };
   const handleConfirmMission = async () => {
     setMissionConfirmOpen(false);
-    if (pendingMissionId !== null)
-      await executeClaimMission(pendingMissionId, pendingReward);
+    if (pendingMissionId !== null) {
+      setClaiming(pendingMissionId);
+      const ok = await completeMission(pendingMissionId, pendingReward);
+      setClaiming(null);
+      if (ok) setPostMissionType("mission");
+    }
   };
   const handleCancelMission = () => {
-    (async () => {
-      try {
-        await (actor == null ? void 0 : actor.logCancelledAction(
-          "completeMission",
-          pendingMissionId,
-          null,
-          "User cancelled mission completion"
-        ));
-      } catch {
-      }
-    })();
     setMissionConfirmOpen(false);
   };
-  async function executeClaimMission(missionId, rewardE8s) {
-    if (!actor) {
-      ue.error("Not connected to canister");
-      return;
-    }
-    setClaiming(missionId);
-    try {
-      const res = await actor.completeMission(missionId);
-      if ("ok" in res) {
-        const rewardFrntr = Number(res.ok) / 1e8;
-        setPostMissionType("mission");
-        ue.success(
-          `Mission complete! +${rewardFrntr.toFixed(2)} FRNTR minted to your wallet`,
-          {
-            duration: 5e3
-          }
-        );
-        const rewardAmount = Number(rewardE8s);
-        setFrntrBalance(
-          BigInt(Math.round(confirmedFrntBalance * 1e8 + rewardAmount))
-        );
-        await loadMissions();
-      } else {
-        ue.error(res.err || "Failed to claim reward", { duration: 5e3 });
-      }
-    } catch (e) {
-      ue.error("Claim failed. Please try again.");
-      console.error("MissionsTab claim error:", e);
-    } finally {
-      setClaiming(null);
-    }
-  }
+  const filteredMissions = playerMissions.filter(({ completed }) => {
+    if (filterMode === "active") return !completed;
+    if (filterMode === "completed") return completed;
+    return true;
+  });
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "div",
     {
@@ -107101,7 +108514,7 @@ function MissionsTab() {
                         style: { width: 2, height: 12, background: CYAN$5, borderRadius: 1 }
                       }
                     ),
-                    "ACTIVE MISSIONS"
+                    "MISSIONS"
                   ]
                 }
               ),
@@ -107127,6 +108540,52 @@ function MissionsTab() {
                 }
               )
             ]
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "div",
+          {
+            "data-ocid": "missions.filter.tab",
+            style: {
+              display: "flex",
+              gap: 4,
+              background: "rgba(0,20,40,0.6)",
+              border: `1px solid ${BORDER$5}`,
+              borderRadius: 7,
+              padding: 3
+            },
+            children: ["all", "active", "completed"].map((mode) => {
+              const labels = {
+                all: `ALL (${playerMissions.length})`,
+                active: `ACTIVE (${playerMissions.filter((m2) => !m2.completed).length})`,
+                completed: `DONE (${completedMissionIds.length})`
+              };
+              const isActive = filterMode === mode;
+              return /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "button",
+                {
+                  type: "button",
+                  "data-ocid": `missions.filter_${mode}`,
+                  onClick: () => setFilterMode(mode),
+                  style: {
+                    flex: 1,
+                    fontSize: 8,
+                    fontWeight: 700,
+                    letterSpacing: 1,
+                    color: isActive ? "#020a12" : TEXT_DIM$3,
+                    background: isActive ? CYAN$5 : "transparent",
+                    border: "none",
+                    borderRadius: 5,
+                    padding: "4px 6px",
+                    cursor: "pointer",
+                    textTransform: "uppercase",
+                    transition: "all 0.15s"
+                  },
+                  children: labels[mode]
+                },
+                mode
+              );
+            })
           }
         ),
         !isAuthenticated && /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -107187,7 +108646,7 @@ function MissionsTab() {
             ))
           }
         ),
-        !loading2 && isAuthenticated && playerMissions.length === 0 && !error && /* @__PURE__ */ jsxRuntimeExports.jsx(
+        !loading2 && isAuthenticated && filteredMissions.length === 0 && !error && /* @__PURE__ */ jsxRuntimeExports.jsx(
           "div",
           {
             "data-ocid": "missions.empty_state",
@@ -107197,10 +108656,11 @@ function MissionsTab() {
               color: TEXT_DIM$3,
               fontSize: 10
             },
-            children: "No missions available. Check back after connecting."
+            children: filterMode === "completed" ? "No completed missions yet. Keep playing!" : filterMode === "active" ? "No active missions remaining — check completed tab!" : "No missions available. Check back after connecting."
           }
         ),
-        playerMissions.map(({ mission, completed }, idx) => {
+        filteredMissions.map(({ mission }, idx) => {
+          const isCompleted = completedMissionIds.includes(mission.id);
           const rewardFrntr = Number(mission.rewardE8s) / 1e8;
           const isClaiming = claiming === mission.id;
           const met = isMissionMet(
@@ -107222,16 +108682,18 @@ function MissionsTab() {
             {
               "data-ocid": `missions.item.${idx + 1}`,
               style: {
-                background: completed ? "rgba(34,197,94,0.04)" : met ? "rgba(0,255,204,0.06)" : "rgba(0,20,40,0.55)",
-                border: `1px solid ${completed ? "rgba(34,197,94,0.3)" : met ? BORDER$5 : "rgba(0,255,204,0.12)"}`,
-                borderTop: `2px solid ${completed ? "#22c55e" : met ? CYAN$5 : "rgba(0,255,204,0.2)"}`,
+                background: isCompleted ? "rgba(34,197,94,0.04)" : met ? "rgba(0,255,204,0.06)" : "rgba(0,20,40,0.55)",
+                border: `1px solid ${isCompleted ? "rgba(34,197,94,0.3)" : met ? BORDER$5 : "rgba(0,255,204,0.12)"}`,
+                borderTop: `2px solid ${isCompleted ? "#22c55e" : met ? CYAN$5 : "rgba(0,255,204,0.2)"}`,
                 borderRadius: 10,
                 padding: "12px 14px",
                 position: "relative",
-                overflow: "hidden"
+                overflow: "hidden",
+                opacity: isCompleted ? 0.6 : 1,
+                transition: "opacity 0.2s"
               },
               children: [
-                !completed && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                !isCompleted && /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "div",
                   {
                     "aria-hidden": "true",
@@ -107261,13 +108723,13 @@ function MissionsTab() {
                             style: {
                               fontSize: 11,
                               fontWeight: 900,
-                              color: completed ? "#22c55e" : TEXT$4,
+                              color: isCompleted ? "#22c55e" : TEXT$4,
                               letterSpacing: 0.5
                             },
                             children: mission.title
                           }
                         ),
-                        completed ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        isCompleted ? /* @__PURE__ */ jsxRuntimeExports.jsx(
                           "span",
                           {
                             "data-ocid": `missions.status.${idx + 1}`,
@@ -107280,9 +108742,12 @@ function MissionsTab() {
                               border: "1px solid rgba(34,197,94,0.3)",
                               borderRadius: 4,
                               padding: "2px 7px",
-                              flexShrink: 0
+                              flexShrink: 0,
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 4
                             },
-                            children: "✓ COMPLETE"
+                            children: "✓ COMPLETED"
                           }
                         ) : met ? /* @__PURE__ */ jsxRuntimeExports.jsx(
                           "span",
@@ -107334,7 +108799,7 @@ function MissionsTab() {
                       children: mission.description
                     }
                   ),
-                  !completed && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { marginBottom: 8 }, children: [
+                  !isCompleted && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { marginBottom: 8 }, children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsx(
                       "div",
                       {
@@ -107396,7 +108861,25 @@ function MissionsTab() {
                             ]
                           }
                         ),
-                        !completed && met && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        isCompleted ? /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                          "div",
+                          {
+                            "data-ocid": `missions.completed_badge.${idx + 1}`,
+                            style: {
+                              fontSize: 8,
+                              fontWeight: 700,
+                              letterSpacing: 1.5,
+                              color: "rgba(34,197,94,0.7)",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 4
+                            },
+                            children: [
+                              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 12 }, children: "✓" }),
+                              " REWARD CLAIMED"
+                            ]
+                          }
+                        ) : met ? /* @__PURE__ */ jsxRuntimeExports.jsx(
                           "button",
                           {
                             type: "button",
@@ -107418,7 +108901,7 @@ function MissionsTab() {
                             },
                             children: isClaiming ? "CLAIMING..." : "CLAIM REWARD"
                           }
-                        )
+                        ) : null
                       ]
                     }
                   )
@@ -109110,6 +110593,37 @@ function RoadmapTab() {
     }
   );
 }
+function useEconomySnapshots() {
+  const { actor, isFetching } = useActor(createActor);
+  const [snapshots, setSnapshots] = reactExports.useState([]);
+  const [latestSnapshot, setLatestSnapshot] = reactExports.useState(
+    null
+  );
+  const [loading2, setLoading] = reactExports.useState(true);
+  const [error, setError] = reactExports.useState(null);
+  reactExports.useEffect(() => {
+    if (!actor || isFetching) return;
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    Promise.all([actor.getEconomySnapshots(), actor.getLatestEconomySnapshot()]).then(([all, latest]) => {
+      if (cancelled) return;
+      setSnapshots(all);
+      setLatestSnapshot(latest ?? null);
+    }).catch((err) => {
+      if (cancelled) return;
+      setError(
+        err instanceof Error ? err.message : "Failed to load snapshots"
+      );
+    }).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [actor, isFetching]);
+  return { snapshots, latestSnapshot, loading: loading2, error };
+}
 const CYAN$1 = "#00ffcc";
 const CYAN_DIM$1 = "rgba(0,255,204,0.35)";
 const BORDER$1 = "rgba(0,255,204,0.22)";
@@ -109200,9 +110714,45 @@ function UniversePanel({ onClose, inline = false }) {
   const player = useGameStore((s2) => s2.player);
   const totalFRNTRBurned = useGameStore((s2) => s2.totalFRNTRBurned);
   const generatorTiers = useGameStore((s2) => s2.generatorTiers);
-  const icpUsdPrice = useGameStore((s2) => s2.icpUsdPrice);
+  useGameStore((s2) => s2.icpUsdPrice);
   const setTreasuryState = useGameStore((s2) => s2.setTreasuryState);
   const [frntrIcpPrice, _setFrntrIcpPrice] = reactExports.useState(null);
+  const [snapshotExpanded, setSnapshotExpanded] = reactExports.useState(false);
+  const [icpPrice, setIcpPrice] = reactExports.useState(10);
+  const [icpPriceLastUpdated, setIcpPriceLastUpdated] = reactExports.useState(
+    Date.now()
+  );
+  reactExports.useEffect(() => {
+    if (!actor) return;
+    const fetchPrice = () => {
+      actor.getICPPriceUSD().then((price) => {
+        setIcpPrice(price);
+        setIcpPriceLastUpdated(Date.now());
+      }).catch(() => {
+      });
+    };
+    fetchPrice();
+    const id2 = setInterval(fetchPrice, 9e5);
+    return () => clearInterval(id2);
+  }, [actor]);
+  const [minutesAgo, setMinutesAgo] = reactExports.useState(0);
+  reactExports.useEffect(() => {
+    const update2 = () => {
+      setMinutesAgo(Math.floor((Date.now() - icpPriceLastUpdated) / 6e4));
+    };
+    update2();
+    const id2 = setInterval(update2, 6e4);
+    return () => clearInterval(id2);
+  }, [icpPriceLastUpdated]);
+  const {
+    snapshots,
+    latestSnapshot,
+    loading: snapshotsLoading
+  } = useEconomySnapshots();
+  const isAdmin = useGameStore((s2) => {
+    var _a3;
+    return ((_a3 = s2.player) == null ? void 0 : _a3.isAdmin) ?? false;
+  });
   const [liveTiers, setLiveTiers] = reactExports.useState(null);
   reactExports.useEffect(() => {
     if (!actor) return;
@@ -109304,35 +110854,26 @@ function UniversePanel({ onClose, inline = false }) {
   const TOTAL_SUPPLY_VAL = (globalStats == null ? void 0 : globalStats.totalSupply) ?? TOTAL_SUPPLY;
   const PRE_MINTED_VAL = (globalStats == null ? void 0 : globalStats.preMinted) ?? PRE_MINTED;
   const MINEABLE_VAL = (globalStats == null ? void 0 : globalStats.mineableSupply) ?? MINEABLE;
-  const TIER_RATES = {
-    0: 7,
-    1: 9,
-    2: 12,
-    3: 17,
-    4: 25,
-    5: 37,
-    6: 55
-  };
   for (const pid of player.plotsOwned) {
     generatorTiers[pid] ?? 0;
   }
   let localDailyEmission = 0;
   for (const plot of globalOwnedPlots) {
     const tier = generatorTiers[String(plot.id)] ?? plot.generatorTier ?? 0;
-    localDailyEmission += TIER_RATES[tier] ?? 7;
+    localDailyEmission += TIER_DAILY_RATES[tier] ?? 7;
   }
   const globalDailyEmission = (globalStats == null ? void 0 : globalStats.currentDailyEmissionRate) ?? localDailyEmission;
   const globalUnclaimedTokens = useGameStore((s2) => s2.globalUnclaimedTokens);
   const networkBurned = (globalStats == null ? void 0 : globalStats.totalFRNTRBurned) ?? totalFRNTRBurned;
   const activePlayers = (globalStats == null ? void 0 : globalStats.activePlayerCount) ?? 0;
-  const networkFRNTRMined = (globalStats == null ? void 0 : globalStats.totalFRNTRMined) ?? globalDailyEmission * 30;
+  const networkFRNTRMined = (globalStats == null ? void 0 : globalStats.totalFRNTRMined) ?? 0;
   const estimatedNetworkMined = globalDailyEmission * 30;
   const circulatingEstimate = Math.min(
     PRE_MINTED_VAL + player.frntBalance + estimatedNetworkMined,
     TOTAL_SUPPLY_VAL
   );
   const circulating = (globalStats == null ? void 0 : globalStats.totalFRNTRInCirculation) ?? circulatingEstimate;
-  const burnRate = 42e-5 + totalPlotsOwned * 15e-7;
+  const burnRate = (globalStats == null ? void 0 : globalStats.burnRate) ?? ((globalStats == null ? void 0 : globalStats.totalFRNTRBurned) && globalStats.totalFRNTRBurned > 0 ? Number(globalStats.totalFRNTRBurned) / Math.max(1, (Date.now() / 1e3 - 17e8) / 86400) / 86400 : null);
   const content = /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "div",
     {
@@ -109590,7 +111131,7 @@ function UniversePanel({ onClose, inline = false }) {
                       color: "#ef4444",
                       fontFamily: "monospace"
                     },
-                    children: burnRate.toFixed(5)
+                    children: burnRate != null ? burnRate.toFixed(5) : "—"
                   }
                 ),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -109862,7 +111403,7 @@ function UniversePanel({ onClose, inline = false }) {
               }
             ].map((pot) => {
               const icpDisplay = `${pot.balance.toFixed(4)} ICP`;
-              const usdDisplay = icpUsdPrice !== null ? `${(pot.balance * icpUsdPrice).toFixed(2)} USD` : "$ --";
+              const usdDisplay = `${(pot.balance * icpPrice).toFixed(2)} USD`;
               return /* @__PURE__ */ jsxRuntimeExports.jsx(
                 "div",
                 {
@@ -110233,26 +111774,50 @@ function UniversePanel({ onClose, inline = false }) {
                       },
                       children: [
                         "$",
-                        icpUsdPrice != null ? icpUsdPrice.toFixed(2) : "--",
+                        icpPrice.toFixed(2),
                         " USD"
+                      ]
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "div",
+                    {
+                      style: {
+                        fontSize: 8,
+                        color: TEXT_DIM,
+                        marginTop: 2
+                      },
+                      children: [
+                        "Updated: ",
+                        minutesAgo,
+                        " min ago"
                       ]
                     }
                   )
                 ] }),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "div",
                   {
                     style: {
                       fontSize: 7,
                       color: TEXT_DIM,
-                      fontStyle: "italic",
                       textAlign: "right"
                     },
-                    children: [
-                      "Live pricing",
-                      /* @__PURE__ */ jsxRuntimeExports.jsx("br", {}),
-                      "coming soon"
-                    ]
+                    children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "span",
+                      {
+                        style: {
+                          display: "inline-block",
+                          padding: "2px 6px",
+                          borderRadius: 4,
+                          background: "rgba(255,200,0,0.12)",
+                          border: "1px solid rgba(255,200,0,0.35)",
+                          color: "#ffd700",
+                          letterSpacing: 0.5
+                        },
+                        children: "Pool not yet seeded"
+                      }
+                    )
                   }
                 )
               ]
@@ -110341,6 +111906,220 @@ function UniversePanel({ onClose, inline = false }) {
             )
           ] })
         ] }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            "data-ocid": "universe.snapshot_section",
+            style: {
+              marginBottom: 16,
+              border: `1px solid ${BORDER$1}`,
+              borderRadius: 10,
+              overflow: "hidden",
+              background: "rgba(0,20,40,0.45)",
+              backdropFilter: "blur(12px)",
+              WebkitBackdropFilter: "blur(12px)"
+            },
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "button",
+                {
+                  type: "button",
+                  "data-ocid": "universe.snapshot.toggle",
+                  onClick: () => setSnapshotExpanded((v2) => !v2),
+                  style: {
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "10px 14px",
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    color: TEXT$1
+                  },
+                  children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "div",
+                        {
+                          style: {
+                            width: 2,
+                            height: 12,
+                            background: CYAN_DIM$1,
+                            borderRadius: 1
+                          }
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "span",
+                        {
+                          style: {
+                            fontSize: 9,
+                            fontWeight: 700,
+                            letterSpacing: 3,
+                            color: CYAN_DIM$1,
+                            textTransform: "uppercase",
+                            textShadow: `0 0 6px ${CYAN_DIM$1}`
+                          },
+                          children: "Snapshot History"
+                        }
+                      ),
+                      latestSnapshot && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                        "span",
+                        {
+                          style: { fontSize: 8, color: TEXT_DIM, letterSpacing: 0.5 },
+                          children: [
+                            "— last:",
+                            " ",
+                            new Date(
+                              Number(latestSnapshot.timestamp) / 1e6
+                            ).toLocaleDateString()
+                          ]
+                        }
+                      )
+                    ] }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "span",
+                      {
+                        style: {
+                          fontSize: 11,
+                          color: CYAN_DIM$1,
+                          transform: snapshotExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                          transition: "transform 0.2s ease",
+                          display: "inline-block"
+                        },
+                        children: "⌃"
+                      }
+                    )
+                  ]
+                }
+              ),
+              snapshotExpanded && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { padding: "0 14px 14px" }, children: snapshotsLoading ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "div",
+                {
+                  style: {
+                    fontSize: 9,
+                    color: TEXT_DIM,
+                    textAlign: "center",
+                    padding: "12px 0",
+                    letterSpacing: 1
+                  },
+                  children: "LOADING..."
+                }
+              ) : snapshots.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "div",
+                {
+                  style: {
+                    fontSize: 9,
+                    color: TEXT_DIM,
+                    textAlign: "center",
+                    padding: "12px 0",
+                    letterSpacing: 1
+                  },
+                  children: "No snapshots yet"
+                }
+              ) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { overflowX: "auto" }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "table",
+                {
+                  style: {
+                    width: "100%",
+                    borderCollapse: "collapse",
+                    fontSize: 8,
+                    color: TEXT$1,
+                    fontFamily: "monospace",
+                    minWidth: 640
+                  },
+                  children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("thead", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("tr", { children: [
+                      "Date",
+                      "Supply",
+                      "Burned",
+                      "Circulating",
+                      "Plots",
+                      "Daily Out",
+                      "Unclaimed",
+                      "Dev",
+                      "LB",
+                      "LQ"
+                    ].map((col) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "th",
+                      {
+                        style: {
+                          padding: "4px 6px",
+                          textAlign: "right",
+                          color: CYAN_DIM$1,
+                          fontWeight: 700,
+                          letterSpacing: 1,
+                          borderBottom: `1px solid ${BORDER$1}`,
+                          whiteSpace: "nowrap"
+                        },
+                        children: col
+                      },
+                      col
+                    )) }) }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("tbody", { children: (() => {
+                      const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1e3;
+                      const visible = isAdmin ? snapshots : snapshots.filter(
+                        (s2) => Number(s2.timestamp) / 1e6 >= thirtyDaysAgo
+                      );
+                      const sorted = [...visible].sort(
+                        (a2, b2) => Number(b2.timestamp) - Number(a2.timestamp)
+                      );
+                      return sorted.map((snap, idx) => {
+                        const ts = new Date(Number(snap.timestamp) / 1e6);
+                        const fmt = (n) => Number(n).toLocaleString(void 0, {
+                          maximumFractionDigits: 0
+                        });
+                        const fmtIcp = (n) => (Number(n) / 1e8).toFixed(4);
+                        const mined = Number(snap.totalFRNTRMined);
+                        const burned = Number(snap.totalFRNTRBurned);
+                        const circulating2 = Math.max(0, mined - burned);
+                        const rowBg = idx % 2 === 0 ? "transparent" : "rgba(0,255,204,0.02)";
+                        const cell = {
+                          padding: "5px 6px",
+                          textAlign: "right",
+                          borderBottom: "1px solid rgba(0,255,204,0.06)",
+                          background: rowBg,
+                          whiteSpace: "nowrap",
+                          color: TEXT_DIM
+                        };
+                        const firstCell = {
+                          ...cell,
+                          textAlign: "left",
+                          color: TEXT$1
+                        };
+                        return /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { style: firstCell, children: ts.toLocaleDateString() }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { style: cell, children: fmtBig(mined) }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "td",
+                            {
+                              style: { ...cell, color: "rgba(239,68,68,0.7)" },
+                              children: fmtBig(burned)
+                            }
+                          ),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "td",
+                            {
+                              style: { ...cell, color: "rgba(0,255,204,0.6)" },
+                              children: fmtBig(circulating2)
+                            }
+                          ),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { style: cell, children: fmt(snap.totalPlotsOwned) }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { style: cell, children: fmt(snap.globalDailyOutput) }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { style: cell, children: fmtBig(Number(snap.totalUnclaimedFRNTR)) }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { style: cell, children: fmtIcp(snap.treasuryDev) }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { style: cell, children: fmtIcp(snap.treasuryLeaderboard) }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { style: cell, children: fmtIcp(snap.treasuryLiquidity) })
+                        ] }, String(snap.timestamp));
+                      });
+                    })() })
+                  ]
+                }
+              ) }) })
+            ]
+          }
+        ),
         /* @__PURE__ */ jsxRuntimeExports.jsx(SectionTitle, { children: "Market Data" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(GlowCard, { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { textAlign: "center", padding: "16px 0" }, children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 24, marginBottom: 8 }, children: "📊" }),
@@ -110510,14 +112289,13 @@ function TopBar({
     (s2) => s2.confirmedFrntBalance + s2.accruedFrntSinceSync
   );
   const frntrStr = displayFrntr >= 1e6 ? displayFrntr.toFixed(2) : displayFrntr >= 1e3 ? displayFrntr.toFixed(4) : displayFrntr.toFixed(8);
-  const TIER_BONUS_TB = [0, 2, 5, 10, 18, 30, 48];
   reactExports.useMemo(() => {
     const ownedPlots = plots.filter(
       (p2) => player.plotsOwned.includes(String(p2.id))
     );
     return ownedPlots.reduce((sum, plot) => {
       const tier = generatorTiers[String(plot.id)] ?? 0;
-      return sum + 7 + (TIER_BONUS_TB[tier] ?? 0);
+      return sum + (TIER_DAILY_RATES[tier] ?? 7);
     }, 0);
   }, [plots, player.plotsOwned, generatorTiers]);
   const shortPrincipal = player.principal ? `${player.principal.slice(0, 6)}…${player.principal.slice(-4)}` : null;
@@ -110977,7 +112755,7 @@ function InventoryPanel() {
     ) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-col gap-2", children: player.plotsOwned.map((plotId, idx) => {
       const plot = plots.find((p2) => String(p2.id) === String(plotId));
       const tier = generatorTiers[String(plotId)] ?? 0;
-      const dailyRate = 7 + tier * 2;
+      const dailyRate = TIER_DAILY_RATES[tier] ?? 7;
       return /* @__PURE__ */ jsxRuntimeExports.jsxs(
         "div",
         {
@@ -111521,7 +113299,7 @@ function QuickNavPopup({
         bottom: 84,
         left: "50%",
         transform: "translateX(-50%)",
-        zIndex: 200,
+        zIndex: 60,
         width: "min(96vw, 420px)",
         background: "rgba(4,12,28,0.97)",
         backdropFilter: "blur(20px)",
@@ -111795,7 +113573,7 @@ function Play() {
               position: "fixed",
               top: 64,
               right: 12,
-              zIndex: 48,
+              zIndex: 35,
               display: "flex",
               flexDirection: "column",
               alignItems: "flex-end",
@@ -112057,7 +113835,7 @@ function Play() {
           "div",
           {
             "data-ocid": "map.success_state",
-            className: "fixed left-1/2 -translate-x-1/2 z-[75] flex items-center gap-2.5 px-5 py-2.5 rounded-lg whitespace-nowrap",
+            className: "fixed left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2.5 px-5 py-2.5 rounded-lg whitespace-nowrap",
             style: {
               bottom: 80,
               background: "rgba(4,12,24,0.95)",

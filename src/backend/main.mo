@@ -29,6 +29,11 @@ import Blob "mo:core/Blob";
 import Debug "mo:core/Debug";
 import Result "mo:core/Result";
 import List "mo:core/List";
+import ExperimentalCycles "mo:base/ExperimentalCycles";
+import Types "types/stable-storage";
+import Nat64 "mo:core/Nat64";
+import Error "mo:core/Error";
+
 
 
 
@@ -197,6 +202,14 @@ type PlayerState = {
   stable var stableSurveys         : [(Text, GameTypes.Survey)]             = [];  // Action audit log — permanent tamperproof record of every player decision.
   // Pattern mirrors stableCombatLog: keyed by auto-increment Int index.
   stable var stableActionAuditLog  : [(Int, GameTypes.ActionAuditEntry)]     = [];
+  // Economy snapshots — periodic point-in-time records of global economy state.
+  stable var stableEconomySnapshots : [Types.EconomySnapshot]                  = [];
+  stable var stableLastSnapshotTime : Int                                       = 0;
+  // ICP/USD price oracle — cached from XRC canister, updated every 15 minutes in heartbeat.
+  // Units: micro-USD (e.g. 1_000_000 = $1.00, 12_340_000 = $12.34).
+  // Initial fallback: $10.00 until first successful XRC fetch.
+  stable var cachedICPPrice     : Nat64 = 10_000_000; // $10.00 fallback
+  stable var lastPriceFetchTime : Int   = 0;
 
   // Feature flags — set to true in future updates to re-enable deferred systems.
   // subParcelAccumulationEnabled: re-enable for the full sub-parcel accumulation system.
@@ -243,6 +256,9 @@ type PlayerState = {
   let actionAuditLog = Map.fromIter<Int, GameTypes.ActionAuditEntry>(stableActionAuditLog.vals());
   // Auto-increment counter for audit log entries
   let auditState = { var nextIndex : Int = stableActionAuditLog.size() };
+  // Economy snapshots — growable list populated by heartbeat and upgrade hooks
+  var economySnapshots : [Types.EconomySnapshot] = stableEconomySnapshots;
+  var lastSnapshotTime : Int = stableLastSnapshotTime;
 
 
   // Global stats tracking — loaded from stable tuple
@@ -285,6 +301,65 @@ type PlayerState = {
     };
     actionAuditLog.add(auditState.nextIndex, entry);
     auditState.nextIndex += 1;
+  };
+
+  /// Capture a point-in-time snapshot of the global economy and append it to
+  /// the in-memory snapshot list.  Called from the heartbeat and preupgrade.
+  private func takeSnapshot(trigger : Text) {
+    // Compute approximate global daily output and unclaimed FRNTR
+    let TIER_DAILY : [Nat] = [7, 9, 12, 17, 25, 37, 55];
+    var globalDailyOutput : Nat = 0;
+    var totalUnclaimedFRNTR : Nat = 0;
+    let nowNs : Int = Time.now();
+    for ((plotKey, plot) in plots.entries()) {
+      switch (plot.owner) {
+        case null {};
+        case (?_) {
+          let tier : Nat = switch (generatorTiers.get(plotKey)) {
+            case (?t) { CoreLib.tierToIndex(t) };
+            case null  { 0 };
+          };
+          let dailyRate : Nat = if (tier < TIER_DAILY.size()) TIER_DAILY[tier] else 0;
+          globalDailyOutput += dailyRate;
+          // Estimate unclaimed: elapsed seconds * (dailyRate / 86400)
+          let lastClaim : Int = switch (plotClaimTimes.get(plotKey)) {
+            case (?t) { t };
+            case null  { 0 };
+          };
+          if (lastClaim > 0 and nowNs > lastClaim) {
+            let elapsedSec : Int = (nowNs - lastClaim) / 1_000_000_000;
+            let unclaimed : Nat = Int.abs(elapsedSec) * dailyRate / 86400;
+            totalUnclaimedFRNTR += unclaimed;
+          };
+        };
+      };
+    };
+    let snap : Types.EconomySnapshot = {
+      timestamp           = nowNs;
+      totalPlotsOwned     = plotSoldState.count;
+      totalFRNTRBurned    = statsState.totalFRNTRBurned;
+      totalFRNTRMined     = statsState.totalFRNTRMined;
+      activePlayers       = statsState.activePlayers;
+      globalDailyOutput;
+      totalUnclaimedFRNTR;
+      treasuryDev         = treasuryPots.devPot;
+      treasuryLeaderboard = treasuryPots.leaderboardPot;
+      treasuryLiquidity   = treasuryPots.liquidityPot;
+      trigger;
+    };
+    // Keep at most 365 snapshots to bound memory growth
+    let maxSnapshots : Nat = 365;
+    let current = economySnapshots;
+    if (current.size() >= maxSnapshots) {
+      // Drop the oldest entry
+      economySnapshots := Array.tabulate<Types.EconomySnapshot>(
+        current.size(),
+        func(i) { if (i == 0) snap else current[i] },
+      );
+    } else {
+      economySnapshots := current.concat([snap]);
+    };
+    lastSnapshotTime := nowNs;
   };
 
   // Pricing config (default midpoints)
@@ -1066,10 +1141,20 @@ type PlayerState = {
 
   /// Public leaderboard query: top players by FRNTR balance.
   public query func getLeaderboard(limit : Nat) : async [{ rank : Nat; principal : Text; username : ?Text; frntBalance : Nat; plotsOwned : Nat }] {
+    // Only include players who have a registered username — keeps leaderboard meaningful.
     let pairs = players.toArray();
-    let sorted = pairs.sort(func(a, b) { Nat.compare(b.1.frntBalance, a.1.frntBalance) });
-    let taken = Nat.min(limit, sorted.size());
-    let sliced = sorted.sliceToArray(0, taken);
+    let withUsernames = pairs.filter(func((p, _ps) : (Principal, PlayerState)) : Bool {
+      switch (usernames.get(p)) {
+        case (null)    { false };
+        case (?uname) { uname.size() > 0 };
+      };
+    });
+    let sorted = withUsernames.sort(func(a : (Principal, PlayerState), b : (Principal, PlayerState)) : Order.Order {
+      Nat.compare(b.1.frntBalance, a.1.frntBalance)
+    });
+    // Cap at min(limit, 100) to bound response size.
+    let cap = Nat.min(Nat.min(limit, 100), sorted.size());
+    let sliced = sorted.sliceToArray(0, cap);
     var i = 0;
     sliced.map<(Principal, PlayerState), { rank : Nat; principal : Text; username : ?Text; frntBalance : Nat; plotsOwned : Nat }>(
       func((p, ps)) {
@@ -1758,6 +1843,13 @@ func missileStats(missileType : Text) : MissileStats {
     calcTotalGlobalDailyOutput();
   };
 
+  /// Total global daily output in FRNTR (not e8s) across all owned plots.
+  /// This is the canonical name expected by the frontend UNIVERSE panel.
+  public query func getGlobalDailyOutput() : async Nat {
+    // Return in base FRNTR units (divide e8s by 1e8)
+    calcTotalGlobalDailyOutput() / 100_000_000;
+  };
+
   /// Total global unclaimed tokens in e8s sitting on all owned plots.
   public query func getGlobalUnclaimedTokens() : async Nat {
     calcGlobalUnclaimedTokens();
@@ -1792,6 +1884,27 @@ func missileStats(missileType : Text) : MissileStats {
       totalDailyOutput      = calcTotalGlobalDailyOutput();
       globalUnclaimedTokens = calcGlobalUnclaimedTokens();
       totalActionCount      = actionAuditLog.size();
+    };
+  };
+
+  // ─── Admin info query ────────────────────────────────────────────────────
+
+  /// Returns current admin configuration for the frontend admin panel.
+  /// Surfaces: admin principal, testnet mode flag, total plot count, cycle balance.
+  public query ({ caller }) func getAdminInfo() : async {
+    adminPrincipal : Text;
+    testnestMode   : Bool;
+    totalPlots     : Nat;
+    cyclesBalance  : Nat;
+  } {
+    if (caller.isAnonymous() or caller.toText() != adminState.adminPrincipal) {
+      Runtime.trap("Unauthorized: admin only");
+    };
+    {
+      adminPrincipal = adminState.adminPrincipal;
+      testnestMode   = TESTNET_MODE;
+      totalPlots     = plotSoldState.count;
+      cyclesBalance  = ExperimentalCycles.balance();
     };
   };
 
@@ -2251,12 +2364,47 @@ func missileStats(missileType : Text) : MissileStats {
     };
     surveys.add(key, record);
 
+    let (biomeText, resPct) : (Text, Nat) = switch (plots.get(plotId)) {
+      case (null) { ("Temperate", 50) };
+      case (?plot) {
+        let bv = GameLib.assignBiome(plot.lat, plot.lng, plotId);
+        let rp = GameLib.resourcePercentageForBiome(bv, plotId);
+        let bn : Text = switch (bv) {
+          case (#Temperate)      { "Temperate" };
+          case (#Desert)         { "Desert" };
+          case (#Arctic)         { "Arctic" };
+          case (#Tropical)       { "Tropical" };
+          case (#Ocean)          { "Ocean" };
+          case (#DeepOcean)      { "DeepOcean" };
+          case (#Volcanic)       { "Volcanic" };
+          case (#AsteroidImpact) { "AsteroidImpact" };
+        };
+        (bn, rp)
+      };
+    };
+    let tierMult : Nat = switch (generatorTiers.get(plotId)) {
+      case (null)      { 1 };
+      case (?#None)    { 1 };
+      case (?#TierI)   { 2 };
+      case (?#TierII)  { 3 };
+      case (?#TierIII) { 5 };
+      case (?#TierIV)  { 8 };
+      case (?#TierV)   { 13 };
+      case (?#TierVI)  { 20 };
+    };
+    let estimatedReward : Nat = 1_000_00000000 * resPct / 100 * tierMult;
+
     let view : GameTypes.SurveyView = {
       plotId;
       status           = #InProgress;
       unlockCost       = cost;
       startTime        = now;
       secondsRemaining = thirtyMinNs / 1_000_000_000;
+      remainingSeconds = (thirtyMinNs / 1_000_000_000).toInt();
+      biome            = biomeText;
+      resourcePct      = resPct;
+      estimatedReward;
+      isCollectable    = false;
       result           = null;
     };
     #ok(view);
@@ -2265,12 +2413,50 @@ func missileStats(missileType : Text) : MissileStats {
   /// Get the current survey status for a plot.
   /// If the timer has expired the result is auto-computed and the survey is
   /// promoted to #Completed — the updated record is persisted.
+  /// Get the current survey status for a plot.
+  /// If the timer has expired the result is auto-computed and the survey is
+  /// promoted to #Completed — the updated record is persisted.
+  /// Returns enriched SurveyView with remainingSeconds, biome, resourcePct,
+  /// estimatedReward, and isCollectable for frontend countdown display.
   public shared ({ caller }) func getSurveyStatus(plotId : Text) : async { #ok : GameTypes.SurveyView; #err : Text } {
     if (caller.isAnonymous()) { return #err("Must be authenticated") };
     let key = surveyKey(plotId, caller);
+
+    // Derive biome info from stored plot (available regardless of survey state)
+    let (biomeText, resPct) : (Text, Nat) = switch (plots.get(plotId)) {
+      case (null) { ("Temperate", 50) };
+      case (?plot) {
+        let bv = GameLib.assignBiome(plot.lat, plot.lng, plotId);
+        let rp = GameLib.resourcePercentageForBiome(bv, plotId);
+        let bn : Text = switch (bv) {
+          case (#Temperate)      { "Temperate" };
+          case (#Desert)         { "Desert" };
+          case (#Arctic)         { "Arctic" };
+          case (#Tropical)       { "Tropical" };
+          case (#Ocean)          { "Ocean" };
+          case (#DeepOcean)      { "DeepOcean" };
+          case (#Volcanic)       { "Volcanic" };
+          case (#AsteroidImpact) { "AsteroidImpact" };
+        };
+        (bn, rp)
+      };
+    };
+
+    // Estimated reward: base 1000 FRNTR e8s * resourcePct / 100, scaled by tier
+    let tierMult : Nat = switch (generatorTiers.get(plotId)) {
+      case (null)      { 1 };
+      case (?#None)    { 1 };
+      case (?#TierI)   { 2 };
+      case (?#TierII)  { 3 };
+      case (?#TierIII) { 5 };
+      case (?#TierIV)  { 8 };
+      case (?#TierV)   { 13 };
+      case (?#TierVI)  { 20 };
+    };
+    let estimatedReward : Nat = 1_000_00000000 * resPct / 100 * tierMult;
+
     let record = switch (surveys.get(key)) {
       case (null) {
-        // No survey started — return a locked placeholder with the cost
         let cost = surveyCostForPlot(plotId);
         return #ok({
           plotId;
@@ -2278,6 +2464,11 @@ func missileStats(missileType : Text) : MissileStats {
           unlockCost       = cost;
           startTime        = 0;
           secondsRemaining = 0;
+          remainingSeconds = 0;
+          biome            = biomeText;
+          resourcePct      = resPct;
+          estimatedReward;
+          isCollectable    = false;
           result           = null;
         });
       };
@@ -2293,6 +2484,11 @@ func missileStats(missileType : Text) : MissileStats {
           unlockCost       = record.unlockCost;
           startTime        = record.startTime;
           secondsRemaining = 0;
+          remainingSeconds = 0;
+          biome            = biomeText;
+          resourcePct      = resPct;
+          estimatedReward;
+          isCollectable    = record.result != null;
           result           = record.result;
         });
       };
@@ -2300,7 +2496,6 @@ func missileStats(missileType : Text) : MissileStats {
         let elapsed : Int = now - record.startTime;
         let durInt  : Int = record.duration.toInt();
         if (elapsed >= durInt) {
-          // Timer expired — compute and persist result
           let res = buildSurveyResult(plotId);
           let completed : GameTypes.Survey = { record with status = #Completed; result = ?res };
           surveys.add(key, completed);
@@ -2310,16 +2505,27 @@ func missileStats(missileType : Text) : MissileStats {
             unlockCost       = record.unlockCost;
             startTime        = record.startTime;
             secondsRemaining = 0;
+            remainingSeconds = 0;
+            biome            = biomeText;
+            resourcePct      = resPct;
+            estimatedReward;
+            isCollectable    = true;
             result           = ?res;
           });
         } else {
-          let remaining : Nat = ((durInt - elapsed) / 1_000_000_000).toNat();
+          let remaining : Int = (durInt - elapsed) / 1_000_000_000;
+          let remainingNat : Nat = Int.abs(remaining);
           #ok({
             plotId;
             status           = #InProgress;
             unlockCost       = record.unlockCost;
             startTime        = record.startTime;
-            secondsRemaining = remaining;
+            secondsRemaining = remainingNat;
+            remainingSeconds = remaining;
+            biome            = biomeText;
+            resourcePct      = resPct;
+            estimatedReward;
+            isCollectable    = false;
             result           = null;
           });
         };
@@ -2331,6 +2537,11 @@ func missileStats(missileType : Text) : MissileStats {
           unlockCost       = record.unlockCost;
           startTime        = 0;
           secondsRemaining = 0;
+          remainingSeconds = 0;
+          biome            = biomeText;
+          resourcePct      = resPct;
+          estimatedReward;
+          isCollectable    = false;
           result           = null;
         });
       };
@@ -2874,6 +3085,109 @@ func missileStats(missileType : Text) : MissileStats {
   };
 
 
+  // ─── Economy snapshot queries ────────────────────────────────────────────
+
+  /// Return all stored economy snapshots (most recent last).
+  public query func getEconomySnapshots() : async [Types.EconomySnapshot] {
+    economySnapshots;
+  };
+
+  /// Return only the most recent economy snapshot, if any.
+  public query func getLatestEconomySnapshot() : async ?Types.EconomySnapshot {
+    let s = economySnapshots;
+    if (s.size() == 0) null
+    else ?s[s.size() - 1];
+  };
+
+  /// Return the timestamp (nanoseconds) of the last snapshot.
+  public query func getLastSnapshotTime() : async Int {
+    lastSnapshotTime;
+  };
+
+  // ─── Heartbeat — fires approximately every second ─────────────────────────
+  // Takes a daily snapshot (every 24 h).  A snapshot is also taken on upgrade.
+  private let SNAPSHOT_INTERVAL_NS : Int = 24 * 60 * 60 * 1_000_000_000; // 24 h
+
+  // XRC Exchange Rate Canister ID (mainnet)
+  let XRC_CANISTER_ID : Text = "uf6dk-hyaaa-aaaaq-qaaaq-cai";
+  // Fetch interval: 15 minutes in nanoseconds
+  private let PRICE_FETCH_INTERVAL_NS : Int = 15 * 60 * 1_000_000_000;
+
+  system func heartbeat() : async () {
+    let now = Time.now();
+    if (lastSnapshotTime == 0 or now - lastSnapshotTime >= SNAPSHOT_INTERVAL_NS) {
+      takeSnapshot("daily");
+    };
+    // Refresh ICP/USD price from XRC every 15 minutes
+    if (lastPriceFetchTime == 0 or now - lastPriceFetchTime >= PRICE_FETCH_INTERVAL_NS) {
+      lastPriceFetchTime := now;
+      try {
+        type Asset = { symbol : Text; class_ : { #Cryptocurrency; #FiatCurrency } };
+        type GetExchangeRateRequest = {
+          base_asset  : Asset;
+          quote_asset : Asset;
+          timestamp   : ?Nat64;
+        };
+        type ExchangeRateMetadata = {
+          decimals            : Nat32;
+          forex_timestamp     : ?Nat64;
+          quote_asset_num_received_rates : Nat64;
+          base_asset_num_received_rates  : Nat64;
+          base_asset_num_excluded_rates  : Nat64;
+          quote_asset_num_excluded_rates : Nat64;
+          standard_deviation  : Nat64;
+        };
+        type ExchangeRate = {
+          base_asset  : Asset;
+          quote_asset : Asset;
+          timestamp   : Nat64;
+          rate        : Nat64;  // scaled by 10^decimals
+          metadata    : ExchangeRateMetadata;
+        };
+        type GetExchangeRateResult = { #Ok : ExchangeRate; #Err : { #AnonymousPrincipalNotAllowed; #CryptoBaseAssetNotFound; #CryptoQuoteAssetNotFound; #StablecoinRateNotFound; #StablecoinRateTooFewRates; #StablecoinRateZeroRate; #ForexInvalidTimestamp; #ForexBaseAssetNotFound; #ForexQuoteAssetNotFound; #ForexAssetsNotFound; #RateLimited; #NotEnoughCycles; #InconsistentRatesReceived; #Other : { code : Nat32; description : Text } } };
+        let xrc = actor(XRC_CANISTER_ID) : actor {
+          get_exchange_rate : (GetExchangeRateRequest) -> async GetExchangeRateResult
+        };
+        let req : GetExchangeRateRequest = {
+          base_asset  = { symbol = "ICP"; class_ = #Cryptocurrency };
+          quote_asset = { symbol = "USD"; class_ = #FiatCurrency };
+          timestamp   = null;
+        };
+        switch (await xrc.get_exchange_rate(req)) {
+          case (#Ok(r)) {
+            // r.rate is scaled by 10^decimals (typically 10^9 for USD pairs).
+            // We want micro-USD: rate_in_micro_usd = r.rate * 1_000_000 / 10^decimals
+            let decimals : Nat = r.metadata.decimals.toNat();
+            let scale : Nat = Nat.pow(10, decimals);
+            let microUSD : Nat64 = if (scale > 0) {
+              Nat64.fromNat(r.rate.toNat() * 1_000_000 / scale)
+            } else { cachedICPPrice };
+            if (microUSD > 0) { cachedICPPrice := microUSD };
+          };
+          case (#Err(_)) { /* keep last cached price */ };
+        };
+      } catch (_) { /* XRC call failed; keep last cached price */ };
+    };
+  };
+
+  // ─── ICP/USD Price oracle queries ──────────────────────────────────────────
+
+  /// Returns the cached ICP/USD price as micro-USD (e.g. 12_340_000 = $12.34).
+  /// Updated every 15 minutes from the XRC canister; falls back to $10.00 on cold start.
+  public query func getICPPrice() : async Nat64 { cachedICPPrice };
+
+  /// Returns the cached ICP/USD price as a Float (e.g. 12.34).
+  public query func getICPPriceUSD() : async Float {
+    cachedICPPrice.toNat().toFloat() / 1_000_000.0
+  };
+
+  /// Convert an ICP amount (in e8s) to micro-USD using the cached price.
+  /// Result is micro-USD (divide by 1_000_000 to get USD).
+  public query func convertICPToUSD(icpE8s : Nat) : async Nat64 {
+    // icpE8s / 1e8 ICP * cachedICPPrice micro-USD/ICP
+    Nat64.fromNat(icpE8s * cachedICPPrice.toNat() / 100_000_000)
+  };
+
   public shared func getIcpBalance(principal : Principal) : async Nat {
     let icpLedger = actor(ICP_LEDGER_ID) : actor {
       icrc1_balance_of : ({ owner : Principal; subaccount : ?Blob }) -> async Nat
@@ -2881,7 +3195,36 @@ func missileStats(missileType : Text) : MissileStats {
     await icpLedger.icrc1_balance_of({ owner = principal; subaccount = null });
   };
 
+  /// Returns the current cycle balance of this canister. Admin only.
+  /// Use this to monitor cycles before mainnet deployment.
+  public query ({ caller }) func getCanisterCycles() : async Nat {
+    if (caller.isAnonymous() or caller.toText() != adminState.adminPrincipal) {
+      Runtime.trap("Unauthorized: admin only");
+    };
+    ExperimentalCycles.balance();
+  };
+
+  public shared(msg) func purgeTestPlayers() : async Result.Result<Nat, Text> {
+    if (msg.caller.toText() != adminState.adminPrincipal) {
+      return #err("Unauthorized");
+    };
+    if (treasuryState.treasuryPrincipal == "aaaaa-aa") {
+      return #err("Treasury canister not configured");
+    };
+    try {
+      let treasury : actor { purgeTestPlayers : () -> async Result.Result<Nat, Text> } =
+        actor(treasuryState.treasuryPrincipal);
+      await treasury.purgeTestPlayers()
+    } catch (e) {
+      #err("Treasury call failed: " # e.message())
+    }
+  };
+
   system func preupgrade() {
+    takeSnapshot("canister_upgrade");
+    stableEconomySnapshots := economySnapshots;
+    stableLastSnapshotTime := lastSnapshotTime;
+    // Price oracle state is already in stable vars (cachedICPPrice, lastPriceFetchTime);
     stablePlots          := plots.toArray();
     stablePlayers        := players.toArray();
     stableCombatLog      := combatLog.toArray();
@@ -2903,7 +3246,11 @@ func missileStats(missileType : Text) : MissileStats {
     stableSurveys          := surveys.toArray();
     stablePlotClaimTimes   := plotClaimTimes.toArray();
     stablePlayerClaimCounts := playerClaimCounts.toArray();
-    stableActionAuditLog   := actionAuditLog.toArray();
+    stableActionAuditLog    := actionAuditLog.toArray();
+    stablePlotClaimTimes    := plotClaimTimes.toArray();
+    stablePlayerClaimCounts := playerClaimCounts.toArray();
+    stableEconomySnapshots  := economySnapshots;
+    stableLastSnapshotTime  := lastSnapshotTime;
     // Serialize missionStatus nested maps
     let missionArr = missionStatus.toArray();
     stableMissionStatus := missionArr.map<(Principal, Map.Map<Text, (Bool, ?Int)>), (Principal, [(Text, Bool, ?Int)])>(
@@ -2932,8 +3279,17 @@ func missileStats(missileType : Text) : MissileStats {
     stablePlayerClaimCounts := [];
     stableMissionStatus    := [];
     stableActionAuditLog   := [];
+    economySnapshots       := [];
+    lastSnapshotTime       := 0;
     // Note: auditState.nextIndex intentionally keeps its heap value after upgrade;
     // it was seeded from stableActionAuditLog.size() at actor init and is not reset here.
+    // Restore snapshot state (economy snapshots are kept in heap, not cleared)
+    if (stableEconomySnapshots.size() > 0) {
+      economySnapshots := stableEconomySnapshots;
+    };
+    if (stableLastSnapshotTime != 0) {
+      lastSnapshotTime := stableLastSnapshotTime;
+    };
     if (stableTreasuryPots.0 != 0 or stableTreasuryPots.1 != 0 or stableTreasuryPots.2 != 0) {
       treasuryPots.devPot        := stableTreasuryPots.0;
       treasuryPots.leaderboardPot := stableTreasuryPots.1;
