@@ -6,11 +6,10 @@ import {
   createRoute,
   createRouter,
 } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { GameTicker } from "./components/GameTicker";
 import Inventory from "./pages/Inventory";
 import Leaderboard from "./pages/Leaderboard";
 import Play from "./pages/Play";
-import { useGameStore } from "./store/gameStore";
 
 const rootRoute = createRootRoute({
   component: () => <Outlet />,
@@ -54,18 +53,6 @@ declare module "@tanstack/react-router" {
   interface Register {
     router: typeof router;
   }
-}
-
-function GameTicker() {
-  useEffect(() => {
-    const id = setInterval(() => {
-      const store = useGameStore.getState();
-      store.tickPassiveIncome();
-      store.tickMineralDrip();
-    }, 1000);
-    return () => clearInterval(id);
-  }, []);
-  return null;
 }
 
 export default function App() {

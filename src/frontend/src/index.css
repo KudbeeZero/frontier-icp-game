@@ -84,6 +84,15 @@
     --treasury-pot-leaderboard-border: rgba(100, 220, 230, 0.3);
     --treasury-pot-liquidity: rgba(0, 255, 204, 0.1);
     --treasury-pot-liquidity-border: rgba(0, 255, 204, 0.3);
+    /* ── Z-index scale ──────────────────────────────── */
+    --z-base: 0;
+    --z-hud: 10;
+    --z-nav: 50;
+    --z-sheet: 60;
+    --z-modal: 100;
+    --z-toast: 110;
+    --z-overlay: 200;
+    --z-critical: 9999;
   }
 
   * {
@@ -179,6 +188,10 @@
     border-top: 3px solid oklch(82% 0.19 195 / 0.8);
     border-top-left-radius: 8px;
     border-top-right-radius: 8px;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
   }
 }
 

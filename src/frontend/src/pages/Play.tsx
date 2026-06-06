@@ -10,6 +10,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { createActor } from "../backend";
+import ActionConfirmModal from "../components/ActionConfirmModal";
 import AdminPanel from "../components/AdminPanel";
 import BottomNav from "../components/BottomNav";
 import { NAV_ITEMS } from "../components/BottomNav";
@@ -20,8 +21,10 @@ import FaucetOverlay from "../components/FaucetOverlay";
 import GlobeCanvas from "../components/GlobeCanvas";
 import IntelTab from "../components/IntelTab";
 import MapBottomSheet from "../components/MapBottomSheet";
+import MissionsTab from "../components/MissionsTab";
 import PlayNowOverlay from "../components/PlayNowOverlay";
 import PlotHoverCard from "../components/PlotHoverCard";
+import PostActionToast from "../components/PostActionToast";
 import RoadmapTab from "../components/RoadmapTab";
 import UniversePanel from "../components/UniversePanel";
 import { useIcpBalance } from "../hooks/useIcpBalance";
@@ -251,8 +254,8 @@ function TopBar({
       </div>
 
       {/* RIGHT: Wallet badges + principal */}
-      <div className="flex items-center gap-1.5 flex-shrink-0">
-        {/* FRNTR balance badge */}
+      <div className="flex items-center gap-1 flex-shrink-0">
+        {/* FRNTR balance badge — hidden on mobile */}
         <div
           data-ocid="topbar.frntr_balance"
           className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-md"
@@ -273,7 +276,26 @@ function TopBar({
           </span>
         </div>
 
-        {/* ICP balance badge */}
+        {/* ICP balance — full badge on sm+, compact icon-chip on mobile */}
+        {/* Mobile compact chip */}
+        <div
+          data-ocid="topbar.icp_balance_mobile"
+          className="flex sm:hidden items-center gap-1 px-1.5 py-1 rounded-md"
+          style={{
+            background: "rgba(0,255,204,0.08)",
+            border: `1px solid ${BORDER}`,
+            minWidth: 0,
+          }}
+        >
+          <span style={{ fontSize: 13, color: CYAN, lineHeight: 1 }}>◎</span>
+          <span
+            className="font-mono font-bold"
+            style={{ fontSize: 10, color: CYAN, letterSpacing: 0.3 }}
+          >
+            {icpBalanceFormatted.toFixed(2)}
+          </span>
+        </div>
+        {/* Desktop full badge */}
         <div
           data-ocid="topbar.icp_balance"
           className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-md"
@@ -292,7 +314,7 @@ function TopBar({
           </span>
         </div>
 
-        {/* Divider */}
+        {/* Divider — desktop only */}
         <div
           className="hidden sm:block"
           style={{
@@ -305,10 +327,11 @@ function TopBar({
 
         {/* Principal badge + logout */}
         {isAuthenticated && shortPrincipal ? (
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1">
+            {/* Mobile: icon-only ID dot */}
             <div
               data-ocid="topbar.principal_badge"
-              className="flex items-center gap-1.5 px-2 py-1 rounded-md"
+              className="flex items-center gap-1 px-1.5 py-1 rounded-md"
               style={{
                 background: "rgba(0,255,204,0.07)",
                 border: `1px solid ${BORDER}`,
@@ -331,6 +354,7 @@ function TopBar({
                   ID
                 </span>
               </div>
+              {/* Principal text hidden on mobile, visible md+ */}
               <span
                 className="font-mono hidden md:inline"
                 style={{ fontSize: 9, color: TEXT, letterSpacing: 0.5 }}
@@ -703,8 +727,12 @@ function PlotActionPanel({
 }) {
   const plots = useGameStore((s) => s.plots);
   const player = useGameStore((s) => s.player);
-  const { actor: _actor } = useActor(createActor);
+  const { actor } = useActor(createActor);
   const { purchasePlot, isPurchasing } = usePurchasePlot();
+  const [showPurchaseConfirm, setShowPurchaseConfirm] = useState(false);
+  const [postActionType, setPostActionType] = useState<
+    "purchase" | "upgrade" | "claim" | "survey" | "mission" | null
+  >(null);
 
   const plot = plots.find((p) => p.id === plotId);
   if (!plot) return null;
@@ -727,13 +755,31 @@ function PlotActionPanel({
     },
   ];
 
-  async function handlePurchase() {
+  async function handleConfirmPurchase() {
+    setShowPurchaseConfirm(false);
     const result = await purchasePlot(String(plotId));
     if (result.success) {
       toast.success(result.message, { duration: 4000 });
+      setPostActionType("purchase");
     } else {
       toast.error(result.message, { duration: 5000 });
     }
+  }
+
+  function handlePurchase() {
+    setShowPurchaseConfirm(true);
+  }
+
+  function handleCancelPurchase() {
+    try {
+      void actor?.logCancelledAction(
+        "purchasePlot",
+        String(plotId),
+        null,
+        "User cancelled plot purchase from plot panel",
+      );
+    } catch (_) {}
+    setShowPurchaseConfirm(false);
   }
 
   return (
@@ -744,7 +790,8 @@ function PlotActionPanel({
         right: 0,
         top: 56,
         width: 280,
-        zIndex: 40,
+        zIndex: 45,
+        bottom: 64,
         background: "rgba(10,14,26,0.90)",
         backdropFilter: "blur(14px)",
         WebkitBackdropFilter: "blur(14px)",
@@ -946,6 +993,220 @@ function PlotActionPanel({
           </>
         )}
       </div>
+
+      <ActionConfirmModal
+        isOpen={showPurchaseConfirm}
+        onConfirm={handleConfirmPurchase}
+        onCancel={handleCancelPurchase}
+        title="Confirm Land Purchase"
+        actionType="purchase"
+        details={[
+          { label: "PLOT ID", value: String(plotId) },
+          { label: "BIOME", value: plot.biome },
+          { label: "PRICE", value: `${icpPrice} ICP` },
+        ]}
+        costLabel={`${icpPrice} ICP`}
+        warningText="This action is permanent and cannot be undone. The ICP will be deducted immediately."
+        isLoading={isPurchasing}
+      />
+      <PostActionToast
+        actionType={postActionType}
+        onNavigate={(tab) => onOpenTab(tab as BottomNavTab)}
+        onDismiss={() => setPostActionType(null)}
+      />
+    </div>
+  );
+}
+
+/* ─── Quick-Nav Popup (shown once after first purchase) ─── */
+const QUICK_NAV_LINKS: {
+  label: string;
+  icon: string;
+  tab: BottomNavTab;
+  desc: string;
+}[] = [
+  { label: "INVENTORY", icon: "📦", tab: "inventory", desc: "View your plots" },
+  { label: "CMD CENTER", icon: "⬡", tab: "command", desc: "Token dashboard" },
+  { label: "UNIVERSE", icon: "◎", tab: "universe", desc: "Global stats" },
+  { label: "LEADERBOARD", icon: "🏆", tab: "leaderboard", desc: "Rankings" },
+];
+
+function QuickNavPopup({
+  onNavigate,
+  onDismiss,
+}: {
+  onNavigate: (tab: BottomNavTab) => void;
+  onDismiss: () => void;
+}) {
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    timerRef.current = setTimeout(onDismiss, 8000);
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [onDismiss]);
+
+  return (
+    <div
+      data-ocid="quick_nav.panel"
+      style={{
+        position: "fixed",
+        bottom: 84,
+        left: "50%",
+        transform: "translateX(-50%)",
+        zIndex: 200,
+        width: "min(96vw, 420px)",
+        background: "rgba(4,12,28,0.97)",
+        backdropFilter: "blur(20px)",
+        WebkitBackdropFilter: "blur(20px)",
+        border: `1px solid ${CYAN}44`,
+        borderTop: `2px solid ${CYAN}`,
+        borderRadius: 12,
+        boxShadow: `0 0 40px ${CYAN}22, 0 8px 32px rgba(0,0,0,0.6)`,
+        padding: "14px 16px 16px",
+        animation: "slideUpFadeIn 0.3s ease",
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 12,
+        }}
+      >
+        <div>
+          <div
+            style={{
+              fontSize: 9,
+              color: CYAN,
+              letterSpacing: 2.5,
+              fontWeight: 700,
+              textTransform: "uppercase",
+              textShadow: `0 0 8px ${CYAN}`,
+            }}
+          >
+            ▶ PLOT ACQUIRED — QUICK ACCESS
+          </div>
+          <div
+            style={{
+              fontSize: 8,
+              color: "rgba(224,244,255,0.4)",
+              letterSpacing: 0.5,
+              marginTop: 2,
+            }}
+          >
+            Where would you like to go next?
+          </div>
+        </div>
+        <button
+          type="button"
+          data-ocid="quick_nav.close_button"
+          onClick={onDismiss}
+          aria-label="Dismiss"
+          style={{
+            width: 22,
+            height: 22,
+            borderRadius: 6,
+            border: "1px solid rgba(255,255,255,0.12)",
+            background: "rgba(255,255,255,0.04)",
+            color: "rgba(224,244,255,0.5)",
+            fontSize: 10,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          ✕
+        </button>
+      </div>
+
+      {/* Nav buttons grid */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(4, 1fr)",
+          gap: 8,
+        }}
+      >
+        {QUICK_NAV_LINKS.map(({ label, icon, tab, desc }) => (
+          <button
+            key={tab}
+            type="button"
+            data-ocid={`quick_nav.${tab}.button`}
+            onClick={() => onNavigate(tab)}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 4,
+              padding: "10px 6px",
+              borderRadius: 8,
+              border: `1px solid ${CYAN}28`,
+              background: "rgba(0,255,204,0.05)",
+              cursor: "pointer",
+              transition: "all 0.15s",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background =
+                "rgba(0,255,204,0.12)";
+              (e.currentTarget as HTMLButtonElement).style.borderColor =
+                `${CYAN}66`;
+              (e.currentTarget as HTMLButtonElement).style.boxShadow =
+                `0 0 12px ${CYAN}22`;
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background =
+                "rgba(0,255,204,0.05)";
+              (e.currentTarget as HTMLButtonElement).style.borderColor =
+                `${CYAN}28`;
+              (e.currentTarget as HTMLButtonElement).style.boxShadow = "none";
+            }}
+          >
+            <span style={{ fontSize: 18, lineHeight: 1 }}>{icon}</span>
+            <span
+              style={{
+                fontSize: 7.5,
+                fontWeight: 700,
+                letterSpacing: 0.8,
+                color: CYAN,
+                textTransform: "uppercase",
+                textAlign: "center",
+                lineHeight: 1.2,
+              }}
+            >
+              {label}
+            </span>
+            <span
+              style={{
+                fontSize: 7,
+                color: "rgba(224,244,255,0.35)",
+                textAlign: "center",
+                lineHeight: 1.2,
+              }}
+            >
+              {desc}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {/* Auto-dismiss hint */}
+      <div
+        style={{
+          marginTop: 10,
+          textAlign: "center",
+          fontSize: 7.5,
+          color: "rgba(224,244,255,0.22)",
+          letterSpacing: 0.5,
+        }}
+      >
+        Auto-dismisses in 8s · This appears only once
+      </div>
     </div>
   );
 }
@@ -967,6 +1228,8 @@ export default function Play() {
     plotId: string;
     rate: number;
   } | null>(null);
+  const [showQuickNav, setShowQuickNav] = useState(false);
+  const quickNavShownRef = useRef(false);
   const [windowWidth, setWindowWidth] = useState(
     typeof window !== "undefined" ? window.innerWidth : 0,
   );
@@ -1032,6 +1295,15 @@ export default function Play() {
         () => setPurchaseToast(null),
         3000,
       );
+      // Show one-time quick-nav popup after first ever purchase
+      if (
+        !quickNavShownRef.current &&
+        !sessionStorage.getItem("frontier_quicknav_shown")
+      ) {
+        quickNavShownRef.current = true;
+        sessionStorage.setItem("frontier_quicknav_shown", "1");
+        setTimeout(() => setShowQuickNav(true), 3200);
+      }
     }
     prevPlotsOwnedLen.current = currentLen;
   }, [player.plotsOwned]);
@@ -1104,6 +1376,7 @@ export default function Play() {
         {activeTab === "leaderboard" && <LeaderboardPanel />}
         {activeTab === "universe" && <UniversePanel inline={true} />}
         {activeTab === "intel" && <IntelTab />}
+        {activeTab === "missions" && <MissionsTab />}
         {activeTab === "admin" && <AdminPanel />}
         {activeTab === "roadmap" && <RoadmapTab />}
       </BottomSheet>
@@ -1146,7 +1419,7 @@ export default function Play() {
           style={{
             position: "fixed",
             inset: 0,
-            zIndex: 960,
+            zIndex: 9999,
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
@@ -1301,11 +1574,22 @@ export default function Play() {
         </div>
       )}
 
+      {/* Purchase success quick-nav popup — shown once per session after first purchase */}
+      {showQuickNav && (
+        <QuickNavPopup
+          onNavigate={(tab) => {
+            setActiveTab(tab);
+            setShowQuickNav(false);
+          }}
+          onDismiss={() => setShowQuickNav(false)}
+        />
+      )}
+
       {/* Purchase toast */}
       {purchaseToast && (
         <div
           data-ocid="map.success_state"
-          className="fixed left-1/2 -translate-x-1/2 z-70 flex items-center gap-2.5 px-5 py-2.5 rounded-lg whitespace-nowrap"
+          className="fixed left-1/2 -translate-x-1/2 z-[75] flex items-center gap-2.5 px-5 py-2.5 rounded-lg whitespace-nowrap"
           style={{
             bottom: 80,
             background: "rgba(4,12,24,0.95)",

@@ -3,7 +3,10 @@ import { Shield, Zap } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { createActor } from "../backend";
 import type { GeneratorTierInfo } from "../backend";
+import { BASE_RATE, TIER_DAILY_RATES, UPGRADE_COSTS } from "../constants/tiers";
 import { useGameStore } from "../store/gameStore";
+import { ActionConfirmModal } from "./ActionConfirmModal";
+import _PostActionToast from "./PostActionToast";
 
 const CYAN = "#00ffcc";
 const CYAN_DIM = "rgba(0,255,204,0.35)";
@@ -48,24 +51,11 @@ const GENERATOR_TIERS_LABEL: Record<number, string> = {
   6: "GEN-VI",
 };
 
-// Fallback values used until backend tiers load
+// Fallback rates used until backend tiers load
 const FALLBACK_TIER_PRODUCTION: Record<number, number> = {
-  0: 7,
-  1: 15,
-  2: 31,
-  3: 63,
-  4: 127,
-  5: 255,
-  6: 511,
+  ...TIER_DAILY_RATES,
 };
-const FALLBACK_UPGRADE_COSTS: Record<number, number> = {
-  1: 500,
-  2: 1500,
-  3: 4000,
-  4: 10000,
-  5: 25000,
-  6: 60000,
-};
+const FALLBACK_UPGRADE_COSTS: Record<number, number> = { ...UPGRADE_COSTS };
 
 export default function TacticalCommandPanel() {
   const selectedPlotId = useGameStore((s) => s.selectedPlotId);
@@ -80,6 +70,9 @@ export default function TacticalCommandPanel() {
   const [backendTiers, setBackendTiers] = useState<GeneratorTierInfo[] | null>(
     null,
   );
+  const [purchaseConfirmOpen, setPurchaseConfirmOpen] = useState(false);
+  const [purchaseLoading, setPurchaseLoading] = useState(false);
+  const [postActionType, setPostActionType] = useState<string | null>(null);
 
   useEffect(() => {
     if (!actor) return;
@@ -91,9 +84,11 @@ export default function TacticalCommandPanel() {
 
   const tierProduction = useMemo(() => {
     if (!backendTiers) return FALLBACK_TIER_PRODUCTION;
-    const map: Record<number, number> = { 0: 7 };
+    // Backend returns bonusPerDay (bonus ABOVE the base 7 FRNTR/day).
+    // Total daily rate = BASE_RATE + bonusPerDay.
+    const map: Record<number, number> = { 0: BASE_RATE };
     for (const t of backendTiers) {
-      map[Number(t.tierIndex)] = t.bonusPerDay;
+      map[Number(t.tierIndex)] = BASE_RATE + Number(t.bonusPerDay);
     }
     return map;
   }, [backendTiers]);
@@ -456,7 +451,7 @@ export default function TacticalCommandPanel() {
           <button
             type="button"
             data-ocid="tactical.colonize_button"
-            onClick={() => purchasePlot(String(plot.id))}
+            onClick={() => setPurchaseConfirmOpen(true)}
             style={{
               flex: 1,
               padding: "10px",
@@ -532,6 +527,47 @@ export default function TacticalCommandPanel() {
           </>
         )}
       </div>
+      <ActionConfirmModal
+        isOpen={purchaseConfirmOpen}
+        actionType="purchase"
+        title={`Acquire Plot #${plot.id}`}
+        details={[
+          { label: "Plot ID", value: `#${plot.id}` },
+          { label: "Biome", value: plot.biome },
+          { label: "Rarity", value: rarityCfg.label },
+          { label: "Efficiency", value: `${effPct}%` },
+        ]}
+        costLabel={`${rarityCfg.priceICP} ICP`}
+        warningText="This land acquisition is permanent and cannot be reversed once confirmed."
+        isLoading={purchaseLoading}
+        onCancel={() => {
+          (async () => {
+            try {
+              await actor?.logCancelledAction(
+                "purchasePlot",
+                String(plot.id),
+                null,
+                "User cancelled plot purchase",
+              );
+            } catch {}
+          })();
+          setPurchaseConfirmOpen(false);
+        }}
+        onConfirm={async () => {
+          setPurchaseLoading(true);
+          try {
+            await purchasePlot(String(plot.id));
+            setPostActionType("purchase");
+          } catch {}
+          setPurchaseLoading(false);
+          setPurchaseConfirmOpen(false);
+        }}
+      />
+      <_PostActionToast
+        actionType={postActionType as "purchase" | null}
+        onNavigate={() => {}}
+        onDismiss={() => setPostActionType(null)}
+      />
     </div>
   );
 }

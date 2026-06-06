@@ -70,7 +70,17 @@ export default {
           ring: "oklch(var(--sidebar-ring))",
         },
       },
-      borderRadius: {
+      borderRadius: {      zIndex: {
+        base: 'var(--z-base)',
+        hud: 'var(--z-hud)',
+        nav: 'var(--z-nav)',
+        sheet: 'var(--z-sheet)',
+        modal: 'var(--z-modal)',
+        toast: 'var(--z-toast)',
+        overlay: 'var(--z-overlay)',
+        critical: 'var(--z-critical)',
+      },
+
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",

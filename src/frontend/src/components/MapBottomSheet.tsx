@@ -21,6 +21,7 @@ import {
   type SubParcel,
   useGameStore,
 } from "../store/gameStore";
+import { PostActionToast } from "./PostActionToast";
 
 const CYAN = "#00ffcc";
 const CYAN_DIM = "rgba(0,255,204,0.5)";
@@ -207,23 +208,22 @@ function SurveyReport({ plot, isOwnPlot: _isOwnPlot }: SurveyReportProps) {
   );
 }
 
-// FRNTR daily rates per tier
-const TIER_DAILY_RATES: Record<number, number> = {
-  0: 7,
-  1: 10,
-  2: 15,
-  3: 22,
-  4: 32,
-  5: 45,
-};
-// Cost in FRNTR (human-readable, not e8s) to upgrade from current tier to next
-const TIER_COSTS: Record<number, number> = {
-  0: 500,
-  1: 1500,
-  2: 4000,
-  3: 10000,
-  4: 25000,
-  5: 60000,
+import {
+  UPGRADE_COSTS as TIER_COSTS,
+  TIER_DAILY_RATES,
+} from "../constants/tiers";
+import { ActionConfirmModal } from "./ActionConfirmModal";
+// TIER_COSTS keys = destination tier (1-6). MapBottomSheet uses tier as current tier key.
+// Re-map so TIER_COSTS_BY_CURRENT[currentTier] = cost to upgrade away from that tier:
+// TIER_COSTS_BY_CURRENT[currentTier] = cost to upgrade away from that tier
+// Maps current tier (0–5) → cost of the upgrade to the next tier
+const TIER_COSTS_BY_CURRENT: Record<number, number> = {
+  0: TIER_COSTS[1], // 500  — cost to go from 0→1
+  1: TIER_COSTS[2], // 1500 — cost to go from 1→2
+  2: TIER_COSTS[3], // 4000
+  3: TIER_COSTS[4], // 10000
+  4: TIER_COSTS[5], // 25000
+  5: TIER_COSTS[6], // 60000
 };
 
 export default function MapBottomSheet({
@@ -239,6 +239,7 @@ export default function MapBottomSheet({
   const [claimStatus, setClaimStatus] = useState<
     "idle" | "claiming" | "success" | "error"
   >("idle");
+  const [postActionType, setPostActionType] = useState<string | null>(null);
 
   const { actor } = useActor(createActor);
 
@@ -312,7 +313,7 @@ export default function MapBottomSheet({
           TierVI: 6,
         };
         const numericTier = tierMap[newTier as unknown as string] ?? 1;
-        const burnCost = TIER_COSTS[numericTier - 1] ?? 0;
+        const burnCost = TIER_COSTS_BY_CURRENT[numericTier - 1] ?? 0;
         useGameStore.setState((s) => ({
           generatorTiers: {
             ...s.generatorTiers,
@@ -392,6 +393,7 @@ export default function MapBottomSheet({
         action: `Plot acquired! ${plot.biome} plot ${shortId}`,
         nextStep: "Open Command Center to track FRNTR generation.",
       });
+      setPostActionType("purchase");
     } else {
       setPurchaseError(result.message);
     }
@@ -615,196 +617,26 @@ export default function MapBottomSheet({
           >
             {!isOwned && (
               <div>
-                {showPurchaseConfirm && plot ? (
-                  /* NFT PURCHASE CONFIRMATION CARD */
-                  <div
-                    data-ocid="map.dialog"
-                    style={{
-                      background: "rgba(0,10,20,0.85)",
-                      border: "1px solid rgba(0,255,204,0.25)",
-                      borderRadius: 8,
-                      padding: "14px 14px 10px",
-                      backdropFilter: "blur(14px)",
-                      WebkitBackdropFilter: "blur(14px)",
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: 9,
-                        color: CYAN_DIM,
-                        letterSpacing: 2,
-                        fontFamily: "monospace",
-                        marginBottom: 10,
-                      }}
-                    >
-                      CONFIRM PURCHASE
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 5,
-                        marginBottom: 12,
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          fontSize: 9,
-                          fontFamily: "monospace",
-                        }}
-                      >
-                        <span style={{ color: "rgba(224,244,255,0.45)" }}>
-                          PLOT ID
-                        </span>
-                        <span style={{ color: CYAN, fontWeight: 700 }}>
-                          {String(plot.id).slice(0, 8)}
-                        </span>
-                      </div>
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          fontSize: 9,
-                          fontFamily: "monospace",
-                        }}
-                      >
-                        <span style={{ color: "rgba(224,244,255,0.45)" }}>
-                          BIOME
-                        </span>
-                        <span
-                          style={{
-                            padding: "1px 6px",
-                            borderRadius: 3,
-                            background: `${BIOME_BADGE_COLORS[plot.biome] ?? CYAN}22`,
-                            border: `1px solid ${BIOME_BADGE_COLORS[plot.biome] ?? CYAN}`,
-                            color: BIOME_BADGE_COLORS[plot.biome] ?? CYAN,
-                            fontWeight: 700,
-                            letterSpacing: 1,
-                          }}
-                        >
-                          {plot.biome.toUpperCase()}
-                        </span>
-                      </div>
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          fontSize: 9,
-                          fontFamily: "monospace",
-                        }}
-                      >
-                        <span style={{ color: "rgba(224,244,255,0.45)" }}>
-                          RARITY
-                        </span>
-                        {(() => {
-                          const r = getRarity(plot.biome);
-                          return (
-                            <span
-                              style={{
-                                padding: "1px 6px",
-                                borderRadius: 3,
-                                background: r.bg,
-                                border: `1px solid ${r.color}`,
-                                color: r.color,
-                                fontWeight: 700,
-                                letterSpacing: 1,
-                              }}
-                            >
-                              {r.label}
-                            </span>
-                          );
-                        })()}
-                      </div>
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          fontSize: 9,
-                          fontFamily: "monospace",
-                        }}
-                      >
-                        <span style={{ color: "rgba(224,244,255,0.45)" }}>
-                          PRICE
-                        </span>
-                        <span style={{ color: "#ffd700", fontWeight: 700 }}>
-                          {icpPriceDisplay}
-                        </span>
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button
-                        type="button"
-                        data-ocid="map.confirm_button"
-                        onClick={handleConfirmPurchase}
-                        disabled={isPurchasing}
-                        style={{
-                          flex: 1,
-                          padding: "10px 0",
-                          background: isPurchasing
-                            ? "rgba(34,197,94,0.06)"
-                            : "rgba(34,197,94,0.15)",
-                          border: "1px solid #22c55e",
-                          borderRadius: 6,
-                          color: "#22c55e",
-                          fontSize: 10,
-                          fontWeight: 700,
-                          letterSpacing: 2,
-                          cursor: isPurchasing ? "not-allowed" : "pointer",
-                          fontFamily: "monospace",
-                          textShadow: "0 0 8px #22c55e80",
-                          opacity: isPurchasing ? 0.6 : 1,
-                        }}
-                      >
-                        {isPurchasing ? "PROCESSING…" : "CONFIRM"}
-                      </button>
-                      <button
-                        type="button"
-                        data-ocid="map.cancel_button"
-                        onClick={() => setShowPurchaseConfirm(false)}
-                        style={{
-                          flex: 1,
-                          padding: "10px 0",
-                          background: "rgba(0,0,0,0.2)",
-                          border: `1px solid ${BORDER}`,
-                          borderRadius: 6,
-                          color: CYAN_DIM,
-                          fontSize: 10,
-                          fontWeight: 700,
-                          letterSpacing: 2,
-                          cursor: "pointer",
-                          fontFamily: "monospace",
-                        }}
-                      >
-                        CANCEL
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    data-ocid="map.primary_button"
-                    onClick={handlePurchase}
-                    disabled={isPurchasing}
-                    style={{
-                      ...actionBtnStyle(
-                        "#00ffcc",
-                        isPurchasing
-                          ? "rgba(0,255,204,0.06)"
-                          : "rgba(0,255,204,0.12)",
-                      ),
-                      opacity: isPurchasing ? 0.6 : 1,
-                      cursor: isPurchasing ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    {isPurchasing
-                      ? "PROCESSING…"
-                      : `PURCHASE — ${icpPriceDisplay}`}
-                  </button>
-                )}
+                <button
+                  type="button"
+                  data-ocid="map.primary_button"
+                  onClick={handlePurchase}
+                  disabled={isPurchasing}
+                  style={{
+                    ...actionBtnStyle(
+                      "#00ffcc",
+                      isPurchasing
+                        ? "rgba(0,255,204,0.06)"
+                        : "rgba(0,255,204,0.12)",
+                    ),
+                    opacity: isPurchasing ? 0.6 : 1,
+                    cursor: isPurchasing ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {isPurchasing
+                    ? "PROCESSING…"
+                    : `PURCHASE — ${icpPriceDisplay}`}
+                </button>
                 {purchaseError && (
                   <div
                     data-ocid="map.error_state"
@@ -820,13 +652,40 @@ export default function MapBottomSheet({
                     {purchaseError}
                   </div>
                 )}
+                <ActionConfirmModal
+                  isOpen={showPurchaseConfirm}
+                  onConfirm={handleConfirmPurchase}
+                  onCancel={() => {
+                    (async () => {
+                      try {
+                        await actor?.logCancelledAction(
+                          "purchasePlot",
+                          selectedPlotId ? String(selectedPlotId) : null,
+                          null,
+                          "User cancelled plot purchase",
+                        );
+                      } catch {}
+                    })();
+                    setShowPurchaseConfirm(false);
+                  }}
+                  title={`Acquire Plot ${String(plot.id).slice(0, 8)}`}
+                  actionType="purchase"
+                  details={[
+                    { label: "Plot ID", value: String(plot.id).slice(0, 8) },
+                    { label: "Biome", value: plot.biome.toUpperCase() },
+                    { label: "Rarity", value: getRarity(plot.biome).label },
+                    { label: "Price", value: icpPriceDisplay },
+                  ]}
+                  warningText="This purchase is permanent and cannot be undone. Your ICP will be deducted immediately and the plot assigned to your wallet."
+                  isLoading={isPurchasing}
+                />
               </div>
             )}
             {isOwnPlot &&
               (() => {
                 const currentTier = generatorTiers[String(plot.id)] ?? 0;
                 const dailyRate = TIER_DAILY_RATES[currentTier] ?? 7;
-                const upgradeCost = TIER_COSTS[currentTier] ?? null;
+                const upgradeCost = TIER_COSTS_BY_CURRENT[currentTier] ?? null;
                 const displayBalance = confirmedFrntBalance + accruedSinceSync;
                 const canUpgrade =
                   upgradeCost !== null &&
@@ -964,6 +823,18 @@ export default function MapBottomSheet({
           </div>
         )}
       </div>
+      {postActionType && (
+        <PostActionToast
+          actionType={postActionType}
+          message="Plot purchased!"
+          onNavigate={(tab) =>
+            window.dispatchEvent(
+              new CustomEvent("navigate-tab", { detail: tab }),
+            )
+          }
+          onClose={() => setPostActionType(null)}
+        />
+      )}
     </>
   );
 }

@@ -117,8 +117,8 @@ export function usePlayerSync(): void {
         const state = await actor.getPlayerState();
         if (!state) return;
 
-        // Accumulation model: sync only updates the confirmed base.
-        // The per-second ticker (accruedFrntSinceSync) is never touched here.
+        // Accumulation model: sync only updates the confirmed base IF the new
+        // value is higher. setFrntrBalance ignores downward syncs internally.
         const newRawFrnt = BigInt(state.frntBalance);
         useGameStore.getState().setFrntrBalance(newRawFrnt);
 
@@ -161,7 +161,7 @@ export function usePlayerSync(): void {
 
     const syncGlobalStats = async () => {
       try {
-        const [g, t, treasury] = await Promise.all([
+        const [g, t, treasury, gameStats] = await Promise.all([
           actor.getGlobalStats(),
           actor.getTokenomics(),
           actor.getTreasuryBalances().catch(() => ({
@@ -169,6 +169,7 @@ export function usePlayerSync(): void {
             leaderboardPot: 0n,
             liquidityPot: 0n,
           })),
+          actor.getGameStats().catch(() => null),
         ]);
         const stats: GlobalStats = {
           totalPlotsOwned: Number(g.totalPlotsOwned),
@@ -191,12 +192,27 @@ export function usePlayerSync(): void {
           leaderboardPotICP: Number(treasury.leaderboardPot) / 1e8,
           liquidityPotICP: Number(treasury.liquidityPot) / 1e8,
         };
+        if (gameStats && gameStats.totalActionCount !== undefined) {
+          stats.totalActionCount = Number(gameStats.totalActionCount);
+        }
         useGameStore.getState().setGlobalStats(stats);
         useGameStore.getState().setTreasuryState({
           developer: BigInt(Math.floor(Number(treasury.devPot))),
           leaderboard: BigInt(Math.floor(Number(treasury.leaderboardPot))),
           liquidity: BigInt(Math.floor(Number(treasury.liquidityPot))),
+          totalPlayers: gameStats ? Number(gameStats.totalPlayers) : undefined,
+          totalPlotsSold: gameStats ? Number(gameStats.totalPlots) : undefined,
         } as TreasuryState);
+        // Extract totalDailyOutput and globalUnclaimedTokens from getGameStats()
+        if (gameStats) {
+          const store = useGameStore.getState();
+          store.setTotalGlobalDailyOutput(
+            Number(gameStats.totalDailyOutput) / 1e8,
+          );
+          store.setGlobalUnclaimedTokens(
+            Number(gameStats.globalUnclaimedTokens) / 1e8,
+          );
+        }
       } catch {
         // Non-critical: keep existing globalStats
       }

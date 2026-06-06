@@ -8,6 +8,32 @@
 
 import { IDL } from '@icp-sdk/core/candid';
 
+export const Biome = IDL.Variant({
+  'Tropical' : IDL.Null,
+  'AsteroidImpact' : IDL.Null,
+  'DeepOcean' : IDL.Null,
+  'Desert' : IDL.Null,
+  'Volcanic' : IDL.Null,
+  'Temperate' : IDL.Null,
+  'Ocean' : IDL.Null,
+  'Arctic' : IDL.Null,
+});
+export const SurveyResult = IDL.Record({
+  'resourcePercentage' : IDL.Nat,
+  'bonusInfo' : IDL.Opt(IDL.Text),
+  'biome' : Biome,
+});
+export const Result = IDL.Variant({ 'ok' : IDL.Nat, 'err' : IDL.Text });
+export const ActionAuditEntry = IDL.Record({
+  'action' : IDL.Text,
+  'decision' : IDL.Text,
+  'plotId' : IDL.Opt(IDL.Text),
+  'tier' : IDL.Opt(IDL.Text),
+  'timestamp' : IDL.Int,
+  'details' : IDL.Text,
+  'caller' : IDL.Principal,
+  'amount' : IDL.Opt(IDL.Nat),
+});
 export const CombatEvent = IDL.Record({
   'attacker' : IDL.Principal,
   'intercepted' : IDL.Bool,
@@ -37,6 +63,21 @@ export const GlobalStats = IDL.Record({
   'totalPlotsOwned' : IDL.Nat,
   'dailyEmission' : IDL.Nat,
   'totalBurned' : IDL.Nat,
+});
+export const MissionRequirementKind = IDL.Variant({
+  'purchasePlots' : IDL.Nat,
+  'upgradeToTier' : IDL.Nat,
+  'holdFRNTR' : IDL.Nat,
+  'reachLeaderboardTop' : IDL.Nat,
+  'surveyPlot' : IDL.Null,
+  'claimTokens' : IDL.Nat,
+});
+export const Mission = IDL.Record({
+  'id' : IDL.Text,
+  'title' : IDL.Text,
+  'description' : IDL.Text,
+  'rewardE8s' : IDL.Nat,
+  'requirement' : MissionRequirementKind,
 });
 export const ResourceType = IDL.Variant({
   'RareEarth' : IDL.Null,
@@ -71,21 +112,6 @@ export const SubParcel = IDL.Record({
   'building' : IDL.Opt(IDL.Text),
   'slotIndex' : IDL.Nat,
   'specialization' : IDL.Text,
-});
-export const Biome = IDL.Variant({
-  'Tropical' : IDL.Null,
-  'AsteroidImpact' : IDL.Null,
-  'DeepOcean' : IDL.Null,
-  'Desert' : IDL.Null,
-  'Volcanic' : IDL.Null,
-  'Temperate' : IDL.Null,
-  'Ocean' : IDL.Null,
-  'Arctic' : IDL.Null,
-});
-export const SurveyResult = IDL.Record({
-  'resourcePercentage' : IDL.Nat,
-  'bonusInfo' : IDL.Opt(IDL.Text),
-  'biome' : Biome,
 });
 export const SurveyStatus = IDL.Variant({
   'Locked' : IDL.Null,
@@ -166,10 +192,36 @@ export const UpgradeError = IDL.Variant({
 export const idlService = IDL.Service({
   'assignInterceptor' : IDL.Func([IDL.Text, IDL.Text], [], []),
   'claimAccumulatedTokens' : IDL.Func(
-      [],
+      [IDL.Text],
       [IDL.Variant({ 'ok' : IDL.Nat, 'err' : IDL.Text })],
       [],
     ),
+  'claimAllPlots' : IDL.Func(
+      [],
+      [
+        IDL.Variant({
+          'ok' : IDL.Record({ 'amount' : IDL.Nat, 'plotsClaimed' : IDL.Nat }),
+          'err' : IDL.Text,
+        }),
+      ],
+      [],
+    ),
+  'claimSurveyReward' : IDL.Func(
+      [IDL.Text],
+      [
+        IDL.Variant({
+          'ok' : IDL.Record({ 'report' : SurveyResult, 'rewardE8s' : IDL.Nat }),
+          'err' : IDL.Text,
+        }),
+      ],
+      [],
+    ),
+  'completeMission' : IDL.Func(
+      [IDL.Text],
+      [IDL.Variant({ 'ok' : IDL.Nat, 'err' : IDL.Text })],
+      [],
+    ),
+  'completeSurvey' : IDL.Func([IDL.Text], [Result], []),
   'getAdjacentPlots' : IDL.Func([IDL.Text], [IDL.Vec(IDL.Text)], ['query']),
   'getAdminPrincipal' : IDL.Func([], [IDL.Text], ['query']),
   'getAllPlotOwners' : IDL.Func(
@@ -181,6 +233,17 @@ export const idlService = IDL.Service({
   'getAssignedInterceptor' : IDL.Func(
       [IDL.Text],
       [IDL.Opt(IDL.Text)],
+      ['query'],
+    ),
+  'getAuditLogCount' : IDL.Func([], [IDL.Nat], ['query']),
+  'getAuditLogForPrincipal' : IDL.Func(
+      [IDL.Principal],
+      [
+        IDL.Variant({
+          'ok' : IDL.Vec(IDL.Tuple(IDL.Int, ActionAuditEntry)),
+          'err' : IDL.Text,
+        }),
+      ],
       ['query'],
     ),
   'getCombatLog' : IDL.Func([IDL.Nat], [IDL.Vec(CombatEvent)], ['query']),
@@ -196,6 +259,16 @@ export const idlService = IDL.Service({
     ),
   'getFirstAvailablePlot' : IDL.Func([], [IDL.Opt(IDL.Text)], ['query']),
   'getFrntrLedger' : IDL.Func([], [IDL.Text], ['query']),
+  'getFullAuditLog' : IDL.Func(
+      [],
+      [
+        IDL.Variant({
+          'ok' : IDL.Vec(IDL.Tuple(IDL.Int, ActionAuditEntry)),
+          'err' : IDL.Text,
+        }),
+      ],
+      ['query'],
+    ),
   'getGameCanisterPrincipal' : IDL.Func([], [IDL.Text], ['query']),
   'getGameStats' : IDL.Func(
       [],
@@ -203,11 +276,14 @@ export const idlService = IDL.Service({
         IDL.Record({
           'totalPlayers' : IDL.Nat,
           'totalFrntrBurned' : IDL.Nat,
+          'totalActionCount' : IDL.Nat,
           'totalSupply' : IDL.Nat,
           'totalBurned' : IDL.Nat,
           'totalPlots' : IDL.Nat,
           'emissionRatePerDay' : IDL.Nat,
+          'totalDailyOutput' : IDL.Nat,
           'remainingMineable' : IDL.Nat,
+          'globalUnclaimedTokens' : IDL.Nat,
         }),
       ],
       ['query'],
@@ -226,6 +302,7 @@ export const idlService = IDL.Service({
       ['query'],
     ),
   'getGlobalStats' : IDL.Func([], [GlobalStats], ['query']),
+  'getGlobalUnclaimedTokens' : IDL.Func([], [IDL.Nat], ['query']),
   'getIcpBalance' : IDL.Func([IDL.Principal], [IDL.Nat], []),
   'getIcpUsdPrice' : IDL.Func([], [IDL.Float64], []),
   'getIcpUsdPriceCached' : IDL.Func([], [IDL.Float64], ['query']),
@@ -264,7 +341,18 @@ export const idlService = IDL.Service({
       [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Text))],
       ['query'],
     ),
+  'getMissions' : IDL.Func([], [IDL.Vec(Mission)], ['query']),
+  'getMyAuditLog' : IDL.Func(
+      [],
+      [IDL.Vec(IDL.Tuple(IDL.Int, ActionAuditEntry))],
+      ['query'],
+    ),
   'getPassiveIncome' : IDL.Func([IDL.Text], [IDL.Float64], ['query']),
+  'getPlayerMissions' : IDL.Func(
+      [],
+      [IDL.Vec(IDL.Record({ 'mission' : Mission, 'completed' : IDL.Bool }))],
+      ['query'],
+    ),
   'getPlayerState' : IDL.Func(
       [],
       [
@@ -339,6 +427,8 @@ export const idlService = IDL.Service({
       [],
     ),
   'getTokenomics' : IDL.Func([], [Tokenomics], ['query']),
+  'getTotalBurned' : IDL.Func([], [IDL.Nat], ['query']),
+  'getTotalGlobalDailyOutput' : IDL.Func([], [IDL.Nat], ['query']),
   'getTreasuryBalances' : IDL.Func(
       [],
       [
@@ -375,6 +465,11 @@ export const idlService = IDL.Service({
   'launchMissile' : IDL.Func(
       [IDL.Text, IDL.Text, IDL.Text],
       [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
+      [],
+    ),
+  'logCancelledAction' : IDL.Func(
+      [IDL.Text, IDL.Opt(IDL.Text), IDL.Opt(IDL.Nat), IDL.Text],
+      [],
       [],
     ),
   'mineResources' : IDL.Func(
@@ -434,6 +529,32 @@ export const idlService = IDL.Service({
 export const idlInitArgs = [];
 
 export const idlFactory = ({ IDL }) => {
+  const Biome = IDL.Variant({
+    'Tropical' : IDL.Null,
+    'AsteroidImpact' : IDL.Null,
+    'DeepOcean' : IDL.Null,
+    'Desert' : IDL.Null,
+    'Volcanic' : IDL.Null,
+    'Temperate' : IDL.Null,
+    'Ocean' : IDL.Null,
+    'Arctic' : IDL.Null,
+  });
+  const SurveyResult = IDL.Record({
+    'resourcePercentage' : IDL.Nat,
+    'bonusInfo' : IDL.Opt(IDL.Text),
+    'biome' : Biome,
+  });
+  const Result = IDL.Variant({ 'ok' : IDL.Nat, 'err' : IDL.Text });
+  const ActionAuditEntry = IDL.Record({
+    'action' : IDL.Text,
+    'decision' : IDL.Text,
+    'plotId' : IDL.Opt(IDL.Text),
+    'tier' : IDL.Opt(IDL.Text),
+    'timestamp' : IDL.Int,
+    'details' : IDL.Text,
+    'caller' : IDL.Principal,
+    'amount' : IDL.Opt(IDL.Nat),
+  });
   const CombatEvent = IDL.Record({
     'attacker' : IDL.Principal,
     'intercepted' : IDL.Bool,
@@ -463,6 +584,21 @@ export const idlFactory = ({ IDL }) => {
     'totalPlotsOwned' : IDL.Nat,
     'dailyEmission' : IDL.Nat,
     'totalBurned' : IDL.Nat,
+  });
+  const MissionRequirementKind = IDL.Variant({
+    'purchasePlots' : IDL.Nat,
+    'upgradeToTier' : IDL.Nat,
+    'holdFRNTR' : IDL.Nat,
+    'reachLeaderboardTop' : IDL.Nat,
+    'surveyPlot' : IDL.Null,
+    'claimTokens' : IDL.Nat,
+  });
+  const Mission = IDL.Record({
+    'id' : IDL.Text,
+    'title' : IDL.Text,
+    'description' : IDL.Text,
+    'rewardE8s' : IDL.Nat,
+    'requirement' : MissionRequirementKind,
   });
   const ResourceType = IDL.Variant({
     'RareEarth' : IDL.Null,
@@ -497,21 +633,6 @@ export const idlFactory = ({ IDL }) => {
     'building' : IDL.Opt(IDL.Text),
     'slotIndex' : IDL.Nat,
     'specialization' : IDL.Text,
-  });
-  const Biome = IDL.Variant({
-    'Tropical' : IDL.Null,
-    'AsteroidImpact' : IDL.Null,
-    'DeepOcean' : IDL.Null,
-    'Desert' : IDL.Null,
-    'Volcanic' : IDL.Null,
-    'Temperate' : IDL.Null,
-    'Ocean' : IDL.Null,
-    'Arctic' : IDL.Null,
-  });
-  const SurveyResult = IDL.Record({
-    'resourcePercentage' : IDL.Nat,
-    'bonusInfo' : IDL.Opt(IDL.Text),
-    'biome' : Biome,
   });
   const SurveyStatus = IDL.Variant({
     'Locked' : IDL.Null,
@@ -589,10 +710,39 @@ export const idlFactory = ({ IDL }) => {
   return IDL.Service({
     'assignInterceptor' : IDL.Func([IDL.Text, IDL.Text], [], []),
     'claimAccumulatedTokens' : IDL.Func(
-        [],
+        [IDL.Text],
         [IDL.Variant({ 'ok' : IDL.Nat, 'err' : IDL.Text })],
         [],
       ),
+    'claimAllPlots' : IDL.Func(
+        [],
+        [
+          IDL.Variant({
+            'ok' : IDL.Record({ 'amount' : IDL.Nat, 'plotsClaimed' : IDL.Nat }),
+            'err' : IDL.Text,
+          }),
+        ],
+        [],
+      ),
+    'claimSurveyReward' : IDL.Func(
+        [IDL.Text],
+        [
+          IDL.Variant({
+            'ok' : IDL.Record({
+              'report' : SurveyResult,
+              'rewardE8s' : IDL.Nat,
+            }),
+            'err' : IDL.Text,
+          }),
+        ],
+        [],
+      ),
+    'completeMission' : IDL.Func(
+        [IDL.Text],
+        [IDL.Variant({ 'ok' : IDL.Nat, 'err' : IDL.Text })],
+        [],
+      ),
+    'completeSurvey' : IDL.Func([IDL.Text], [Result], []),
     'getAdjacentPlots' : IDL.Func([IDL.Text], [IDL.Vec(IDL.Text)], ['query']),
     'getAdminPrincipal' : IDL.Func([], [IDL.Text], ['query']),
     'getAllPlotOwners' : IDL.Func(
@@ -610,6 +760,17 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Opt(IDL.Text)],
         ['query'],
       ),
+    'getAuditLogCount' : IDL.Func([], [IDL.Nat], ['query']),
+    'getAuditLogForPrincipal' : IDL.Func(
+        [IDL.Principal],
+        [
+          IDL.Variant({
+            'ok' : IDL.Vec(IDL.Tuple(IDL.Int, ActionAuditEntry)),
+            'err' : IDL.Text,
+          }),
+        ],
+        ['query'],
+      ),
     'getCombatLog' : IDL.Func([IDL.Nat], [IDL.Vec(CombatEvent)], ['query']),
     'getCoreGeneratorTiers' : IDL.Func(
         [],
@@ -623,6 +784,16 @@ export const idlFactory = ({ IDL }) => {
       ),
     'getFirstAvailablePlot' : IDL.Func([], [IDL.Opt(IDL.Text)], ['query']),
     'getFrntrLedger' : IDL.Func([], [IDL.Text], ['query']),
+    'getFullAuditLog' : IDL.Func(
+        [],
+        [
+          IDL.Variant({
+            'ok' : IDL.Vec(IDL.Tuple(IDL.Int, ActionAuditEntry)),
+            'err' : IDL.Text,
+          }),
+        ],
+        ['query'],
+      ),
     'getGameCanisterPrincipal' : IDL.Func([], [IDL.Text], ['query']),
     'getGameStats' : IDL.Func(
         [],
@@ -630,11 +801,14 @@ export const idlFactory = ({ IDL }) => {
           IDL.Record({
             'totalPlayers' : IDL.Nat,
             'totalFrntrBurned' : IDL.Nat,
+            'totalActionCount' : IDL.Nat,
             'totalSupply' : IDL.Nat,
             'totalBurned' : IDL.Nat,
             'totalPlots' : IDL.Nat,
             'emissionRatePerDay' : IDL.Nat,
+            'totalDailyOutput' : IDL.Nat,
             'remainingMineable' : IDL.Nat,
+            'globalUnclaimedTokens' : IDL.Nat,
           }),
         ],
         ['query'],
@@ -653,6 +827,7 @@ export const idlFactory = ({ IDL }) => {
         ['query'],
       ),
     'getGlobalStats' : IDL.Func([], [GlobalStats], ['query']),
+    'getGlobalUnclaimedTokens' : IDL.Func([], [IDL.Nat], ['query']),
     'getIcpBalance' : IDL.Func([IDL.Principal], [IDL.Nat], []),
     'getIcpUsdPrice' : IDL.Func([], [IDL.Float64], []),
     'getIcpUsdPriceCached' : IDL.Func([], [IDL.Float64], ['query']),
@@ -691,7 +866,18 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Text))],
         ['query'],
       ),
+    'getMissions' : IDL.Func([], [IDL.Vec(Mission)], ['query']),
+    'getMyAuditLog' : IDL.Func(
+        [],
+        [IDL.Vec(IDL.Tuple(IDL.Int, ActionAuditEntry))],
+        ['query'],
+      ),
     'getPassiveIncome' : IDL.Func([IDL.Text], [IDL.Float64], ['query']),
+    'getPlayerMissions' : IDL.Func(
+        [],
+        [IDL.Vec(IDL.Record({ 'mission' : Mission, 'completed' : IDL.Bool }))],
+        ['query'],
+      ),
     'getPlayerState' : IDL.Func(
         [],
         [
@@ -770,6 +956,8 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'getTokenomics' : IDL.Func([], [Tokenomics], ['query']),
+    'getTotalBurned' : IDL.Func([], [IDL.Nat], ['query']),
+    'getTotalGlobalDailyOutput' : IDL.Func([], [IDL.Nat], ['query']),
     'getTreasuryBalances' : IDL.Func(
         [],
         [
@@ -806,6 +994,11 @@ export const idlFactory = ({ IDL }) => {
     'launchMissile' : IDL.Func(
         [IDL.Text, IDL.Text, IDL.Text],
         [IDL.Variant({ 'ok' : IDL.Text, 'err' : IDL.Text })],
+        [],
+      ),
+    'logCancelledAction' : IDL.Func(
+        [IDL.Text, IDL.Opt(IDL.Text), IDL.Opt(IDL.Nat), IDL.Text],
+        [],
         [],
       ),
     'mineResources' : IDL.Func(

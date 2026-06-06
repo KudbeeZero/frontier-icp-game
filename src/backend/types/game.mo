@@ -186,6 +186,24 @@ module {
     result              : ?SurveyResult;
   };
 
+
+  // ---------------------------------------------------------------------------
+  // Action Audit Log — tamperproof on-chain record of every player decision.
+  // Every irreversible action (purchase, upgrade, claim, mission) appended here.
+  // "cancelled" entries are written by the frontend via logCancelledAction when
+  // the player dismisses the confirmation modal before a canister call is made.
+  // ---------------------------------------------------------------------------
+  public type ActionAuditEntry = {
+    caller    : Principal;     // Internet Identity principal of the player
+    action    : Text;          // "purchasePlot" | "upgradeGenerator" | "claimAccumulatedTokens" | "claimAllPlots" | "completeMission" | "cancelledAction"
+    decision  : Text;          // "confirmed" | "cancelled" | "failed"
+    timestamp : Int;           // Time.now() nanoseconds at moment of recording
+    plotId    : ?Text;         // plot H3 ID when relevant (null for claimAllPlots / completeMission)
+    amount    : ?Nat;          // ICP e8s for purchase, FRNTR e8s for upgrade/claim/mission reward
+    tier      : ?Text;         // new generator tier name on upgrade (null otherwise)
+    details   : Text;          // free-form detail string (error reason, summary, etc.)
+  };
+
   // Faucet result for testFaucetV2 is defined in types/testnet.mo as FaucetGrant.
 };
 

@@ -27,12 +27,14 @@ import TokenTypes "token/types";
 import FrntrLedgerApiMixin "mixins/frntr-ledger-api";
 import Blob "mo:core/Blob";
 import Debug "mo:core/Debug";
-import Migration "migration";
+import Result "mo:core/Result";
+import List "mo:core/List";
 
 
 
 
-(with migration = Migration.run)
+
+
 actor {
   // TODO: MAINNET — verify admin principal and treasury canister principal below before go-live.
   let TESTNET_MODE : Bool = false; // Set to true only for local testnet development
@@ -180,13 +182,22 @@ type PlayerState = {
   stable var stableUsernames       : [(Principal, Text)]                   = [];
   stable var stableFaucetClaims    : [(Principal, Nat)]                    = [];
   stable var stableClaimTimes      : [(Principal, Int)]                    = []; // lastClaimAccumulatedTokens timestamp per player
+  // Per-plot last claim time (nanoseconds). Keys are plot IDs (H3 Text).
+  stable var stablePlotClaimTimes  : [(Text, Int)]                         = [];
+  // Mission completion status: principal -> [(missionId, MissionStatus)]
+  stable var stableMissionStatus   : [(Principal, [(Text, Bool, ?Int)])]   = [];
+  // Player claim counts (for mission tracking)
+  stable var stablePlayerClaimCounts : [(Principal, Nat)]                  = [];
   stable var stableStatsState      : (Nat, Nat, Nat)                       = (0, 0, 0); // (totalFRNTRBurned, totalFRNTRMined, activePlayers)
   stable var stablePlotSoldCount   : Nat                                   = 0;
   stable var stableSubParcels      : [(Text, SubParcel)]                   = [];
   stable var stablePlotSoldState   : Nat                                   = 0; // alias for stablePlotSoldCount
   stable var stableTreasuryPots    : (Nat, Nat, Nat)                       = (0, 0, 0);
   // Survey records: surveyKey -> Survey.  SurveyKey = plotId # "::" # principalText
-  stable var stableSurveys         : [(Text, GameTypes.Survey)]             = [];
+  stable var stableSurveys         : [(Text, GameTypes.Survey)]             = [];  // Action audit log — permanent tamperproof record of every player decision.
+  // Pattern mirrors stableCombatLog: keyed by auto-increment Int index.
+  stable var stableActionAuditLog  : [(Int, GameTypes.ActionAuditEntry)]     = [];
+
   // Feature flags — set to true in future updates to re-enable deferred systems.
   // subParcelAccumulationEnabled: re-enable for the full sub-parcel accumulation system.
   stable var subParcelAccumulationEnabled : Bool = false;
@@ -209,11 +220,30 @@ type PlayerState = {
   // Faucet claims: principal -> claim count
   let faucetClaims   = Map.fromIter<Principal, Nat>(stableFaucetClaims.vals());
   // Claim timestamps: principal -> nanosecond timestamp of last claimAccumulatedTokens
-  let claimTimes     = Map.fromIter(stableClaimTimes.vals());
+  let claimTimes       = Map.fromIter(stableClaimTimes.vals());
+  // Per-plot claim timestamps: plotId -> nanosecond timestamp of last claim
+  let plotClaimTimes   = Map.fromIter(stablePlotClaimTimes.vals());
+  // Mission completion: principal -> missionId -> (completed, completedAt)
+  let missionStatus    = Map.fromIter<Principal, Map.Map<Text, (Bool, ?Int)>>(
+    stableMissionStatus.vals().map<(Principal, [(Text, Bool, ?Int)]), (Principal, Map.Map<Text, (Bool, ?Int)>)>(
+      func((p, entries)) {
+        let inner = Map.empty<Text, (Bool, ?Int)>();
+        for ((mid, ok, at) in entries.vals()) { inner.add(mid, (ok, at)) };
+        (p, inner)
+      }
+    )
+  );
+  // Player claim counts
+  let playerClaimCounts = Map.fromIter<Principal, Nat>(stablePlayerClaimCounts.vals());
   // Sub-parcels map: subParcelId (Text) -> SubParcel
   let subParcels     = Map.fromIter<Text, SubParcel>(stableSubParcels.vals());
   // Survey map: surveyKey -> Survey
   let surveys        = Map.fromIter<Text, GameTypes.Survey>(stableSurveys.vals());
+  // Action audit log map: auto-increment index (Int) -> ActionAuditEntry
+  let actionAuditLog = Map.fromIter<Int, GameTypes.ActionAuditEntry>(stableActionAuditLog.vals());
+  // Auto-increment counter for audit log entries
+  let auditState = { var nextIndex : Int = stableActionAuditLog.size() };
+
 
   // Global stats tracking — loaded from stable tuple
   let statsState = {
@@ -232,6 +262,31 @@ type PlayerState = {
   private func frntrLedgerIsSet() : Bool {
     frntrLedgerState.frntrLedger != "aaaaa-aa";
   };
+  /// Append a new entry to the action audit log with the current timestamp.
+  /// Called at the end of every irreversible function to record the outcome.
+  private func logAuditEntry(
+    caller  : Principal,
+    action  : Text,
+    decision : Text,
+    plotId  : ?Text,
+    amount  : ?Nat,
+    tier    : ?Text,
+    details : Text,
+  ) {
+    let entry : GameTypes.ActionAuditEntry = {
+      caller;
+      action;
+      decision;
+      timestamp = Time.now();
+      plotId;
+      amount;
+      tier;
+      details;
+    };
+    actionAuditLog.add(auditState.nextIndex, entry);
+    auditState.nextIndex += 1;
+  };
+
   // Pricing config (default midpoints)
   let pricingState = { var pricing : CommonTypes.PlotPricing = CommonTypes.defaultPricing };
 
@@ -373,54 +428,58 @@ type PlayerState = {
   /// Compute how much FRNTR has accrued for the caller since their lastClaimTime,
   /// transfer it from the game canister to the caller's principal via ICRC-1,
   /// update lastClaimTime to now, and return the claimed amount (in e8s) or an error.
-  public shared ({ caller }) func claimAccumulatedTokens() : async { #ok : Nat; #err : Text } {
+  /// Claim accumulated FRNTR tokens for a specific plot.
+  /// Accrual = (now - lastClaimTime) / 86400s * dailyRate.
+  /// Mints fresh tokens via icrc1_transfer from game canister (minting account).
+  public shared ({ caller }) func claimAccumulatedTokens(plotId : Text) : async { #ok : Nat; #err : Text } {
     if (caller.isAnonymous()) { return #err("Must be authenticated to claim tokens") };
 
-    let player = switch (players.get(caller)) {
-      case (null) { return #err("No player record found. Purchase a plot first.") };
+    let plot = switch (plots.get(plotId)) {
+      case (null) { return #err("Plot not found") };
       case (?p)   { p };
     };
+    if (plot.owner != ?caller) { return #err("You do not own this plot") };
 
     let now : Int = Time.now();
-    let lastClaim : Int = switch (claimTimes.get(caller)) { case (?t) t; case (null) 0 };
-    let elapsedNs : Int = now - lastClaim;
-    if (elapsedNs <= 0) { return #err("No time has elapsed since last claim") };
-
-    // Sum daily rates for all plots owned by caller.
-    // Base rate: 7 FRNTR/day per plot; generator tier bonuses stack on top.
-    var dailyRateE8s : Nat = 0;
-    for ((pid, _) in plots.entries()) {
-      switch (plots.get(pid)) {
-        case (null) {};
-        case (?plot) {
-          if (plot.owner == ?caller) {
-            let tier = switch (generatorTiers.get(pid)) {
-              case (?t) { t };
-              case (null) { #None };
-            };
-            let bonus = GameLib.tierBonus(tier);
-            let dailyBase : Float = 7.0 + bonus;
-            // Convert FRNTR/day to e8s/day (1 FRNTR = 100_000_000 e8s)
-            let dailyE8s : Nat = Int.abs(Float.toInt(dailyBase * 100_000_000.0));
-            dailyRateE8s += dailyE8s;
-          };
-        };
+    let lastClaim : Int = switch (plotClaimTimes.get(plotId)) {
+      case (?t) { t };
+      case (null) {
+        // Fall back to player-level claim time for backward compat
+        switch (claimTimes.get(caller)) { case (?t) t; case (null) 0 };
       };
     };
 
-    if (dailyRateE8s == 0) { return #err("No plots owned; nothing to claim") };
+    let elapsedNs : Int = now - lastClaim;
+    if (elapsedNs <= 0) { return #err("No time has elapsed since last claim") };
 
-    // accrued = dailyRateE8s * elapsedNs / (86400 * 1_000_000_000)
+    // Compute daily rate for this specific plot using canonical TIER_DAILY_RATES
+    let tierIndex : Nat = switch (generatorTiers.get(plotId)) {
+      case (null)      { 0 };
+      case (?#None)    { 0 };
+      case (?#TierI)   { 1 };
+      case (?#TierII)  { 2 };
+      case (?#TierIII) { 3 };
+      case (?#TierIV)  { 4 };
+      case (?#TierV)   { 5 };
+      case (?#TierVI)  { 6 };
+    };
+    let dailyRateFrntr : Nat = if (tierIndex < TIER_DAILY_RATES.size()) {
+      TIER_DAILY_RATES[tierIndex]
+    } else { 7 };
+    // Convert FRNTR/day to e8s/day
+    let dailyRateE8s : Nat = dailyRateFrntr * 100_000_000;
+
+    // accrued = dailyRateE8s * elapsedNs / dayNs
     let dayNs : Int = 86_400_000_000_000;
     let accrued : Nat = Int.abs((Int.fromNat(dailyRateE8s) * elapsedNs) / dayNs);
     if (accrued == 0) { return #err("Accrued amount is zero; wait longer before claiming") };
 
-    // Transfer accrued FRNTR to caller via ICRC-1 ledger if configured
+    // Mint fresh tokens to caller via icrc1_transfer from game canister (minting account)
     if (frntrLedgerIsSet()) {
       let tokenActor = actor(frntrLedgerState.frntrLedger) : actor {
         icrc1_transfer : (TokenTypes.TransferArg) -> async TokenTypes.TransferResult
       };
-      let transferArg : TokenTypes.TransferArg = {
+      let mintArg : TokenTypes.TransferArg = {
         from_subaccount = null;
         to = toFrntrAccount(caller);
         amount = accrued;
@@ -428,22 +487,121 @@ type PlayerState = {
         memo = null;
         created_at_time = null;
       };
-      switch (await tokenActor.icrc1_transfer(transferArg)) {
+      switch (await tokenActor.icrc1_transfer(mintArg)) {
         case (#Err(e)) {
-          return #err("FRNTR transfer failed: " # debug_show(e));
+          return #err("FRNTR mint failed: " # debug_show(e));
         };
         case (#Ok(_)) {};
       };
     } else {
-      // Fallback: credit directly to local balance
+      // Testnet fallback: credit to local balance
+      let player = switch (players.get(caller)) {
+        case (?p) { p };
+        case (null) { emptyPlayerState() };
+      };
       players.add(caller, { player with frntBalance = player.frntBalance + accrued });
-      statsState.totalFRNTRMined += accrued;
     };
 
-    // Update claimTimes to now
+    // Track mined tokens globally
+    statsState.totalFRNTRMined += accrued;
+
+    // Update per-plot claim time
+    plotClaimTimes.add(plotId, now);
+    // Also update player-level claim time for backward compat
     claimTimes.add(caller, now);
-    players.add(caller, player);
+
+    // Increment player claim count for mission tracking
+    let prevCount : Nat = switch (playerClaimCounts.get(caller)) { case (?n) n; case (null) 0 };
+    playerClaimCounts.add(caller, prevCount + 1);
+
+    logAuditEntry(caller, "claimAccumulatedTokens", "confirmed", ?plotId, ?accrued, null,
+      "Claimed " # accrued.toText() # " e8s from plot " # plotId);
     #ok(accrued);
+  };
+
+  /// Claim accumulated FRNTR tokens for ALL plots owned by the caller.
+  /// Mints fresh tokens via icrc1_transfer from game canister (minting account).
+  public shared ({ caller }) func claimAllPlots() : async { #ok : { amount : Nat; plotsClaimed : Nat }; #err : Text } {
+    if (caller.isAnonymous()) { return #err("Must be authenticated") };
+
+    let now : Int = Time.now();
+    let dayNs : Int = 86_400_000_000_000;
+    var totalAccrued : Nat = 0;
+    var claimedCount : Nat = 0;
+    var plotsToUpdate : [(Text, Int)] = [];
+
+    for ((pid, plot) in plots.entries()) {
+      if (plot.owner == ?caller) {
+        let lastClaim : Int = switch (plotClaimTimes.get(pid)) {
+          case (?t) { t };
+          case (null) { switch (claimTimes.get(caller)) { case (?t) t; case (null) 0 } };
+        };
+        let elapsedNs : Int = now - lastClaim;
+        if (elapsedNs > 0) {
+          let tierIndex : Nat = switch (generatorTiers.get(pid)) {
+            case (null)      { 0 };
+            case (?#None)    { 0 };
+            case (?#TierI)   { 1 };
+            case (?#TierII)  { 2 };
+            case (?#TierIII) { 3 };
+            case (?#TierIV)  { 4 };
+            case (?#TierV)   { 5 };
+            case (?#TierVI)  { 6 };
+          };
+          let dailyRateFrntr : Nat = if (tierIndex < TIER_DAILY_RATES.size()) {
+            TIER_DAILY_RATES[tierIndex]
+          } else { 7 };
+          let dailyRateE8s : Nat = dailyRateFrntr * 100_000_000;
+          let accrued : Nat = Int.abs((Int.fromNat(dailyRateE8s) * elapsedNs) / dayNs);
+          if (accrued > 0) {
+            totalAccrued += accrued;
+            claimedCount += 1;
+            plotsToUpdate := plotsToUpdate.concat([(pid, now)]);
+          };
+        };
+      };
+    };
+
+    if (totalAccrued == 0) { return #err("Nothing to claim across all plots") };
+
+    // Mint fresh tokens to caller
+    if (frntrLedgerIsSet()) {
+      let tokenActor = actor(frntrLedgerState.frntrLedger) : actor {
+        icrc1_transfer : (TokenTypes.TransferArg) -> async TokenTypes.TransferResult
+      };
+      let mintArg : TokenTypes.TransferArg = {
+        from_subaccount = null;
+        to = toFrntrAccount(caller);
+        amount = totalAccrued;
+        fee = null;
+        memo = null;
+        created_at_time = null;
+      };
+      switch (await tokenActor.icrc1_transfer(mintArg)) {
+        case (#Err(e)) { return #err("FRNTR mint failed: " # debug_show(e)) };
+        case (#Ok(_))  {};
+      };
+    } else {
+      let player = switch (players.get(caller)) {
+        case (?p) { p };
+        case (null) { emptyPlayerState() };
+      };
+      players.add(caller, { player with frntBalance = player.frntBalance + totalAccrued });
+    };
+
+    statsState.totalFRNTRMined += totalAccrued;
+
+    // Update all per-plot claim times and player-level claim time
+    for ((pid, ts) in plotsToUpdate.vals()) { plotClaimTimes.add(pid, ts) };
+    claimTimes.add(caller, now);
+
+    // Increment claim count
+    let prevCount : Nat = switch (playerClaimCounts.get(caller)) { case (?n) n; case (null) 0 };
+    playerClaimCounts.add(caller, prevCount + claimedCount);
+
+    logAuditEntry(caller, "claimAllPlots", "confirmed", null, ?totalAccrued, null,
+      "Claimed " # totalAccrued.toText() # " e8s across " # claimedCount.toText() # " plots");
+    #ok({ amount = totalAccrued; plotsClaimed = claimedCount });
   };
 
   // ─── Stress-test endpoints (TESTNET_MODE only) ───────────────────────────
@@ -628,8 +786,11 @@ type PlayerState = {
     interceptors.get(plotId);
   };
 
-  // Returns daily FRNTR rate for a plot (base 7 + nexus electricity bonus)
-  // Returns daily FRNTR rate for a plot using canonical formula: base 7 + (tierIndex * 3) + nexus bonus
+  // Canonical daily FRNTR rates per tier index (0-6).
+  // Tier 0=7, 1=9, 2=12, 3=17, 4=25, 5=37, 6=55 FRNTR/day.
+  let TIER_DAILY_RATES : [Nat] = [7, 9, 12, 17, 25, 37, 55];
+
+  // Returns daily FRNTR rate for a plot using canonical TIER_DAILY_RATES + nexus electricity bonus.
   func plotDailyRate(plotId : Text) : Float {
     let tierIndex : Nat = switch (generatorTiers.get(plotId)) {
       case (null)      { 0 };
@@ -641,8 +802,9 @@ type PlayerState = {
       case (?#TierV)   { 5 };
       case (?#TierVI)  { 6 };
     };
-    let base : Float = 7.0;
-    let tier : Float = (tierIndex * 3).toFloat();
+    let base : Float = if (tierIndex < TIER_DAILY_RATES.size()) {
+      TIER_DAILY_RATES[tierIndex].toFloat()
+    } else { 7.0 };
     let nexus : Float = switch (plots.get(plotId)) {
       case (null) { 0.0 };
       case (?plot) {
@@ -654,7 +816,7 @@ type PlayerState = {
         };
       };
     };
-    base + tier + nexus;
+    base + nexus;
   };
 
   func computePassiveIncomePerDay(caller : Principal) : Float {
@@ -683,15 +845,6 @@ type PlayerState = {
 
     if (plot.owner != ?caller) { return #err(#NotOwner) };
 
-    // Check 4-hour cooldown after purchase
-    let fourHoursNs : Int = 14_400_000_000_000;
-    switch (plot.purchaseTimestamp) {
-      case (?ts) {
-        if (Time.now() < ts + fourHoursNs) { return #err(#SubParcelLocked) };
-      };
-      case (null) {};
-    };
-
     let curTier : GameTypes.GeneratorTier = switch (generatorTiers.get(plotId)) {
       case (null)  { #None };
       case (?t)    { t };
@@ -719,18 +872,48 @@ type PlayerState = {
       player.frntBalance;
     };
 
-    if (liveFrntBalance < cost) { return #err(#InsufficientFRNTR) };
+    if (liveFrntBalance < cost) {
+      logAuditEntry(caller, "upgradeGenerator", "failed", ?plotId, ?cost, null, "InsufficientFRNTR");
+      return #err(#InsufficientFRNTR)
+    };
 
     // Calculate 0.075% liquidity tax: taxAmount = cost * 75 / 100_000
     let taxAmount : Nat = cost * 75 / 100_000;
 
-    // Track the full cost burned (not just the non-tax portion)
+    // Perform the FRNTR burn via ICRC-1 ledger BEFORE updating tier or burn counter.
+    // Only if ledger is configured — otherwise deduct from local balance.
+    if (frntrLedgerIsSet()) {
+      let tokenActor = actor(frntrLedgerState.frntrLedger) : actor {
+        icrc1_transfer : (TokenTypes.TransferArg) -> async TokenTypes.TransferResult
+      };
+      // Transfer cost from caller to the game canister (burn-equivalent: tokens leave caller)
+      let burnArg : TokenTypes.TransferArg = {
+        from_subaccount = null;
+        to = toFrntrAccount(Principal.fromText(selfPrincipalText));
+        amount = cost;
+        fee = null;
+        memo = null;
+        created_at_time = null;
+      };
+      switch (await tokenActor.icrc1_transfer(burnArg)) {
+        case (#Err(e)) {
+          logAuditEntry(caller, "upgradeGenerator", "failed", ?plotId, ?cost, null,
+            "FRNTR ledger transfer failed: " # debug_show(e));
+          return #err(#InsufficientFRNTR);
+        };
+        case (#Ok(_)) {};
+      };
+    } else {
+      // Local-balance path: re-verify and deduct only now
+      if (player.frntBalance < cost) {
+        logAuditEntry(caller, "upgradeGenerator", "failed", ?plotId, ?cost, null, "InsufficientFRNTR");
+        return #err(#InsufficientFRNTR);
+      };
+      players.add(caller, { player with frntBalance = player.frntBalance - cost });
+    };
+
+    // Transfer confirmed — now safely update tier and burn counter
     statsState.totalFRNTRBurned += cost;
-
-    // Deduct full cost from player balance
-    players.add(caller, { player with frntBalance = player.frntBalance - cost });
-
-    // Record upgrade
     generatorTiers.add(plotId, nextTier);
 
     // Notify treasury with the tax amount (non-blocking — ignore failures)
@@ -751,6 +934,9 @@ type PlayerState = {
         case (?t)    { ?GameLib.tierCost(t) };
       };
     };
+    logAuditEntry(caller, "upgradeGenerator", "confirmed", ?plotId, ?cost,
+      ?GameLib.tierName(nextTier),
+      "Upgraded plot " # plotId # " to " # GameLib.tierName(nextTier) # " for " # cost.toText() # " e8s");
     #ok(view);
   };
 
@@ -1236,6 +1422,7 @@ func missileStats(missileType : Text) : MissileStats {
       switch (await icpLedger.icrc2_transfer_from(transferArgs)) {
         case (#Err(err)) {
           // Treasury deposit failed — do NOT assign ownership
+          logAuditEntry(caller, "purchasePlot", "failed", ?plotId, ?icpAmt, null, "ICP transfer failed: " # debug_show(err));
           return #err("ICP transfer failed: " # debug_show(err));
         };
         case (#Ok(_)) {};
@@ -1269,6 +1456,8 @@ func missileStats(missileType : Text) : MissileStats {
       ignore (async { try { await treasury.notifyPlotPurchase(icpAmt, caller) } catch (_) {} });
     };
 
+    logAuditEntry(caller, "purchasePlot", "confirmed", ?plotId, ?icpAmt, null,
+      "Purchased plot " # plotId # " for " # icpAmt.toText() # " e8s ICP");
     #ok("Purchase successful, congrats!");
   };
 
@@ -1500,30 +1689,109 @@ func missileStats(missileType : Text) : MissileStats {
     ];
   };
 
+  /// Helper: compute total global daily output in e8s (sum of all owned plots' daily rates).
+  private func calcTotalGlobalDailyOutput() : Nat {
+    var total : Nat = 0;
+    for ((pid, plot) in plots.entries()) {
+      switch (plot.owner) {
+        case (null) {};
+        case (?_) {
+          let tierIndex : Nat = switch (generatorTiers.get(pid)) {
+            case (null)      { 0 };
+            case (?#None)    { 0 };
+            case (?#TierI)   { 1 };
+            case (?#TierII)  { 2 };
+            case (?#TierIII) { 3 };
+            case (?#TierIV)  { 4 };
+            case (?#TierV)   { 5 };
+            case (?#TierVI)  { 6 };
+          };
+          let rate : Nat = if (tierIndex < TIER_DAILY_RATES.size()) {
+            TIER_DAILY_RATES[tierIndex]
+          } else { 7 };
+          total += rate * 100_000_000; // e8s/day
+        };
+      };
+    };
+    total;
+  };
+
+  /// Helper: compute total global unclaimed tokens in e8s.
+  private func calcGlobalUnclaimedTokens() : Nat {
+    let now : Int = Time.now();
+    let dayNs : Int = 86_400_000_000_000;
+    var total : Nat = 0;
+    for ((pid, plot) in plots.entries()) {
+      switch (plot.owner) {
+        case (null) {};
+        case (?owner) {
+          let lastClaim : Int = switch (plotClaimTimes.get(pid)) {
+            case (?t) { t };
+            case (null) { switch (claimTimes.get(owner)) { case (?t) t; case (null) 0 } };
+          };
+          let elapsedNs : Int = now - lastClaim;
+          if (elapsedNs > 0) {
+            let tierIndex : Nat = switch (generatorTiers.get(pid)) {
+              case (null)      { 0 };
+              case (?#None)    { 0 };
+              case (?#TierI)   { 1 };
+              case (?#TierII)  { 2 };
+              case (?#TierIII) { 3 };
+              case (?#TierIV)  { 4 };
+              case (?#TierV)   { 5 };
+              case (?#TierVI)  { 6 };
+            };
+            let rate : Nat = if (tierIndex < TIER_DAILY_RATES.size()) {
+              TIER_DAILY_RATES[tierIndex]
+            } else { 7 };
+            let dailyE8s : Nat = rate * 100_000_000;
+            total += Int.abs((Int.fromNat(dailyE8s) * elapsedNs) / dayNs);
+          };
+        };
+      };
+    };
+    total;
+  };
+
+  /// Total global daily output in e8s across all owned plots.
+  public query func getTotalGlobalDailyOutput() : async Nat {
+    calcTotalGlobalDailyOutput();
+  };
+
+  /// Total global unclaimed tokens in e8s sitting on all owned plots.
+  public query func getGlobalUnclaimedTokens() : async Nat {
+    calcGlobalUnclaimedTokens();
+  };
+
   /// Live global game stats for the UNIVERSE panel (v2 — detailed fields).
   /// totalSupply = 10B hard cap (in e8s); remainingMineable = 5B mineable cap minus total burned.
   public query func getGameStats() : async {
-    totalSupply        : Nat;
-    totalBurned        : Nat;
-    totalPlots         : Nat;
-    totalPlayers       : Nat;
-    emissionRatePerDay : Nat;
-    remainingMineable  : Nat;
-    totalFrntrBurned   : Nat;
+    totalSupply           : Nat;
+    totalBurned           : Nat;
+    totalPlots            : Nat;
+    totalPlayers          : Nat;
+    emissionRatePerDay    : Nat;
+    remainingMineable     : Nat;
+    totalFrntrBurned      : Nat;
+    totalDailyOutput      : Nat;
+    globalUnclaimedTokens : Nat;
+    totalActionCount      : Nat;
   } {
     // mineableCap in e8s: 5_000_000_000 FRNTR * 100_000_000 e8s
     let mineableCap : Nat = 5_000_000_000_00000000;
     let burned      : Nat = statsState.totalFRNTRBurned;
     let remaining   : Nat = if (burned >= mineableCap) { 0 } else { mineableCap - burned };
-    let ownedCount  : Nat = plots.size();
     {
-      totalSupply        = 10_000_000_000_00000000; // 10B FRNTR in e8s
-      totalBurned        = burned;
-      totalPlots         = plotSoldState.count;     // plots sold (purchased)
-      totalPlayers       = players.size();       // live player count
-      emissionRatePerDay = plotSoldState.count * 7;
-      remainingMineable  = remaining;
-      totalFrntrBurned   = burned;
+      totalSupply           = 10_000_000_000_00000000; // 10B FRNTR in e8s
+      totalBurned           = burned;
+      totalPlots            = plotSoldState.count;     // plots sold (purchased)
+      totalPlayers          = players.size();          // live player count
+      emissionRatePerDay    = calcTotalGlobalDailyOutput();
+      remainingMineable     = remaining;
+      totalFrntrBurned      = burned;
+      totalDailyOutput      = calcTotalGlobalDailyOutput();
+      globalUnclaimedTokens = calcGlobalUnclaimedTokens();
+      totalActionCount      = actionAuditLog.size();
     };
   };
 
@@ -2112,6 +2380,119 @@ func missileStats(missileType : Text) : MissileStats {
     surveyCostForPlot(plotId);
   };
 
+  /// Complete a survey that has finished its timer and mint the token award to the caller.
+  /// Returns #ok(awardE8s) on success or #err(message) on failure.
+  public shared ({ caller }) func completeSurvey(plotId : Text) : async Result.Result<Nat, Text> {
+    if (caller.isAnonymous()) { return #err("Must be authenticated to complete a survey") };
+
+    let key = surveyKey(plotId, caller);
+    let record = switch (surveys.get(key)) {
+      case (null) { return #err("No active survey found for this plot") };
+      case (?r)   { r };
+    };
+
+    switch (record.status) {
+      case (#Locked)    { return #err("Survey has not been started") };
+      case (#Completed) { return #err("Survey already claimed") };
+      case (#InProgress) {};
+    };
+
+    let now : Int = Time.now();
+    let unlockTime : Int = record.startTime + Int.fromNat(record.duration);
+    if (now < unlockTime) {
+      let remaining : Nat = Int.abs(unlockTime - now) / 1_000_000_000;
+      return #err("Survey not yet complete. " # remaining.toText() # " seconds remaining.");
+    };
+
+    // Build result if not already computed
+    let res : GameTypes.SurveyResult = switch (record.result) {
+      case (?r) { r };
+      case (null) { buildSurveyResult(plotId) };
+    };
+
+    // Award = resourcePercentage * 10_000_000 e8s (0.1 FRNTR per 1% richness, max 10 FRNTR)
+    let baseAward : Nat = res.resourcePercentage * 10_000_000;
+    // Add a small pseudo-random bonus based on timestamp
+    let bonus : Nat = Int.abs(now) % (res.resourcePercentage + 1) * 1_000_000;
+    let award : Nat = baseAward + bonus;
+
+    // Mint award tokens to caller via ICRC-1
+    if (frntrLedgerIsSet()) {
+      let tokenActor = actor(frntrLedgerState.frntrLedger) : actor {
+        icrc1_transfer : (TokenTypes.TransferArg) -> async TokenTypes.TransferResult
+      };
+      let mintArg : TokenTypes.TransferArg = {
+        from_subaccount = null;
+        to = toFrntrAccount(caller);
+        amount = award;
+        fee = null;
+        memo = null;
+        created_at_time = null;
+      };
+      switch (await tokenActor.icrc1_transfer(mintArg)) {
+        case (#Err(e)) { return #err("FRNTR mint failed: " # debug_show(e)) };
+        case (#Ok(_)) {};
+      };
+    } else {
+      // Testnet fallback: credit local balance
+      let player = switch (players.get(caller)) {
+        case (?p) { p };
+        case (null) { emptyPlayerState() };
+      };
+      players.add(caller, { player with frntBalance = player.frntBalance + award });
+    };
+
+    statsState.totalFRNTRMined += award;
+
+    // Mark survey completed with final result and award recorded
+    surveys.add(key, { record with status = #Completed; result = ?res });
+
+    #ok(award);
+  };
+
+  /// Thin wrapper around completeSurvey — returns the SurveyResult report alongside the
+  /// token award so the frontend can display both in a single call.
+  /// Returns #err if the survey timer is not yet complete or no survey exists.
+  /// Thin wrapper around completeSurvey — returns the SurveyResult report alongside the
+  /// token award so the frontend can display both in a single call.
+  /// Returns #err if the survey timer is not yet complete or no survey exists.
+  public shared ({ caller }) func claimSurveyReward(plotId : Text)
+      : async { #ok : { report : GameTypes.SurveyResult; rewardE8s : Nat }; #err : Text } {
+    if (caller.isAnonymous()) { return #err("Must be authenticated") };
+
+    // Guard: ensure a survey record exists before delegating to completeSurvey.
+    let key = surveyKey(plotId, caller);
+    switch (surveys.get(key)) {
+      case (null) { return #err("No active survey found for this plot") };
+      case (?_)   {};
+    };
+
+    // Delegate minting + status update to completeSurvey.
+    switch (await completeSurvey(plotId)) {
+      case (#err(e)) { return #err(e) };
+      case (#ok(awardE8s)) {
+        // After completeSurvey the record has been updated; fetch fresh result.
+        let finalRecord = switch (surveys.get(key)) {
+          case (null) { return #err("Survey record missing after claim") };
+          case (?r)   { r };
+        };
+        let report : GameTypes.SurveyResult = switch (finalRecord.result) {
+          case (?r) { r };
+          case (null) {
+            // completeSurvey always sets result before returning #ok; fallback.
+            buildSurveyResult(plotId);
+          };
+        };
+        #ok({ report; rewardE8s = awardE8s });
+      };
+    };
+  };
+
+  /// Returns the total amount of FRNTR burned across all game actions.
+  public query func getTotalBurned() : async Nat {
+    statsState.totalFRNTRBurned;
+  };
+
   // ─── Upgrade hooks — persist heap state to stable arrays ─────────────────
 
 
@@ -2240,8 +2621,259 @@ func missileStats(missileType : Text) : MissileStats {
     approvedDexPrincipalText;
   };
 
+  // ===========================================================================
+  // MISSION SYSTEM — on-chain mission completion with FRNTR rewards
+  // ===========================================================================
+
+  type MissionRequirementKind = {
+    #purchasePlots : Nat;
+    #upgradeToTier : Nat;
+    #surveyPlot;
+    #holdFRNTR     : Nat;
+    #claimTokens   : Nat;
+    #reachLeaderboardTop : Nat;
+  };
+
+  type Mission = {
+    id          : Text;
+    title       : Text;
+    description : Text;
+    rewardE8s   : Nat;
+    requirement : MissionRequirementKind;
+  };
+
+  let MISSIONS : [Mission] = [
+    { id = "mission_1"; title = "First Foothold";       description = "Purchase your first plot of land";     rewardE8s = 500_000_000;   requirement = #purchasePlots(1) },
+    { id = "mission_2"; title = "Power Surge";          description = "Upgrade any plot to Tier 2";           rewardE8s = 1_000_000_000; requirement = #upgradeToTier(2) },
+    { id = "mission_3"; title = "Intel Sweep";          description = "Survey any plot";                      rewardE8s = 750_000_000;   requirement = #surveyPlot },
+    { id = "mission_4"; title = "Token Reserve";        description = "Hold 1,000 FRNTR tokens";              rewardE8s = 500_000_000;   requirement = #holdFRNTR(100_000_000_000) },
+    { id = "mission_5"; title = "Grid Expansion";       description = "Own 5 plots of land";                  rewardE8s = 2_000_000_000; requirement = #purchasePlots(5) },
+    { id = "mission_6"; title = "Advanced Systems";     description = "Upgrade any plot to Tier 5";           rewardE8s = 5_000_000_000; requirement = #upgradeToTier(5) },
+    { id = "mission_7"; title = "Veteran Commander";    description = "Claim tokens 10 times";                rewardE8s = 1_000_000_000; requirement = #claimTokens(10) },
+    { id = "mission_8"; title = "Leaderboard Contender"; description = "Reach top 10 on the leaderboard";   rewardE8s = 3_000_000_000; requirement = #reachLeaderboardTop(10) },
+  ];
+
+  /// Returns the full mission list.
+  public query func getMissions() : async [Mission] { MISSIONS };
+
+  /// Returns each mission with the caller's completion status.
+  public shared query ({ caller }) func getPlayerMissions() : async [{ mission : Mission; completed : Bool }] {
+    let inner : ?Map.Map<Text, (Bool, ?Int)> = missionStatus.get(caller);
+    MISSIONS.map<Mission, { mission : Mission; completed : Bool }>(
+      func(m) {
+        let done : Bool = switch (inner) {
+          case (null) { false };
+          case (?mp)  {
+            switch (mp.get(m.id)) {
+              case (?(ok, _)) { ok };
+              case (null)     { false };
+            };
+          };
+        };
+        { mission = m; completed = done };
+      }
+    );
+  };
+
+  /// Helper: check if requirement is met for a given mission.
+  private func checkMissionRequirement(caller : Principal, req : MissionRequirementKind) : Bool {
+    switch (req) {
+      case (#purchasePlots(n)) {
+        let ps = switch (players.get(caller)) { case (?p) p; case (null) emptyPlayerState() };
+        ps.plotsOwned >= n;
+      };
+      case (#upgradeToTier(n)) {
+        var found = false;
+        for ((pid, plot) in plots.entries()) {
+          if (plot.owner == ?caller) {
+            let tierIndex : Nat = switch (generatorTiers.get(pid)) {
+              case (null)      { 0 };
+              case (?#None)    { 0 };
+              case (?#TierI)   { 1 };
+              case (?#TierII)  { 2 };
+              case (?#TierIII) { 3 };
+              case (?#TierIV)  { 4 };
+              case (?#TierV)   { 5 };
+              case (?#TierVI)  { 6 };
+            };
+            if (tierIndex >= n) { found := true };
+          };
+        };
+        found;
+      };
+      case (#surveyPlot) {
+        var found = false;
+        for ((key, survey) in surveys.entries()) {
+          if (survey.surveyor == caller) {
+            switch (survey.status) {
+              case (#Completed) { found := true };
+              case (_)          {};
+            };
+          };
+        };
+        found;
+      };
+      case (#holdFRNTR(n)) {
+        let ps = switch (players.get(caller)) { case (?p) p; case (null) emptyPlayerState() };
+        ps.frntBalance >= n;
+      };
+      case (#claimTokens(n)) {
+        let count = switch (playerClaimCounts.get(caller)) { case (?c) c; case (null) 0 };
+        count >= n;
+      };
+      case (#reachLeaderboardTop(n)) {
+        let pairs = players.toArray();
+        let sorted = pairs.sort(func(a, b) { Nat.compare(b.1.frntBalance, a.1.frntBalance) });
+        var rank : Nat = 0;
+        var found = false;
+        label search for ((p, _) in sorted.vals()) {
+          rank += 1;
+          if (p == caller) { found := rank <= n; break search };
+        };
+        found;
+      };
+    };
+  };
+
+  /// Complete a mission. Verifies requirement, mints reward, marks done.
+  public shared ({ caller }) func completeMission(missionId : Text) : async { #ok : Nat; #err : Text } {
+    if (caller.isAnonymous()) { return #err("Must be authenticated") };
+
+    // Find mission
+    var foundMission : ?Mission = null;
+    for (m in MISSIONS.vals()) {
+      if (m.id == missionId) { foundMission := ?m };
+    };
+    let mission = switch (foundMission) {
+      case (null) { return #err("Mission not found: " # missionId) };
+      case (?m)   { m };
+    };
+
+    // Check if already completed
+    switch (missionStatus.get(caller)) {
+      case (?inner) {
+        switch (inner.get(missionId)) {
+          case (?(true, _)) { return #err("Mission already completed") };
+          case (_) {};
+        };
+      };
+      case (null) {};
+    };
+
+    // Verify requirement
+    if (not checkMissionRequirement(caller, mission.requirement)) {
+      logAuditEntry(caller, "completeMission", "failed", ?missionId, null, null,
+        "Requirement not met for mission: " # mission.title);
+      return #err("Requirement not met for mission: " # mission.title);
+    };
+
+    // Mint reward tokens to caller
+    if (frntrLedgerIsSet()) {
+      let tokenActor = actor(frntrLedgerState.frntrLedger) : actor {
+        icrc1_transfer : (TokenTypes.TransferArg) -> async TokenTypes.TransferResult
+      };
+      let mintArg : TokenTypes.TransferArg = {
+        from_subaccount = null;
+        to = toFrntrAccount(caller);
+        amount = mission.rewardE8s;
+        fee = null;
+        memo = null;
+        created_at_time = null;
+      };
+      switch (await tokenActor.icrc1_transfer(mintArg)) {
+        case (#Err(e)) { return #err("Reward mint failed: " # debug_show(e)) };
+        case (#Ok(_))  {};
+      };
+    } else {
+      let ps = switch (players.get(caller)) { case (?p) p; case (null) emptyPlayerState() };
+      players.add(caller, { ps with frntBalance = ps.frntBalance + mission.rewardE8s });
+    };
+
+    statsState.totalFRNTRMined += mission.rewardE8s;
+
+    // Mark mission completed
+    let now = Time.now();
+    let inner : Map.Map<Text, (Bool, ?Int)> = switch (missionStatus.get(caller)) {
+      case (?mp) { mp };
+      case (null) {
+        let mp = Map.empty<Text, (Bool, ?Int)>();
+        missionStatus.add(caller, mp);
+        mp;
+      };
+    };
+    inner.add(missionId, (true, ?now));
+
+    logAuditEntry(caller, "completeMission", "confirmed", ?missionId, ?mission.rewardE8s, null,
+      "Completed mission '" # mission.title # "' reward " # mission.rewardE8s.toText() # " e8s");
+    #ok(mission.rewardE8s);
+  };
+
   /// Returns the caller's real ICP balance from the on-chain ICP ledger (ryjl3-tyaaa-aaaaa-aaaba-cai).
   /// Result is in raw e8s (divide by 100_000_000 for ICP display).
+  // ─── Action Audit Log public endpoints ───────────────────────────────────
+
+  /// Log a cancellation decision. Called by the frontend when the player clicks
+  /// "Cancel" on a confirmation modal — BEFORE any canister call is made.
+  /// Records the caller's wallet address, action type, and timestamp on-chain.
+  public shared ({ caller }) func logCancelledAction(
+    action  : Text,
+    plotId  : ?Text,
+    amount  : ?Nat,
+    details : Text,
+  ) : async () {
+    if (caller.isAnonymous()) { return }; // silently skip anonymous callers
+    logAuditEntry(caller, action, "cancelled", plotId, amount, null, details);
+  };
+
+  /// Returns all audit log entries for a given principal.
+  /// Only the principal themselves or the admin may query this.
+  public shared query ({ caller }) func getAuditLogForPrincipal(
+    principal : Principal,
+  ) : async { #ok : [(Int, GameTypes.ActionAuditEntry)]; #err : Text } {
+    let isOwn   = caller == principal;
+    let isAdmin = not caller.isAnonymous() and caller.toText() == adminState.adminPrincipal;
+    if (not isOwn and not isAdmin) {
+      return #err("Unauthorized: you may only view your own audit log");
+    };
+    // Explicit loop accumulator avoids M0098/M0096 iterator chaining inference issues.
+    let buf = List.empty<(Int, GameTypes.ActionAuditEntry)>();
+    for ((idx, e) in actionAuditLog.entries()) {
+      if (Principal.equal(e.caller, principal)) { buf.add((idx, e)) };
+    };
+    #ok(buf.values().toArray());
+  };
+
+  /// Returns the full audit log. Admin only.
+  public shared query ({ caller }) func getFullAuditLog() : async { #ok : [(Int, GameTypes.ActionAuditEntry)]; #err : Text } {
+    if (caller.isAnonymous() or caller.toText() != adminState.adminPrincipal) {
+      return #err("Unauthorized: admin only");
+    };
+    #ok(actionAuditLog.entries().toArray());
+  };
+  /// Returns the calling player's own audit log (most-recent-first, capped at 500 entries).
+  /// No arguments required — identity is taken from the caller's principal.
+  public shared query ({ caller }) func getMyAuditLog() : async [(Int, GameTypes.ActionAuditEntry)] {
+    let buf = List.empty<(Int, GameTypes.ActionAuditEntry)>();
+    for ((idx, e) in actionAuditLog.entries()) {
+      if (Principal.equal(e.caller, caller)) { buf.add((idx, e)) };
+    };
+    let arr = buf.values().toArray();
+    // Reverse for most-recent-first
+    let rev = arr.reverse();
+    if (rev.size() > 500) {
+      Array.tabulate<(Int, GameTypes.ActionAuditEntry)>(500, func(i) { rev[i] });
+    } else {
+      rev;
+    };
+  };
+
+
+  /// Returns the total number of entries in the audit log. Public — no auth required.
+  public query func getAuditLogCount() : async Nat {
+    actionAuditLog.size();
+  };
+
+
   public shared func getIcpBalance(principal : Principal) : async Nat {
     let icpLedger = actor(ICP_LEDGER_ID) : actor {
       icrc1_balance_of : ({ owner : Principal; subaccount : ?Blob }) -> async Nat
@@ -2268,7 +2900,17 @@ func missileStats(missileType : Text) : MissileStats {
     stablePlotSoldCount  := plotSoldState.count;
     stableSubParcels     := subParcels.toArray();
     stableTreasuryPots   := (treasuryPots.devPot, treasuryPots.leaderboardPot, treasuryPots.liquidityPot);
-    stableSurveys        := surveys.toArray();
+    stableSurveys          := surveys.toArray();
+    stablePlotClaimTimes   := plotClaimTimes.toArray();
+    stablePlayerClaimCounts := playerClaimCounts.toArray();
+    stableActionAuditLog   := actionAuditLog.toArray();
+    // Serialize missionStatus nested maps
+    let missionArr = missionStatus.toArray();
+    stableMissionStatus := missionArr.map<(Principal, Map.Map<Text, (Bool, ?Int)>), (Principal, [(Text, Bool, ?Int)])>(
+      func((p, mp)) {
+        (p, mp.toArray().map<(Text, (Bool, ?Int)), (Text, Bool, ?Int)>(func((mid, (ok, at))) { (mid, ok, at) }))
+      }
+    );
   };
 
   // ─── Free stable arrays after upgrade to reclaim heap memory ─────────────
@@ -2284,8 +2926,14 @@ func missileStats(missileType : Text) : MissileStats {
     stableUsernames      := [];
     stableFaucetClaims   := [];
     stableClaimTimes     := [];
-    stableSubParcels     := [];
-    stableSurveys        := [];
+    stableSubParcels       := [];
+    stableSurveys          := [];
+    stablePlotClaimTimes   := [];
+    stablePlayerClaimCounts := [];
+    stableMissionStatus    := [];
+    stableActionAuditLog   := [];
+    // Note: auditState.nextIndex intentionally keeps its heap value after upgrade;
+    // it was seeded from stableActionAuditLog.size() at actor init and is not reset here.
     if (stableTreasuryPots.0 != 0 or stableTreasuryPots.1 != 0 or stableTreasuryPots.2 != 0) {
       treasuryPots.devPot        := stableTreasuryPots.0;
       treasuryPots.leaderboardPot := stableTreasuryPots.1;

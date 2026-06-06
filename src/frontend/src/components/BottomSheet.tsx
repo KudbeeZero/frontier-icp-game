@@ -47,9 +47,9 @@ export default function BottomSheet({
       {/* Sheet */}
       <div
         data-ocid="bottom_sheet.panel"
-        className="fixed left-0 right-0 z-50 flex flex-col"
+        className="fixed left-0 right-0 z-[70] flex flex-col"
         style={{
-          bottom: 64,
+          bottom: "calc(64px + env(safe-area-inset-bottom))",
           height,
           background: "rgba(4,12,24,0.97)",
           borderTop: `1px solid ${BORDER}`,

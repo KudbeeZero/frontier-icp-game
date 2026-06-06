@@ -18,7 +18,7 @@ export default function Navbar() {
   return (
     <header
       data-ocid="navbar.panel"
-      className="hidden md:flex fixed top-0 left-0 right-0 z-50 h-14 items-center justify-between px-6"
+      className="hidden"
       style={{
         background: "rgba(2,10,20,0.88)",
         borderBottom: "1px solid rgba(0,255,204,0.22)",

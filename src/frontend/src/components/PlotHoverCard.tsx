@@ -47,7 +47,7 @@ export default function PlotHoverCard({
         borderTop: `2px solid ${actionColor}`,
         borderRadius: 10,
         padding: "14px 16px",
-        zIndex: 60,
+        zIndex: 48,
         opacity: visible ? 1 : 0,
         transition:
           "bottom 0.35s cubic-bezier(0.34,1.56,0.64,1), opacity 0.25s ease",
@@ -221,9 +221,7 @@ export default function PlotHoverCard({
               whiteSpace: "nowrap",
             }}
           >
-            ⚡ {"50"} FRNTR/DAY
-            <br />
-            GENERATING
+            ⚡ GENERATING
           </div>
         </div>
       )}

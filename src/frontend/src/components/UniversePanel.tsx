@@ -261,10 +261,10 @@ export default function UniversePanel({ onClose, inline = false }: Props) {
   };
 
   // ── Player's daily FRNTR rate ──
-  let playerDailyFrntr = 0;
+  let _playerDailyFrntr = 0;
   for (const pid of player.plotsOwned) {
     const tier = (generatorTiers[pid] ?? 0) as number;
-    playerDailyFrntr += TIER_RATES[tier] ?? 7;
+    _playerDailyFrntr += TIER_RATES[tier] ?? 7;
   }
 
   // ── Global daily emission: on-chain if available, else compute locally ──
@@ -277,6 +277,9 @@ export default function UniversePanel({ onClose, inline = false }: Props) {
   }
   const globalDailyEmission =
     globalStats?.currentDailyEmissionRate ?? localDailyEmission;
+
+  // ── Global unclaimed tokens from store (set by usePlayerSync) ──
+  const globalUnclaimedTokens = useGameStore((s) => s.globalUnclaimedTokens);
 
   // ── Network burn: on-chain if available ──
   const networkBurned = globalStats?.totalFRNTRBurned ?? totalFRNTRBurned;
@@ -310,158 +313,6 @@ export default function UniversePanel({ onClose, inline = false }: Props) {
         zIndex: 2,
       }}
     >
-      {/* ── PLAYER STATS (live) ── */}
-      <SectionTitle>Your Command Stats</SectionTitle>
-      <GlowCard style={{ marginBottom: 16 }}>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: 14,
-            marginBottom: 14,
-          }}
-        >
-          <div>
-            <div
-              style={{
-                fontSize: 8,
-                color: TEXT_DIM,
-                letterSpacing: 1.5,
-                marginBottom: 4,
-              }}
-            >
-              FRNTR BALANCE
-            </div>
-            <div
-              style={{
-                fontSize: 16,
-                fontWeight: 900,
-                color: CYAN,
-                fontFamily: "monospace",
-                textShadow: `0 0 10px ${CYAN}`,
-              }}
-            >
-              {player.frntBalance.toFixed(8)}
-            </div>
-          </div>
-          <div>
-            <div
-              style={{
-                fontSize: 8,
-                color: TEXT_DIM,
-                letterSpacing: 1.5,
-                marginBottom: 4,
-              }}
-            >
-              DAILY RATE
-            </div>
-            <div
-              style={{
-                fontSize: 16,
-                fontWeight: 900,
-                color: GOLD,
-                fontFamily: "monospace",
-              }}
-            >
-              +{playerDailyFrntr} / day
-            </div>
-          </div>
-        </div>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(4, 1fr)",
-            gap: 8,
-          }}
-        >
-          {[
-            { label: "IRON" },
-            { label: "FUEL" },
-            { label: "CRYSTAL" },
-            { label: "RARE EARTH" },
-          ].map((r) => (
-            <div key={r.label}>
-              <div
-                style={{
-                  fontSize: 7,
-                  color: TEXT_DIM,
-                  letterSpacing: 1,
-                  marginBottom: 2,
-                }}
-              >
-                {r.label}
-              </div>
-              <div
-                style={{
-                  fontSize: 10,
-                  fontWeight: 700,
-                  color: "rgba(224,244,255,0.35)",
-                  fontFamily: "monospace",
-                  letterSpacing: 0.5,
-                }}
-              >
-                SOON™
-              </div>
-            </div>
-          ))}
-        </div>
-        <div
-          style={{
-            marginTop: 10,
-            paddingTop: 10,
-            borderTop: `1px solid ${BORDER}`,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <div>
-            <div
-              style={{
-                fontSize: 7,
-                color: TEXT_DIM,
-                letterSpacing: 1,
-                marginBottom: 2,
-              }}
-            >
-              PLOTS OWNED
-            </div>
-            <div
-              style={{
-                fontSize: 13,
-                fontWeight: 900,
-                color: CYAN,
-                fontFamily: "monospace",
-              }}
-            >
-              {player.plotsOwned.length}
-            </div>
-          </div>
-          <div>
-            <div
-              style={{
-                fontSize: 7,
-                color: TEXT_DIM,
-                letterSpacing: 1,
-                marginBottom: 2,
-              }}
-            >
-              TOTAL BURNED
-            </div>
-            <div
-              style={{
-                fontSize: 13,
-                fontWeight: 900,
-                color: "#ef4444",
-                fontFamily: "monospace",
-              }}
-            >
-              {networkBurned.toFixed(4)}
-            </div>
-          </div>
-        </div>
-      </GlowCard>
-
       {/* ── GLOBAL NETWORK STATS (on-chain) ── */}
       <SectionTitle>Global Network Stats</SectionTitle>
       <GlowCard style={{ marginBottom: 16 }}>
@@ -492,6 +343,21 @@ export default function UniversePanel({ onClose, inline = false }: Props) {
               value: fmtBig(globalDailyEmission),
               color: "#3b82f6",
               sub: "FRNTR / day",
+            },
+            {
+              label: "UNCLAIMED IN CIRCULATION",
+              value: fmtBig(globalUnclaimedTokens),
+              color: "#a855f7",
+              sub: "across all plots",
+            },
+            {
+              label: "ON-CHAIN ACTIONS",
+              value:
+                globalStats?.totalActionCount !== undefined
+                  ? Number(globalStats.totalActionCount).toLocaleString()
+                  : "—",
+              color: "#f97316",
+              sub: "confirmed on-chain",
             },
           ].map((item) => (
             <div key={item.label}>

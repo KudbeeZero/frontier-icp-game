@@ -10,6 +10,16 @@ import type { ActorMethod } from '@icp-sdk/core/agent';
 import type { IDL } from '@icp-sdk/core/candid';
 import type { Principal } from '@icp-sdk/core/principal';
 
+export interface ActionAuditEntry {
+  'action' : string,
+  'decision' : string,
+  'plotId' : [] | [string],
+  'tier' : [] | [string],
+  'timestamp' : bigint,
+  'details' : string,
+  'caller' : Principal,
+  'amount' : [] | [bigint],
+}
 export type Biome = { 'Tropical' : null } |
   { 'AsteroidImpact' : null } |
   { 'DeepOcean' : null } |
@@ -64,6 +74,19 @@ export interface MineResult {
   'resourceYields' : Array<[ResourceType, number]>,
   'frntRate' : number,
 }
+export interface Mission {
+  'id' : string,
+  'title' : string,
+  'description' : string,
+  'rewardE8s' : bigint,
+  'requirement' : MissionRequirementKind,
+}
+export type MissionRequirementKind = { 'purchasePlots' : bigint } |
+  { 'upgradeToTier' : bigint } |
+  { 'holdFRNTR' : bigint } |
+  { 'reachLeaderboardTop' : bigint } |
+  { 'surveyPlot' : null } |
+  { 'claimTokens' : bigint };
 export type PlotId = string;
 export interface PlotProductionRate {
   'totalPerDay' : number,
@@ -92,6 +115,8 @@ export type ResourceType = { 'RareEarth' : null } |
   { 'Fuel' : null } |
   { 'Iron' : null } |
   { 'Crystal' : null };
+export type Result = { 'ok' : bigint } |
+  { 'err' : string };
 export interface StressActionResult {
   'ok' : boolean,
   'action' : string,
@@ -154,12 +179,50 @@ export interface _SERVICE {
    * / Compute how much FRNTR has accrued for the caller since their lastClaimTime,
    * / transfer it from the game canister to the caller's principal via ICRC-1,
    * / update lastClaimTime to now, and return the claimed amount (in e8s) or an error.
+   * / Claim accumulated FRNTR tokens for a specific plot.
+   * / Accrual = (now - lastClaimTime) / 86400s * dailyRate.
+   * / Mints fresh tokens via icrc1_transfer from game canister (minting account).
    */
   'claimAccumulatedTokens' : ActorMethod<
-    [],
+    [string],
     { 'ok' : bigint } |
       { 'err' : string }
   >,
+  /**
+   * / Claim accumulated FRNTR tokens for ALL plots owned by the caller.
+   * / Mints fresh tokens via icrc1_transfer from game canister (minting account).
+   */
+  'claimAllPlots' : ActorMethod<
+    [],
+    { 'ok' : { 'amount' : bigint, 'plotsClaimed' : bigint } } |
+      { 'err' : string }
+  >,
+  /**
+   * / Thin wrapper around completeSurvey — returns the SurveyResult report alongside the
+   * / token award so the frontend can display both in a single call.
+   * / Returns #err if the survey timer is not yet complete or no survey exists.
+   * / Thin wrapper around completeSurvey — returns the SurveyResult report alongside the
+   * / token award so the frontend can display both in a single call.
+   * / Returns #err if the survey timer is not yet complete or no survey exists.
+   */
+  'claimSurveyReward' : ActorMethod<
+    [string],
+    { 'ok' : { 'report' : SurveyResult, 'rewardE8s' : bigint } } |
+      { 'err' : string }
+  >,
+  /**
+   * / Complete a mission. Verifies requirement, mints reward, marks done.
+   */
+  'completeMission' : ActorMethod<
+    [string],
+    { 'ok' : bigint } |
+      { 'err' : string }
+  >,
+  /**
+   * / Complete a survey that has finished its timer and mint the token award to the caller.
+   * / Returns #ok(awardE8s) on success or #err(message) on failure.
+   */
+  'completeSurvey' : ActorMethod<[string], Result>,
   'getAdjacentPlots' : ActorMethod<[string], Array<string>>,
   'getAdminPrincipal' : ActorMethod<[], string>,
   /**
@@ -172,6 +235,19 @@ export interface _SERVICE {
    */
   'getApprovedLiquidityCanister' : ActorMethod<[], [] | [string]>,
   'getAssignedInterceptor' : ActorMethod<[string], [] | [string]>,
+  /**
+   * / Returns the total number of entries in the audit log. Public — no auth required.
+   */
+  'getAuditLogCount' : ActorMethod<[], bigint>,
+  /**
+   * / Returns all audit log entries for a given principal.
+   * / Only the principal themselves or the admin may query this.
+   */
+  'getAuditLogForPrincipal' : ActorMethod<
+    [Principal],
+    { 'ok' : Array<[bigint, ActionAuditEntry]> } |
+      { 'err' : string }
+  >,
   'getCombatLog' : ActorMethod<[bigint], Array<CombatEvent>>,
   'getCoreGeneratorTiers' : ActorMethod<[], Array<GeneratorTierInfo>>,
   /**
@@ -184,6 +260,14 @@ export interface _SERVICE {
    */
   'getFirstAvailablePlot' : ActorMethod<[], [] | [string]>,
   'getFrntrLedger' : ActorMethod<[], string>,
+  /**
+   * / Returns the full audit log. Admin only.
+   */
+  'getFullAuditLog' : ActorMethod<
+    [],
+    { 'ok' : Array<[bigint, ActionAuditEntry]> } |
+      { 'err' : string }
+  >,
   'getGameCanisterPrincipal' : ActorMethod<[], string>,
   /**
    * / Live global game stats for the UNIVERSE panel (v2 — detailed fields).
@@ -194,11 +278,14 @@ export interface _SERVICE {
     {
       'totalPlayers' : bigint,
       'totalFrntrBurned' : bigint,
+      'totalActionCount' : bigint,
       'totalSupply' : bigint,
       'totalBurned' : bigint,
       'totalPlots' : bigint,
       'emissionRatePerDay' : bigint,
+      'totalDailyOutput' : bigint,
       'remainingMineable' : bigint,
+      'globalUnclaimedTokens' : bigint,
     }
   >,
   /**
@@ -211,9 +298,9 @@ export interface _SERVICE {
   >,
   'getGlobalStats' : ActorMethod<[], GlobalStats>,
   /**
-   * / Returns the caller's real ICP balance from the on-chain ICP ledger (ryjl3-tyaaa-aaaaa-aaaba-cai).
-   * / Result is in raw e8s (divide by 100_000_000 for ICP display).
+   * / Total global unclaimed tokens in e8s sitting on all owned plots.
    */
+  'getGlobalUnclaimedTokens' : ActorMethod<[], bigint>,
   'getIcpBalance' : ActorMethod<[Principal], bigint>,
   /**
    * / ICP/USD price oracle — performs HTTP outcall to CoinGecko API with 60s cache.
@@ -264,7 +351,23 @@ export interface _SERVICE {
    * / Alias used by frontend for globe ownership sync.
    */
   'getLivePlotOwners' : ActorMethod<[], Array<[string, string]>>,
+  /**
+   * / Returns the full mission list.
+   */
+  'getMissions' : ActorMethod<[], Array<Mission>>,
+  /**
+   * / Returns the calling player's own audit log (most-recent-first, capped at 500 entries).
+   * / No arguments required — identity is taken from the caller's principal.
+   */
+  'getMyAuditLog' : ActorMethod<[], Array<[bigint, ActionAuditEntry]>>,
   'getPassiveIncome' : ActorMethod<[string], number>,
+  /**
+   * / Returns each mission with the caller's completion status.
+   */
+  'getPlayerMissions' : ActorMethod<
+    [],
+    Array<{ 'mission' : Mission, 'completed' : boolean }>
+  >,
   'getPlayerState' : ActorMethod<
     [],
     {
@@ -367,6 +470,14 @@ export interface _SERVICE {
       { 'err' : string }
   >,
   'getTokenomics' : ActorMethod<[], Tokenomics>,
+  /**
+   * / Returns the total amount of FRNTR burned across all game actions.
+   */
+  'getTotalBurned' : ActorMethod<[], bigint>,
+  /**
+   * / Total global daily output in e8s across all owned plots.
+   */
+  'getTotalGlobalDailyOutput' : ActorMethod<[], bigint>,
   'getTreasuryBalances' : ActorMethod<
     [],
     { 'leaderboardPot' : bigint, 'devPot' : bigint, 'liquidityPot' : bigint }
@@ -398,6 +509,17 @@ export interface _SERVICE {
     [string, string, string],
     { 'ok' : string } |
       { 'err' : string }
+  >,
+  /**
+   * / Returns the caller's real ICP balance from the on-chain ICP ledger (ryjl3-tyaaa-aaaaa-aaaba-cai).
+   * / Result is in raw e8s (divide by 100_000_000 for ICP display).
+   * / Log a cancellation decision. Called by the frontend when the player clicks
+   * / "Cancel" on a confirmation modal — BEFORE any canister call is made.
+   * / Records the caller's wallet address, action type, and timestamp on-chain.
+   */
+  'logCancelledAction' : ActorMethod<
+    [string, [] | [string], [] | [bigint], string],
+    undefined
   >,
   /**
    * / Mine resources from an owned plot.

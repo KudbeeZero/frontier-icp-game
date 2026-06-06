@@ -1,7 +1,7 @@
 // Treasury domain logic for plot-sale milestone tracking and payout history.
-import Debug   "mo:core/Debug";
 import Nat     "mo:core/Nat";
 import List    "mo:core/List";
+import Map     "mo:core/Map";
 import Time    "mo:core/Time";
 import Types   "../types/treasury";
 
@@ -60,5 +60,24 @@ module {
     history : List.List<Types.PayoutEvent>
   ) : [Types.PayoutEventView] {
     history.toArray();
+  };
+
+  /// Build the flat TreasuryState snapshot from mutable state refs.
+  public func buildTreasuryState(
+    devE8s          : Nat,
+    leaderboardE8s  : Nat,
+    liquidityE8s    : Nat,
+    plotsSoldVal    : Nat,
+    totalRevenueVal : Nat,
+    usernamesMap    : Map.Map<Principal, Text>,
+  ) : Types.TreasuryState {
+    {
+      developer       = devE8s;
+      leaderboard     = leaderboardE8s;
+      liquidity       = liquidityE8s;
+      totalPlotsSold  = plotsSoldVal;
+      totalPlayers    = usernamesMap.size();
+      totalRevenueICP = totalRevenueVal;
+    };
   };
 };

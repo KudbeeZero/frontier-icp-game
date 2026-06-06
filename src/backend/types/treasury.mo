@@ -26,4 +26,17 @@ module {
 
   /// Summary view returned by getPayoutHistory.
   public type PayoutEventView = PayoutEvent;
+
+  /// Flat snapshot returned by getTreasuryState — matches the frontend TreasuryState shape.
+  public type TreasuryState = {
+    developer       : Nat;  // dev treasury ICP e8s
+    leaderboard     : Nat;  // leaderboard pot ICP e8s
+    liquidity       : Nat;  // liquidity pot ICP e8s
+    totalPlotsSold  : Nat;  // cumulative plots sold
+    totalPlayers    : Nat;  // registered players (have a username)
+    totalRevenueICP : Nat;  // cumulative ICP e8s received from plot sales
+  };
+
+  /// Result variants for seed operations.
+  public type SeedResult = { #ok; #err : { #NotAuthorized; #InsufficientFunds } };
 };

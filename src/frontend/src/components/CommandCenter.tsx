@@ -3,6 +3,7 @@ import {
   CheckCircle,
   Circle,
   Flame,
+  Globe,
   Target,
   TrendingUp,
   Zap,
@@ -11,13 +12,18 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { createActor } from "../backend";
 import { useGameStore } from "../store/gameStore";
+import AuditHistoryPanel from "./AuditHistoryPanel";
 
 const CYAN = "#00ffcc";
 const CYAN_DIM = "rgba(0,255,204,0.35)";
 const BORDER = "rgba(0,255,204,0.22)";
+const GOLD = "#ffd700";
 const TEXT = "#e0f4ff";
 const TEXT_DIM = "rgba(224,244,255,0.45)";
-const MiniBar = ({
+
+import { TIER_DAILY_RATES, TIER_NAMES } from "../constants/tiers";
+
+const _MiniBar = ({
   value,
   max,
   color,
@@ -33,26 +39,6 @@ const MiniBar = ({
   </div>
 );
 
-// Real tier daily rates matching backend
-const _TIER_RATES: Record<number, number> = {
-  0: 7,
-  1: 9,
-  2: 12,
-  3: 17,
-  4: 25,
-  5: 37,
-  6: 55,
-};
-
-const _TIER_COSTS: Record<number, number> = {
-  1: 500,
-  2: 1500,
-  3: 4000,
-  4: 10000,
-  5: 25000,
-  6: 60000,
-};
-
 function fmtFrntr(n: number): string {
   if (Number.isNaN(n) || n === undefined) return "0.00000000";
   if (n >= 1_000_000) return n.toFixed(2);
@@ -67,12 +53,12 @@ export default function CommandCenter() {
   const plots = useGameStore((s) => s.plots);
   const accruedFrntSinceSync = useGameStore((s) => s.accruedFrntSinceSync);
   const setFrntrBalance = useGameStore((s) => s.setFrntrBalance);
-
+  const incrementClaimCount = useGameStore((s) => s.incrementClaimCount);
   const addFrntr = useGameStore((s) => s.addFrntr);
   const { actor } = useActor(createActor);
   const [isClaiming, setIsClaiming] = useState(false);
-
   const [activeTab, setActiveTab] = useState<"tokens" | "missions">("tokens");
+  const [auditOpen, setAuditOpen] = useState(false);
 
   // ── Missions ──────────────────────────────────────────────────────────────
   const MISSIONS_LS_KEY = "frontier_missions_v1";
@@ -107,19 +93,48 @@ export default function CommandCenter() {
         check: () => player.plotsOwned.length >= 1,
       },
       {
+        id: "tier2_upgrade",
+        title: "Upgrade a plot to tier 2",
+        desc: "Reach Ion Capacitor tier on any plot",
+        reward: 350,
+        check: () =>
+          Object.values(generatorTiers).some((t) => (t as number) >= 2),
+      },
+      {
         id: "tier3_upgrade",
         title: "Upgrade a plot to tier 3",
-        desc: "Reach Generator tier 3 on any plot",
+        desc: "Reach Fusion Core tier on any plot",
         reward: 500,
         check: () =>
           Object.values(generatorTiers).some((t) => (t as number) >= 3),
       },
       {
         id: "acc_1000",
-        title: "Accumulate 1000 FRNTR",
+        title: "Accumulate 1,000 FRNTR",
         desc: "Hold at least 1,000 FRNTR in your balance",
         reward: 300,
         check: () => player.frntBalance >= 1000,
+      },
+      {
+        id: "acc_5000",
+        title: "Accumulate 5,000 FRNTR",
+        desc: "Hold at least 5,000 FRNTR in your balance",
+        reward: 750,
+        check: () => player.frntBalance >= 5000,
+      },
+      {
+        id: "five_plots",
+        title: "Own 5 plots",
+        desc: "Expand your territory to 5 hex plots",
+        reward: 1000,
+        check: () => player.plotsOwned.length >= 5,
+      },
+      {
+        id: "claim_10",
+        title: "Claim tokens 10 times",
+        desc: "Use the Claim All button 10 times",
+        reward: 400,
+        check: () => (useGameStore.getState().claimCount ?? 0) >= 10,
       },
     ],
     [player.plotsOwned, player.frntBalance, generatorTiers],
@@ -152,28 +167,6 @@ export default function CommandCenter() {
     return () => clearInterval(interval);
   }, [MISSION_DEFS, addFrntr, saveMissions]);
 
-  const ownedPlotData = useMemo(
-    () => plots.filter((p) => player.plotsOwned.includes(String(p.id))),
-    [plots, player.plotsOwned],
-  );
-
-  const TIER_DAILY: Record<number, number> = {
-    0: 7,
-    1: 9,
-    2: 12,
-    3: 17,
-    4: 25,
-    5: 37,
-    6: 55,
-  };
-
-  const totalDailyFrntr = useMemo(() => {
-    return ownedPlotData.reduce((sum, plot) => {
-      const tier = generatorTiers[String(plot.id)] ?? 0;
-      return sum + (TIER_DAILY[tier] ?? 7);
-    }, 0);
-  }, [ownedPlotData, generatorTiers]);
-
   // ── Per-second accrual ticker ─────────────────
   useEffect(() => {
     const interval = setInterval(() => {
@@ -182,31 +175,55 @@ export default function CommandCenter() {
     return () => clearInterval(interval);
   }, []);
 
+  const ownedPlotData = useMemo(
+    () => plots.filter((p) => player.plotsOwned.includes(String(p.id))),
+    [plots, player.plotsOwned],
+  );
+
+  const totalDailyFrntr = useMemo(() => {
+    return ownedPlotData.reduce((sum, plot) => {
+      const tier = generatorTiers[String(plot.id)] ?? 0;
+      return sum + (TIER_DAILY_RATES[tier as number] ?? 7);
+    }, 0);
+  }, [ownedPlotData, generatorTiers]);
+
   const displayBalance = useGameStore(
     (s) => s.confirmedFrntBalance + s.accruedFrntSinceSync,
   );
+  const perHourRate = totalDailyFrntr / 24;
+  const perMinRate = totalDailyFrntr / 1440;
   const perSecRate = totalDailyFrntr / 86400;
   const displayBurned = totalFRNTRBurned;
 
-  const handleClaim = async () => {
-    if (!actor || isClaiming || accruedFrntSinceSync < 0.001) return;
+  const highestTier = useMemo(() => {
+    if (player.plotsOwned.length === 0) return 0;
+    return Math.max(
+      ...player.plotsOwned.map((id) => (generatorTiers[id] ?? 0) as number),
+    );
+  }, [player.plotsOwned, generatorTiers]);
+
+  const handleClaimAll = async () => {
+    if (!actor || isClaiming || player.plotsOwned.length === 0) return;
     setIsClaiming(true);
     try {
-      const res = await actor.claimAccumulatedTokens();
+      const res = await actor.claimAllPlots();
       if ("ok" in res) {
-        const claimed = Number((res as { ok: bigint }).ok) / 1e8;
-        toast.success(`Claimed ${claimed.toFixed(4)} FRNTR!`, {
-          duration: 4000,
-        });
-        // Refresh balance from canister
+        const { amount, plotsClaimed } = (
+          res as { ok: { amount: bigint; plotsClaimed: bigint } }
+        ).ok;
+        const claimed = Number(amount) / 1e8;
+        toast.success(
+          `Claimed ${fmtFrntr(claimed)} FRNTR from ${Number(plotsClaimed)} plot${
+            Number(plotsClaimed) !== 1 ? "s" : ""
+          }!`,
+          { duration: 4000 },
+        );
+        incrementClaimCount();
         try {
           const state = await actor.getPlayerState();
-          if (state) {
-            setFrntrBalance(state.frntBalance);
-          }
+          if (state) setFrntrBalance(state.frntBalance);
         } catch {
-          // fallback: add locally
-          addFrntr(accruedFrntSinceSync);
+          addFrntr(claimed);
         }
       } else {
         const errMsg = (res as { err: string }).err;
@@ -220,6 +237,9 @@ export default function CommandCenter() {
     }
   };
 
+  const plotCount = player.plotsOwned.length;
+  const canClaim = plotCount > 0 && !isClaiming && !!actor;
+
   return (
     <div
       data-ocid="command.panel"
@@ -232,6 +252,12 @@ export default function CommandCenter() {
         overflowY: "auto",
       }}
     >
+      {/* Audit log */}
+      <AuditHistoryPanel
+        isOpen={auditOpen}
+        onClose={() => setAuditOpen(false)}
+      />
+
       {/* Tabs */}
       <div style={{ display: "flex", gap: 6 }}>
         {(["tokens", "missions"] as const).map((tab) => (
@@ -268,7 +294,7 @@ export default function CommandCenter() {
 
       {activeTab === "tokens" && (
         <>
-          {/* FRNTR Balance */}
+          {/* FRNTR Balance + Claim All */}
           <div
             style={{
               background: "rgba(0,20,40,0.55)",
@@ -282,103 +308,177 @@ export default function CommandCenter() {
                 fontSize: 8,
                 color: TEXT_DIM,
                 letterSpacing: 2,
-                marginBottom: 6,
+                marginBottom: 4,
               }}
             >
-              FRNTR BALANCE
+              YOUR FRNTR BALANCE
             </div>
             <div
               style={{
-                fontSize: 20,
+                fontSize: 22,
                 fontWeight: 900,
                 color: CYAN,
                 fontFamily: "monospace",
                 textShadow: `0 0 12px ${CYAN}`,
-                marginBottom: 4,
+                marginBottom: 2,
               }}
             >
               {fmtFrntr(displayBalance)}
             </div>
-            <div style={{ fontSize: 9, color: CYAN_DIM, marginBottom: 10 }}>
-              +{totalDailyFrntr.toLocaleString()} FRNTR/DAY ·{" "}
-              {perSecRate.toFixed(8)} FRNTR/SEC
+            <div style={{ fontSize: 8, color: CYAN_DIM, marginBottom: 10 }}>
+              +{totalDailyFrntr.toFixed(2)} FRNTR/day &nbsp;&middot;&nbsp; +
+              {perHourRate.toFixed(4)}/hr &nbsp;&middot;&nbsp; +
+              {perSecRate.toFixed(8)}/sec
             </div>
-            {/* CLAIM button */}
+            {/* AUDIT LOG button */}
+            <button
+              type="button"
+              data-ocid="command.audit_button"
+              onClick={() => setAuditOpen(true)}
+              style={{
+                width: "100%",
+                padding: "7px 0",
+                borderRadius: 6,
+                background: "rgba(0,255,204,0.04)",
+                border: `1px solid ${BORDER}`,
+                color: CYAN_DIM,
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: 1.5,
+                cursor: "pointer",
+                fontFamily: "monospace",
+                marginBottom: 6,
+              }}
+            >
+              🔐 AUDIT LOG
+            </button>
+
+            {/* CLAIM ALL button */}
             <button
               type="button"
               data-ocid="command.claim_button"
-              onClick={handleClaim}
-              disabled={isClaiming || accruedFrntSinceSync < 0.001 || !actor}
+              onClick={handleClaimAll}
+              disabled={!canClaim}
               style={{
                 width: "100%",
                 padding: "9px 0",
                 borderRadius: 6,
-                background:
-                  accruedFrntSinceSync >= 0.001 && !isClaiming
-                    ? "linear-gradient(135deg, rgba(0,255,204,0.18), rgba(0,255,204,0.07))"
-                    : "rgba(255,255,255,0.03)",
-                border: `1px solid ${
-                  accruedFrntSinceSync >= 0.001 && !isClaiming
-                    ? `${CYAN}99`
-                    : BORDER
-                }`,
-                color:
-                  accruedFrntSinceSync >= 0.001 && !isClaiming
-                    ? CYAN
-                    : "rgba(0,255,204,0.3)",
-                fontSize: 11,
+                background: canClaim
+                  ? "linear-gradient(135deg, rgba(0,255,204,0.18), rgba(0,255,204,0.07))"
+                  : "rgba(255,255,255,0.03)",
+                border: `1px solid ${canClaim ? `${CYAN}99` : BORDER}`,
+                color: canClaim ? CYAN : "rgba(0,255,204,0.3)",
+                fontSize: 10,
                 fontWeight: 900,
-                letterSpacing: 2,
-                cursor:
-                  accruedFrntSinceSync >= 0.001 && !isClaiming && actor
-                    ? "pointer"
-                    : "not-allowed",
+                letterSpacing: 1.5,
+                cursor: canClaim ? "pointer" : "not-allowed",
                 fontFamily: "monospace",
-                textShadow:
-                  accruedFrntSinceSync >= 0.001 ? `0 0 8px ${CYAN}88` : "none",
+                textShadow: canClaim ? `0 0 8px ${CYAN}88` : "none",
                 transition: "all 0.2s",
               }}
             >
               {isClaiming
                 ? "CLAIMING…"
-                : accruedFrntSinceSync < 0.001
-                  ? "CLAIM (ACCUMULATING…)"
-                  : `CLAIM +${fmtFrntr(accruedFrntSinceSync)} FRNTR`}
+                : plotCount === 0
+                  ? "CLAIM ALL — (no plots owned)"
+                  : `CLAIM ALL — ${plotCount} plot${
+                      plotCount !== 1 ? "s" : ""
+                    } / ${totalDailyFrntr.toFixed(2)} FRNTR/day`}
             </button>
           </div>
 
-          {/* Stats grid */}
+          {/* Generation rate breakdown */}
+          <div
+            style={{
+              background: "rgba(0,20,40,0.40)",
+              border: `1px solid ${BORDER}`,
+              borderRadius: 10,
+              padding: "10px 14px",
+            }}
+          >
+            <div
+              style={{
+                fontSize: 8,
+                color: TEXT_DIM,
+                letterSpacing: 2,
+                marginBottom: 8,
+              }}
+            >
+              GENERATION RATES
+            </div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr 1fr",
+                gap: 8,
+              }}
+            >
+              {[
+                {
+                  label: "PER HOUR",
+                  value: perHourRate.toFixed(4),
+                  color: GOLD,
+                },
+                { label: "PER MIN", value: perMinRate.toFixed(6), color: CYAN },
+                {
+                  label: "PER SEC",
+                  value: perSecRate.toFixed(8),
+                  color: "#22c55e",
+                },
+              ].map((r) => (
+                <div key={r.label}>
+                  <div
+                    style={{ fontSize: 7, color: TEXT_DIM, marginBottom: 2 }}
+                  >
+                    {r.label}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      color: r.color,
+                      fontFamily: "monospace",
+                    }}
+                  >
+                    {r.value}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Stats grid — player-specific only */}
           <div
             style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}
           >
             {[
               {
-                icon: Zap,
+                icon: Globe,
                 label: "Plots Owned",
-                value: player.plotsOwned.length,
+                value: plotCount,
                 color: CYAN,
-                sub: `${totalDailyFrntr} F/day`,
+                sub: `${totalDailyFrntr.toFixed(2)} FRNTR/day`,
               },
               {
                 icon: Flame,
                 label: "FRNTR Burned",
                 value: fmtFrntr(displayBurned),
                 color: "#ef4444",
-                sub: "out of circulation",
+                sub: "your upgrades",
               },
               {
                 icon: TrendingUp,
-                label: "Daily Yield",
-                value: `${totalDailyFrntr}`,
-                color: "#ffd700",
-                sub: "FRNTR total",
+                label: "Highest Tier",
+                value: TIER_NAMES[highestTier] ?? "Outpost",
+                color: GOLD,
+                sub: `Tier ${highestTier} generator`,
               },
               {
                 icon: Zap,
-                label: "Rank Points",
-                value: player.plotsOwned.length * 100,
+                label: "Accruing Now",
+                value: fmtFrntr(accruedFrntSinceSync),
                 color: "#a855f7",
-                sub: "global score",
+                sub: "since last sync",
               },
             ].map((stat) => (
               <div
@@ -407,7 +507,7 @@ export default function CommandCenter() {
                 </div>
                 <div
                   style={{
-                    fontSize: 14,
+                    fontSize: 12,
                     fontWeight: 900,
                     color: stat.color,
                     fontFamily: "monospace",
@@ -418,69 +518,6 @@ export default function CommandCenter() {
                 <div style={{ fontSize: 7, color: TEXT_DIM, marginTop: 2 }}>
                   {stat.sub}
                 </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Supply progress */}
-          <div
-            style={{
-              background: "rgba(0,20,40,0.55)",
-              border: `1px solid ${BORDER}`,
-              borderRadius: 10,
-              padding: "12px 14px",
-            }}
-          >
-            <div
-              style={{
-                fontSize: 8,
-                color: TEXT_DIM,
-                letterSpacing: 2,
-                marginBottom: 8,
-              }}
-            >
-              TOKEN SUPPLY OVERVIEW
-            </div>
-            {[
-              {
-                label: "Pre-Minted",
-                value: 5_000_000_000,
-                total: 10_000_000_000,
-                color: "#ffd700",
-              },
-              {
-                label: "Mineable Left",
-                value: 5_000_000_000 - totalFRNTRBurned,
-                total: 10_000_000_000,
-                color: CYAN,
-              },
-            ].map((item) => (
-              <div key={item.label} style={{ marginBottom: 8 }}>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    marginBottom: 3,
-                  }}
-                >
-                  <span style={{ fontSize: 8, color: TEXT_DIM }}>
-                    {item.label}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 8,
-                      color: item.color,
-                      fontFamily: "monospace",
-                    }}
-                  >
-                    {(item.value / 1e9).toFixed(2)}B
-                  </span>
-                </div>
-                <MiniBar
-                  value={item.value}
-                  max={item.total}
-                  color={item.color}
-                />
               </div>
             ))}
           </div>

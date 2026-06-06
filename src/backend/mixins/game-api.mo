@@ -183,8 +183,12 @@ mixin (
       case (#Ok(_)) {};
     };
 
-    // Update lastClaimTime
-    let updated = { player with lastClaimTime = now };
+    // Update lastClaimTime AND credit frntBalance so the local record stays in sync
+    // with the on-chain ICRC-1 ledger balance.
+    let updated = { player with
+      lastClaimTime = now;
+      frntBalance   = player.frntBalance + accrued;
+    };
     players.add(caller, updated);
 
     #ok(accrued);

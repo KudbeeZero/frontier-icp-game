@@ -1,4 +1,15 @@
-// Version: 3.0.0
+// Version: 1.0.0
+type ActionAuditEntry__116674707 =
+  {
+    action : Text;
+    amount : ?Nat;
+    caller : Principal;
+    decision : Text;
+    details : Text;
+    plotId : ?Text;
+    tier : ?Text;
+    timestamp : Int
+  };
 type Biome__579062165 =
   {
     #Arctic;
@@ -67,29 +78,27 @@ type Map__222667396<K, V> = Map__912772452<K, V>;
 type Map__709709801<K, V> =
   {var root : Node__1000929467<K, V>; var size : Nat__1040412405};
 type Map__912772452<K, V> = Map__709709801<K, V>;
+type MissionRequirementKind__616308829 =
+  {
+    #claimTokens : Nat;
+    #holdFRNTR : Nat;
+    #purchasePlots : Nat;
+    #reachLeaderboardTop : Nat;
+    #surveyPlot;
+    #upgradeToTier : Nat
+  };
+type Mission__366741264 =
+  {
+    description : Text;
+    id : Text;
+    requirement : MissionRequirementKind__616308829;
+    rewardE8s : Nat;
+    title : Text
+  };
 type Nat__1040412405 = Nat__920180692;
 type Nat__920180692 = Nat;
 type Node__1000929467<K, V> =
   {#internal : Internal__41346355<K, V>; #leaf : Leaf__712614010<K, V>};
-type PlayerState__703694124 =
-  {
-    combatVictories : Nat;
-    commanderAtk : Nat;
-    commanderDef : Nat;
-    commanderType : ?Text;
-    crystal : Nat;
-    empTargets : [(Nat, Int)];
-    frntBalance : Nat;
-    fuel : Nat;
-    icpBalance : Nat;
-    iron : Nat;
-    lastClaimTime : Int;
-    passiveIncomePerDay : Float;
-    plotsOwned : Nat;
-    reconTargets : [(Nat, Int)];
-    satelliteExpiry : Int;
-    totalFRNTRBurned : Float
-  };
 type PlayerState__809798667 =
   {
     combatVictories : Nat;
@@ -165,14 +174,16 @@ type Survey__1035355375 =
     surveyor : Principal;
     unlockCost : Nat
   };
-actor ({
+actor {
   stable ICP_LEDGER_ID : Text;
   stable IC_MANAGEMENT :
     actor {
       http_request :
         shared HttpRequest__103655718 -> async HttpResponse__280953736
     };
+  stable MISSIONS : [Mission__366741264];
   stable TESTNET_MODE : Bool;
+  stable TIER_DAILY_RATES : [Nat];
   stable _leaderboard :
     {
       var root : Node__1000929467<Principal, LeaderEntry__1009553798>;
@@ -183,8 +194,14 @@ actor ({
       var root : Node__1000929467<Text, PlotRarity__638978278>;
       var size : Nat__1040412405
     };
+  stable actionAuditLog :
+    {
+      var root : Node__1000929467<Int, ActionAuditEntry__116674707>;
+      var size : Nat__1040412405
+    };
   stable adminState : {var adminPrincipal : Text};
   stable var approvedDexPrincipalText : ?Text;
+  stable auditState : {var nextIndex : Int};
   stable claimTimes :
     {var root : Node__1000929467<Principal, Int>; var size : Nat__1040412405};
   stable combatLog :
@@ -206,102 +223,21 @@ actor ({
     {var root : Node__1000929467<Text, Text>; var size : Nat__1040412405};
   stable var lastPriceTimestamp : Int;
   stable var lastPriceValue : Float;
-  in players : Map__222667396<Principal, PlayerState__703694124>;
-  stable plotSoldState : {var count : Nat};
-  stable plots :
+  stable missionStatus :
     {
-      var root : Node__1000929467<Text, PlotState__764233857>;
+      var root :
+        Node__1000929467<Principal, Map__222667396<Text, (Bool, ?Int)>>;
       var size : Nat__1040412405
     };
-  stable pricingState : {var pricing : PlotPricing__177782395};
-  stable var selfPrincipalText : Text;
-  stable var stableClaimTimes : [(Principal, Int)];
-  stable var stableCombatLog : [(Int, CombatEvent__911207586)];
-  stable var stableFaucetClaims : [(Principal, Nat)];
-  stable var stableGeneratorTiers : [(Text, GeneratorTier__319383119)];
-  stable var stableInterceptors : [(Text, Text)];
-  stable var stableLeaderboard : [(Principal, LeaderEntry__1009553798)];
-  in stablePlayers : [(Principal, PlayerState__703694124)];
-  stable var stablePlotRarities : [(Text, PlotRarity__638978278)];
-  stable var stablePlotSoldCount : Nat;
-  stable var stablePlotSoldState : Nat;
-  stable var stablePlots : [(Text, PlotState__764233857)];
-  stable var stableStatsState : (Nat, Nat, Nat);
-  stable var stableSubParcels : [(Text, SubParcel__236257253)];
-  stable var stableSurveys : [(Text, Survey__1035355375)];
-  stable var stableTreasuryPots : (Nat, Nat, Nat);
-  stable var stableUsernames : [(Principal, Text)];
-  stable statsState :
-    {
-      var activePlayers : Nat;
-      var totalFRNTRBurned : Nat;
-      var totalFRNTRMined : Nat
-    };
-  stable var subParcelAccumulationEnabled : Bool;
-  stable subParcels :
-    {
-      var root : Node__1000929467<Text, SubParcel__236257253>;
-      var size : Nat__1040412405
-    };
-  stable surveys :
-    {
-      var root : Node__1000929467<Text, Survey__1035355375>;
-      var size : Nat__1040412405
-    };
-  stable treasuryPots :
-    {var devPot : Nat; var leaderboardPot : Nat; var liquidityPot : Nat};
-  stable treasuryState : {var treasuryPrincipal : Text};
-  stable usernames :
-    {
-      var root : Node__1000929467<Principal, Text>;
-      var size : Nat__1040412405
-    }
-}, {
-  stable ICP_LEDGER_ID : Text;
-  stable IC_MANAGEMENT :
-    actor {
-      http_request :
-        shared HttpRequest__103655718 -> async HttpResponse__280953736
-    };
-  stable TESTNET_MODE : Bool;
-  stable _leaderboard :
-    {
-      var root : Node__1000929467<Principal, LeaderEntry__1009553798>;
-      var size : Nat__1040412405
-    };
-  stable _plotRarities :
-    {
-      var root : Node__1000929467<Text, PlotRarity__638978278>;
-      var size : Nat__1040412405
-    };
-  stable adminState : {var adminPrincipal : Text};
-  stable var approvedDexPrincipalText : ?Text;
-  stable claimTimes :
-    {var root : Node__1000929467<Principal, Int>; var size : Nat__1040412405};
-  stable combatLog :
-    {
-      var root : Node__1000929467<Int, CombatEvent__911207586>;
-      var size : Nat__1040412405
-    };
-  stable var commanderNFTEnabled : Bool;
-  stable faucetClaims :
+  stable playerClaimCounts :
     {var root : Node__1000929467<Principal, Nat>; var size : Nat__1040412405};
-  stable frntrLedgerState :
-    {var adminPrincipal : Text; var frntrLedger : Text};
-  stable generatorTiers :
-    {
-      var root : Node__1000929467<Text, GeneratorTier__319383119>;
-      var size : Nat__1040412405
-    };
-  stable interceptors :
-    {var root : Node__1000929467<Text, Text>; var size : Nat__1040412405};
-  stable var lastPriceTimestamp : Int;
-  stable var lastPriceValue : Float;
   stable players :
     {
       var root : Node__1000929467<Principal, PlayerState__809798667>;
       var size : Nat__1040412405
     };
+  stable plotClaimTimes :
+    {var root : Node__1000929467<Text, Int>; var size : Nat__1040412405};
   stable plotSoldState : {var count : Nat};
   stable plots :
     {
@@ -310,13 +246,17 @@ actor ({
     };
   stable pricingState : {var pricing : PlotPricing__177782395};
   stable var selfPrincipalText : Text;
+  stable var stableActionAuditLog : [(Int, ActionAuditEntry__116674707)];
   stable var stableClaimTimes : [(Principal, Int)];
   stable var stableCombatLog : [(Int, CombatEvent__911207586)];
   stable var stableFaucetClaims : [(Principal, Nat)];
   stable var stableGeneratorTiers : [(Text, GeneratorTier__319383119)];
   stable var stableInterceptors : [(Text, Text)];
   stable var stableLeaderboard : [(Principal, LeaderEntry__1009553798)];
+  stable var stableMissionStatus : [(Principal, [(Text, Bool, ?Int)])];
+  stable var stablePlayerClaimCounts : [(Principal, Nat)];
   stable var stablePlayers : [(Principal, PlayerState__809798667)];
+  stable var stablePlotClaimTimes : [(Text, Int)];
   stable var stablePlotRarities : [(Text, PlotRarity__638978278)];
   stable var stablePlotSoldCount : Nat;
   stable var stablePlotSoldState : Nat;
@@ -351,4 +291,4 @@ actor ({
       var root : Node__1000929467<Principal, Text>;
       var size : Nat__1040412405
     }
-});
+};

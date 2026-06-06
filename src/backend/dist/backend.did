@@ -69,6 +69,11 @@ type StressActionResult =
    index: nat;
    ok: bool;
  };
+type Result = 
+ variant {
+   err: text;
+   ok: nat;
+ };
 type ResourceType = 
  variant {
    Crystal;
@@ -106,6 +111,23 @@ type PlotProductionRate =
    totalPerDay: float64;
  };
 type PlotId = text;
+type MissionRequirementKind = 
+ variant {
+   claimTokens: nat;
+   holdFRNTR: nat;
+   purchasePlots: nat;
+   reachLeaderboardTop: nat;
+   surveyPlot;
+   upgradeToTier: nat;
+ };
+type Mission = 
+ record {
+   description: text;
+   id: text;
+   requirement: MissionRequirementKind;
+   rewardE8s: nat;
+   title: text;
+ };
 type MineResult = 
  record {
    efficiency: float64;
@@ -181,15 +203,61 @@ type Biome =
    Tropical;
    Volcanic;
  };
+type ActionAuditEntry = 
+ record {
+   action: text;
+   amount: opt nat;
+   caller: principal;
+   decision: text;
+   details: text;
+   plotId: opt text;
+   tier: opt text;
+   timestamp: int;
+ };
 service : {
   assignInterceptor: (plotId: text, interceptorType: text) -> ();
   /// Compute how much FRNTR has accrued for the caller since their lastClaimTime,
   /// transfer it from the game canister to the caller's principal via ICRC-1,
   /// update lastClaimTime to now, and return the claimed amount (in e8s) or an error.
-  claimAccumulatedTokens: () -> (variant {
-                                   err: text;
-                                   ok: nat;
-                                 });
+  /// Claim accumulated FRNTR tokens for a specific plot.
+  /// Accrual = (now - lastClaimTime) / 86400s * dailyRate.
+  /// Mints fresh tokens via icrc1_transfer from game canister (minting account).
+  claimAccumulatedTokens: (plotId: text) -> (variant {
+                                               err: text;
+                                               ok: nat;
+                                             });
+  /// Claim accumulated FRNTR tokens for ALL plots owned by the caller.
+  /// Mints fresh tokens via icrc1_transfer from game canister (minting account).
+  claimAllPlots: () ->
+   (variant {
+      err: text;
+      ok: record {
+            amount: nat;
+            plotsClaimed: nat;
+          };
+    });
+  /// Thin wrapper around completeSurvey — returns the SurveyResult report alongside the
+  /// token award so the frontend can display both in a single call.
+  /// Returns #err if the survey timer is not yet complete or no survey exists.
+  /// Thin wrapper around completeSurvey — returns the SurveyResult report alongside the
+  /// token award so the frontend can display both in a single call.
+  /// Returns #err if the survey timer is not yet complete or no survey exists.
+  claimSurveyReward: (plotId: text) ->
+   (variant {
+      err: text;
+      ok: record {
+            report: SurveyResult;
+            rewardE8s: nat;
+          };
+    });
+  /// Complete a mission. Verifies requirement, mints reward, marks done.
+  completeMission: (missionId: text) -> (variant {
+                                           err: text;
+                                           ok: nat;
+                                         });
+  /// Complete a survey that has finished its timer and mint the token award to the caller.
+  /// Returns #ok(awardE8s) on success or #err(message) on failure.
+  completeSurvey: (plotId: text) -> (Result);
   getAdjacentPlots: (plotId: text) -> (vec text) query;
   getAdminPrincipal: () -> (text) query;
   /// Returns all plots that have an owner as (plotId, ownerPrincipalText) pairs.
@@ -201,6 +269,18 @@ service : {
   /// Set via setApprovedLiquidityCanister (admin only).
   getApprovedLiquidityCanister: () -> (opt text) query;
   getAssignedInterceptor: (plotId: text) -> (opt text) query;
+  /// Returns the total number of entries in the audit log. Public — no auth required.
+  getAuditLogCount: () -> (nat) query;
+  /// Returns all audit log entries for a given principal.
+  /// Only the principal themselves or the admin may query this.
+  getAuditLogForPrincipal: ("principal": principal) ->
+   (variant {
+      err: text;
+      ok: vec record {
+                int;
+                ActionAuditEntry;
+              };
+    }) query;
   getCombatLog: (limit: nat) -> (vec CombatEvent) query;
   getCoreGeneratorTiers: () -> (vec GeneratorTierInfo) query;
   /// Returns total faucet claims for a principal (debug/analytics).
@@ -209,14 +289,26 @@ service : {
   /// Used by the stress-test to find a purchasable plot without hardcoding an ID.
   getFirstAvailablePlot: () -> (opt text) query;
   getFrntrLedger: () -> (text) query;
+  /// Returns the full audit log. Admin only.
+  getFullAuditLog: () ->
+   (variant {
+      err: text;
+      ok: vec record {
+                int;
+                ActionAuditEntry;
+              };
+    }) query;
   getGameCanisterPrincipal: () -> (text) query;
   /// Live global game stats for the UNIVERSE panel (v2 — detailed fields).
   /// totalSupply = 10B hard cap (in e8s); remainingMineable = 5B mineable cap minus total burned.
   getGameStats: () ->
    (record {
       emissionRatePerDay: nat;
+      globalUnclaimedTokens: nat;
       remainingMineable: nat;
+      totalActionCount: nat;
       totalBurned: nat;
+      totalDailyOutput: nat;
       totalFrntrBurned: nat;
       totalPlayers: nat;
       totalPlots: nat;
@@ -231,8 +323,8 @@ service : {
           tierIndex: nat;
         }) query;
   getGlobalStats: () -> (GlobalStats) query;
-  /// Returns the caller's real ICP balance from the on-chain ICP ledger (ryjl3-tyaaa-aaaaa-aaaba-cai).
-  /// Result is in raw e8s (divide by 100_000_000 for ICP display).
+  /// Total global unclaimed tokens in e8s sitting on all owned plots.
+  getGlobalUnclaimedTokens: () -> (nat) query;
   getIcpBalance: ("principal": principal) -> (nat);
   /// ICP/USD price oracle — performs HTTP outcall to CoinGecko API with 60s cache.
   /// URL: https://api.coingecko.com/api/v3/simple/price?ids=internet-computer&vs_currencies=usd
@@ -269,7 +361,21 @@ service : {
                                   text;
                                   text;
                                 }) query;
+  /// Returns the full mission list.
+  getMissions: () -> (vec Mission) query;
+  /// Returns the calling player's own audit log (most-recent-first, capped at 500 entries).
+  /// No arguments required — identity is taken from the caller's principal.
+  getMyAuditLog: () -> (vec record {
+                              int;
+                              ActionAuditEntry;
+                            }) query;
   getPassiveIncome: (plotId: text) -> (float64) query;
+  /// Returns each mission with the caller's completion status.
+  getPlayerMissions: () ->
+   (vec record {
+          completed: bool;
+          mission: Mission;
+        }) query;
   getPlayerState: () ->
    (record {
       combatVictories: nat;
@@ -356,6 +462,10 @@ service : {
                                         ok: SurveyView;
                                       });
   getTokenomics: () -> (Tokenomics) query;
+  /// Returns the total amount of FRNTR burned across all game actions.
+  getTotalBurned: () -> (nat) query;
+  /// Total global daily output in e8s across all owned plots.
+  getTotalGlobalDailyOutput: () -> (nat) query;
   getTreasuryBalances: () ->
    (record {
       devPot: nat;
@@ -389,6 +499,13 @@ service : {
       err: text;
       ok: text;
     });
+  /// Returns the caller's real ICP balance from the on-chain ICP ledger (ryjl3-tyaaa-aaaaa-aaaba-cai).
+  /// Result is in raw e8s (divide by 100_000_000 for ICP display).
+  /// Log a cancellation decision. Called by the frontend when the player clicks
+  /// "Cancel" on a confirmation modal — BEFORE any canister call is made.
+  /// Records the caller's wallet address, action type, and timestamp on-chain.
+  logCancelledAction: (action: text, plotId: opt text, amount: opt nat,
+   details: text) -> ();
   /// Mine resources from an owned plot.
   /// DISABLED: returns an informative error until the mining system launches.
   mineResources: (_plotId: text) -> (variant {

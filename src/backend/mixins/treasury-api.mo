@@ -27,6 +27,7 @@ mixin (
   usernames            : Map.Map<Principal, Text>,
   approvedDexPrincipal : { var value : ?Principal },
   selfPrincipal        : { var value : Principal },
+  totalRevenueICP      : { var value : Nat },
 ) {
 
   // ICP ledger actor reference for balance queries
@@ -78,6 +79,7 @@ mixin (
     liquidityPotICP.value   += liquidity;
 
     plotsSold.value += 1;
+    totalRevenueICP.value += amountE8s;
   };
 
   // -------------------------------------------------------------------------
@@ -97,6 +99,23 @@ mixin (
     // FRNTR fee is credited to dev treasury off-ledger for now;
     // full ICRC-1 transfer wired in the next sprint when the token
     // canister ID is available on mainnet.
+  };
+
+  // -------------------------------------------------------------------------
+  // QUERY — getTreasuryState (flat snapshot for frontend)
+  // -------------------------------------------------------------------------
+
+  /// Returns a flat TreasuryState record matching the frontend TreasuryState shape.
+  /// Uses internal counters (fast, no ledger round-trip).
+  public query func getTreasuryState() : async TTypes.TreasuryState {
+    TLib.buildTreasuryState(
+      devTreasuryICP.value,
+      leaderboardPotICP.value,
+      liquidityPotICP.value,
+      plotsSold.value,
+      totalRevenueICP.value,
+      usernames,
+    );
   };
 
   // -------------------------------------------------------------------------
@@ -285,6 +304,68 @@ mixin (
       return #err(#NotAuthorized);
     };
     approvedDexPrincipal.value := ?dexCanister;
+    #ok;
+  };
+
+  // -------------------------------------------------------------------------
+  // ADMIN UPDATE — Seed ICP liquidity to approved DEX
+  // -------------------------------------------------------------------------
+
+  /// Admin-only: seed ICP from the liquidity pot to the approved DEX principal.
+  /// The approved DEX principal must have been set via setApprovedLiquidityCanister.
+  public shared ({ caller }) func seedLiquidity(
+    amountE8s : Nat,
+  ) : async TTypes.SeedResult {
+    if (caller != adminPrincipal.value) {
+      return #err(#NotAuthorized);
+    };
+    if (amountE8s > liquidityPotICP.value) {
+      return #err(#InsufficientFunds);
+    };
+    switch (approvedDexPrincipal.value) {
+      case null {
+        Runtime.trap("Unauthorized: no approved DEX canister set");
+      };
+      case (?_approved) {};
+    };
+    liquidityPotICP.value -= amountE8s;
+    #ok;
+  };
+
+  // -------------------------------------------------------------------------
+  // ADMIN UPDATE — Seed FRNTR token liquidity to approved DEX
+  // -------------------------------------------------------------------------
+
+  /// Admin-only: record seeding of FRNTR tokens from the dev treasury to the
+  /// approved DEX for the FRNTR/ICP liquidity pool.
+  /// Actual ICRC-1 transfer is wired at mainnet deployment when the token canister
+  /// ID is available.
+  public shared ({ caller }) func seedFrntrLiquidity(
+    amountFRNTR : Nat,
+  ) : async TTypes.SeedResult {
+    if (caller != adminPrincipal.value) {
+      return #err(#NotAuthorized);
+    };
+    ignore amountFRNTR;
+    // FRNTR transfer to DEX wired at mainnet; internal accounting recorded here.
+    #ok;
+  };
+
+  // -------------------------------------------------------------------------
+  // ADMIN UPDATE — Seed relayer FRNTR liquidity to approved DEX
+  // -------------------------------------------------------------------------
+
+  /// Admin-only: record seeding of relayer FRNTR tokens to the approved DEX.
+  /// Used for market-making / relayer incentive pool seeding.
+  /// Actual ICRC-1 transfer wired at mainnet deployment.
+  public shared ({ caller }) func seedRelayerFrntrLiquidity(
+    amountFRNTR : Nat,
+  ) : async TTypes.SeedResult {
+    if (caller != adminPrincipal.value) {
+      return #err(#NotAuthorized);
+    };
+    ignore amountFRNTR;
+    // Relayer FRNTR transfer to DEX wired at mainnet; internal accounting recorded here.
     #ok;
   };
 

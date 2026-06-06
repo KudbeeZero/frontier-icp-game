@@ -120,6 +120,13 @@ actor {
   let usernameIndex = Map.empty<Text, Principal>();
 
   // ---------------------------------------------------------------------------
+  // Pending treasury transfers — filled when any icrc1_transfer in notifyPlotPurchase
+  // returns #Err. Admin can drain via retryPendingTransfers().
+  // Each entry: (subaccountIndex: Nat8, amount: Nat, timestamp: Int)
+  // ---------------------------------------------------------------------------
+  stable var pendingTreasuryTransfers : [(Nat8, Nat, Int)] = [];
+
+  // ---------------------------------------------------------------------------
   // Treasury canister's own principal — used as `to.owner` for subaccount transfers.
   // Set once after deployment by calling setSelfPrincipal(), or via admin override.
   // ---------------------------------------------------------------------------
@@ -226,7 +233,10 @@ actor {
       created_at_time = null;
     });
     switch (devResult) {
-      case (#Err(_)) {}; // log but continue — counter updated below regardless
+      case (#Err(_)) {
+        let ts = Time.now();
+        pendingTreasuryTransfers := Array.concat(pendingTreasuryTransfers, [(1 : Nat8, dev_gross, ts)]);
+      };
       case (#Ok(_))  {};
     };
 
@@ -240,7 +250,10 @@ actor {
       created_at_time = null;
     });
     switch (lbResult) {
-      case (#Err(_)) {};
+      case (#Err(_)) {
+        let ts = Time.now();
+        pendingTreasuryTransfers := Array.concat(pendingTreasuryTransfers, [(2 : Nat8, lb_gross, ts)]);
+      };
       case (#Ok(_))  {};
     };
 
@@ -254,7 +267,10 @@ actor {
       created_at_time = null;
     });
     switch (liqResult) {
-      case (#Err(_)) {};
+      case (#Err(_)) {
+        let ts = Time.now();
+        pendingTreasuryTransfers := Array.concat(pendingTreasuryTransfers, [(3 : Nat8, liq_gross, ts)]);
+      };
       case (#Ok(_))  {};
     };
 
@@ -265,6 +281,63 @@ actor {
 
     logAudit(buyer, amount, "plotPurchase:dev=" # Nat.toText(dev_gross) # ":lb=" # Nat.toText(lb_gross) # ":liq=" # Nat.toText(liq_gross));
     #ok;
+  };
+
+  // ---------------------------------------------------------------------------
+  // ADMIN — Retry failed treasury transfers
+  // ---------------------------------------------------------------------------
+
+  /// Retry any treasury transfers that failed during notifyPlotPurchase.
+  /// Loops pendingTreasuryTransfers, attempts each transfer, removes successful ones.
+  /// Returns the count of successful retries.
+  /// Admin only.
+  public shared ({ caller }) func retryPendingTransfers() : async { #ok : Nat; #err : TreasuryError } {
+    switch (requireAdmin(caller)) {
+      case (#err e) { return #err e };
+      case (#ok) {};
+    };
+    if (pendingTreasuryTransfers.size() == 0) { return #ok(0) };
+
+    let icpLedger = actor(ICP_LEDGER_ID) : actor {
+      icrc1_transfer : (ICRC1TransferArgs) -> async ICRC1TransferResult
+    };
+    let fee : Nat = 10_000;
+    var successCount : Nat = 0;
+    var remaining : [(Nat8, Nat, Int)] = [];
+
+    for ((subIdx, gross, ts) in pendingTreasuryTransfers.vals()) {
+      if (gross < fee) {
+        // Amount too small to retry — drop it silently
+      } else {
+        let net = gross - fee;
+        let result = await icpLedger.icrc1_transfer({
+          to              = { owner = Principal.fromText(selfPrincipalText); subaccount = ?(subaccountOf(subIdx)) };
+          amount          = net;
+          fee             = ?fee;
+          memo            = null;
+          from_subaccount = null;
+          created_at_time = null;
+        });
+        switch (result) {
+          case (#Ok(_))  { successCount += 1 };
+          case (#Err(_)) { remaining := Array.concat(remaining, [(subIdx, gross, ts)]) };
+        };
+      };
+    };
+
+    pendingTreasuryTransfers := remaining;
+    logAudit(caller, successCount, "retryPendingTransfers:success=" # Nat.toText(successCount));
+    #ok(successCount);
+  };
+
+  /// Returns pending transfers that have not yet been successfully retried.
+  /// Admin only.
+  public shared query ({ caller }) func getPendingTransfers() : async { #ok : [(Nat8, Nat, Int)]; #err : TreasuryError } {
+    switch (requireAdmin(caller)) {
+      case (#err e) { return #err e };
+      case (#ok) {};
+    };
+    #ok(pendingTreasuryTransfers);
   };
 
   /// Consolidated query returning all three pot balances at once.

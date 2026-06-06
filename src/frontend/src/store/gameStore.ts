@@ -364,12 +364,16 @@ export interface GlobalStats {
   devPotICP: number;
   leaderboardPotICP: number;
   liquidityPotICP: number;
+  // On-chain action count
+  totalActionCount?: number;
 }
 
 export interface TreasuryState {
   developer: bigint;
   leaderboard: bigint;
   liquidity: bigint;
+  totalPlayers?: number;
+  totalPlotsSold?: number;
 }
 
 interface GameState {
@@ -400,14 +404,26 @@ interface GameState {
   confirmedIcpBalance: number;
   accruedIcpSinceSync: number;
 
+  // Claim tracking
+  claimCount: number;
+  lastBalanceBoostTime: number;
+
+  // Global token economy stats
+  totalGlobalDailyOutput: number;
+  globalUnclaimedTokens: number;
+
   activeBattleEntry?: unknown;
   assignedInterceptors?: Record<string, string>;
 
   setGlobalStats: (stats: GlobalStats) => void;
   setFrntrBalance: (e8s: bigint) => void;
+  spendFrntr: (amount: number) => void;
   setIcpBalance: (e8s: bigint) => void;
   setTreasuryState: (state: TreasuryState) => void;
   setIcpUsdPrice: (price: number | null) => void;
+  incrementClaimCount: () => void;
+  setTotalGlobalDailyOutput: (n: number) => void;
+  setGlobalUnclaimedTokens: (n: number) => void;
   selectPlot: (id: number | null) => void;
   setSelectedWorldPoint: (p: [number, number, number] | null) => void;
   purchasePlot: (id: string) => void;
@@ -510,17 +526,28 @@ export const useGameStore = create<GameState>((set, get) => ({
   confirmedIcpBalance: 0,
   accruedIcpSinceSync: 0,
 
+  // Claim tracking
+  claimCount: 0,
+  lastBalanceBoostTime: 0,
+
+  // Global token economy stats
+  totalGlobalDailyOutput: 0,
+  globalUnclaimedTokens: 0,
+
   setFrntrBalance: (e8s) =>
     set((s) => {
       const confirmed = Number(e8s) / 100_000_000;
-      // Only reset accruedFrntSinceSync when the canister balance goes DOWN
-      // (i.e. user spent tokens). When balance goes up or stays same, keep
-      // the accrued ticker running so the display never flickers backward.
+      // Only update confirmedFrntBalance if the new canister value is HIGHER.
+      // A downward sync means a stale poll — ignore it to prevent flicker.
+      // Balance only goes down via spendFrntr (explicit user action).
+      if (confirmed < s.confirmedFrntBalance) {
+        // Ignore downward canister syncs — do not update state
+        return {};
+      }
+      // New balance is >= confirmed: absorb any difference smoothly.
+      // Keep the accrued ticker running from where it was.
       const prevDisplay = s.confirmedFrntBalance + s.accruedFrntSinceSync;
-      const newAccrued =
-        confirmed >= s.confirmedFrntBalance
-          ? Math.max(0, prevDisplay - confirmed) // absorb upward diff smoothly
-          : 0; // balance dropped — user spent
+      const newAccrued = Math.max(0, prevDisplay - confirmed);
       const next = {
         ...s,
         confirmedFrntBalance: confirmed,
@@ -531,6 +558,29 @@ export const useGameStore = create<GameState>((set, get) => ({
       return {
         confirmedFrntBalance: confirmed,
         accruedFrntSinceSync: newAccrued,
+        player: next.player,
+      };
+    }),
+
+  // Explicit spend action — this is the ONLY way the balance goes down
+  spendFrntr: (amount) =>
+    set((s) => {
+      const displayBal = s.confirmedFrntBalance + s.accruedFrntSinceSync;
+      const nextDisplay = Math.max(0, displayBal - amount);
+      // Reduce confirmed first, then accrued if needed
+      const nextConfirmed = Math.max(0, s.confirmedFrntBalance - amount);
+      const nextAccrued =
+        nextConfirmed === 0 ? Math.max(0, nextDisplay) : s.accruedFrntSinceSync;
+      const next = {
+        ...s,
+        confirmedFrntBalance: nextConfirmed,
+        accruedFrntSinceSync: nextAccrued,
+        player: { ...s.player, frntBalance: nextConfirmed + nextAccrued },
+      };
+      saveToStorage(next as GameState);
+      return {
+        confirmedFrntBalance: nextConfirmed,
+        accruedFrntSinceSync: nextAccrued,
         player: next.player,
       };
     }),
@@ -555,6 +605,9 @@ export const useGameStore = create<GameState>((set, get) => ({
   setGlobalStats: (stats) => set({ globalStats: stats }),
   setTreasuryState: (state) => set({ treasuryState: state }),
   setIcpUsdPrice: (price) => set({ icpUsdPrice: price }),
+  incrementClaimCount: () => set((s) => ({ claimCount: s.claimCount + 1 })),
+  setTotalGlobalDailyOutput: (n) => set({ totalGlobalDailyOutput: n }),
+  setGlobalUnclaimedTokens: (n) => set({ globalUnclaimedTokens: n }),
 
   setPlots: (plots) => set({ plots }),
 
@@ -761,7 +814,11 @@ export const useGameStore = create<GameState>((set, get) => ({
         },
       };
       saveToStorage(next as GameState);
-      return { confirmedFrntBalance: nextConfirmed, player: next.player };
+      return {
+        confirmedFrntBalance: nextConfirmed,
+        player: next.player,
+        lastBalanceBoostTime: Date.now(),
+      };
     }),
 
   addFrntr: (amount) =>
@@ -776,7 +833,11 @@ export const useGameStore = create<GameState>((set, get) => ({
         },
       };
       saveToStorage(next as GameState);
-      return { confirmedFrntBalance: nextConfirmed, player: next.player };
+      return {
+        confirmedFrntBalance: nextConfirmed,
+        player: next.player,
+        lastBalanceBoostTime: Date.now(),
+      };
     }),
 
   mintTestTokens: () =>

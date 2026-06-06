@@ -32496,6 +32496,46 @@ function RouterContextProvider({
 function RouterProvider({ router: router2, ...rest }) {
   return /* @__PURE__ */ jsxRuntimeExports.jsx(RouterContextProvider, { router: router2, ...rest, children: /* @__PURE__ */ jsxRuntimeExports.jsx(Matches, {}) });
 }
+const TIER_DAILY_RATES = {
+  0: 7,
+  1: 9,
+  2: 12,
+  3: 17,
+  4: 25,
+  5: 37,
+  6: 55
+};
+const UPGRADE_COSTS = {
+  1: 500,
+  2: 1500,
+  3: 4e3,
+  4: 1e4,
+  5: 25e3,
+  6: 6e4
+};
+const TIER_NAMES = {
+  0: "Outpost",
+  1: "Generator",
+  2: "Ion Capacitor",
+  3: "Fusion Core",
+  4: "Quantum Relay",
+  5: "Neural Matrix",
+  6: "Apex Nexus"
+};
+const BIOME_DOT = {
+  Arctic: "#a8d8ea",
+  Desert: "#e8c97a",
+  Forest: "#4a9b5f",
+  Ocean: "#1a6b9e",
+  Mountain: "#7a6b5a",
+  Volcanic: "#c0392b",
+  Grassland: "#5aab4a",
+  Toxic: "#7dba3a",
+  Temperate: "#6ab04c",
+  Tropical: "#27ae60",
+  DeepOcean: "#0d3b6e",
+  AsteroidImpact: "#8e44ad"
+};
 const createStoreImpl = (createState2) => {
   let state2;
   const listeners = /* @__PURE__ */ new Set();
@@ -74138,7 +74178,7 @@ function generateLeaderboard() {
 }
 const ALL_PLOTS = generatePlots();
 const _cached = loadFromStorage();
-const BIOME_DRIP$1 = {
+const BIOME_DRIP = {
   Desert: [8e-4, 25e-4, 3e-4, 1e-4],
   Jungle: [25e-4, 8e-4, 5e-4, 2e-4],
   Arctic: [5e-4, 3e-4, 22e-4, 8e-4],
@@ -74185,10 +74225,19 @@ const useGameStore = create((set, get) => ({
   accruedFrntSinceSync: 0,
   confirmedIcpBalance: 0,
   accruedIcpSinceSync: 0,
+  // Claim tracking
+  claimCount: 0,
+  lastBalanceBoostTime: 0,
+  // Global token economy stats
+  totalGlobalDailyOutput: 0,
+  globalUnclaimedTokens: 0,
   setFrntrBalance: (e8s) => set((s2) => {
     const confirmed = Number(e8s) / 1e8;
+    if (confirmed < s2.confirmedFrntBalance) {
+      return {};
+    }
     const prevDisplay = s2.confirmedFrntBalance + s2.accruedFrntSinceSync;
-    const newAccrued = confirmed >= s2.confirmedFrntBalance ? Math.max(0, prevDisplay - confirmed) : 0;
+    const newAccrued = Math.max(0, prevDisplay - confirmed);
     const next = {
       ...s2,
       confirmedFrntBalance: confirmed,
@@ -74199,6 +74248,25 @@ const useGameStore = create((set, get) => ({
     return {
       confirmedFrntBalance: confirmed,
       accruedFrntSinceSync: newAccrued,
+      player: next.player
+    };
+  }),
+  // Explicit spend action — this is the ONLY way the balance goes down
+  spendFrntr: (amount) => set((s2) => {
+    const displayBal = s2.confirmedFrntBalance + s2.accruedFrntSinceSync;
+    const nextDisplay = Math.max(0, displayBal - amount);
+    const nextConfirmed = Math.max(0, s2.confirmedFrntBalance - amount);
+    const nextAccrued = nextConfirmed === 0 ? Math.max(0, nextDisplay) : s2.accruedFrntSinceSync;
+    const next = {
+      ...s2,
+      confirmedFrntBalance: nextConfirmed,
+      accruedFrntSinceSync: nextAccrued,
+      player: { ...s2.player, frntBalance: nextConfirmed + nextAccrued }
+    };
+    saveToStorage(next);
+    return {
+      confirmedFrntBalance: nextConfirmed,
+      accruedFrntSinceSync: nextAccrued,
       player: next.player
     };
   }),
@@ -74220,6 +74288,9 @@ const useGameStore = create((set, get) => ({
   setGlobalStats: (stats) => set({ globalStats: stats }),
   setTreasuryState: (state2) => set({ treasuryState: state2 }),
   setIcpUsdPrice: (price) => set({ icpUsdPrice: price }),
+  incrementClaimCount: () => set((s2) => ({ claimCount: s2.claimCount + 1 })),
+  setTotalGlobalDailyOutput: (n) => set({ totalGlobalDailyOutput: n }),
+  setGlobalUnclaimedTokens: (n) => set({ globalUnclaimedTokens: n }),
   setPlots: (plots) => set({ plots }),
   setPlotOwnership: (owners, myPrincipal) => {
     const ownerMap = /* @__PURE__ */ new Map();
@@ -74397,7 +74468,11 @@ const useGameStore = create((set, get) => ({
       }
     };
     saveToStorage(next);
-    return { confirmedFrntBalance: nextConfirmed, player: next.player };
+    return {
+      confirmedFrntBalance: nextConfirmed,
+      player: next.player,
+      lastBalanceBoostTime: Date.now()
+    };
   }),
   addFrntr: (amount) => set((s2) => {
     const nextConfirmed = s2.confirmedFrntBalance + amount;
@@ -74410,7 +74485,11 @@ const useGameStore = create((set, get) => ({
       }
     };
     saveToStorage(next);
-    return { confirmedFrntBalance: nextConfirmed, player: next.player };
+    return {
+      confirmedFrntBalance: nextConfirmed,
+      player: next.player,
+      lastBalanceBoostTime: Date.now()
+    };
   }),
   mintTestTokens: () => set((s2) => {
     const nextConfirmed = s2.confirmedFrntBalance + 500;
@@ -74583,7 +74662,7 @@ const useGameStore = create((set, get) => ({
       for (const plotId of s2.player.plotsOwned) {
         const plot = s2.plots.find((p2) => String(p2.id) === plotId);
         if (!plot) continue;
-        const rates = BIOME_DRIP$1[plot.biome] ?? [1e-3, 1e-3, 1e-3, 1e-3];
+        const rates = BIOME_DRIP[plot.biome] ?? [1e-3, 1e-3, 1e-3, 1e-3];
         const eff = (plot.efficiency ?? 90) / 100;
         const regenMult = Date.now() < plot.regenActiveUntil ? 1.2 : 1;
         dIron += rates[0] * eff * regenMult;
@@ -74629,3548 +74708,25 @@ const useGameStore = create((set, get) => ({
   },
   faction: null
 }));
-const CYAN$d = "#00ffcc";
-const GOLD$4 = "#ffd700";
-const AMBER$1 = "#f59e0b";
-const PURPLE = "#a855f7";
-const BORDER$c = "rgba(0,255,204,0.18)";
-const PANEL$1 = "rgba(0,20,40,0.70)";
-const TEXT$7 = "#e0f4ff";
-const TEXT_DIM$6 = "rgba(224,244,255,0.45)";
-const TIER_DAILY = {
-  0: 7,
-  1: 10,
-  2: 15,
-  3: 22,
-  4: 32,
-  5: 45,
-  6: 45
-  // tier 6 same cap as 5 for display
-};
-const TIER_LABELS = {
-  0: "NONE",
-  1: "I",
-  2: "II",
-  3: "III",
-  4: "IV",
-  5: "V",
-  6: "VI"
-};
-const BIOME_DOT = {
-  Arctic: "#a8d8ea",
-  Desert: "#e8c97a",
-  Forest: "#4a9b5f",
-  Ocean: "#1a6b9e",
-  Mountain: "#7a6b5a",
-  Volcanic: "#c0392b",
-  Grassland: "#5aab4a",
-  Toxic: "#7dba3a"
-};
-const BIOME_DRIP = {
-  Desert: [8e-4, 25e-4, 3e-4, 1e-4],
-  Arctic: [5e-4, 3e-4, 22e-4, 8e-4],
-  Ocean: [1e-3, 1e-3, 8e-4, 4e-4],
-  Mountain: [25e-4, 5e-4, 8e-4, 3e-4],
-  Volcanic: [1e-3, 15e-4, 5e-4, 17e-4],
-  Forest: [15e-4, 12e-4, 1e-3, 3e-4],
-  Grassland: [18e-4, 15e-4, 5e-4, 3e-4],
-  Toxic: [5e-4, 8e-4, 8e-4, 2e-3],
-  Jungle: [25e-4, 8e-4, 5e-4, 2e-4]
-};
-function shortH3(plotId) {
-  return String(plotId).padStart(8, "0").toUpperCase();
+function GameTicker() {
+  reactExports.useEffect(() => {
+    const id2 = setInterval(() => {
+      const store = useGameStore.getState();
+      const { plotsOwned } = store.player;
+      if (plotsOwned.length === 0) return;
+      let perSecondTotal = 0;
+      for (const plotId of plotsOwned) {
+        const tier = store.generatorTiers[plotId] ?? 0;
+        const dailyRate = TIER_DAILY_RATES[tier] ?? TIER_DAILY_RATES[0];
+        perSecondTotal += dailyRate / 86400;
+      }
+      if (perSecondTotal === 0) return;
+      store.tickPassiveIncome();
+    }, 1e3);
+    return () => clearInterval(id2);
+  }, []);
+  return null;
 }
-function effColor(eff) {
-  if (eff >= 85) return "#22c55e";
-  if (eff >= 70) return AMBER$1;
-  return "#ef4444";
-}
-function FRNTRCounter() {
-  const player = useGameStore((s2) => s2.player);
-  const frntrBalance = useGameStore(
-    (s2) => s2.confirmedFrntBalance + s2.accruedFrntSinceSync
-  );
-  const plotCount = player.plotsOwned.length;
-  const fmtFrntr2 = (n) => n.toLocaleString(void 0, {
-    minimumFractionDigits: 8,
-    maximumFractionDigits: 8
-  });
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-    "div",
-    {
-      style: {
-        background: PANEL$1,
-        backdropFilter: "blur(16px)",
-        WebkitBackdropFilter: "blur(16px)",
-        border: `1px solid ${BORDER$c}`,
-        borderRadius: 10,
-        padding: "14px 16px",
-        marginBottom: 14
-      },
-      children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "div",
-          {
-            style: {
-              fontSize: 9,
-              fontWeight: 700,
-              letterSpacing: 3,
-              color: CYAN$d,
-              textTransform: "uppercase",
-              marginBottom: 8
-            },
-            children: "TOTAL FRNTR EARNED"
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "div",
-          {
-            "data-ocid": "inventory.frntr_counter",
-            style: {
-              fontSize: 26,
-              fontWeight: 900,
-              fontFamily: "monospace",
-              color: GOLD$4,
-              textShadow: `0 0 16px ${GOLD$4}44`,
-              letterSpacing: 1,
-              lineHeight: 1
-            },
-            children: fmtFrntr2(frntrBalance)
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { fontSize: 8, color: TEXT_DIM$6, marginTop: 3 }, children: [
-          "FRNTR  ·  ",
-          plotCount,
-          " PLOT",
-          plotCount !== 1 ? "S" : "",
-          " ",
-          "ACTIVE"
-        ] })
-      ]
-    }
-  );
-}
-function ResourceStockpiles() {
-  const player = useGameStore((s2) => s2.player);
-  const storageCap = player.resourceStorageCap ?? 200;
-  const resources = [
-    { label: "IRON", val: player.iron, color: "#94a3b8", icon: "⚙️" },
-    { label: "FUEL", val: player.fuel, color: AMBER$1, icon: "⛽" },
-    { label: "CRYSTAL", val: player.crystal, color: CYAN$d, icon: "💎" },
-    { label: "RARE EARTH", val: player.rareEarth, color: PURPLE, icon: "🔮" }
-  ];
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-    "div",
-    {
-      style: {
-        background: PANEL$1,
-        backdropFilter: "blur(16px)",
-        WebkitBackdropFilter: "blur(16px)",
-        border: `1px solid ${BORDER$c}`,
-        borderRadius: 10,
-        padding: "12px 14px",
-        marginBottom: 14
-      },
-      children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "div",
-          {
-            style: {
-              fontSize: 9,
-              fontWeight: 700,
-              letterSpacing: 3,
-              color: CYAN$d,
-              textTransform: "uppercase",
-              marginBottom: 10
-            },
-            children: "RESOURCE STOCKPILES"
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "flex", flexDirection: "column", gap: 8 }, children: resources.map((r2) => {
-          const pct = Math.min(100, r2.val / storageCap * 100);
-          return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs(
-              "div",
-              {
-                style: {
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: 4
-                },
-                children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 5 }, children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 11 }, children: r2.icon }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx(
-                      "span",
-                      {
-                        style: {
-                          fontSize: 9,
-                          fontWeight: 700,
-                          letterSpacing: 1.5,
-                          color: r2.color
-                        },
-                        children: r2.label
-                      }
-                    )
-                  ] }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                    "span",
-                    {
-                      style: {
-                        fontSize: 9,
-                        fontFamily: "monospace",
-                        color: TEXT_DIM$6
-                      },
-                      children: [
-                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: r2.color, fontWeight: 700 }, children: r2.val.toFixed(8) }),
-                        " ",
-                        "/",
-                        storageCap
-                      ]
-                    }
-                  )
-                ]
-              }
-            ),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "div",
-              {
-                style: {
-                  height: 5,
-                  background: "rgba(255,255,255,0.07)",
-                  borderRadius: 3,
-                  overflow: "hidden"
-                },
-                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "div",
-                  {
-                    style: {
-                      height: "100%",
-                      width: `${pct}%`,
-                      background: r2.color,
-                      borderRadius: 3,
-                      transition: "width 0.6s ease",
-                      boxShadow: `0 0 6px ${r2.color}66`
-                    }
-                  }
-                )
-              }
-            )
-          ] }, r2.label);
-        }) })
-      ]
-    }
-  );
-}
-function PlotCard({ plotId, index: index2 }) {
-  const plot = useGameStore(
-    (s2) => s2.plots.find((p2) => String(p2.id) === plotId)
-  );
-  const generatorTiers = useGameStore((s2) => s2.generatorTiers);
-  const upgradeGenerator = useGameStore((s2) => s2.upgradeGenerator);
-  const mineResources = useGameStore((s2) => s2.mineResources);
-  const player = useGameStore((s2) => s2.player);
-  const [mineFlash, setMineFlash] = reactExports.useState(null);
-  if (!plot) return null;
-  const tier = generatorTiers[plotId] ?? 0;
-  const tierLabel = TIER_LABELS[tier];
-  const dailyRate = TIER_DAILY[tier];
-  const biomeColor = BIOME_DOT[plot.biome] ?? CYAN$d;
-  const h3Short = shortH3(String(plotId));
-  const drip = BIOME_DRIP[plot.biome] ?? [1e-3, 1e-3, 1e-3, 1e-3];
-  const effFactor = plot.efficiency / 100;
-  const ironPerDay = (drip[0] * 86400 * effFactor).toFixed(2);
-  const fuelPerDay = (drip[1] * 86400 * effFactor).toFixed(2);
-  const crystalPerDay = (drip[2] * 86400 * effFactor).toFixed(2);
-  const rarePerDay = (drip[3] * 86400 * effFactor).toFixed(2);
-  const upgradeCosts = [500, 1500, 4e3, 8e3, 15e3];
-  const upgradeCost = tier < 5 ? upgradeCosts[tier] : null;
-  const canUpgrade = upgradeCost !== null && player.frntBalance >= upgradeCost;
-  const isLoggedIn = !!player.principal;
-  const eff = plot.efficiency;
-  const handleMine = () => {
-    const yields = mineResources(Number(plotId));
-    if (yields) {
-      const total = Object.values(yields).reduce((a2, b2) => a2 + b2, 0);
-      setMineFlash(`+${total.toFixed(4)}`);
-      setTimeout(() => setMineFlash(null), 1800);
-    }
-  };
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-    "div",
-    {
-      "data-ocid": `inventory.item.${index2}`,
-      style: {
-        background: "rgba(0,20,40,0.55)",
-        border: `1px solid ${BORDER$c}`,
-        borderRadius: 10,
-        padding: "12px 14px",
-        position: "relative",
-        overflow: "hidden"
-      },
-      children: [
-        tier > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "div",
-          {
-            style: {
-              position: "absolute",
-              top: 0,
-              left: 0,
-              width: `${tier / 6 * 100}%`,
-              height: 2,
-              background: `linear-gradient(90deg, ${CYAN$d}, ${GOLD$4})`
-            }
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs(
-          "div",
-          {
-            style: {
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              marginBottom: 8
-            },
-            children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "div",
-                {
-                  style: {
-                    width: 8,
-                    height: 8,
-                    borderRadius: "50%",
-                    background: biomeColor,
-                    flexShrink: 0,
-                    boxShadow: `0 0 5px ${biomeColor}88`
-                  }
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { flex: 1, minWidth: 0 }, children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "div",
-                  {
-                    style: {
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color: TEXT$7,
-                      fontFamily: "monospace",
-                      letterSpacing: 0.5
-                    },
-                    children: h3Short
-                  }
-                ),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$6, letterSpacing: 0.5 }, children: plot.biome })
-              ] }),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                "div",
-                {
-                  style: {
-                    padding: "3px 8px",
-                    background: tier > 0 ? "rgba(0,255,204,0.12)" : "rgba(255,255,255,0.05)",
-                    border: `1px solid ${tier > 0 ? BORDER$c : "rgba(255,255,255,0.08)"}`,
-                    borderRadius: 4,
-                    fontSize: 8,
-                    fontWeight: 700,
-                    color: tier > 0 ? CYAN$d : TEXT_DIM$6,
-                    letterSpacing: 1,
-                    whiteSpace: "nowrap"
-                  },
-                  children: [
-                    "GEN ",
-                    tierLabel
-                  ]
-                }
-              )
-            ]
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { marginBottom: 8 }, children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "div",
-            {
-              style: {
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 3
-              },
-              children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 8, color: TEXT_DIM$6, letterSpacing: 1 }, children: "EFFICIENCY" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                  "span",
-                  {
-                    style: {
-                      fontSize: 9,
-                      fontWeight: 700,
-                      color: effColor(eff),
-                      fontFamily: "monospace"
-                    },
-                    children: [
-                      eff,
-                      "%"
-                    ]
-                  }
-                )
-              ]
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "div",
-            {
-              style: {
-                height: 4,
-                background: "rgba(255,255,255,0.07)",
-                borderRadius: 2,
-                overflow: "hidden"
-              },
-              children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "div",
-                {
-                  style: {
-                    height: "100%",
-                    width: `${eff}%`,
-                    background: effColor(eff),
-                    borderRadius: 2,
-                    transition: "width 0.4s ease",
-                    boxShadow: `0 0 4px ${effColor(eff)}88`
-                  }
-                }
-              )
-            }
-          )
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs(
-          "div",
-          {
-            style: {
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: 4,
-              marginBottom: 10,
-              padding: "8px 10px",
-              background: "rgba(0,255,204,0.03)",
-              border: "1px solid rgba(0,255,204,0.07)",
-              borderRadius: 6
-            },
-            children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$6 }, children: "FRNTR/DAY" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "div",
-                  {
-                    style: {
-                      fontSize: 10,
-                      fontWeight: 700,
-                      color: GOLD$4,
-                      fontFamily: "monospace"
-                    },
-                    children: dailyRate.toFixed(2)
-                  }
-                )
-              ] }),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$6 }, children: "IRON/DAY" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "div",
-                  {
-                    style: {
-                      fontSize: 10,
-                      fontWeight: 700,
-                      color: "#94a3b8",
-                      fontFamily: "monospace"
-                    },
-                    children: ironPerDay
-                  }
-                )
-              ] }),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$6 }, children: "FUEL/DAY" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "div",
-                  {
-                    style: {
-                      fontSize: 10,
-                      fontWeight: 700,
-                      color: AMBER$1,
-                      fontFamily: "monospace"
-                    },
-                    children: fuelPerDay
-                  }
-                )
-              ] }),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$6 }, children: "CRYSTAL/DAY" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "div",
-                  {
-                    style: {
-                      fontSize: 10,
-                      fontWeight: 700,
-                      color: CYAN$d,
-                      fontFamily: "monospace"
-                    },
-                    children: crystalPerDay
-                  }
-                )
-              ] }),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$6 }, children: "RARE/DAY" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "div",
-                  {
-                    style: {
-                      fontSize: 10,
-                      fontWeight: 700,
-                      color: PURPLE,
-                      fontFamily: "monospace"
-                    },
-                    children: rarePerDay
-                  }
-                )
-              ] })
-            ]
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", gap: 8 }, children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "button",
-            {
-              type: "button",
-              "data-ocid": `inventory.mine_button.${index2}`,
-              onClick: handleMine,
-              disabled: !isLoggedIn,
-              style: {
-                flex: 1,
-                padding: "8px 0",
-                background: "rgba(0,255,204,0.08)",
-                border: `1px solid ${BORDER$c}`,
-                borderRadius: 6,
-                color: isLoggedIn ? CYAN$d : TEXT_DIM$6,
-                fontSize: 9,
-                fontWeight: 700,
-                letterSpacing: 1.5,
-                cursor: isLoggedIn ? "pointer" : "not-allowed",
-                opacity: isLoggedIn ? 1 : 0.45,
-                textTransform: "uppercase"
-              },
-              children: mineFlash ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: GOLD$4, fontSize: 9 }, children: mineFlash }) : "MINE"
-            }
-          ),
-          upgradeCost !== null && /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "button",
-            {
-              type: "button",
-              "data-ocid": `inventory.upgrade_button.${index2}`,
-              onClick: () => upgradeGenerator(String(plotId)),
-              disabled: !isLoggedIn || !canUpgrade,
-              style: {
-                flex: 1,
-                padding: "8px 0",
-                background: canUpgrade && isLoggedIn ? "rgba(255,215,0,0.08)" : "rgba(255,255,255,0.03)",
-                border: `1px solid ${canUpgrade && isLoggedIn ? "rgba(255,215,0,0.3)" : "rgba(255,255,255,0.07)"}`,
-                borderRadius: 6,
-                color: canUpgrade && isLoggedIn ? GOLD$4 : TEXT_DIM$6,
-                fontSize: 8,
-                fontWeight: 700,
-                letterSpacing: 1,
-                cursor: canUpgrade && isLoggedIn ? "pointer" : "not-allowed",
-                opacity: canUpgrade && isLoggedIn ? 1 : 0.45,
-                textTransform: "uppercase"
-              },
-              children: [
-                "UPGRADE",
-                /* @__PURE__ */ jsxRuntimeExports.jsx("br", {}),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { style: { fontSize: 7, fontWeight: 400 }, children: [
-                  upgradeCost.toLocaleString(),
-                  " FRNTR"
-                ] })
-              ]
-            }
-          )
-        ] })
-      ]
-    }
-  );
-}
-function Inventory() {
-  const plotsOwned = useGameStore((s2) => s2.player.plotsOwned);
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-    "div",
-    {
-      "data-ocid": "inventory.page",
-      style: {
-        height: "100%",
-        overflowY: "auto",
-        padding: "12px 12px 4px",
-        display: "flex",
-        flexDirection: "column"
-      },
-      children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(FRNTRCounter, {}),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(ResourceStockpiles, {}),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs(
-          "div",
-          {
-            style: {
-              fontSize: 9,
-              fontWeight: 700,
-              letterSpacing: 3,
-              color: CYAN$d,
-              textTransform: "uppercase",
-              marginBottom: 10,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between"
-            },
-            children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "OWNED PLOTS" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "span",
-                {
-                  style: {
-                    fontSize: 10,
-                    fontWeight: 800,
-                    color: TEXT$7,
-                    fontFamily: "monospace"
-                  },
-                  children: plotsOwned.length
-                }
-              )
-            ]
-          }
-        ),
-        plotsOwned.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs(
-          "div",
-          {
-            "data-ocid": "inventory.empty_state",
-            style: {
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "32px 20px",
-              textAlign: "center",
-              color: TEXT_DIM$6,
-              gap: 10
-            },
-            children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 32 }, children: "🌍" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "div",
-                {
-                  style: {
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: TEXT$7,
-                    letterSpacing: 1.5
-                  },
-                  children: "NO PLOTS OWNED YET"
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "div",
-                {
-                  style: {
-                    fontSize: 9,
-                    color: TEXT_DIM$6,
-                    lineHeight: 1.6,
-                    maxWidth: 260
-                  },
-                  children: "Purchase your first plot on the globe to start earning FRNTR tokens and resources passively."
-                }
-              )
-            ]
-          }
-        ) : /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "div",
-          {
-            style: {
-              display: "flex",
-              flexDirection: "column",
-              gap: 10,
-              paddingBottom: 12
-            },
-            children: plotsOwned.map((plotId, idx) => /* @__PURE__ */ jsxRuntimeExports.jsx(PlotCard, { plotId, index: idx + 1 }, plotId))
-          }
-        )
-      ]
-    }
-  );
-}
-function r(e) {
-  var t, f, n = "";
-  if ("string" == typeof e || "number" == typeof e) n += e;
-  else if ("object" == typeof e) if (Array.isArray(e)) {
-    var o2 = e.length;
-    for (t = 0; t < o2; t++) e[t] && (f = r(e[t])) && (n && (n += " "), n += f);
-  } else for (f in e) e[f] && (n && (n += " "), n += f);
-  return n;
-}
-function clsx() {
-  for (var e, t, f = 0, n = "", o2 = arguments.length; f < o2; f++) (e = arguments[f]) && (t = r(e)) && (n && (n += " "), n += t);
-  return n;
-}
-const CLASS_PART_SEPARATOR = "-";
-const createClassGroupUtils = (config) => {
-  const classMap = createClassMap(config);
-  const {
-    conflictingClassGroups,
-    conflictingClassGroupModifiers
-  } = config;
-  const getClassGroupId = (className) => {
-    const classParts = className.split(CLASS_PART_SEPARATOR);
-    if (classParts[0] === "" && classParts.length !== 1) {
-      classParts.shift();
-    }
-    return getGroupRecursive(classParts, classMap) || getGroupIdForArbitraryProperty(className);
-  };
-  const getConflictingClassGroupIds = (classGroupId, hasPostfixModifier) => {
-    const conflicts = conflictingClassGroups[classGroupId] || [];
-    if (hasPostfixModifier && conflictingClassGroupModifiers[classGroupId]) {
-      return [...conflicts, ...conflictingClassGroupModifiers[classGroupId]];
-    }
-    return conflicts;
-  };
-  return {
-    getClassGroupId,
-    getConflictingClassGroupIds
-  };
-};
-const getGroupRecursive = (classParts, classPartObject) => {
-  var _a3;
-  if (classParts.length === 0) {
-    return classPartObject.classGroupId;
-  }
-  const currentClassPart = classParts[0];
-  const nextClassPartObject = classPartObject.nextPart.get(currentClassPart);
-  const classGroupFromNextClassPart = nextClassPartObject ? getGroupRecursive(classParts.slice(1), nextClassPartObject) : void 0;
-  if (classGroupFromNextClassPart) {
-    return classGroupFromNextClassPart;
-  }
-  if (classPartObject.validators.length === 0) {
-    return void 0;
-  }
-  const classRest = classParts.join(CLASS_PART_SEPARATOR);
-  return (_a3 = classPartObject.validators.find(({
-    validator
-  }) => validator(classRest))) == null ? void 0 : _a3.classGroupId;
-};
-const arbitraryPropertyRegex = /^\[(.+)\]$/;
-const getGroupIdForArbitraryProperty = (className) => {
-  if (arbitraryPropertyRegex.test(className)) {
-    const arbitraryPropertyClassName = arbitraryPropertyRegex.exec(className)[1];
-    const property = arbitraryPropertyClassName == null ? void 0 : arbitraryPropertyClassName.substring(0, arbitraryPropertyClassName.indexOf(":"));
-    if (property) {
-      return "arbitrary.." + property;
-    }
-  }
-};
-const createClassMap = (config) => {
-  const {
-    theme,
-    prefix: prefix2
-  } = config;
-  const classMap = {
-    nextPart: /* @__PURE__ */ new Map(),
-    validators: []
-  };
-  const prefixedClassGroupEntries = getPrefixedClassGroupEntries(Object.entries(config.classGroups), prefix2);
-  prefixedClassGroupEntries.forEach(([classGroupId, classGroup]) => {
-    processClassesRecursively(classGroup, classMap, classGroupId, theme);
-  });
-  return classMap;
-};
-const processClassesRecursively = (classGroup, classPartObject, classGroupId, theme) => {
-  classGroup.forEach((classDefinition) => {
-    if (typeof classDefinition === "string") {
-      const classPartObjectToEdit = classDefinition === "" ? classPartObject : getPart(classPartObject, classDefinition);
-      classPartObjectToEdit.classGroupId = classGroupId;
-      return;
-    }
-    if (typeof classDefinition === "function") {
-      if (isThemeGetter(classDefinition)) {
-        processClassesRecursively(classDefinition(theme), classPartObject, classGroupId, theme);
-        return;
-      }
-      classPartObject.validators.push({
-        validator: classDefinition,
-        classGroupId
-      });
-      return;
-    }
-    Object.entries(classDefinition).forEach(([key, classGroup2]) => {
-      processClassesRecursively(classGroup2, getPart(classPartObject, key), classGroupId, theme);
-    });
-  });
-};
-const getPart = (classPartObject, path) => {
-  let currentClassPartObject = classPartObject;
-  path.split(CLASS_PART_SEPARATOR).forEach((pathPart) => {
-    if (!currentClassPartObject.nextPart.has(pathPart)) {
-      currentClassPartObject.nextPart.set(pathPart, {
-        nextPart: /* @__PURE__ */ new Map(),
-        validators: []
-      });
-    }
-    currentClassPartObject = currentClassPartObject.nextPart.get(pathPart);
-  });
-  return currentClassPartObject;
-};
-const isThemeGetter = (func) => func.isThemeGetter;
-const getPrefixedClassGroupEntries = (classGroupEntries, prefix2) => {
-  if (!prefix2) {
-    return classGroupEntries;
-  }
-  return classGroupEntries.map(([classGroupId, classGroup]) => {
-    const prefixedClassGroup = classGroup.map((classDefinition) => {
-      if (typeof classDefinition === "string") {
-        return prefix2 + classDefinition;
-      }
-      if (typeof classDefinition === "object") {
-        return Object.fromEntries(Object.entries(classDefinition).map(([key, value]) => [prefix2 + key, value]));
-      }
-      return classDefinition;
-    });
-    return [classGroupId, prefixedClassGroup];
-  });
-};
-const createLruCache = (maxCacheSize) => {
-  if (maxCacheSize < 1) {
-    return {
-      get: () => void 0,
-      set: () => {
-      }
-    };
-  }
-  let cacheSize = 0;
-  let cache = /* @__PURE__ */ new Map();
-  let previousCache = /* @__PURE__ */ new Map();
-  const update2 = (key, value) => {
-    cache.set(key, value);
-    cacheSize++;
-    if (cacheSize > maxCacheSize) {
-      cacheSize = 0;
-      previousCache = cache;
-      cache = /* @__PURE__ */ new Map();
-    }
-  };
-  return {
-    get(key) {
-      let value = cache.get(key);
-      if (value !== void 0) {
-        return value;
-      }
-      if ((value = previousCache.get(key)) !== void 0) {
-        update2(key, value);
-        return value;
-      }
-    },
-    set(key, value) {
-      if (cache.has(key)) {
-        cache.set(key, value);
-      } else {
-        update2(key, value);
-      }
-    }
-  };
-};
-const IMPORTANT_MODIFIER = "!";
-const createParseClassName = (config) => {
-  const {
-    separator,
-    experimentalParseClassName
-  } = config;
-  const isSeparatorSingleCharacter = separator.length === 1;
-  const firstSeparatorCharacter = separator[0];
-  const separatorLength = separator.length;
-  const parseClassName = (className) => {
-    const modifiers = [];
-    let bracketDepth = 0;
-    let modifierStart = 0;
-    let postfixModifierPosition;
-    for (let index2 = 0; index2 < className.length; index2++) {
-      let currentCharacter = className[index2];
-      if (bracketDepth === 0) {
-        if (currentCharacter === firstSeparatorCharacter && (isSeparatorSingleCharacter || className.slice(index2, index2 + separatorLength) === separator)) {
-          modifiers.push(className.slice(modifierStart, index2));
-          modifierStart = index2 + separatorLength;
-          continue;
-        }
-        if (currentCharacter === "/") {
-          postfixModifierPosition = index2;
-          continue;
-        }
-      }
-      if (currentCharacter === "[") {
-        bracketDepth++;
-      } else if (currentCharacter === "]") {
-        bracketDepth--;
-      }
-    }
-    const baseClassNameWithImportantModifier = modifiers.length === 0 ? className : className.substring(modifierStart);
-    const hasImportantModifier = baseClassNameWithImportantModifier.startsWith(IMPORTANT_MODIFIER);
-    const baseClassName = hasImportantModifier ? baseClassNameWithImportantModifier.substring(1) : baseClassNameWithImportantModifier;
-    const maybePostfixModifierPosition = postfixModifierPosition && postfixModifierPosition > modifierStart ? postfixModifierPosition - modifierStart : void 0;
-    return {
-      modifiers,
-      hasImportantModifier,
-      baseClassName,
-      maybePostfixModifierPosition
-    };
-  };
-  if (experimentalParseClassName) {
-    return (className) => experimentalParseClassName({
-      className,
-      parseClassName
-    });
-  }
-  return parseClassName;
-};
-const sortModifiers = (modifiers) => {
-  if (modifiers.length <= 1) {
-    return modifiers;
-  }
-  const sortedModifiers = [];
-  let unsortedModifiers = [];
-  modifiers.forEach((modifier) => {
-    const isArbitraryVariant = modifier[0] === "[";
-    if (isArbitraryVariant) {
-      sortedModifiers.push(...unsortedModifiers.sort(), modifier);
-      unsortedModifiers = [];
-    } else {
-      unsortedModifiers.push(modifier);
-    }
-  });
-  sortedModifiers.push(...unsortedModifiers.sort());
-  return sortedModifiers;
-};
-const createConfigUtils = (config) => ({
-  cache: createLruCache(config.cacheSize),
-  parseClassName: createParseClassName(config),
-  ...createClassGroupUtils(config)
-});
-const SPLIT_CLASSES_REGEX = /\s+/;
-const mergeClassList = (classList, configUtils) => {
-  const {
-    parseClassName,
-    getClassGroupId,
-    getConflictingClassGroupIds
-  } = configUtils;
-  const classGroupsInConflict = [];
-  const classNames = classList.trim().split(SPLIT_CLASSES_REGEX);
-  let result = "";
-  for (let index2 = classNames.length - 1; index2 >= 0; index2 -= 1) {
-    const originalClassName = classNames[index2];
-    const {
-      modifiers,
-      hasImportantModifier,
-      baseClassName,
-      maybePostfixModifierPosition
-    } = parseClassName(originalClassName);
-    let hasPostfixModifier = Boolean(maybePostfixModifierPosition);
-    let classGroupId = getClassGroupId(hasPostfixModifier ? baseClassName.substring(0, maybePostfixModifierPosition) : baseClassName);
-    if (!classGroupId) {
-      if (!hasPostfixModifier) {
-        result = originalClassName + (result.length > 0 ? " " + result : result);
-        continue;
-      }
-      classGroupId = getClassGroupId(baseClassName);
-      if (!classGroupId) {
-        result = originalClassName + (result.length > 0 ? " " + result : result);
-        continue;
-      }
-      hasPostfixModifier = false;
-    }
-    const variantModifier = sortModifiers(modifiers).join(":");
-    const modifierId = hasImportantModifier ? variantModifier + IMPORTANT_MODIFIER : variantModifier;
-    const classId = modifierId + classGroupId;
-    if (classGroupsInConflict.includes(classId)) {
-      continue;
-    }
-    classGroupsInConflict.push(classId);
-    const conflictGroups = getConflictingClassGroupIds(classGroupId, hasPostfixModifier);
-    for (let i2 = 0; i2 < conflictGroups.length; ++i2) {
-      const group = conflictGroups[i2];
-      classGroupsInConflict.push(modifierId + group);
-    }
-    result = originalClassName + (result.length > 0 ? " " + result : result);
-  }
-  return result;
-};
-function twJoin() {
-  let index2 = 0;
-  let argument;
-  let resolvedValue;
-  let string = "";
-  while (index2 < arguments.length) {
-    if (argument = arguments[index2++]) {
-      if (resolvedValue = toValue(argument)) {
-        string && (string += " ");
-        string += resolvedValue;
-      }
-    }
-  }
-  return string;
-}
-const toValue = (mix2) => {
-  if (typeof mix2 === "string") {
-    return mix2;
-  }
-  let resolvedValue;
-  let string = "";
-  for (let k2 = 0; k2 < mix2.length; k2++) {
-    if (mix2[k2]) {
-      if (resolvedValue = toValue(mix2[k2])) {
-        string && (string += " ");
-        string += resolvedValue;
-      }
-    }
-  }
-  return string;
-};
-function createTailwindMerge(createConfigFirst, ...createConfigRest) {
-  let configUtils;
-  let cacheGet;
-  let cacheSet;
-  let functionToCall = initTailwindMerge;
-  function initTailwindMerge(classList) {
-    const config = createConfigRest.reduce((previousConfig, createConfigCurrent) => createConfigCurrent(previousConfig), createConfigFirst());
-    configUtils = createConfigUtils(config);
-    cacheGet = configUtils.cache.get;
-    cacheSet = configUtils.cache.set;
-    functionToCall = tailwindMerge;
-    return tailwindMerge(classList);
-  }
-  function tailwindMerge(classList) {
-    const cachedResult = cacheGet(classList);
-    if (cachedResult) {
-      return cachedResult;
-    }
-    const result = mergeClassList(classList, configUtils);
-    cacheSet(classList, result);
-    return result;
-  }
-  return function callTailwindMerge() {
-    return functionToCall(twJoin.apply(null, arguments));
-  };
-}
-const fromTheme = (key) => {
-  const themeGetter = (theme) => theme[key] || [];
-  themeGetter.isThemeGetter = true;
-  return themeGetter;
-};
-const arbitraryValueRegex = /^\[(?:([a-z-]+):)?(.+)\]$/i;
-const fractionRegex = /^\d+\/\d+$/;
-const stringLengths = /* @__PURE__ */ new Set(["px", "full", "screen"]);
-const tshirtUnitRegex = /^(\d+(\.\d+)?)?(xs|sm|md|lg|xl)$/;
-const lengthUnitRegex = /\d+(%|px|r?em|[sdl]?v([hwib]|min|max)|pt|pc|in|cm|mm|cap|ch|ex|r?lh|cq(w|h|i|b|min|max))|\b(calc|min|max|clamp)\(.+\)|^0$/;
-const colorFunctionRegex = /^(rgba?|hsla?|hwb|(ok)?(lab|lch)|color-mix)\(.+\)$/;
-const shadowRegex = /^(inset_)?-?((\d+)?\.?(\d+)[a-z]+|0)_-?((\d+)?\.?(\d+)[a-z]+|0)/;
-const imageRegex = /^(url|image|image-set|cross-fade|element|(repeating-)?(linear|radial|conic)-gradient)\(.+\)$/;
-const isLength = (value) => isNumber(value) || stringLengths.has(value) || fractionRegex.test(value);
-const isArbitraryLength = (value) => getIsArbitraryValue(value, "length", isLengthOnly);
-const isNumber = (value) => Boolean(value) && !Number.isNaN(Number(value));
-const isArbitraryNumber = (value) => getIsArbitraryValue(value, "number", isNumber);
-const isInteger = (value) => Boolean(value) && Number.isInteger(Number(value));
-const isPercent = (value) => value.endsWith("%") && isNumber(value.slice(0, -1));
-const isArbitraryValue = (value) => arbitraryValueRegex.test(value);
-const isTshirtSize = (value) => tshirtUnitRegex.test(value);
-const sizeLabels = /* @__PURE__ */ new Set(["length", "size", "percentage"]);
-const isArbitrarySize = (value) => getIsArbitraryValue(value, sizeLabels, isNever);
-const isArbitraryPosition = (value) => getIsArbitraryValue(value, "position", isNever);
-const imageLabels = /* @__PURE__ */ new Set(["image", "url"]);
-const isArbitraryImage = (value) => getIsArbitraryValue(value, imageLabels, isImage);
-const isArbitraryShadow = (value) => getIsArbitraryValue(value, "", isShadow);
-const isAny = () => true;
-const getIsArbitraryValue = (value, label, testValue) => {
-  const result = arbitraryValueRegex.exec(value);
-  if (result) {
-    if (result[1]) {
-      return typeof label === "string" ? result[1] === label : label.has(result[1]);
-    }
-    return testValue(result[2]);
-  }
-  return false;
-};
-const isLengthOnly = (value) => (
-  // `colorFunctionRegex` check is necessary because color functions can have percentages in them which which would be incorrectly classified as lengths.
-  // For example, `hsl(0 0% 0%)` would be classified as a length without this check.
-  // I could also use lookbehind assertion in `lengthUnitRegex` but that isn't supported widely enough.
-  lengthUnitRegex.test(value) && !colorFunctionRegex.test(value)
-);
-const isNever = () => false;
-const isShadow = (value) => shadowRegex.test(value);
-const isImage = (value) => imageRegex.test(value);
-const getDefaultConfig = () => {
-  const colors = fromTheme("colors");
-  const spacing = fromTheme("spacing");
-  const blur = fromTheme("blur");
-  const brightness = fromTheme("brightness");
-  const borderColor = fromTheme("borderColor");
-  const borderRadius = fromTheme("borderRadius");
-  const borderSpacing = fromTheme("borderSpacing");
-  const borderWidth = fromTheme("borderWidth");
-  const contrast = fromTheme("contrast");
-  const grayscale = fromTheme("grayscale");
-  const hueRotate = fromTheme("hueRotate");
-  const invert2 = fromTheme("invert");
-  const gap = fromTheme("gap");
-  const gradientColorStops = fromTheme("gradientColorStops");
-  const gradientColorStopPositions = fromTheme("gradientColorStopPositions");
-  const inset = fromTheme("inset");
-  const margin = fromTheme("margin");
-  const opacity = fromTheme("opacity");
-  const padding = fromTheme("padding");
-  const saturate = fromTheme("saturate");
-  const scale2 = fromTheme("scale");
-  const sepia = fromTheme("sepia");
-  const skew = fromTheme("skew");
-  const space = fromTheme("space");
-  const translate = fromTheme("translate");
-  const getOverscroll = () => ["auto", "contain", "none"];
-  const getOverflow = () => ["auto", "hidden", "clip", "visible", "scroll"];
-  const getSpacingWithAutoAndArbitrary = () => ["auto", isArbitraryValue, spacing];
-  const getSpacingWithArbitrary = () => [isArbitraryValue, spacing];
-  const getLengthWithEmptyAndArbitrary = () => ["", isLength, isArbitraryLength];
-  const getNumberWithAutoAndArbitrary = () => ["auto", isNumber, isArbitraryValue];
-  const getPositions = () => ["bottom", "center", "left", "left-bottom", "left-top", "right", "right-bottom", "right-top", "top"];
-  const getLineStyles = () => ["solid", "dashed", "dotted", "double", "none"];
-  const getBlendModes = () => ["normal", "multiply", "screen", "overlay", "darken", "lighten", "color-dodge", "color-burn", "hard-light", "soft-light", "difference", "exclusion", "hue", "saturation", "color", "luminosity"];
-  const getAlign = () => ["start", "end", "center", "between", "around", "evenly", "stretch"];
-  const getZeroAndEmpty = () => ["", "0", isArbitraryValue];
-  const getBreaks = () => ["auto", "avoid", "all", "avoid-page", "page", "left", "right", "column"];
-  const getNumberAndArbitrary = () => [isNumber, isArbitraryValue];
-  return {
-    cacheSize: 500,
-    separator: ":",
-    theme: {
-      colors: [isAny],
-      spacing: [isLength, isArbitraryLength],
-      blur: ["none", "", isTshirtSize, isArbitraryValue],
-      brightness: getNumberAndArbitrary(),
-      borderColor: [colors],
-      borderRadius: ["none", "", "full", isTshirtSize, isArbitraryValue],
-      borderSpacing: getSpacingWithArbitrary(),
-      borderWidth: getLengthWithEmptyAndArbitrary(),
-      contrast: getNumberAndArbitrary(),
-      grayscale: getZeroAndEmpty(),
-      hueRotate: getNumberAndArbitrary(),
-      invert: getZeroAndEmpty(),
-      gap: getSpacingWithArbitrary(),
-      gradientColorStops: [colors],
-      gradientColorStopPositions: [isPercent, isArbitraryLength],
-      inset: getSpacingWithAutoAndArbitrary(),
-      margin: getSpacingWithAutoAndArbitrary(),
-      opacity: getNumberAndArbitrary(),
-      padding: getSpacingWithArbitrary(),
-      saturate: getNumberAndArbitrary(),
-      scale: getNumberAndArbitrary(),
-      sepia: getZeroAndEmpty(),
-      skew: getNumberAndArbitrary(),
-      space: getSpacingWithArbitrary(),
-      translate: getSpacingWithArbitrary()
-    },
-    classGroups: {
-      // Layout
-      /**
-       * Aspect Ratio
-       * @see https://tailwindcss.com/docs/aspect-ratio
-       */
-      aspect: [{
-        aspect: ["auto", "square", "video", isArbitraryValue]
-      }],
-      /**
-       * Container
-       * @see https://tailwindcss.com/docs/container
-       */
-      container: ["container"],
-      /**
-       * Columns
-       * @see https://tailwindcss.com/docs/columns
-       */
-      columns: [{
-        columns: [isTshirtSize]
-      }],
-      /**
-       * Break After
-       * @see https://tailwindcss.com/docs/break-after
-       */
-      "break-after": [{
-        "break-after": getBreaks()
-      }],
-      /**
-       * Break Before
-       * @see https://tailwindcss.com/docs/break-before
-       */
-      "break-before": [{
-        "break-before": getBreaks()
-      }],
-      /**
-       * Break Inside
-       * @see https://tailwindcss.com/docs/break-inside
-       */
-      "break-inside": [{
-        "break-inside": ["auto", "avoid", "avoid-page", "avoid-column"]
-      }],
-      /**
-       * Box Decoration Break
-       * @see https://tailwindcss.com/docs/box-decoration-break
-       */
-      "box-decoration": [{
-        "box-decoration": ["slice", "clone"]
-      }],
-      /**
-       * Box Sizing
-       * @see https://tailwindcss.com/docs/box-sizing
-       */
-      box: [{
-        box: ["border", "content"]
-      }],
-      /**
-       * Display
-       * @see https://tailwindcss.com/docs/display
-       */
-      display: ["block", "inline-block", "inline", "flex", "inline-flex", "table", "inline-table", "table-caption", "table-cell", "table-column", "table-column-group", "table-footer-group", "table-header-group", "table-row-group", "table-row", "flow-root", "grid", "inline-grid", "contents", "list-item", "hidden"],
-      /**
-       * Floats
-       * @see https://tailwindcss.com/docs/float
-       */
-      float: [{
-        float: ["right", "left", "none", "start", "end"]
-      }],
-      /**
-       * Clear
-       * @see https://tailwindcss.com/docs/clear
-       */
-      clear: [{
-        clear: ["left", "right", "both", "none", "start", "end"]
-      }],
-      /**
-       * Isolation
-       * @see https://tailwindcss.com/docs/isolation
-       */
-      isolation: ["isolate", "isolation-auto"],
-      /**
-       * Object Fit
-       * @see https://tailwindcss.com/docs/object-fit
-       */
-      "object-fit": [{
-        object: ["contain", "cover", "fill", "none", "scale-down"]
-      }],
-      /**
-       * Object Position
-       * @see https://tailwindcss.com/docs/object-position
-       */
-      "object-position": [{
-        object: [...getPositions(), isArbitraryValue]
-      }],
-      /**
-       * Overflow
-       * @see https://tailwindcss.com/docs/overflow
-       */
-      overflow: [{
-        overflow: getOverflow()
-      }],
-      /**
-       * Overflow X
-       * @see https://tailwindcss.com/docs/overflow
-       */
-      "overflow-x": [{
-        "overflow-x": getOverflow()
-      }],
-      /**
-       * Overflow Y
-       * @see https://tailwindcss.com/docs/overflow
-       */
-      "overflow-y": [{
-        "overflow-y": getOverflow()
-      }],
-      /**
-       * Overscroll Behavior
-       * @see https://tailwindcss.com/docs/overscroll-behavior
-       */
-      overscroll: [{
-        overscroll: getOverscroll()
-      }],
-      /**
-       * Overscroll Behavior X
-       * @see https://tailwindcss.com/docs/overscroll-behavior
-       */
-      "overscroll-x": [{
-        "overscroll-x": getOverscroll()
-      }],
-      /**
-       * Overscroll Behavior Y
-       * @see https://tailwindcss.com/docs/overscroll-behavior
-       */
-      "overscroll-y": [{
-        "overscroll-y": getOverscroll()
-      }],
-      /**
-       * Position
-       * @see https://tailwindcss.com/docs/position
-       */
-      position: ["static", "fixed", "absolute", "relative", "sticky"],
-      /**
-       * Top / Right / Bottom / Left
-       * @see https://tailwindcss.com/docs/top-right-bottom-left
-       */
-      inset: [{
-        inset: [inset]
-      }],
-      /**
-       * Right / Left
-       * @see https://tailwindcss.com/docs/top-right-bottom-left
-       */
-      "inset-x": [{
-        "inset-x": [inset]
-      }],
-      /**
-       * Top / Bottom
-       * @see https://tailwindcss.com/docs/top-right-bottom-left
-       */
-      "inset-y": [{
-        "inset-y": [inset]
-      }],
-      /**
-       * Start
-       * @see https://tailwindcss.com/docs/top-right-bottom-left
-       */
-      start: [{
-        start: [inset]
-      }],
-      /**
-       * End
-       * @see https://tailwindcss.com/docs/top-right-bottom-left
-       */
-      end: [{
-        end: [inset]
-      }],
-      /**
-       * Top
-       * @see https://tailwindcss.com/docs/top-right-bottom-left
-       */
-      top: [{
-        top: [inset]
-      }],
-      /**
-       * Right
-       * @see https://tailwindcss.com/docs/top-right-bottom-left
-       */
-      right: [{
-        right: [inset]
-      }],
-      /**
-       * Bottom
-       * @see https://tailwindcss.com/docs/top-right-bottom-left
-       */
-      bottom: [{
-        bottom: [inset]
-      }],
-      /**
-       * Left
-       * @see https://tailwindcss.com/docs/top-right-bottom-left
-       */
-      left: [{
-        left: [inset]
-      }],
-      /**
-       * Visibility
-       * @see https://tailwindcss.com/docs/visibility
-       */
-      visibility: ["visible", "invisible", "collapse"],
-      /**
-       * Z-Index
-       * @see https://tailwindcss.com/docs/z-index
-       */
-      z: [{
-        z: ["auto", isInteger, isArbitraryValue]
-      }],
-      // Flexbox and Grid
-      /**
-       * Flex Basis
-       * @see https://tailwindcss.com/docs/flex-basis
-       */
-      basis: [{
-        basis: getSpacingWithAutoAndArbitrary()
-      }],
-      /**
-       * Flex Direction
-       * @see https://tailwindcss.com/docs/flex-direction
-       */
-      "flex-direction": [{
-        flex: ["row", "row-reverse", "col", "col-reverse"]
-      }],
-      /**
-       * Flex Wrap
-       * @see https://tailwindcss.com/docs/flex-wrap
-       */
-      "flex-wrap": [{
-        flex: ["wrap", "wrap-reverse", "nowrap"]
-      }],
-      /**
-       * Flex
-       * @see https://tailwindcss.com/docs/flex
-       */
-      flex: [{
-        flex: ["1", "auto", "initial", "none", isArbitraryValue]
-      }],
-      /**
-       * Flex Grow
-       * @see https://tailwindcss.com/docs/flex-grow
-       */
-      grow: [{
-        grow: getZeroAndEmpty()
-      }],
-      /**
-       * Flex Shrink
-       * @see https://tailwindcss.com/docs/flex-shrink
-       */
-      shrink: [{
-        shrink: getZeroAndEmpty()
-      }],
-      /**
-       * Order
-       * @see https://tailwindcss.com/docs/order
-       */
-      order: [{
-        order: ["first", "last", "none", isInteger, isArbitraryValue]
-      }],
-      /**
-       * Grid Template Columns
-       * @see https://tailwindcss.com/docs/grid-template-columns
-       */
-      "grid-cols": [{
-        "grid-cols": [isAny]
-      }],
-      /**
-       * Grid Column Start / End
-       * @see https://tailwindcss.com/docs/grid-column
-       */
-      "col-start-end": [{
-        col: ["auto", {
-          span: ["full", isInteger, isArbitraryValue]
-        }, isArbitraryValue]
-      }],
-      /**
-       * Grid Column Start
-       * @see https://tailwindcss.com/docs/grid-column
-       */
-      "col-start": [{
-        "col-start": getNumberWithAutoAndArbitrary()
-      }],
-      /**
-       * Grid Column End
-       * @see https://tailwindcss.com/docs/grid-column
-       */
-      "col-end": [{
-        "col-end": getNumberWithAutoAndArbitrary()
-      }],
-      /**
-       * Grid Template Rows
-       * @see https://tailwindcss.com/docs/grid-template-rows
-       */
-      "grid-rows": [{
-        "grid-rows": [isAny]
-      }],
-      /**
-       * Grid Row Start / End
-       * @see https://tailwindcss.com/docs/grid-row
-       */
-      "row-start-end": [{
-        row: ["auto", {
-          span: [isInteger, isArbitraryValue]
-        }, isArbitraryValue]
-      }],
-      /**
-       * Grid Row Start
-       * @see https://tailwindcss.com/docs/grid-row
-       */
-      "row-start": [{
-        "row-start": getNumberWithAutoAndArbitrary()
-      }],
-      /**
-       * Grid Row End
-       * @see https://tailwindcss.com/docs/grid-row
-       */
-      "row-end": [{
-        "row-end": getNumberWithAutoAndArbitrary()
-      }],
-      /**
-       * Grid Auto Flow
-       * @see https://tailwindcss.com/docs/grid-auto-flow
-       */
-      "grid-flow": [{
-        "grid-flow": ["row", "col", "dense", "row-dense", "col-dense"]
-      }],
-      /**
-       * Grid Auto Columns
-       * @see https://tailwindcss.com/docs/grid-auto-columns
-       */
-      "auto-cols": [{
-        "auto-cols": ["auto", "min", "max", "fr", isArbitraryValue]
-      }],
-      /**
-       * Grid Auto Rows
-       * @see https://tailwindcss.com/docs/grid-auto-rows
-       */
-      "auto-rows": [{
-        "auto-rows": ["auto", "min", "max", "fr", isArbitraryValue]
-      }],
-      /**
-       * Gap
-       * @see https://tailwindcss.com/docs/gap
-       */
-      gap: [{
-        gap: [gap]
-      }],
-      /**
-       * Gap X
-       * @see https://tailwindcss.com/docs/gap
-       */
-      "gap-x": [{
-        "gap-x": [gap]
-      }],
-      /**
-       * Gap Y
-       * @see https://tailwindcss.com/docs/gap
-       */
-      "gap-y": [{
-        "gap-y": [gap]
-      }],
-      /**
-       * Justify Content
-       * @see https://tailwindcss.com/docs/justify-content
-       */
-      "justify-content": [{
-        justify: ["normal", ...getAlign()]
-      }],
-      /**
-       * Justify Items
-       * @see https://tailwindcss.com/docs/justify-items
-       */
-      "justify-items": [{
-        "justify-items": ["start", "end", "center", "stretch"]
-      }],
-      /**
-       * Justify Self
-       * @see https://tailwindcss.com/docs/justify-self
-       */
-      "justify-self": [{
-        "justify-self": ["auto", "start", "end", "center", "stretch"]
-      }],
-      /**
-       * Align Content
-       * @see https://tailwindcss.com/docs/align-content
-       */
-      "align-content": [{
-        content: ["normal", ...getAlign(), "baseline"]
-      }],
-      /**
-       * Align Items
-       * @see https://tailwindcss.com/docs/align-items
-       */
-      "align-items": [{
-        items: ["start", "end", "center", "baseline", "stretch"]
-      }],
-      /**
-       * Align Self
-       * @see https://tailwindcss.com/docs/align-self
-       */
-      "align-self": [{
-        self: ["auto", "start", "end", "center", "stretch", "baseline"]
-      }],
-      /**
-       * Place Content
-       * @see https://tailwindcss.com/docs/place-content
-       */
-      "place-content": [{
-        "place-content": [...getAlign(), "baseline"]
-      }],
-      /**
-       * Place Items
-       * @see https://tailwindcss.com/docs/place-items
-       */
-      "place-items": [{
-        "place-items": ["start", "end", "center", "baseline", "stretch"]
-      }],
-      /**
-       * Place Self
-       * @see https://tailwindcss.com/docs/place-self
-       */
-      "place-self": [{
-        "place-self": ["auto", "start", "end", "center", "stretch"]
-      }],
-      // Spacing
-      /**
-       * Padding
-       * @see https://tailwindcss.com/docs/padding
-       */
-      p: [{
-        p: [padding]
-      }],
-      /**
-       * Padding X
-       * @see https://tailwindcss.com/docs/padding
-       */
-      px: [{
-        px: [padding]
-      }],
-      /**
-       * Padding Y
-       * @see https://tailwindcss.com/docs/padding
-       */
-      py: [{
-        py: [padding]
-      }],
-      /**
-       * Padding Start
-       * @see https://tailwindcss.com/docs/padding
-       */
-      ps: [{
-        ps: [padding]
-      }],
-      /**
-       * Padding End
-       * @see https://tailwindcss.com/docs/padding
-       */
-      pe: [{
-        pe: [padding]
-      }],
-      /**
-       * Padding Top
-       * @see https://tailwindcss.com/docs/padding
-       */
-      pt: [{
-        pt: [padding]
-      }],
-      /**
-       * Padding Right
-       * @see https://tailwindcss.com/docs/padding
-       */
-      pr: [{
-        pr: [padding]
-      }],
-      /**
-       * Padding Bottom
-       * @see https://tailwindcss.com/docs/padding
-       */
-      pb: [{
-        pb: [padding]
-      }],
-      /**
-       * Padding Left
-       * @see https://tailwindcss.com/docs/padding
-       */
-      pl: [{
-        pl: [padding]
-      }],
-      /**
-       * Margin
-       * @see https://tailwindcss.com/docs/margin
-       */
-      m: [{
-        m: [margin]
-      }],
-      /**
-       * Margin X
-       * @see https://tailwindcss.com/docs/margin
-       */
-      mx: [{
-        mx: [margin]
-      }],
-      /**
-       * Margin Y
-       * @see https://tailwindcss.com/docs/margin
-       */
-      my: [{
-        my: [margin]
-      }],
-      /**
-       * Margin Start
-       * @see https://tailwindcss.com/docs/margin
-       */
-      ms: [{
-        ms: [margin]
-      }],
-      /**
-       * Margin End
-       * @see https://tailwindcss.com/docs/margin
-       */
-      me: [{
-        me: [margin]
-      }],
-      /**
-       * Margin Top
-       * @see https://tailwindcss.com/docs/margin
-       */
-      mt: [{
-        mt: [margin]
-      }],
-      /**
-       * Margin Right
-       * @see https://tailwindcss.com/docs/margin
-       */
-      mr: [{
-        mr: [margin]
-      }],
-      /**
-       * Margin Bottom
-       * @see https://tailwindcss.com/docs/margin
-       */
-      mb: [{
-        mb: [margin]
-      }],
-      /**
-       * Margin Left
-       * @see https://tailwindcss.com/docs/margin
-       */
-      ml: [{
-        ml: [margin]
-      }],
-      /**
-       * Space Between X
-       * @see https://tailwindcss.com/docs/space
-       */
-      "space-x": [{
-        "space-x": [space]
-      }],
-      /**
-       * Space Between X Reverse
-       * @see https://tailwindcss.com/docs/space
-       */
-      "space-x-reverse": ["space-x-reverse"],
-      /**
-       * Space Between Y
-       * @see https://tailwindcss.com/docs/space
-       */
-      "space-y": [{
-        "space-y": [space]
-      }],
-      /**
-       * Space Between Y Reverse
-       * @see https://tailwindcss.com/docs/space
-       */
-      "space-y-reverse": ["space-y-reverse"],
-      // Sizing
-      /**
-       * Width
-       * @see https://tailwindcss.com/docs/width
-       */
-      w: [{
-        w: ["auto", "min", "max", "fit", "svw", "lvw", "dvw", isArbitraryValue, spacing]
-      }],
-      /**
-       * Min-Width
-       * @see https://tailwindcss.com/docs/min-width
-       */
-      "min-w": [{
-        "min-w": [isArbitraryValue, spacing, "min", "max", "fit"]
-      }],
-      /**
-       * Max-Width
-       * @see https://tailwindcss.com/docs/max-width
-       */
-      "max-w": [{
-        "max-w": [isArbitraryValue, spacing, "none", "full", "min", "max", "fit", "prose", {
-          screen: [isTshirtSize]
-        }, isTshirtSize]
-      }],
-      /**
-       * Height
-       * @see https://tailwindcss.com/docs/height
-       */
-      h: [{
-        h: [isArbitraryValue, spacing, "auto", "min", "max", "fit", "svh", "lvh", "dvh"]
-      }],
-      /**
-       * Min-Height
-       * @see https://tailwindcss.com/docs/min-height
-       */
-      "min-h": [{
-        "min-h": [isArbitraryValue, spacing, "min", "max", "fit", "svh", "lvh", "dvh"]
-      }],
-      /**
-       * Max-Height
-       * @see https://tailwindcss.com/docs/max-height
-       */
-      "max-h": [{
-        "max-h": [isArbitraryValue, spacing, "min", "max", "fit", "svh", "lvh", "dvh"]
-      }],
-      /**
-       * Size
-       * @see https://tailwindcss.com/docs/size
-       */
-      size: [{
-        size: [isArbitraryValue, spacing, "auto", "min", "max", "fit"]
-      }],
-      // Typography
-      /**
-       * Font Size
-       * @see https://tailwindcss.com/docs/font-size
-       */
-      "font-size": [{
-        text: ["base", isTshirtSize, isArbitraryLength]
-      }],
-      /**
-       * Font Smoothing
-       * @see https://tailwindcss.com/docs/font-smoothing
-       */
-      "font-smoothing": ["antialiased", "subpixel-antialiased"],
-      /**
-       * Font Style
-       * @see https://tailwindcss.com/docs/font-style
-       */
-      "font-style": ["italic", "not-italic"],
-      /**
-       * Font Weight
-       * @see https://tailwindcss.com/docs/font-weight
-       */
-      "font-weight": [{
-        font: ["thin", "extralight", "light", "normal", "medium", "semibold", "bold", "extrabold", "black", isArbitraryNumber]
-      }],
-      /**
-       * Font Family
-       * @see https://tailwindcss.com/docs/font-family
-       */
-      "font-family": [{
-        font: [isAny]
-      }],
-      /**
-       * Font Variant Numeric
-       * @see https://tailwindcss.com/docs/font-variant-numeric
-       */
-      "fvn-normal": ["normal-nums"],
-      /**
-       * Font Variant Numeric
-       * @see https://tailwindcss.com/docs/font-variant-numeric
-       */
-      "fvn-ordinal": ["ordinal"],
-      /**
-       * Font Variant Numeric
-       * @see https://tailwindcss.com/docs/font-variant-numeric
-       */
-      "fvn-slashed-zero": ["slashed-zero"],
-      /**
-       * Font Variant Numeric
-       * @see https://tailwindcss.com/docs/font-variant-numeric
-       */
-      "fvn-figure": ["lining-nums", "oldstyle-nums"],
-      /**
-       * Font Variant Numeric
-       * @see https://tailwindcss.com/docs/font-variant-numeric
-       */
-      "fvn-spacing": ["proportional-nums", "tabular-nums"],
-      /**
-       * Font Variant Numeric
-       * @see https://tailwindcss.com/docs/font-variant-numeric
-       */
-      "fvn-fraction": ["diagonal-fractions", "stacked-fractions"],
-      /**
-       * Letter Spacing
-       * @see https://tailwindcss.com/docs/letter-spacing
-       */
-      tracking: [{
-        tracking: ["tighter", "tight", "normal", "wide", "wider", "widest", isArbitraryValue]
-      }],
-      /**
-       * Line Clamp
-       * @see https://tailwindcss.com/docs/line-clamp
-       */
-      "line-clamp": [{
-        "line-clamp": ["none", isNumber, isArbitraryNumber]
-      }],
-      /**
-       * Line Height
-       * @see https://tailwindcss.com/docs/line-height
-       */
-      leading: [{
-        leading: ["none", "tight", "snug", "normal", "relaxed", "loose", isLength, isArbitraryValue]
-      }],
-      /**
-       * List Style Image
-       * @see https://tailwindcss.com/docs/list-style-image
-       */
-      "list-image": [{
-        "list-image": ["none", isArbitraryValue]
-      }],
-      /**
-       * List Style Type
-       * @see https://tailwindcss.com/docs/list-style-type
-       */
-      "list-style-type": [{
-        list: ["none", "disc", "decimal", isArbitraryValue]
-      }],
-      /**
-       * List Style Position
-       * @see https://tailwindcss.com/docs/list-style-position
-       */
-      "list-style-position": [{
-        list: ["inside", "outside"]
-      }],
-      /**
-       * Placeholder Color
-       * @deprecated since Tailwind CSS v3.0.0
-       * @see https://tailwindcss.com/docs/placeholder-color
-       */
-      "placeholder-color": [{
-        placeholder: [colors]
-      }],
-      /**
-       * Placeholder Opacity
-       * @see https://tailwindcss.com/docs/placeholder-opacity
-       */
-      "placeholder-opacity": [{
-        "placeholder-opacity": [opacity]
-      }],
-      /**
-       * Text Alignment
-       * @see https://tailwindcss.com/docs/text-align
-       */
-      "text-alignment": [{
-        text: ["left", "center", "right", "justify", "start", "end"]
-      }],
-      /**
-       * Text Color
-       * @see https://tailwindcss.com/docs/text-color
-       */
-      "text-color": [{
-        text: [colors]
-      }],
-      /**
-       * Text Opacity
-       * @see https://tailwindcss.com/docs/text-opacity
-       */
-      "text-opacity": [{
-        "text-opacity": [opacity]
-      }],
-      /**
-       * Text Decoration
-       * @see https://tailwindcss.com/docs/text-decoration
-       */
-      "text-decoration": ["underline", "overline", "line-through", "no-underline"],
-      /**
-       * Text Decoration Style
-       * @see https://tailwindcss.com/docs/text-decoration-style
-       */
-      "text-decoration-style": [{
-        decoration: [...getLineStyles(), "wavy"]
-      }],
-      /**
-       * Text Decoration Thickness
-       * @see https://tailwindcss.com/docs/text-decoration-thickness
-       */
-      "text-decoration-thickness": [{
-        decoration: ["auto", "from-font", isLength, isArbitraryLength]
-      }],
-      /**
-       * Text Underline Offset
-       * @see https://tailwindcss.com/docs/text-underline-offset
-       */
-      "underline-offset": [{
-        "underline-offset": ["auto", isLength, isArbitraryValue]
-      }],
-      /**
-       * Text Decoration Color
-       * @see https://tailwindcss.com/docs/text-decoration-color
-       */
-      "text-decoration-color": [{
-        decoration: [colors]
-      }],
-      /**
-       * Text Transform
-       * @see https://tailwindcss.com/docs/text-transform
-       */
-      "text-transform": ["uppercase", "lowercase", "capitalize", "normal-case"],
-      /**
-       * Text Overflow
-       * @see https://tailwindcss.com/docs/text-overflow
-       */
-      "text-overflow": ["truncate", "text-ellipsis", "text-clip"],
-      /**
-       * Text Wrap
-       * @see https://tailwindcss.com/docs/text-wrap
-       */
-      "text-wrap": [{
-        text: ["wrap", "nowrap", "balance", "pretty"]
-      }],
-      /**
-       * Text Indent
-       * @see https://tailwindcss.com/docs/text-indent
-       */
-      indent: [{
-        indent: getSpacingWithArbitrary()
-      }],
-      /**
-       * Vertical Alignment
-       * @see https://tailwindcss.com/docs/vertical-align
-       */
-      "vertical-align": [{
-        align: ["baseline", "top", "middle", "bottom", "text-top", "text-bottom", "sub", "super", isArbitraryValue]
-      }],
-      /**
-       * Whitespace
-       * @see https://tailwindcss.com/docs/whitespace
-       */
-      whitespace: [{
-        whitespace: ["normal", "nowrap", "pre", "pre-line", "pre-wrap", "break-spaces"]
-      }],
-      /**
-       * Word Break
-       * @see https://tailwindcss.com/docs/word-break
-       */
-      break: [{
-        break: ["normal", "words", "all", "keep"]
-      }],
-      /**
-       * Hyphens
-       * @see https://tailwindcss.com/docs/hyphens
-       */
-      hyphens: [{
-        hyphens: ["none", "manual", "auto"]
-      }],
-      /**
-       * Content
-       * @see https://tailwindcss.com/docs/content
-       */
-      content: [{
-        content: ["none", isArbitraryValue]
-      }],
-      // Backgrounds
-      /**
-       * Background Attachment
-       * @see https://tailwindcss.com/docs/background-attachment
-       */
-      "bg-attachment": [{
-        bg: ["fixed", "local", "scroll"]
-      }],
-      /**
-       * Background Clip
-       * @see https://tailwindcss.com/docs/background-clip
-       */
-      "bg-clip": [{
-        "bg-clip": ["border", "padding", "content", "text"]
-      }],
-      /**
-       * Background Opacity
-       * @deprecated since Tailwind CSS v3.0.0
-       * @see https://tailwindcss.com/docs/background-opacity
-       */
-      "bg-opacity": [{
-        "bg-opacity": [opacity]
-      }],
-      /**
-       * Background Origin
-       * @see https://tailwindcss.com/docs/background-origin
-       */
-      "bg-origin": [{
-        "bg-origin": ["border", "padding", "content"]
-      }],
-      /**
-       * Background Position
-       * @see https://tailwindcss.com/docs/background-position
-       */
-      "bg-position": [{
-        bg: [...getPositions(), isArbitraryPosition]
-      }],
-      /**
-       * Background Repeat
-       * @see https://tailwindcss.com/docs/background-repeat
-       */
-      "bg-repeat": [{
-        bg: ["no-repeat", {
-          repeat: ["", "x", "y", "round", "space"]
-        }]
-      }],
-      /**
-       * Background Size
-       * @see https://tailwindcss.com/docs/background-size
-       */
-      "bg-size": [{
-        bg: ["auto", "cover", "contain", isArbitrarySize]
-      }],
-      /**
-       * Background Image
-       * @see https://tailwindcss.com/docs/background-image
-       */
-      "bg-image": [{
-        bg: ["none", {
-          "gradient-to": ["t", "tr", "r", "br", "b", "bl", "l", "tl"]
-        }, isArbitraryImage]
-      }],
-      /**
-       * Background Color
-       * @see https://tailwindcss.com/docs/background-color
-       */
-      "bg-color": [{
-        bg: [colors]
-      }],
-      /**
-       * Gradient Color Stops From Position
-       * @see https://tailwindcss.com/docs/gradient-color-stops
-       */
-      "gradient-from-pos": [{
-        from: [gradientColorStopPositions]
-      }],
-      /**
-       * Gradient Color Stops Via Position
-       * @see https://tailwindcss.com/docs/gradient-color-stops
-       */
-      "gradient-via-pos": [{
-        via: [gradientColorStopPositions]
-      }],
-      /**
-       * Gradient Color Stops To Position
-       * @see https://tailwindcss.com/docs/gradient-color-stops
-       */
-      "gradient-to-pos": [{
-        to: [gradientColorStopPositions]
-      }],
-      /**
-       * Gradient Color Stops From
-       * @see https://tailwindcss.com/docs/gradient-color-stops
-       */
-      "gradient-from": [{
-        from: [gradientColorStops]
-      }],
-      /**
-       * Gradient Color Stops Via
-       * @see https://tailwindcss.com/docs/gradient-color-stops
-       */
-      "gradient-via": [{
-        via: [gradientColorStops]
-      }],
-      /**
-       * Gradient Color Stops To
-       * @see https://tailwindcss.com/docs/gradient-color-stops
-       */
-      "gradient-to": [{
-        to: [gradientColorStops]
-      }],
-      // Borders
-      /**
-       * Border Radius
-       * @see https://tailwindcss.com/docs/border-radius
-       */
-      rounded: [{
-        rounded: [borderRadius]
-      }],
-      /**
-       * Border Radius Start
-       * @see https://tailwindcss.com/docs/border-radius
-       */
-      "rounded-s": [{
-        "rounded-s": [borderRadius]
-      }],
-      /**
-       * Border Radius End
-       * @see https://tailwindcss.com/docs/border-radius
-       */
-      "rounded-e": [{
-        "rounded-e": [borderRadius]
-      }],
-      /**
-       * Border Radius Top
-       * @see https://tailwindcss.com/docs/border-radius
-       */
-      "rounded-t": [{
-        "rounded-t": [borderRadius]
-      }],
-      /**
-       * Border Radius Right
-       * @see https://tailwindcss.com/docs/border-radius
-       */
-      "rounded-r": [{
-        "rounded-r": [borderRadius]
-      }],
-      /**
-       * Border Radius Bottom
-       * @see https://tailwindcss.com/docs/border-radius
-       */
-      "rounded-b": [{
-        "rounded-b": [borderRadius]
-      }],
-      /**
-       * Border Radius Left
-       * @see https://tailwindcss.com/docs/border-radius
-       */
-      "rounded-l": [{
-        "rounded-l": [borderRadius]
-      }],
-      /**
-       * Border Radius Start Start
-       * @see https://tailwindcss.com/docs/border-radius
-       */
-      "rounded-ss": [{
-        "rounded-ss": [borderRadius]
-      }],
-      /**
-       * Border Radius Start End
-       * @see https://tailwindcss.com/docs/border-radius
-       */
-      "rounded-se": [{
-        "rounded-se": [borderRadius]
-      }],
-      /**
-       * Border Radius End End
-       * @see https://tailwindcss.com/docs/border-radius
-       */
-      "rounded-ee": [{
-        "rounded-ee": [borderRadius]
-      }],
-      /**
-       * Border Radius End Start
-       * @see https://tailwindcss.com/docs/border-radius
-       */
-      "rounded-es": [{
-        "rounded-es": [borderRadius]
-      }],
-      /**
-       * Border Radius Top Left
-       * @see https://tailwindcss.com/docs/border-radius
-       */
-      "rounded-tl": [{
-        "rounded-tl": [borderRadius]
-      }],
-      /**
-       * Border Radius Top Right
-       * @see https://tailwindcss.com/docs/border-radius
-       */
-      "rounded-tr": [{
-        "rounded-tr": [borderRadius]
-      }],
-      /**
-       * Border Radius Bottom Right
-       * @see https://tailwindcss.com/docs/border-radius
-       */
-      "rounded-br": [{
-        "rounded-br": [borderRadius]
-      }],
-      /**
-       * Border Radius Bottom Left
-       * @see https://tailwindcss.com/docs/border-radius
-       */
-      "rounded-bl": [{
-        "rounded-bl": [borderRadius]
-      }],
-      /**
-       * Border Width
-       * @see https://tailwindcss.com/docs/border-width
-       */
-      "border-w": [{
-        border: [borderWidth]
-      }],
-      /**
-       * Border Width X
-       * @see https://tailwindcss.com/docs/border-width
-       */
-      "border-w-x": [{
-        "border-x": [borderWidth]
-      }],
-      /**
-       * Border Width Y
-       * @see https://tailwindcss.com/docs/border-width
-       */
-      "border-w-y": [{
-        "border-y": [borderWidth]
-      }],
-      /**
-       * Border Width Start
-       * @see https://tailwindcss.com/docs/border-width
-       */
-      "border-w-s": [{
-        "border-s": [borderWidth]
-      }],
-      /**
-       * Border Width End
-       * @see https://tailwindcss.com/docs/border-width
-       */
-      "border-w-e": [{
-        "border-e": [borderWidth]
-      }],
-      /**
-       * Border Width Top
-       * @see https://tailwindcss.com/docs/border-width
-       */
-      "border-w-t": [{
-        "border-t": [borderWidth]
-      }],
-      /**
-       * Border Width Right
-       * @see https://tailwindcss.com/docs/border-width
-       */
-      "border-w-r": [{
-        "border-r": [borderWidth]
-      }],
-      /**
-       * Border Width Bottom
-       * @see https://tailwindcss.com/docs/border-width
-       */
-      "border-w-b": [{
-        "border-b": [borderWidth]
-      }],
-      /**
-       * Border Width Left
-       * @see https://tailwindcss.com/docs/border-width
-       */
-      "border-w-l": [{
-        "border-l": [borderWidth]
-      }],
-      /**
-       * Border Opacity
-       * @see https://tailwindcss.com/docs/border-opacity
-       */
-      "border-opacity": [{
-        "border-opacity": [opacity]
-      }],
-      /**
-       * Border Style
-       * @see https://tailwindcss.com/docs/border-style
-       */
-      "border-style": [{
-        border: [...getLineStyles(), "hidden"]
-      }],
-      /**
-       * Divide Width X
-       * @see https://tailwindcss.com/docs/divide-width
-       */
-      "divide-x": [{
-        "divide-x": [borderWidth]
-      }],
-      /**
-       * Divide Width X Reverse
-       * @see https://tailwindcss.com/docs/divide-width
-       */
-      "divide-x-reverse": ["divide-x-reverse"],
-      /**
-       * Divide Width Y
-       * @see https://tailwindcss.com/docs/divide-width
-       */
-      "divide-y": [{
-        "divide-y": [borderWidth]
-      }],
-      /**
-       * Divide Width Y Reverse
-       * @see https://tailwindcss.com/docs/divide-width
-       */
-      "divide-y-reverse": ["divide-y-reverse"],
-      /**
-       * Divide Opacity
-       * @see https://tailwindcss.com/docs/divide-opacity
-       */
-      "divide-opacity": [{
-        "divide-opacity": [opacity]
-      }],
-      /**
-       * Divide Style
-       * @see https://tailwindcss.com/docs/divide-style
-       */
-      "divide-style": [{
-        divide: getLineStyles()
-      }],
-      /**
-       * Border Color
-       * @see https://tailwindcss.com/docs/border-color
-       */
-      "border-color": [{
-        border: [borderColor]
-      }],
-      /**
-       * Border Color X
-       * @see https://tailwindcss.com/docs/border-color
-       */
-      "border-color-x": [{
-        "border-x": [borderColor]
-      }],
-      /**
-       * Border Color Y
-       * @see https://tailwindcss.com/docs/border-color
-       */
-      "border-color-y": [{
-        "border-y": [borderColor]
-      }],
-      /**
-       * Border Color S
-       * @see https://tailwindcss.com/docs/border-color
-       */
-      "border-color-s": [{
-        "border-s": [borderColor]
-      }],
-      /**
-       * Border Color E
-       * @see https://tailwindcss.com/docs/border-color
-       */
-      "border-color-e": [{
-        "border-e": [borderColor]
-      }],
-      /**
-       * Border Color Top
-       * @see https://tailwindcss.com/docs/border-color
-       */
-      "border-color-t": [{
-        "border-t": [borderColor]
-      }],
-      /**
-       * Border Color Right
-       * @see https://tailwindcss.com/docs/border-color
-       */
-      "border-color-r": [{
-        "border-r": [borderColor]
-      }],
-      /**
-       * Border Color Bottom
-       * @see https://tailwindcss.com/docs/border-color
-       */
-      "border-color-b": [{
-        "border-b": [borderColor]
-      }],
-      /**
-       * Border Color Left
-       * @see https://tailwindcss.com/docs/border-color
-       */
-      "border-color-l": [{
-        "border-l": [borderColor]
-      }],
-      /**
-       * Divide Color
-       * @see https://tailwindcss.com/docs/divide-color
-       */
-      "divide-color": [{
-        divide: [borderColor]
-      }],
-      /**
-       * Outline Style
-       * @see https://tailwindcss.com/docs/outline-style
-       */
-      "outline-style": [{
-        outline: ["", ...getLineStyles()]
-      }],
-      /**
-       * Outline Offset
-       * @see https://tailwindcss.com/docs/outline-offset
-       */
-      "outline-offset": [{
-        "outline-offset": [isLength, isArbitraryValue]
-      }],
-      /**
-       * Outline Width
-       * @see https://tailwindcss.com/docs/outline-width
-       */
-      "outline-w": [{
-        outline: [isLength, isArbitraryLength]
-      }],
-      /**
-       * Outline Color
-       * @see https://tailwindcss.com/docs/outline-color
-       */
-      "outline-color": [{
-        outline: [colors]
-      }],
-      /**
-       * Ring Width
-       * @see https://tailwindcss.com/docs/ring-width
-       */
-      "ring-w": [{
-        ring: getLengthWithEmptyAndArbitrary()
-      }],
-      /**
-       * Ring Width Inset
-       * @see https://tailwindcss.com/docs/ring-width
-       */
-      "ring-w-inset": ["ring-inset"],
-      /**
-       * Ring Color
-       * @see https://tailwindcss.com/docs/ring-color
-       */
-      "ring-color": [{
-        ring: [colors]
-      }],
-      /**
-       * Ring Opacity
-       * @see https://tailwindcss.com/docs/ring-opacity
-       */
-      "ring-opacity": [{
-        "ring-opacity": [opacity]
-      }],
-      /**
-       * Ring Offset Width
-       * @see https://tailwindcss.com/docs/ring-offset-width
-       */
-      "ring-offset-w": [{
-        "ring-offset": [isLength, isArbitraryLength]
-      }],
-      /**
-       * Ring Offset Color
-       * @see https://tailwindcss.com/docs/ring-offset-color
-       */
-      "ring-offset-color": [{
-        "ring-offset": [colors]
-      }],
-      // Effects
-      /**
-       * Box Shadow
-       * @see https://tailwindcss.com/docs/box-shadow
-       */
-      shadow: [{
-        shadow: ["", "inner", "none", isTshirtSize, isArbitraryShadow]
-      }],
-      /**
-       * Box Shadow Color
-       * @see https://tailwindcss.com/docs/box-shadow-color
-       */
-      "shadow-color": [{
-        shadow: [isAny]
-      }],
-      /**
-       * Opacity
-       * @see https://tailwindcss.com/docs/opacity
-       */
-      opacity: [{
-        opacity: [opacity]
-      }],
-      /**
-       * Mix Blend Mode
-       * @see https://tailwindcss.com/docs/mix-blend-mode
-       */
-      "mix-blend": [{
-        "mix-blend": [...getBlendModes(), "plus-lighter", "plus-darker"]
-      }],
-      /**
-       * Background Blend Mode
-       * @see https://tailwindcss.com/docs/background-blend-mode
-       */
-      "bg-blend": [{
-        "bg-blend": getBlendModes()
-      }],
-      // Filters
-      /**
-       * Filter
-       * @deprecated since Tailwind CSS v3.0.0
-       * @see https://tailwindcss.com/docs/filter
-       */
-      filter: [{
-        filter: ["", "none"]
-      }],
-      /**
-       * Blur
-       * @see https://tailwindcss.com/docs/blur
-       */
-      blur: [{
-        blur: [blur]
-      }],
-      /**
-       * Brightness
-       * @see https://tailwindcss.com/docs/brightness
-       */
-      brightness: [{
-        brightness: [brightness]
-      }],
-      /**
-       * Contrast
-       * @see https://tailwindcss.com/docs/contrast
-       */
-      contrast: [{
-        contrast: [contrast]
-      }],
-      /**
-       * Drop Shadow
-       * @see https://tailwindcss.com/docs/drop-shadow
-       */
-      "drop-shadow": [{
-        "drop-shadow": ["", "none", isTshirtSize, isArbitraryValue]
-      }],
-      /**
-       * Grayscale
-       * @see https://tailwindcss.com/docs/grayscale
-       */
-      grayscale: [{
-        grayscale: [grayscale]
-      }],
-      /**
-       * Hue Rotate
-       * @see https://tailwindcss.com/docs/hue-rotate
-       */
-      "hue-rotate": [{
-        "hue-rotate": [hueRotate]
-      }],
-      /**
-       * Invert
-       * @see https://tailwindcss.com/docs/invert
-       */
-      invert: [{
-        invert: [invert2]
-      }],
-      /**
-       * Saturate
-       * @see https://tailwindcss.com/docs/saturate
-       */
-      saturate: [{
-        saturate: [saturate]
-      }],
-      /**
-       * Sepia
-       * @see https://tailwindcss.com/docs/sepia
-       */
-      sepia: [{
-        sepia: [sepia]
-      }],
-      /**
-       * Backdrop Filter
-       * @deprecated since Tailwind CSS v3.0.0
-       * @see https://tailwindcss.com/docs/backdrop-filter
-       */
-      "backdrop-filter": [{
-        "backdrop-filter": ["", "none"]
-      }],
-      /**
-       * Backdrop Blur
-       * @see https://tailwindcss.com/docs/backdrop-blur
-       */
-      "backdrop-blur": [{
-        "backdrop-blur": [blur]
-      }],
-      /**
-       * Backdrop Brightness
-       * @see https://tailwindcss.com/docs/backdrop-brightness
-       */
-      "backdrop-brightness": [{
-        "backdrop-brightness": [brightness]
-      }],
-      /**
-       * Backdrop Contrast
-       * @see https://tailwindcss.com/docs/backdrop-contrast
-       */
-      "backdrop-contrast": [{
-        "backdrop-contrast": [contrast]
-      }],
-      /**
-       * Backdrop Grayscale
-       * @see https://tailwindcss.com/docs/backdrop-grayscale
-       */
-      "backdrop-grayscale": [{
-        "backdrop-grayscale": [grayscale]
-      }],
-      /**
-       * Backdrop Hue Rotate
-       * @see https://tailwindcss.com/docs/backdrop-hue-rotate
-       */
-      "backdrop-hue-rotate": [{
-        "backdrop-hue-rotate": [hueRotate]
-      }],
-      /**
-       * Backdrop Invert
-       * @see https://tailwindcss.com/docs/backdrop-invert
-       */
-      "backdrop-invert": [{
-        "backdrop-invert": [invert2]
-      }],
-      /**
-       * Backdrop Opacity
-       * @see https://tailwindcss.com/docs/backdrop-opacity
-       */
-      "backdrop-opacity": [{
-        "backdrop-opacity": [opacity]
-      }],
-      /**
-       * Backdrop Saturate
-       * @see https://tailwindcss.com/docs/backdrop-saturate
-       */
-      "backdrop-saturate": [{
-        "backdrop-saturate": [saturate]
-      }],
-      /**
-       * Backdrop Sepia
-       * @see https://tailwindcss.com/docs/backdrop-sepia
-       */
-      "backdrop-sepia": [{
-        "backdrop-sepia": [sepia]
-      }],
-      // Tables
-      /**
-       * Border Collapse
-       * @see https://tailwindcss.com/docs/border-collapse
-       */
-      "border-collapse": [{
-        border: ["collapse", "separate"]
-      }],
-      /**
-       * Border Spacing
-       * @see https://tailwindcss.com/docs/border-spacing
-       */
-      "border-spacing": [{
-        "border-spacing": [borderSpacing]
-      }],
-      /**
-       * Border Spacing X
-       * @see https://tailwindcss.com/docs/border-spacing
-       */
-      "border-spacing-x": [{
-        "border-spacing-x": [borderSpacing]
-      }],
-      /**
-       * Border Spacing Y
-       * @see https://tailwindcss.com/docs/border-spacing
-       */
-      "border-spacing-y": [{
-        "border-spacing-y": [borderSpacing]
-      }],
-      /**
-       * Table Layout
-       * @see https://tailwindcss.com/docs/table-layout
-       */
-      "table-layout": [{
-        table: ["auto", "fixed"]
-      }],
-      /**
-       * Caption Side
-       * @see https://tailwindcss.com/docs/caption-side
-       */
-      caption: [{
-        caption: ["top", "bottom"]
-      }],
-      // Transitions and Animation
-      /**
-       * Tranisition Property
-       * @see https://tailwindcss.com/docs/transition-property
-       */
-      transition: [{
-        transition: ["none", "all", "", "colors", "opacity", "shadow", "transform", isArbitraryValue]
-      }],
-      /**
-       * Transition Duration
-       * @see https://tailwindcss.com/docs/transition-duration
-       */
-      duration: [{
-        duration: getNumberAndArbitrary()
-      }],
-      /**
-       * Transition Timing Function
-       * @see https://tailwindcss.com/docs/transition-timing-function
-       */
-      ease: [{
-        ease: ["linear", "in", "out", "in-out", isArbitraryValue]
-      }],
-      /**
-       * Transition Delay
-       * @see https://tailwindcss.com/docs/transition-delay
-       */
-      delay: [{
-        delay: getNumberAndArbitrary()
-      }],
-      /**
-       * Animation
-       * @see https://tailwindcss.com/docs/animation
-       */
-      animate: [{
-        animate: ["none", "spin", "ping", "pulse", "bounce", isArbitraryValue]
-      }],
-      // Transforms
-      /**
-       * Transform
-       * @see https://tailwindcss.com/docs/transform
-       */
-      transform: [{
-        transform: ["", "gpu", "none"]
-      }],
-      /**
-       * Scale
-       * @see https://tailwindcss.com/docs/scale
-       */
-      scale: [{
-        scale: [scale2]
-      }],
-      /**
-       * Scale X
-       * @see https://tailwindcss.com/docs/scale
-       */
-      "scale-x": [{
-        "scale-x": [scale2]
-      }],
-      /**
-       * Scale Y
-       * @see https://tailwindcss.com/docs/scale
-       */
-      "scale-y": [{
-        "scale-y": [scale2]
-      }],
-      /**
-       * Rotate
-       * @see https://tailwindcss.com/docs/rotate
-       */
-      rotate: [{
-        rotate: [isInteger, isArbitraryValue]
-      }],
-      /**
-       * Translate X
-       * @see https://tailwindcss.com/docs/translate
-       */
-      "translate-x": [{
-        "translate-x": [translate]
-      }],
-      /**
-       * Translate Y
-       * @see https://tailwindcss.com/docs/translate
-       */
-      "translate-y": [{
-        "translate-y": [translate]
-      }],
-      /**
-       * Skew X
-       * @see https://tailwindcss.com/docs/skew
-       */
-      "skew-x": [{
-        "skew-x": [skew]
-      }],
-      /**
-       * Skew Y
-       * @see https://tailwindcss.com/docs/skew
-       */
-      "skew-y": [{
-        "skew-y": [skew]
-      }],
-      /**
-       * Transform Origin
-       * @see https://tailwindcss.com/docs/transform-origin
-       */
-      "transform-origin": [{
-        origin: ["center", "top", "top-right", "right", "bottom-right", "bottom", "bottom-left", "left", "top-left", isArbitraryValue]
-      }],
-      // Interactivity
-      /**
-       * Accent Color
-       * @see https://tailwindcss.com/docs/accent-color
-       */
-      accent: [{
-        accent: ["auto", colors]
-      }],
-      /**
-       * Appearance
-       * @see https://tailwindcss.com/docs/appearance
-       */
-      appearance: [{
-        appearance: ["none", "auto"]
-      }],
-      /**
-       * Cursor
-       * @see https://tailwindcss.com/docs/cursor
-       */
-      cursor: [{
-        cursor: ["auto", "default", "pointer", "wait", "text", "move", "help", "not-allowed", "none", "context-menu", "progress", "cell", "crosshair", "vertical-text", "alias", "copy", "no-drop", "grab", "grabbing", "all-scroll", "col-resize", "row-resize", "n-resize", "e-resize", "s-resize", "w-resize", "ne-resize", "nw-resize", "se-resize", "sw-resize", "ew-resize", "ns-resize", "nesw-resize", "nwse-resize", "zoom-in", "zoom-out", isArbitraryValue]
-      }],
-      /**
-       * Caret Color
-       * @see https://tailwindcss.com/docs/just-in-time-mode#caret-color-utilities
-       */
-      "caret-color": [{
-        caret: [colors]
-      }],
-      /**
-       * Pointer Events
-       * @see https://tailwindcss.com/docs/pointer-events
-       */
-      "pointer-events": [{
-        "pointer-events": ["none", "auto"]
-      }],
-      /**
-       * Resize
-       * @see https://tailwindcss.com/docs/resize
-       */
-      resize: [{
-        resize: ["none", "y", "x", ""]
-      }],
-      /**
-       * Scroll Behavior
-       * @see https://tailwindcss.com/docs/scroll-behavior
-       */
-      "scroll-behavior": [{
-        scroll: ["auto", "smooth"]
-      }],
-      /**
-       * Scroll Margin
-       * @see https://tailwindcss.com/docs/scroll-margin
-       */
-      "scroll-m": [{
-        "scroll-m": getSpacingWithArbitrary()
-      }],
-      /**
-       * Scroll Margin X
-       * @see https://tailwindcss.com/docs/scroll-margin
-       */
-      "scroll-mx": [{
-        "scroll-mx": getSpacingWithArbitrary()
-      }],
-      /**
-       * Scroll Margin Y
-       * @see https://tailwindcss.com/docs/scroll-margin
-       */
-      "scroll-my": [{
-        "scroll-my": getSpacingWithArbitrary()
-      }],
-      /**
-       * Scroll Margin Start
-       * @see https://tailwindcss.com/docs/scroll-margin
-       */
-      "scroll-ms": [{
-        "scroll-ms": getSpacingWithArbitrary()
-      }],
-      /**
-       * Scroll Margin End
-       * @see https://tailwindcss.com/docs/scroll-margin
-       */
-      "scroll-me": [{
-        "scroll-me": getSpacingWithArbitrary()
-      }],
-      /**
-       * Scroll Margin Top
-       * @see https://tailwindcss.com/docs/scroll-margin
-       */
-      "scroll-mt": [{
-        "scroll-mt": getSpacingWithArbitrary()
-      }],
-      /**
-       * Scroll Margin Right
-       * @see https://tailwindcss.com/docs/scroll-margin
-       */
-      "scroll-mr": [{
-        "scroll-mr": getSpacingWithArbitrary()
-      }],
-      /**
-       * Scroll Margin Bottom
-       * @see https://tailwindcss.com/docs/scroll-margin
-       */
-      "scroll-mb": [{
-        "scroll-mb": getSpacingWithArbitrary()
-      }],
-      /**
-       * Scroll Margin Left
-       * @see https://tailwindcss.com/docs/scroll-margin
-       */
-      "scroll-ml": [{
-        "scroll-ml": getSpacingWithArbitrary()
-      }],
-      /**
-       * Scroll Padding
-       * @see https://tailwindcss.com/docs/scroll-padding
-       */
-      "scroll-p": [{
-        "scroll-p": getSpacingWithArbitrary()
-      }],
-      /**
-       * Scroll Padding X
-       * @see https://tailwindcss.com/docs/scroll-padding
-       */
-      "scroll-px": [{
-        "scroll-px": getSpacingWithArbitrary()
-      }],
-      /**
-       * Scroll Padding Y
-       * @see https://tailwindcss.com/docs/scroll-padding
-       */
-      "scroll-py": [{
-        "scroll-py": getSpacingWithArbitrary()
-      }],
-      /**
-       * Scroll Padding Start
-       * @see https://tailwindcss.com/docs/scroll-padding
-       */
-      "scroll-ps": [{
-        "scroll-ps": getSpacingWithArbitrary()
-      }],
-      /**
-       * Scroll Padding End
-       * @see https://tailwindcss.com/docs/scroll-padding
-       */
-      "scroll-pe": [{
-        "scroll-pe": getSpacingWithArbitrary()
-      }],
-      /**
-       * Scroll Padding Top
-       * @see https://tailwindcss.com/docs/scroll-padding
-       */
-      "scroll-pt": [{
-        "scroll-pt": getSpacingWithArbitrary()
-      }],
-      /**
-       * Scroll Padding Right
-       * @see https://tailwindcss.com/docs/scroll-padding
-       */
-      "scroll-pr": [{
-        "scroll-pr": getSpacingWithArbitrary()
-      }],
-      /**
-       * Scroll Padding Bottom
-       * @see https://tailwindcss.com/docs/scroll-padding
-       */
-      "scroll-pb": [{
-        "scroll-pb": getSpacingWithArbitrary()
-      }],
-      /**
-       * Scroll Padding Left
-       * @see https://tailwindcss.com/docs/scroll-padding
-       */
-      "scroll-pl": [{
-        "scroll-pl": getSpacingWithArbitrary()
-      }],
-      /**
-       * Scroll Snap Align
-       * @see https://tailwindcss.com/docs/scroll-snap-align
-       */
-      "snap-align": [{
-        snap: ["start", "end", "center", "align-none"]
-      }],
-      /**
-       * Scroll Snap Stop
-       * @see https://tailwindcss.com/docs/scroll-snap-stop
-       */
-      "snap-stop": [{
-        snap: ["normal", "always"]
-      }],
-      /**
-       * Scroll Snap Type
-       * @see https://tailwindcss.com/docs/scroll-snap-type
-       */
-      "snap-type": [{
-        snap: ["none", "x", "y", "both"]
-      }],
-      /**
-       * Scroll Snap Type Strictness
-       * @see https://tailwindcss.com/docs/scroll-snap-type
-       */
-      "snap-strictness": [{
-        snap: ["mandatory", "proximity"]
-      }],
-      /**
-       * Touch Action
-       * @see https://tailwindcss.com/docs/touch-action
-       */
-      touch: [{
-        touch: ["auto", "none", "manipulation"]
-      }],
-      /**
-       * Touch Action X
-       * @see https://tailwindcss.com/docs/touch-action
-       */
-      "touch-x": [{
-        "touch-pan": ["x", "left", "right"]
-      }],
-      /**
-       * Touch Action Y
-       * @see https://tailwindcss.com/docs/touch-action
-       */
-      "touch-y": [{
-        "touch-pan": ["y", "up", "down"]
-      }],
-      /**
-       * Touch Action Pinch Zoom
-       * @see https://tailwindcss.com/docs/touch-action
-       */
-      "touch-pz": ["touch-pinch-zoom"],
-      /**
-       * User Select
-       * @see https://tailwindcss.com/docs/user-select
-       */
-      select: [{
-        select: ["none", "text", "all", "auto"]
-      }],
-      /**
-       * Will Change
-       * @see https://tailwindcss.com/docs/will-change
-       */
-      "will-change": [{
-        "will-change": ["auto", "scroll", "contents", "transform", isArbitraryValue]
-      }],
-      // SVG
-      /**
-       * Fill
-       * @see https://tailwindcss.com/docs/fill
-       */
-      fill: [{
-        fill: [colors, "none"]
-      }],
-      /**
-       * Stroke Width
-       * @see https://tailwindcss.com/docs/stroke-width
-       */
-      "stroke-w": [{
-        stroke: [isLength, isArbitraryLength, isArbitraryNumber]
-      }],
-      /**
-       * Stroke
-       * @see https://tailwindcss.com/docs/stroke
-       */
-      stroke: [{
-        stroke: [colors, "none"]
-      }],
-      // Accessibility
-      /**
-       * Screen Readers
-       * @see https://tailwindcss.com/docs/screen-readers
-       */
-      sr: ["sr-only", "not-sr-only"],
-      /**
-       * Forced Color Adjust
-       * @see https://tailwindcss.com/docs/forced-color-adjust
-       */
-      "forced-color-adjust": [{
-        "forced-color-adjust": ["auto", "none"]
-      }]
-    },
-    conflictingClassGroups: {
-      overflow: ["overflow-x", "overflow-y"],
-      overscroll: ["overscroll-x", "overscroll-y"],
-      inset: ["inset-x", "inset-y", "start", "end", "top", "right", "bottom", "left"],
-      "inset-x": ["right", "left"],
-      "inset-y": ["top", "bottom"],
-      flex: ["basis", "grow", "shrink"],
-      gap: ["gap-x", "gap-y"],
-      p: ["px", "py", "ps", "pe", "pt", "pr", "pb", "pl"],
-      px: ["pr", "pl"],
-      py: ["pt", "pb"],
-      m: ["mx", "my", "ms", "me", "mt", "mr", "mb", "ml"],
-      mx: ["mr", "ml"],
-      my: ["mt", "mb"],
-      size: ["w", "h"],
-      "font-size": ["leading"],
-      "fvn-normal": ["fvn-ordinal", "fvn-slashed-zero", "fvn-figure", "fvn-spacing", "fvn-fraction"],
-      "fvn-ordinal": ["fvn-normal"],
-      "fvn-slashed-zero": ["fvn-normal"],
-      "fvn-figure": ["fvn-normal"],
-      "fvn-spacing": ["fvn-normal"],
-      "fvn-fraction": ["fvn-normal"],
-      "line-clamp": ["display", "overflow"],
-      rounded: ["rounded-s", "rounded-e", "rounded-t", "rounded-r", "rounded-b", "rounded-l", "rounded-ss", "rounded-se", "rounded-ee", "rounded-es", "rounded-tl", "rounded-tr", "rounded-br", "rounded-bl"],
-      "rounded-s": ["rounded-ss", "rounded-es"],
-      "rounded-e": ["rounded-se", "rounded-ee"],
-      "rounded-t": ["rounded-tl", "rounded-tr"],
-      "rounded-r": ["rounded-tr", "rounded-br"],
-      "rounded-b": ["rounded-br", "rounded-bl"],
-      "rounded-l": ["rounded-tl", "rounded-bl"],
-      "border-spacing": ["border-spacing-x", "border-spacing-y"],
-      "border-w": ["border-w-s", "border-w-e", "border-w-t", "border-w-r", "border-w-b", "border-w-l"],
-      "border-w-x": ["border-w-r", "border-w-l"],
-      "border-w-y": ["border-w-t", "border-w-b"],
-      "border-color": ["border-color-s", "border-color-e", "border-color-t", "border-color-r", "border-color-b", "border-color-l"],
-      "border-color-x": ["border-color-r", "border-color-l"],
-      "border-color-y": ["border-color-t", "border-color-b"],
-      "scroll-m": ["scroll-mx", "scroll-my", "scroll-ms", "scroll-me", "scroll-mt", "scroll-mr", "scroll-mb", "scroll-ml"],
-      "scroll-mx": ["scroll-mr", "scroll-ml"],
-      "scroll-my": ["scroll-mt", "scroll-mb"],
-      "scroll-p": ["scroll-px", "scroll-py", "scroll-ps", "scroll-pe", "scroll-pt", "scroll-pr", "scroll-pb", "scroll-pl"],
-      "scroll-px": ["scroll-pr", "scroll-pl"],
-      "scroll-py": ["scroll-pt", "scroll-pb"],
-      touch: ["touch-x", "touch-y", "touch-pz"],
-      "touch-x": ["touch"],
-      "touch-y": ["touch"],
-      "touch-pz": ["touch"]
-    },
-    conflictingClassGroupModifiers: {
-      "font-size": ["leading"]
-    }
-  };
-};
-const twMerge = /* @__PURE__ */ createTailwindMerge(getDefaultConfig);
-function cn(...inputs) {
-  return twMerge(clsx(inputs));
-}
-function Skeleton2({ className, ...props }) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(
-    "div",
-    {
-      "data-slot": "skeleton",
-      className: cn("bg-accent animate-pulse rounded-md", className),
-      ...props
-    }
-  );
-}
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const toKebabCase = (string) => string.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
-const toCamelCase = (string) => string.replace(
-  /^([A-Z])|[\s-_]+(\w)/g,
-  (match, p1, p2) => p2 ? p2.toUpperCase() : p1.toLowerCase()
-);
-const toPascalCase$1 = (string) => {
-  const camelCase = toCamelCase(string);
-  return camelCase.charAt(0).toUpperCase() + camelCase.slice(1);
-};
-const mergeClasses = (...classes) => classes.filter((className, index2, array) => {
-  return Boolean(className) && className.trim() !== "" && array.indexOf(className) === index2;
-}).join(" ").trim();
-const hasA11yProp = (props) => {
-  for (const prop in props) {
-    if (prop.startsWith("aria-") || prop === "role" || prop === "title") {
-      return true;
-    }
-  }
-};
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-var defaultAttributes = {
-  xmlns: "http://www.w3.org/2000/svg",
-  width: 24,
-  height: 24,
-  viewBox: "0 0 24 24",
-  fill: "none",
-  stroke: "currentColor",
-  strokeWidth: 2,
-  strokeLinecap: "round",
-  strokeLinejoin: "round"
-};
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const Icon = reactExports.forwardRef(
-  ({
-    color: color2 = "currentColor",
-    size = 24,
-    strokeWidth = 2,
-    absoluteStrokeWidth,
-    className = "",
-    children,
-    iconNode,
-    ...rest
-  }, ref) => reactExports.createElement(
-    "svg",
-    {
-      ref,
-      ...defaultAttributes,
-      width: size,
-      height: size,
-      stroke: color2,
-      strokeWidth: absoluteStrokeWidth ? Number(strokeWidth) * 24 / Number(size) : strokeWidth,
-      className: mergeClasses("lucide", className),
-      ...!children && !hasA11yProp(rest) && { "aria-hidden": "true" },
-      ...rest
-    },
-    [
-      ...iconNode.map(([tag, attrs]) => reactExports.createElement(tag, attrs)),
-      ...Array.isArray(children) ? children : [children]
-    ]
-  )
-);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const createLucideIcon = (iconName, iconNode) => {
-  const Component2 = reactExports.forwardRef(
-    ({ className, ...props }, ref) => reactExports.createElement(Icon, {
-      ref,
-      iconNode,
-      className: mergeClasses(
-        `lucide-${toKebabCase(toPascalCase$1(iconName))}`,
-        `lucide-${iconName}`,
-        className
-      ),
-      ...props
-    })
-  );
-  Component2.displayName = toPascalCase$1(iconName);
-  return Component2;
-};
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$l = [
-  ["path", { d: "M12 7v14", key: "1akyts" }],
-  [
-    "path",
-    {
-      d: "M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z",
-      key: "ruj8y"
-    }
-  ]
-];
-const BookOpen = createLucideIcon("book-open", __iconNode$l);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$k = [["path", { d: "m6 9 6 6 6-6", key: "qrunsl" }]];
-const ChevronDown = createLucideIcon("chevron-down", __iconNode$k);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$j = [["path", { d: "m9 18 6-6-6-6", key: "mthhwq" }]];
-const ChevronRight = createLucideIcon("chevron-right", __iconNode$j);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$i = [["path", { d: "m18 15-6-6-6 6", key: "153udz" }]];
-const ChevronUp = createLucideIcon("chevron-up", __iconNode$i);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$h = [
-  ["path", { d: "M21.801 10A10 10 0 1 1 17 3.335", key: "yps3ct" }],
-  ["path", { d: "m9 11 3 3L22 4", key: "1pflzl" }]
-];
-const CircleCheckBig = createLucideIcon("circle-check-big", __iconNode$h);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$g = [["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }]];
-const Circle = createLucideIcon("circle", __iconNode$g);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$f = [
-  [
-    "path",
-    {
-      d: "M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z",
-      key: "96xj49"
-    }
-  ]
-];
-const Flame = createLucideIcon("flame", __iconNode$f);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$e = [
-  [
-    "path",
-    {
-      d: "M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2",
-      key: "18mbvz"
-    }
-  ],
-  ["path", { d: "M6.453 15h11.094", key: "3shlmq" }],
-  ["path", { d: "M8.5 2h7", key: "csnxdl" }]
-];
-const FlaskConical = createLucideIcon("flask-conical", __iconNode$e);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$d = [
-  ["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }],
-  ["path", { d: "M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20", key: "13o1zl" }],
-  ["path", { d: "M2 12h20", key: "9i4pu4" }]
-];
-const Globe = createLucideIcon("globe", __iconNode$d);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$c = [
-  ["rect", { width: "7", height: "9", x: "3", y: "3", rx: "1", key: "10lvy0" }],
-  ["rect", { width: "7", height: "5", x: "14", y: "3", rx: "1", key: "16une8" }],
-  ["rect", { width: "7", height: "9", x: "14", y: "12", rx: "1", key: "1hutg5" }],
-  ["rect", { width: "7", height: "5", x: "3", y: "16", rx: "1", key: "ldoo1y" }]
-];
-const LayoutDashboard = createLucideIcon("layout-dashboard", __iconNode$c);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$b = [
-  [
-    "path",
-    {
-      d: "M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z",
-      key: "169xi5"
-    }
-  ],
-  ["path", { d: "M15 5.764v15", key: "1pn4in" }],
-  ["path", { d: "M9 3.236v15", key: "1uimfh" }]
-];
-const Map$1 = createLucideIcon("map", __iconNode$b);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$a = [
-  [
-    "path",
-    {
-      d: "M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z",
-      key: "1a0edw"
-    }
-  ],
-  ["path", { d: "M12 22V12", key: "d0xqtd" }],
-  ["polyline", { points: "3.29 7 12 12 20.71 7", key: "ousv84" }],
-  ["path", { d: "m7.5 4.27 9 5.15", key: "1c824w" }]
-];
-const Package = createLucideIcon("package", __iconNode$a);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$9 = [
-  ["path", { d: "M4.9 19.1C1 15.2 1 8.8 4.9 4.9", key: "1vaf9d" }],
-  ["path", { d: "M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5", key: "u1ii0m" }],
-  ["circle", { cx: "12", cy: "12", r: "2", key: "1c9p78" }],
-  ["path", { d: "M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5", key: "1j5fej" }],
-  ["path", { d: "M19.1 4.9C23 8.8 23 15.1 19.1 19", key: "10b0cb" }]
-];
-const Radio = createLucideIcon("radio", __iconNode$9);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$8 = [
-  ["path", { d: "M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8", key: "v9h5vc" }],
-  ["path", { d: "M21 3v5h-5", key: "1q7to0" }],
-  ["path", { d: "M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16", key: "3uifl3" }],
-  ["path", { d: "M8 16H3v5", key: "1cv678" }]
-];
-const RefreshCw = createLucideIcon("refresh-cw", __iconNode$8);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$7 = [
-  ["path", { d: "M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8", key: "1357e3" }],
-  ["path", { d: "M3 3v5h5", key: "1xhq8a" }]
-];
-const RotateCcw = createLucideIcon("rotate-ccw", __iconNode$7);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$6 = [
-  [
-    "path",
-    {
-      d: "M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z",
-      key: "oel41y"
-    }
-  ]
-];
-const Shield = createLucideIcon("shield", __iconNode$6);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$5 = [
-  ["polyline", { points: "14.5 17.5 3 6 3 3 6 3 17.5 14.5", key: "1hfsw2" }],
-  ["line", { x1: "13", x2: "19", y1: "19", y2: "13", key: "1vrmhu" }],
-  ["line", { x1: "16", x2: "20", y1: "16", y2: "20", key: "1bron3" }],
-  ["line", { x1: "19", x2: "21", y1: "21", y2: "19", key: "13pww6" }]
-];
-const Sword = createLucideIcon("sword", __iconNode$5);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$4 = [
-  ["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }],
-  ["circle", { cx: "12", cy: "12", r: "6", key: "1vlfrh" }],
-  ["circle", { cx: "12", cy: "12", r: "2", key: "1c9p78" }]
-];
-const Target = createLucideIcon("target", __iconNode$4);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$3 = [
-  ["path", { d: "M16 7h6v6", key: "box55l" }],
-  ["path", { d: "m22 7-8.5 8.5-5-5L2 17", key: "1t1m79" }]
-];
-const TrendingUp = createLucideIcon("trending-up", __iconNode$3);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$2 = [
-  ["path", { d: "M6 9H4.5a2.5 2.5 0 0 1 0-5H6", key: "17hqa7" }],
-  ["path", { d: "M18 9h1.5a2.5 2.5 0 0 0 0-5H18", key: "lmptdp" }],
-  ["path", { d: "M4 22h16", key: "57wxv0" }],
-  ["path", { d: "M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22", key: "1nw9bq" }],
-  ["path", { d: "M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22", key: "1np0yb" }],
-  ["path", { d: "M18 2H6v7a6 6 0 0 0 12 0V2Z", key: "u46fv3" }]
-];
-const Trophy = createLucideIcon("trophy", __iconNode$2);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$1 = [
-  ["path", { d: "M18 6 6 18", key: "1bl5f8" }],
-  ["path", { d: "m6 6 12 12", key: "d8bk6v" }]
-];
-const X$1 = createLucideIcon("x", __iconNode$1);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode = [
-  [
-    "path",
-    {
-      d: "M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z",
-      key: "1xq2db"
-    }
-  ]
-];
-const Zap = createLucideIcon("zap", __iconNode);
 const LayoutGroupContext = reactExports.createContext({});
 function useConstant(init) {
   const ref = reactExports.useRef(null);
@@ -84281,6 +80837,155 @@ const MotionConfigContext = reactExports.createContext({
   isStatic: false,
   reducedMotion: "never"
 });
+function setRef(ref, value) {
+  if (typeof ref === "function") {
+    return ref(value);
+  } else if (ref !== null && ref !== void 0) {
+    ref.current = value;
+  }
+}
+function composeRefs(...refs) {
+  return (node) => {
+    let hasCleanup = false;
+    const cleanups = refs.map((ref) => {
+      const cleanup = setRef(ref, node);
+      if (!hasCleanup && typeof cleanup === "function") {
+        hasCleanup = true;
+      }
+      return cleanup;
+    });
+    if (hasCleanup) {
+      return () => {
+        for (let i2 = 0; i2 < cleanups.length; i2++) {
+          const cleanup = cleanups[i2];
+          if (typeof cleanup === "function") {
+            cleanup();
+          } else {
+            setRef(refs[i2], null);
+          }
+        }
+      };
+    }
+  };
+}
+function useComposedRefs(...refs) {
+  return reactExports.useCallback(composeRefs(...refs), refs);
+}
+class PopChildMeasure extends reactExports.Component {
+  getSnapshotBeforeUpdate(prevProps) {
+    const element = this.props.childRef.current;
+    if (isHTMLElement(element) && prevProps.isPresent && !this.props.isPresent && this.props.pop !== false) {
+      const parent = element.offsetParent;
+      const parentWidth = isHTMLElement(parent) ? parent.offsetWidth || 0 : 0;
+      const parentHeight = isHTMLElement(parent) ? parent.offsetHeight || 0 : 0;
+      const computedStyle = getComputedStyle(element);
+      const size = this.props.sizeRef.current;
+      size.height = parseFloat(computedStyle.height);
+      size.width = parseFloat(computedStyle.width);
+      size.top = element.offsetTop;
+      size.left = element.offsetLeft;
+      size.right = parentWidth - size.width - size.left;
+      size.bottom = parentHeight - size.height - size.top;
+    }
+    return null;
+  }
+  /**
+   * Required with getSnapshotBeforeUpdate to stop React complaining.
+   */
+  componentDidUpdate() {
+  }
+  render() {
+    return this.props.children;
+  }
+}
+function PopChild({ children, isPresent, anchorX, anchorY, root: root2, pop: pop2 }) {
+  var _a3;
+  const id2 = reactExports.useId();
+  const ref = reactExports.useRef(null);
+  const size = reactExports.useRef({
+    width: 0,
+    height: 0,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0
+  });
+  const { nonce } = reactExports.useContext(MotionConfigContext);
+  const childRef = ((_a3 = children.props) == null ? void 0 : _a3.ref) ?? (children == null ? void 0 : children.ref);
+  const composedRef = useComposedRefs(ref, childRef);
+  reactExports.useInsertionEffect(() => {
+    const { width, height, top, left, right, bottom } = size.current;
+    if (isPresent || pop2 === false || !ref.current || !width || !height)
+      return;
+    const x3 = anchorX === "left" ? `left: ${left}` : `right: ${right}`;
+    const y2 = anchorY === "bottom" ? `bottom: ${bottom}` : `top: ${top}`;
+    ref.current.dataset.motionPopId = id2;
+    const style2 = document.createElement("style");
+    if (nonce)
+      style2.nonce = nonce;
+    const parent = root2 ?? document.head;
+    parent.appendChild(style2);
+    if (style2.sheet) {
+      style2.sheet.insertRule(`
+          [data-motion-pop-id="${id2}"] {
+            position: absolute !important;
+            width: ${width}px !important;
+            height: ${height}px !important;
+            ${x3}px !important;
+            ${y2}px !important;
+          }
+        `);
+    }
+    return () => {
+      var _a4;
+      (_a4 = ref.current) == null ? void 0 : _a4.removeAttribute("data-motion-pop-id");
+      if (parent.contains(style2)) {
+        parent.removeChild(style2);
+      }
+    };
+  }, [isPresent]);
+  return jsxRuntimeExports.jsx(PopChildMeasure, { isPresent, childRef: ref, sizeRef: size, pop: pop2, children: pop2 === false ? children : reactExports.cloneElement(children, { ref: composedRef }) });
+}
+const PresenceChild = ({ children, initial, isPresent, onExitComplete, custom, presenceAffectsLayout, mode, anchorX, anchorY, root: root2 }) => {
+  const presenceChildren = useConstant(newChildrenMap);
+  const id2 = reactExports.useId();
+  let isReusedContext = true;
+  let context2 = reactExports.useMemo(() => {
+    isReusedContext = false;
+    return {
+      id: id2,
+      initial,
+      isPresent,
+      custom,
+      onExitComplete: (childId) => {
+        presenceChildren.set(childId, true);
+        for (const isComplete of presenceChildren.values()) {
+          if (!isComplete)
+            return;
+        }
+        onExitComplete && onExitComplete();
+      },
+      register: (childId) => {
+        presenceChildren.set(childId, false);
+        return () => presenceChildren.delete(childId);
+      }
+    };
+  }, [isPresent, presenceChildren, onExitComplete]);
+  if (presenceAffectsLayout && isReusedContext) {
+    context2 = { ...context2 };
+  }
+  reactExports.useMemo(() => {
+    presenceChildren.forEach((_2, key) => presenceChildren.set(key, false));
+  }, [isPresent]);
+  reactExports.useEffect(() => {
+    !isPresent && !presenceChildren.size && onExitComplete && onExitComplete();
+  }, [isPresent]);
+  children = jsxRuntimeExports.jsx(PopChild, { pop: mode === "popLayout", isPresent, anchorX, anchorY, root: root2, children });
+  return jsxRuntimeExports.jsx(PresenceContext.Provider, { value: context2, children });
+};
+function newChildrenMap() {
+  return /* @__PURE__ */ new Map();
+}
 function usePresence(subscribe2 = true) {
   const context2 = reactExports.useContext(PresenceContext);
   if (context2 === null)
@@ -84295,6 +81000,87 @@ function usePresence(subscribe2 = true) {
   const safeToRemove = reactExports.useCallback(() => subscribe2 && onExitComplete && onExitComplete(id2), [id2, onExitComplete, subscribe2]);
   return !isPresent && onExitComplete ? [false, safeToRemove] : [true];
 }
+const getChildKey = (child) => child.key || "";
+function onlyElements(children) {
+  const filtered = [];
+  reactExports.Children.forEach(children, (child) => {
+    if (reactExports.isValidElement(child))
+      filtered.push(child);
+  });
+  return filtered;
+}
+const AnimatePresence = ({ children, custom, initial = true, onExitComplete, presenceAffectsLayout = true, mode = "sync", propagate = false, anchorX = "left", anchorY = "top", root: root2 }) => {
+  const [isParentPresent, safeToRemove] = usePresence(propagate);
+  const presentChildren = reactExports.useMemo(() => onlyElements(children), [children]);
+  const presentKeys = propagate && !isParentPresent ? [] : presentChildren.map(getChildKey);
+  const isInitialRender = reactExports.useRef(true);
+  const pendingPresentChildren = reactExports.useRef(presentChildren);
+  const exitComplete = useConstant(() => /* @__PURE__ */ new Map());
+  const exitingComponents = reactExports.useRef(/* @__PURE__ */ new Set());
+  const [diffedChildren, setDiffedChildren] = reactExports.useState(presentChildren);
+  const [renderedChildren, setRenderedChildren] = reactExports.useState(presentChildren);
+  useIsomorphicLayoutEffect$1(() => {
+    isInitialRender.current = false;
+    pendingPresentChildren.current = presentChildren;
+    for (let i2 = 0; i2 < renderedChildren.length; i2++) {
+      const key = getChildKey(renderedChildren[i2]);
+      if (!presentKeys.includes(key)) {
+        if (exitComplete.get(key) !== true) {
+          exitComplete.set(key, false);
+        }
+      } else {
+        exitComplete.delete(key);
+        exitingComponents.current.delete(key);
+      }
+    }
+  }, [renderedChildren, presentKeys.length, presentKeys.join("-")]);
+  const exitingChildren = [];
+  if (presentChildren !== diffedChildren) {
+    let nextChildren = [...presentChildren];
+    for (let i2 = 0; i2 < renderedChildren.length; i2++) {
+      const child = renderedChildren[i2];
+      const key = getChildKey(child);
+      if (!presentKeys.includes(key)) {
+        nextChildren.splice(i2, 0, child);
+        exitingChildren.push(child);
+      }
+    }
+    if (mode === "wait" && exitingChildren.length) {
+      nextChildren = exitingChildren;
+    }
+    setRenderedChildren(onlyElements(nextChildren));
+    setDiffedChildren(presentChildren);
+    return null;
+  }
+  const { forceRender } = reactExports.useContext(LayoutGroupContext);
+  return jsxRuntimeExports.jsx(jsxRuntimeExports.Fragment, { children: renderedChildren.map((child) => {
+    const key = getChildKey(child);
+    const isPresent = propagate && !isParentPresent ? false : presentChildren === renderedChildren || presentKeys.includes(key);
+    const onExit = () => {
+      if (exitingComponents.current.has(key)) {
+        return;
+      }
+      if (exitComplete.has(key)) {
+        exitingComponents.current.add(key);
+        exitComplete.set(key, true);
+      } else {
+        return;
+      }
+      let isEveryExitComplete = true;
+      exitComplete.forEach((isExitComplete) => {
+        if (!isExitComplete)
+          isEveryExitComplete = false;
+      });
+      if (isEveryExitComplete) {
+        forceRender == null ? void 0 : forceRender();
+        setRenderedChildren(pendingPresentChildren.current);
+        propagate && (safeToRemove == null ? void 0 : safeToRemove());
+        onExitComplete && onExitComplete();
+      }
+    };
+    return jsxRuntimeExports.jsx(PresenceChild, { isPresent, initial: !isInitialRender.current || initial ? void 0 : false, custom, presenceAffectsLayout, mode, root: root2, onExitComplete: isPresent ? void 0 : onExit, anchorX, anchorY, children: child }, key);
+  }) });
+};
 const LazyContext = reactExports.createContext({ strict: false });
 const featureProps = {
   animation: [
@@ -86010,2775 +82796,6 @@ const featureBundle = {
   ...layout
 };
 const motion = /* @__PURE__ */ createMotionProxy(featureBundle, createDomVisualElement);
-const CombatEvent = Record({
-  "attacker": Principal2,
-  "intercepted": Bool,
-  "interceptorType": Opt(Text),
-  "toPlot": Text,
-  "atkPower": Nat,
-  "timestamp": Int,
-  "fromPlot": Text,
-  "success": Bool,
-  "missileType": Opt(Text),
-  "defPower": Nat
-});
-const GeneratorTierInfo = Record({
-  "name": Text,
-  "tierIndex": Nat,
-  "bonusPerDay": Float64,
-  "costFRNTR": Nat
-});
-const FaucetClaimSummary = Record({
-  "principal": Text,
-  "lastClaim": Opt(Int),
-  "totalClaims": Nat
-});
-const GlobalStats = Record({
-  "circulatingSupply": Nat,
-  "activePlayers": Nat,
-  "totalPlotsOwned": Nat,
-  "dailyEmission": Nat,
-  "totalBurned": Nat
-});
-const ResourceType = Variant({
-  "RareEarth": Null,
-  "Fuel": Null,
-  "Iron": Null,
-  "Crystal": Null
-});
-const PlotProductionRate = Record({
-  "totalPerDay": Float64,
-  "plotId": Text,
-  "tierBonus": Float64,
-  "baseFRNTRPerDay": Float64,
-  "generatorTier": Nat,
-  "nexusBonus": Float64
-});
-const PrincipalDisplay = Record({
-  "full": Text,
-  "short": Text,
-  "isAuthed": Bool
-});
-const SubParcelInfo = Record({
-  "resourceRate": Float64,
-  "slotIndex": Nat,
-  "isLocked": Bool,
-  "buildingType": Text,
-  "cooldownSecondsRemaining": Nat
-});
-const SubParcel = Record({
-  "subParcelId": Text,
-  "cooldownEnds": Int,
-  "plotId": Text,
-  "building": Opt(Text),
-  "slotIndex": Nat,
-  "specialization": Text
-});
-const Biome = Variant({
-  "Tropical": Null,
-  "AsteroidImpact": Null,
-  "DeepOcean": Null,
-  "Desert": Null,
-  "Volcanic": Null,
-  "Temperate": Null,
-  "Ocean": Null,
-  "Arctic": Null
-});
-const SurveyResult = Record({
-  "resourcePercentage": Nat,
-  "bonusInfo": Opt(Text),
-  "biome": Biome
-});
-const SurveyStatus = Variant({
-  "Locked": Null,
-  "InProgress": Null,
-  "Completed": Null
-});
-const PlotId = Text;
-const SurveyView = Record({
-  "startTime": Int,
-  "status": SurveyStatus,
-  "result": Opt(SurveyResult),
-  "unlockCost": Nat,
-  "secondsRemaining": Nat,
-  "plotId": PlotId
-});
-const Tokenomics = Record({
-  "burnRate": Nat,
-  "emissionRate": Nat,
-  "circulatingSupply": Nat,
-  "daysUntilMilestone": Nat,
-  "totalBurned": Nat,
-  "maxSupply": Nat,
-  "remainingMineable": Nat
-});
-const MineResult = Record({
-  "efficiency": Float64,
-  "plotId": PlotId,
-  "resourceYields": Vec(Tuple(ResourceType, Float64)),
-  "frntRate": Float64
-});
-const ResetResult = Variant({ "ok": Text, "err": Text });
-const StressActionResult = Record({
-  "ok": Bool,
-  "action": Text,
-  "index": Nat,
-  "errorMsg": Opt(Text),
-  "durationMs": Int
-});
-const StressTestResult = Variant({
-  "ok": Vec(StressActionResult),
-  "err": Text
-});
-const FaucetGrant = Record({
-  "icpGranted": Nat,
-  "frntGranted": Nat
-});
-const FaucetResult = Variant({
-  "ok": FaucetGrant,
-  "err": Text
-});
-const Timestamp = Int;
-const GeneratorTier = Variant({
-  "TierIII": Null,
-  "None": Null,
-  "TierII": Null,
-  "TierIV": Null,
-  "TierVI": Null,
-  "TierI": Null,
-  "TierV": Null
-});
-const PlotUpgradesView = Record({
-  "tierName": Text,
-  "plotId": PlotId,
-  "installedAt": Opt(Timestamp),
-  "bonusPerDay": Float64,
-  "nextTierCost": Opt(Nat),
-  "generatorTier": GeneratorTier
-});
-const UpgradeError = Variant({
-  "SubParcelLocked": Null,
-  "PlotNotFound": Null,
-  "InvalidTier": Null,
-  "NotOwner": Null,
-  "AlreadyMaxTier": Null,
-  "InsufficientFRNTR": Null
-});
-Service({
-  "assignInterceptor": Func([Text, Text], [], []),
-  "claimAccumulatedTokens": Func(
-    [],
-    [Variant({ "ok": Nat, "err": Text })],
-    []
-  ),
-  "getAdjacentPlots": Func([Text], [Vec(Text)], ["query"]),
-  "getAdminPrincipal": Func([], [Text], ["query"]),
-  "getAllPlotOwners": Func(
-    [],
-    [Vec(Tuple(Text, Text))],
-    ["query"]
-  ),
-  "getApprovedLiquidityCanister": Func([], [Opt(Text)], ["query"]),
-  "getAssignedInterceptor": Func(
-    [Text],
-    [Opt(Text)],
-    ["query"]
-  ),
-  "getCombatLog": Func([Nat], [Vec(CombatEvent)], ["query"]),
-  "getCoreGeneratorTiers": Func(
-    [],
-    [Vec(GeneratorTierInfo)],
-    ["query"]
-  ),
-  "getFaucetClaims": Func(
-    [Principal2],
-    [FaucetClaimSummary],
-    ["query"]
-  ),
-  "getFirstAvailablePlot": Func([], [Opt(Text)], ["query"]),
-  "getFrntrLedger": Func([], [Text], ["query"]),
-  "getGameCanisterPrincipal": Func([], [Text], ["query"]),
-  "getGameStats": Func(
-    [],
-    [
-      Record({
-        "totalPlayers": Nat,
-        "totalFrntrBurned": Nat,
-        "totalSupply": Nat,
-        "totalBurned": Nat,
-        "totalPlots": Nat,
-        "emissionRatePerDay": Nat,
-        "remainingMineable": Nat
-      })
-    ],
-    ["query"]
-  ),
-  "getGeneratorTierCatalog": Func(
-    [],
-    [
-      Vec(
-        Record({
-          "cost": Nat,
-          "tierIndex": Nat,
-          "bonusPerDay": Float64
-        })
-      )
-    ],
-    ["query"]
-  ),
-  "getGlobalStats": Func([], [GlobalStats], ["query"]),
-  "getIcpBalance": Func([Principal2], [Nat], []),
-  "getIcpUsdPrice": Func([], [Float64], []),
-  "getIcpUsdPriceCached": Func([], [Float64], ["query"]),
-  "getIsAdmin": Func([], [Bool], ["query"]),
-  "getLeaderboard": Func(
-    [Nat],
-    [
-      Vec(
-        Record({
-          "principal": Text,
-          "username": Opt(Text),
-          "rank": Nat,
-          "frntBalance": Nat,
-          "plotsOwned": Nat
-        })
-      )
-    ],
-    ["query"]
-  ),
-  "getLeaderboardStats": Func(
-    [],
-    [
-      Record({
-        "leaderboardPrizePool": Nat,
-        "nextPayoutAt": Nat,
-        "activePlayers": Nat,
-        "totalPlotsOwned": Nat,
-        "totalFRNTRMined": Nat,
-        "totalFRNTRBurned": Nat
-      })
-    ],
-    ["query"]
-  ),
-  "getLivePlotOwners": Func(
-    [],
-    [Vec(Tuple(Text, Text))],
-    ["query"]
-  ),
-  "getPassiveIncome": Func([Text], [Float64], ["query"]),
-  "getPlayerState": Func(
-    [],
-    [
-      Record({
-        "resourceBalances": Vec(Tuple(ResourceType, Float64)),
-        "username": Opt(Text),
-        "fuel": Nat,
-        "iron": Nat,
-        "icpBalance": Nat,
-        "frntBalance": Nat,
-        "totalFRNTRBurned": Float64,
-        "plotsOwned": Nat,
-        "plotIds": Vec(Text),
-        "lastFaucetTime": Opt(Int),
-        "crystal": Nat,
-        "ownedPlots": Vec(Text),
-        "combatVictories": Nat,
-        "generatorTiersMap": Vec(Tuple(Text, Nat)),
-        "passiveIncomePerDay": Float64
-      })
-    ],
-    []
-  ),
-  "getPlayerStateByPrincipal": Func(
-    [Principal2],
-    [
-      Record({
-        "resourceBalances": Vec(Tuple(ResourceType, Float64)),
-        "username": Opt(Text),
-        "fuel": Nat,
-        "iron": Nat,
-        "icpBalance": Nat,
-        "frntBalance": Nat,
-        "totalFRNTRBurned": Float64,
-        "plotsOwned": Nat,
-        "plotIds": Vec(Text),
-        "lastFaucetTime": Opt(Int),
-        "crystal": Nat,
-        "ownedPlots": Vec(Text),
-        "combatVictories": Nat,
-        "generatorTiersMap": Vec(Tuple(Text, Nat)),
-        "passiveIncomePerDay": Float64
-      })
-    ],
-    []
-  ),
-  "getPlotCount": Func([], [Nat], ["query"]),
-  "getPlotPrice": Func([Text], [Nat], ["query"]),
-  "getPlotPriceById": Func([Text], [Nat], ["query"]),
-  "getPlotProductionRate": Func(
-    [Text],
-    [PlotProductionRate],
-    ["query"]
-  ),
-  "getPlotsByOwner": Func([Principal2], [Vec(Text)], ["query"]),
-  "getPrincipal": Func([], [PrincipalDisplay], ["query"]),
-  "getSubParcelStatus": Func(
-    [Text],
-    [Vec(SubParcelInfo)],
-    ["query"]
-  ),
-  "getSubParcels": Func([Text], [Vec(SubParcel)], ["query"]),
-  "getSurveyCost": Func([Text], [Nat], ["query"]),
-  "getSurveyResult": Func(
-    [Text],
-    [Variant({ "ok": SurveyResult, "err": Text })],
-    []
-  ),
-  "getSurveyStatus": Func(
-    [Text],
-    [Variant({ "ok": SurveyView, "err": Text })],
-    []
-  ),
-  "getTokenomics": Func([], [Tokenomics], ["query"]),
-  "getTreasuryBalances": Func(
-    [],
-    [
-      Record({
-        "leaderboardPot": Nat,
-        "devPot": Nat,
-        "liquidityPot": Nat
-      })
-    ],
-    []
-  ),
-  "getTreasuryPrincipal": Func([], [Text], ["query"]),
-  "getTreasuryState": Func(
-    [],
-    [
-      Record({
-        "leaderboard": Nat,
-        "liquidity": Nat,
-        "developer": Nat
-      })
-    ],
-    ["query"]
-  ),
-  "initPlots": Func(
-    [
-      Vec(
-        Tuple(Text, Text, Float64, Float64, Nat)
-      )
-    ],
-    [],
-    []
-  ),
-  "isSubParcelLocked": Func([Text], [Bool], ["query"]),
-  "launchMissile": Func(
-    [Text, Text, Text],
-    [Variant({ "ok": Text, "err": Text })],
-    []
-  ),
-  "mineResources": Func(
-    [Text],
-    [Variant({ "ok": MineResult, "err": Text })],
-    []
-  ),
-  "purchasePlot": Func(
-    [Text],
-    [Variant({ "ok": Text, "err": Text })],
-    []
-  ),
-  "resetAllData": Func([], [], []),
-  "resetTestState": Func([], [ResetResult], []),
-  "setAdminPrincipal": Func([Principal2], [], []),
-  "setApprovedLiquidityCanister": Func(
-    [Principal2],
-    [Variant({ "ok": Null, "err": Text })],
-    []
-  ),
-  "setFrntrLedger": Func([Principal2], [], []),
-  "setGameCanisterPrincipal": Func([Text], [], []),
-  "setSelfPrincipal": Func([], [], []),
-  "setTreasuryPrincipal": Func([Principal2], [], []),
-  "setUsername": Func(
-    [Text],
-    [Variant({ "ok": Null, "err": Text })],
-    []
-  ),
-  "startSurvey": Func(
-    [Text],
-    [Variant({ "ok": SurveyView, "err": Text })],
-    []
-  ),
-  "stressBuyPlots": Func([Nat], [StressTestResult], []),
-  "stressMintPlots": Func([Nat], [StressTestResult], []),
-  "stressUpgradePlots": Func([Nat], [StressTestResult], []),
-  "testFaucet": Func(
-    [],
-    [Variant({ "ok": Text, "err": Text })],
-    []
-  ),
-  "testFaucetV2": Func([], [FaucetResult], []),
-  "updateAdminPrincipalAuth": Func([Text], [], []),
-  "upgradeGenerator": Func(
-    [Text],
-    [Variant({ "ok": PlotUpgradesView, "err": UpgradeError })],
-    []
-  ),
-  "withdrawLiquidityPot": Func(
-    [Nat, Principal2],
-    [Variant({ "ok": Null, "err": Text })],
-    []
-  )
-});
-const idlFactory = ({ IDL: IDL2 }) => {
-  const CombatEvent2 = IDL2.Record({
-    "attacker": IDL2.Principal,
-    "intercepted": IDL2.Bool,
-    "interceptorType": IDL2.Opt(IDL2.Text),
-    "toPlot": IDL2.Text,
-    "atkPower": IDL2.Nat,
-    "timestamp": IDL2.Int,
-    "fromPlot": IDL2.Text,
-    "success": IDL2.Bool,
-    "missileType": IDL2.Opt(IDL2.Text),
-    "defPower": IDL2.Nat
-  });
-  const GeneratorTierInfo2 = IDL2.Record({
-    "name": IDL2.Text,
-    "tierIndex": IDL2.Nat,
-    "bonusPerDay": IDL2.Float64,
-    "costFRNTR": IDL2.Nat
-  });
-  const FaucetClaimSummary2 = IDL2.Record({
-    "principal": IDL2.Text,
-    "lastClaim": IDL2.Opt(IDL2.Int),
-    "totalClaims": IDL2.Nat
-  });
-  const GlobalStats2 = IDL2.Record({
-    "circulatingSupply": IDL2.Nat,
-    "activePlayers": IDL2.Nat,
-    "totalPlotsOwned": IDL2.Nat,
-    "dailyEmission": IDL2.Nat,
-    "totalBurned": IDL2.Nat
-  });
-  const ResourceType2 = IDL2.Variant({
-    "RareEarth": IDL2.Null,
-    "Fuel": IDL2.Null,
-    "Iron": IDL2.Null,
-    "Crystal": IDL2.Null
-  });
-  const PlotProductionRate2 = IDL2.Record({
-    "totalPerDay": IDL2.Float64,
-    "plotId": IDL2.Text,
-    "tierBonus": IDL2.Float64,
-    "baseFRNTRPerDay": IDL2.Float64,
-    "generatorTier": IDL2.Nat,
-    "nexusBonus": IDL2.Float64
-  });
-  const PrincipalDisplay2 = IDL2.Record({
-    "full": IDL2.Text,
-    "short": IDL2.Text,
-    "isAuthed": IDL2.Bool
-  });
-  const SubParcelInfo2 = IDL2.Record({
-    "resourceRate": IDL2.Float64,
-    "slotIndex": IDL2.Nat,
-    "isLocked": IDL2.Bool,
-    "buildingType": IDL2.Text,
-    "cooldownSecondsRemaining": IDL2.Nat
-  });
-  const SubParcel2 = IDL2.Record({
-    "subParcelId": IDL2.Text,
-    "cooldownEnds": IDL2.Int,
-    "plotId": IDL2.Text,
-    "building": IDL2.Opt(IDL2.Text),
-    "slotIndex": IDL2.Nat,
-    "specialization": IDL2.Text
-  });
-  const Biome2 = IDL2.Variant({
-    "Tropical": IDL2.Null,
-    "AsteroidImpact": IDL2.Null,
-    "DeepOcean": IDL2.Null,
-    "Desert": IDL2.Null,
-    "Volcanic": IDL2.Null,
-    "Temperate": IDL2.Null,
-    "Ocean": IDL2.Null,
-    "Arctic": IDL2.Null
-  });
-  const SurveyResult2 = IDL2.Record({
-    "resourcePercentage": IDL2.Nat,
-    "bonusInfo": IDL2.Opt(IDL2.Text),
-    "biome": Biome2
-  });
-  const SurveyStatus2 = IDL2.Variant({
-    "Locked": IDL2.Null,
-    "InProgress": IDL2.Null,
-    "Completed": IDL2.Null
-  });
-  const PlotId2 = IDL2.Text;
-  const SurveyView2 = IDL2.Record({
-    "startTime": IDL2.Int,
-    "status": SurveyStatus2,
-    "result": IDL2.Opt(SurveyResult2),
-    "unlockCost": IDL2.Nat,
-    "secondsRemaining": IDL2.Nat,
-    "plotId": PlotId2
-  });
-  const Tokenomics2 = IDL2.Record({
-    "burnRate": IDL2.Nat,
-    "emissionRate": IDL2.Nat,
-    "circulatingSupply": IDL2.Nat,
-    "daysUntilMilestone": IDL2.Nat,
-    "totalBurned": IDL2.Nat,
-    "maxSupply": IDL2.Nat,
-    "remainingMineable": IDL2.Nat
-  });
-  const MineResult2 = IDL2.Record({
-    "efficiency": IDL2.Float64,
-    "plotId": PlotId2,
-    "resourceYields": IDL2.Vec(IDL2.Tuple(ResourceType2, IDL2.Float64)),
-    "frntRate": IDL2.Float64
-  });
-  const ResetResult2 = IDL2.Variant({ "ok": IDL2.Text, "err": IDL2.Text });
-  const StressActionResult2 = IDL2.Record({
-    "ok": IDL2.Bool,
-    "action": IDL2.Text,
-    "index": IDL2.Nat,
-    "errorMsg": IDL2.Opt(IDL2.Text),
-    "durationMs": IDL2.Int
-  });
-  const StressTestResult2 = IDL2.Variant({
-    "ok": IDL2.Vec(StressActionResult2),
-    "err": IDL2.Text
-  });
-  const FaucetGrant2 = IDL2.Record({
-    "icpGranted": IDL2.Nat,
-    "frntGranted": IDL2.Nat
-  });
-  const FaucetResult2 = IDL2.Variant({ "ok": FaucetGrant2, "err": IDL2.Text });
-  const Timestamp2 = IDL2.Int;
-  const GeneratorTier2 = IDL2.Variant({
-    "TierIII": IDL2.Null,
-    "None": IDL2.Null,
-    "TierII": IDL2.Null,
-    "TierIV": IDL2.Null,
-    "TierVI": IDL2.Null,
-    "TierI": IDL2.Null,
-    "TierV": IDL2.Null
-  });
-  const PlotUpgradesView2 = IDL2.Record({
-    "tierName": IDL2.Text,
-    "plotId": PlotId2,
-    "installedAt": IDL2.Opt(Timestamp2),
-    "bonusPerDay": IDL2.Float64,
-    "nextTierCost": IDL2.Opt(IDL2.Nat),
-    "generatorTier": GeneratorTier2
-  });
-  const UpgradeError2 = IDL2.Variant({
-    "SubParcelLocked": IDL2.Null,
-    "PlotNotFound": IDL2.Null,
-    "InvalidTier": IDL2.Null,
-    "NotOwner": IDL2.Null,
-    "AlreadyMaxTier": IDL2.Null,
-    "InsufficientFRNTR": IDL2.Null
-  });
-  return IDL2.Service({
-    "assignInterceptor": IDL2.Func([IDL2.Text, IDL2.Text], [], []),
-    "claimAccumulatedTokens": IDL2.Func(
-      [],
-      [IDL2.Variant({ "ok": IDL2.Nat, "err": IDL2.Text })],
-      []
-    ),
-    "getAdjacentPlots": IDL2.Func([IDL2.Text], [IDL2.Vec(IDL2.Text)], ["query"]),
-    "getAdminPrincipal": IDL2.Func([], [IDL2.Text], ["query"]),
-    "getAllPlotOwners": IDL2.Func(
-      [],
-      [IDL2.Vec(IDL2.Tuple(IDL2.Text, IDL2.Text))],
-      ["query"]
-    ),
-    "getApprovedLiquidityCanister": IDL2.Func(
-      [],
-      [IDL2.Opt(IDL2.Text)],
-      ["query"]
-    ),
-    "getAssignedInterceptor": IDL2.Func(
-      [IDL2.Text],
-      [IDL2.Opt(IDL2.Text)],
-      ["query"]
-    ),
-    "getCombatLog": IDL2.Func([IDL2.Nat], [IDL2.Vec(CombatEvent2)], ["query"]),
-    "getCoreGeneratorTiers": IDL2.Func(
-      [],
-      [IDL2.Vec(GeneratorTierInfo2)],
-      ["query"]
-    ),
-    "getFaucetClaims": IDL2.Func(
-      [IDL2.Principal],
-      [FaucetClaimSummary2],
-      ["query"]
-    ),
-    "getFirstAvailablePlot": IDL2.Func([], [IDL2.Opt(IDL2.Text)], ["query"]),
-    "getFrntrLedger": IDL2.Func([], [IDL2.Text], ["query"]),
-    "getGameCanisterPrincipal": IDL2.Func([], [IDL2.Text], ["query"]),
-    "getGameStats": IDL2.Func(
-      [],
-      [
-        IDL2.Record({
-          "totalPlayers": IDL2.Nat,
-          "totalFrntrBurned": IDL2.Nat,
-          "totalSupply": IDL2.Nat,
-          "totalBurned": IDL2.Nat,
-          "totalPlots": IDL2.Nat,
-          "emissionRatePerDay": IDL2.Nat,
-          "remainingMineable": IDL2.Nat
-        })
-      ],
-      ["query"]
-    ),
-    "getGeneratorTierCatalog": IDL2.Func(
-      [],
-      [
-        IDL2.Vec(
-          IDL2.Record({
-            "cost": IDL2.Nat,
-            "tierIndex": IDL2.Nat,
-            "bonusPerDay": IDL2.Float64
-          })
-        )
-      ],
-      ["query"]
-    ),
-    "getGlobalStats": IDL2.Func([], [GlobalStats2], ["query"]),
-    "getIcpBalance": IDL2.Func([IDL2.Principal], [IDL2.Nat], []),
-    "getIcpUsdPrice": IDL2.Func([], [IDL2.Float64], []),
-    "getIcpUsdPriceCached": IDL2.Func([], [IDL2.Float64], ["query"]),
-    "getIsAdmin": IDL2.Func([], [IDL2.Bool], ["query"]),
-    "getLeaderboard": IDL2.Func(
-      [IDL2.Nat],
-      [
-        IDL2.Vec(
-          IDL2.Record({
-            "principal": IDL2.Text,
-            "username": IDL2.Opt(IDL2.Text),
-            "rank": IDL2.Nat,
-            "frntBalance": IDL2.Nat,
-            "plotsOwned": IDL2.Nat
-          })
-        )
-      ],
-      ["query"]
-    ),
-    "getLeaderboardStats": IDL2.Func(
-      [],
-      [
-        IDL2.Record({
-          "leaderboardPrizePool": IDL2.Nat,
-          "nextPayoutAt": IDL2.Nat,
-          "activePlayers": IDL2.Nat,
-          "totalPlotsOwned": IDL2.Nat,
-          "totalFRNTRMined": IDL2.Nat,
-          "totalFRNTRBurned": IDL2.Nat
-        })
-      ],
-      ["query"]
-    ),
-    "getLivePlotOwners": IDL2.Func(
-      [],
-      [IDL2.Vec(IDL2.Tuple(IDL2.Text, IDL2.Text))],
-      ["query"]
-    ),
-    "getPassiveIncome": IDL2.Func([IDL2.Text], [IDL2.Float64], ["query"]),
-    "getPlayerState": IDL2.Func(
-      [],
-      [
-        IDL2.Record({
-          "resourceBalances": IDL2.Vec(IDL2.Tuple(ResourceType2, IDL2.Float64)),
-          "username": IDL2.Opt(IDL2.Text),
-          "fuel": IDL2.Nat,
-          "iron": IDL2.Nat,
-          "icpBalance": IDL2.Nat,
-          "frntBalance": IDL2.Nat,
-          "totalFRNTRBurned": IDL2.Float64,
-          "plotsOwned": IDL2.Nat,
-          "plotIds": IDL2.Vec(IDL2.Text),
-          "lastFaucetTime": IDL2.Opt(IDL2.Int),
-          "crystal": IDL2.Nat,
-          "ownedPlots": IDL2.Vec(IDL2.Text),
-          "combatVictories": IDL2.Nat,
-          "generatorTiersMap": IDL2.Vec(IDL2.Tuple(IDL2.Text, IDL2.Nat)),
-          "passiveIncomePerDay": IDL2.Float64
-        })
-      ],
-      []
-    ),
-    "getPlayerStateByPrincipal": IDL2.Func(
-      [IDL2.Principal],
-      [
-        IDL2.Record({
-          "resourceBalances": IDL2.Vec(IDL2.Tuple(ResourceType2, IDL2.Float64)),
-          "username": IDL2.Opt(IDL2.Text),
-          "fuel": IDL2.Nat,
-          "iron": IDL2.Nat,
-          "icpBalance": IDL2.Nat,
-          "frntBalance": IDL2.Nat,
-          "totalFRNTRBurned": IDL2.Float64,
-          "plotsOwned": IDL2.Nat,
-          "plotIds": IDL2.Vec(IDL2.Text),
-          "lastFaucetTime": IDL2.Opt(IDL2.Int),
-          "crystal": IDL2.Nat,
-          "ownedPlots": IDL2.Vec(IDL2.Text),
-          "combatVictories": IDL2.Nat,
-          "generatorTiersMap": IDL2.Vec(IDL2.Tuple(IDL2.Text, IDL2.Nat)),
-          "passiveIncomePerDay": IDL2.Float64
-        })
-      ],
-      []
-    ),
-    "getPlotCount": IDL2.Func([], [IDL2.Nat], ["query"]),
-    "getPlotPrice": IDL2.Func([IDL2.Text], [IDL2.Nat], ["query"]),
-    "getPlotPriceById": IDL2.Func([IDL2.Text], [IDL2.Nat], ["query"]),
-    "getPlotProductionRate": IDL2.Func(
-      [IDL2.Text],
-      [PlotProductionRate2],
-      ["query"]
-    ),
-    "getPlotsByOwner": IDL2.Func(
-      [IDL2.Principal],
-      [IDL2.Vec(IDL2.Text)],
-      ["query"]
-    ),
-    "getPrincipal": IDL2.Func([], [PrincipalDisplay2], ["query"]),
-    "getSubParcelStatus": IDL2.Func(
-      [IDL2.Text],
-      [IDL2.Vec(SubParcelInfo2)],
-      ["query"]
-    ),
-    "getSubParcels": IDL2.Func([IDL2.Text], [IDL2.Vec(SubParcel2)], ["query"]),
-    "getSurveyCost": IDL2.Func([IDL2.Text], [IDL2.Nat], ["query"]),
-    "getSurveyResult": IDL2.Func(
-      [IDL2.Text],
-      [IDL2.Variant({ "ok": SurveyResult2, "err": IDL2.Text })],
-      []
-    ),
-    "getSurveyStatus": IDL2.Func(
-      [IDL2.Text],
-      [IDL2.Variant({ "ok": SurveyView2, "err": IDL2.Text })],
-      []
-    ),
-    "getTokenomics": IDL2.Func([], [Tokenomics2], ["query"]),
-    "getTreasuryBalances": IDL2.Func(
-      [],
-      [
-        IDL2.Record({
-          "leaderboardPot": IDL2.Nat,
-          "devPot": IDL2.Nat,
-          "liquidityPot": IDL2.Nat
-        })
-      ],
-      []
-    ),
-    "getTreasuryPrincipal": IDL2.Func([], [IDL2.Text], ["query"]),
-    "getTreasuryState": IDL2.Func(
-      [],
-      [
-        IDL2.Record({
-          "leaderboard": IDL2.Nat,
-          "liquidity": IDL2.Nat,
-          "developer": IDL2.Nat
-        })
-      ],
-      ["query"]
-    ),
-    "initPlots": IDL2.Func(
-      [
-        IDL2.Vec(
-          IDL2.Tuple(IDL2.Text, IDL2.Text, IDL2.Float64, IDL2.Float64, IDL2.Nat)
-        )
-      ],
-      [],
-      []
-    ),
-    "isSubParcelLocked": IDL2.Func([IDL2.Text], [IDL2.Bool], ["query"]),
-    "launchMissile": IDL2.Func(
-      [IDL2.Text, IDL2.Text, IDL2.Text],
-      [IDL2.Variant({ "ok": IDL2.Text, "err": IDL2.Text })],
-      []
-    ),
-    "mineResources": IDL2.Func(
-      [IDL2.Text],
-      [IDL2.Variant({ "ok": MineResult2, "err": IDL2.Text })],
-      []
-    ),
-    "purchasePlot": IDL2.Func(
-      [IDL2.Text],
-      [IDL2.Variant({ "ok": IDL2.Text, "err": IDL2.Text })],
-      []
-    ),
-    "resetAllData": IDL2.Func([], [], []),
-    "resetTestState": IDL2.Func([], [ResetResult2], []),
-    "setAdminPrincipal": IDL2.Func([IDL2.Principal], [], []),
-    "setApprovedLiquidityCanister": IDL2.Func(
-      [IDL2.Principal],
-      [IDL2.Variant({ "ok": IDL2.Null, "err": IDL2.Text })],
-      []
-    ),
-    "setFrntrLedger": IDL2.Func([IDL2.Principal], [], []),
-    "setGameCanisterPrincipal": IDL2.Func([IDL2.Text], [], []),
-    "setSelfPrincipal": IDL2.Func([], [], []),
-    "setTreasuryPrincipal": IDL2.Func([IDL2.Principal], [], []),
-    "setUsername": IDL2.Func(
-      [IDL2.Text],
-      [IDL2.Variant({ "ok": IDL2.Null, "err": IDL2.Text })],
-      []
-    ),
-    "startSurvey": IDL2.Func(
-      [IDL2.Text],
-      [IDL2.Variant({ "ok": SurveyView2, "err": IDL2.Text })],
-      []
-    ),
-    "stressBuyPlots": IDL2.Func([IDL2.Nat], [StressTestResult2], []),
-    "stressMintPlots": IDL2.Func([IDL2.Nat], [StressTestResult2], []),
-    "stressUpgradePlots": IDL2.Func([IDL2.Nat], [StressTestResult2], []),
-    "testFaucet": IDL2.Func(
-      [],
-      [IDL2.Variant({ "ok": IDL2.Text, "err": IDL2.Text })],
-      []
-    ),
-    "testFaucetV2": IDL2.Func([], [FaucetResult2], []),
-    "updateAdminPrincipalAuth": IDL2.Func([IDL2.Text], [], []),
-    "upgradeGenerator": IDL2.Func(
-      [IDL2.Text],
-      [IDL2.Variant({ "ok": PlotUpgradesView2, "err": UpgradeError2 })],
-      []
-    ),
-    "withdrawLiquidityPot": IDL2.Func(
-      [IDL2.Nat, IDL2.Principal],
-      [IDL2.Variant({ "ok": IDL2.Null, "err": IDL2.Text })],
-      []
-    )
-  });
-};
-function record_opt_to_undefined(arg) {
-  return arg == null ? void 0 : arg;
-}
-class Backend {
-  constructor(actor, _uploadFile, _downloadFile, processError2) {
-    this.actor = actor;
-    this._uploadFile = _uploadFile;
-    this._downloadFile = _downloadFile;
-    this.processError = processError2;
-  }
-  async assignInterceptor(arg0, arg1) {
-    if (this.processError) {
-      try {
-        const result = await this.actor.assignInterceptor(arg0, arg1);
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.assignInterceptor(arg0, arg1);
-      return result;
-    }
-  }
-  async claimAccumulatedTokens() {
-    if (this.processError) {
-      try {
-        const result = await this.actor.claimAccumulatedTokens();
-        return from_candid_variant_n1(this._uploadFile, this._downloadFile, result);
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.claimAccumulatedTokens();
-      return from_candid_variant_n1(this._uploadFile, this._downloadFile, result);
-    }
-  }
-  async getAdjacentPlots(arg0) {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getAdjacentPlots(arg0);
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getAdjacentPlots(arg0);
-      return result;
-    }
-  }
-  async getAdminPrincipal() {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getAdminPrincipal();
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getAdminPrincipal();
-      return result;
-    }
-  }
-  async getAllPlotOwners() {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getAllPlotOwners();
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getAllPlotOwners();
-      return result;
-    }
-  }
-  async getApprovedLiquidityCanister() {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getApprovedLiquidityCanister();
-        return from_candid_opt_n2(this._uploadFile, this._downloadFile, result);
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getApprovedLiquidityCanister();
-      return from_candid_opt_n2(this._uploadFile, this._downloadFile, result);
-    }
-  }
-  async getAssignedInterceptor(arg0) {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getAssignedInterceptor(arg0);
-        return from_candid_opt_n2(this._uploadFile, this._downloadFile, result);
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getAssignedInterceptor(arg0);
-      return from_candid_opt_n2(this._uploadFile, this._downloadFile, result);
-    }
-  }
-  async getCombatLog(arg0) {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getCombatLog(arg0);
-        return from_candid_vec_n3(this._uploadFile, this._downloadFile, result);
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getCombatLog(arg0);
-      return from_candid_vec_n3(this._uploadFile, this._downloadFile, result);
-    }
-  }
-  async getCoreGeneratorTiers() {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getCoreGeneratorTiers();
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getCoreGeneratorTiers();
-      return result;
-    }
-  }
-  async getFaucetClaims(arg0) {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getFaucetClaims(arg0);
-        return from_candid_FaucetClaimSummary_n6(this._uploadFile, this._downloadFile, result);
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getFaucetClaims(arg0);
-      return from_candid_FaucetClaimSummary_n6(this._uploadFile, this._downloadFile, result);
-    }
-  }
-  async getFirstAvailablePlot() {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getFirstAvailablePlot();
-        return from_candid_opt_n2(this._uploadFile, this._downloadFile, result);
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getFirstAvailablePlot();
-      return from_candid_opt_n2(this._uploadFile, this._downloadFile, result);
-    }
-  }
-  async getFrntrLedger() {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getFrntrLedger();
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getFrntrLedger();
-      return result;
-    }
-  }
-  async getGameCanisterPrincipal() {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getGameCanisterPrincipal();
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getGameCanisterPrincipal();
-      return result;
-    }
-  }
-  async getGameStats() {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getGameStats();
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getGameStats();
-      return result;
-    }
-  }
-  async getGeneratorTierCatalog() {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getGeneratorTierCatalog();
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getGeneratorTierCatalog();
-      return result;
-    }
-  }
-  async getGlobalStats() {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getGlobalStats();
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getGlobalStats();
-      return result;
-    }
-  }
-  async getIcpBalance(arg0) {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getIcpBalance(arg0);
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getIcpBalance(arg0);
-      return result;
-    }
-  }
-  async getIcpUsdPrice() {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getIcpUsdPrice();
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getIcpUsdPrice();
-      return result;
-    }
-  }
-  async getIcpUsdPriceCached() {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getIcpUsdPriceCached();
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getIcpUsdPriceCached();
-      return result;
-    }
-  }
-  async getIsAdmin() {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getIsAdmin();
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getIsAdmin();
-      return result;
-    }
-  }
-  async getLeaderboard(arg0) {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getLeaderboard(arg0);
-        return from_candid_vec_n9(this._uploadFile, this._downloadFile, result);
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getLeaderboard(arg0);
-      return from_candid_vec_n9(this._uploadFile, this._downloadFile, result);
-    }
-  }
-  async getLeaderboardStats() {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getLeaderboardStats();
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getLeaderboardStats();
-      return result;
-    }
-  }
-  async getLivePlotOwners() {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getLivePlotOwners();
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getLivePlotOwners();
-      return result;
-    }
-  }
-  async getPassiveIncome(arg0) {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getPassiveIncome(arg0);
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getPassiveIncome(arg0);
-      return result;
-    }
-  }
-  async getPlayerState() {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getPlayerState();
-        return from_candid_record_n11(this._uploadFile, this._downloadFile, result);
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getPlayerState();
-      return from_candid_record_n11(this._uploadFile, this._downloadFile, result);
-    }
-  }
-  async getPlayerStateByPrincipal(arg0) {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getPlayerStateByPrincipal(arg0);
-        return from_candid_record_n11(this._uploadFile, this._downloadFile, result);
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getPlayerStateByPrincipal(arg0);
-      return from_candid_record_n11(this._uploadFile, this._downloadFile, result);
-    }
-  }
-  async getPlotCount() {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getPlotCount();
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getPlotCount();
-      return result;
-    }
-  }
-  async getPlotPrice(arg0) {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getPlotPrice(arg0);
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getPlotPrice(arg0);
-      return result;
-    }
-  }
-  async getPlotPriceById(arg0) {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getPlotPriceById(arg0);
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getPlotPriceById(arg0);
-      return result;
-    }
-  }
-  async getPlotProductionRate(arg0) {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getPlotProductionRate(arg0);
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getPlotProductionRate(arg0);
-      return result;
-    }
-  }
-  async getPlotsByOwner(arg0) {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getPlotsByOwner(arg0);
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getPlotsByOwner(arg0);
-      return result;
-    }
-  }
-  async getPrincipal() {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getPrincipal();
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getPrincipal();
-      return result;
-    }
-  }
-  async getSubParcelStatus(arg0) {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getSubParcelStatus(arg0);
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getSubParcelStatus(arg0);
-      return result;
-    }
-  }
-  async getSubParcels(arg0) {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getSubParcels(arg0);
-        return from_candid_vec_n16(this._uploadFile, this._downloadFile, result);
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getSubParcels(arg0);
-      return from_candid_vec_n16(this._uploadFile, this._downloadFile, result);
-    }
-  }
-  async getSurveyCost(arg0) {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getSurveyCost(arg0);
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getSurveyCost(arg0);
-      return result;
-    }
-  }
-  async getSurveyResult(arg0) {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getSurveyResult(arg0);
-        return from_candid_variant_n19(this._uploadFile, this._downloadFile, result);
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getSurveyResult(arg0);
-      return from_candid_variant_n19(this._uploadFile, this._downloadFile, result);
-    }
-  }
-  async getSurveyStatus(arg0) {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getSurveyStatus(arg0);
-        return from_candid_variant_n24(this._uploadFile, this._downloadFile, result);
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getSurveyStatus(arg0);
-      return from_candid_variant_n24(this._uploadFile, this._downloadFile, result);
-    }
-  }
-  async getTokenomics() {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getTokenomics();
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getTokenomics();
-      return result;
-    }
-  }
-  async getTreasuryBalances() {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getTreasuryBalances();
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getTreasuryBalances();
-      return result;
-    }
-  }
-  async getTreasuryPrincipal() {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getTreasuryPrincipal();
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getTreasuryPrincipal();
-      return result;
-    }
-  }
-  async getTreasuryState() {
-    if (this.processError) {
-      try {
-        const result = await this.actor.getTreasuryState();
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.getTreasuryState();
-      return result;
-    }
-  }
-  async initPlots(arg0) {
-    if (this.processError) {
-      try {
-        const result = await this.actor.initPlots(arg0);
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.initPlots(arg0);
-      return result;
-    }
-  }
-  async isSubParcelLocked(arg0) {
-    if (this.processError) {
-      try {
-        const result = await this.actor.isSubParcelLocked(arg0);
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.isSubParcelLocked(arg0);
-      return result;
-    }
-  }
-  async launchMissile(arg0, arg1, arg2) {
-    if (this.processError) {
-      try {
-        const result = await this.actor.launchMissile(arg0, arg1, arg2);
-        return from_candid_variant_n30(this._uploadFile, this._downloadFile, result);
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.launchMissile(arg0, arg1, arg2);
-      return from_candid_variant_n30(this._uploadFile, this._downloadFile, result);
-    }
-  }
-  async mineResources(arg0) {
-    if (this.processError) {
-      try {
-        const result = await this.actor.mineResources(arg0);
-        return from_candid_variant_n31(this._uploadFile, this._downloadFile, result);
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.mineResources(arg0);
-      return from_candid_variant_n31(this._uploadFile, this._downloadFile, result);
-    }
-  }
-  async purchasePlot(arg0) {
-    if (this.processError) {
-      try {
-        const result = await this.actor.purchasePlot(arg0);
-        return from_candid_variant_n30(this._uploadFile, this._downloadFile, result);
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.purchasePlot(arg0);
-      return from_candid_variant_n30(this._uploadFile, this._downloadFile, result);
-    }
-  }
-  async resetAllData() {
-    if (this.processError) {
-      try {
-        const result = await this.actor.resetAllData();
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.resetAllData();
-      return result;
-    }
-  }
-  async resetTestState() {
-    if (this.processError) {
-      try {
-        const result = await this.actor.resetTestState();
-        return from_candid_ResetResult_n34(this._uploadFile, this._downloadFile, result);
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.resetTestState();
-      return from_candid_ResetResult_n34(this._uploadFile, this._downloadFile, result);
-    }
-  }
-  async setAdminPrincipal(arg0) {
-    if (this.processError) {
-      try {
-        const result = await this.actor.setAdminPrincipal(arg0);
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.setAdminPrincipal(arg0);
-      return result;
-    }
-  }
-  async setApprovedLiquidityCanister(arg0) {
-    if (this.processError) {
-      try {
-        const result = await this.actor.setApprovedLiquidityCanister(arg0);
-        return from_candid_variant_n35(this._uploadFile, this._downloadFile, result);
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.setApprovedLiquidityCanister(arg0);
-      return from_candid_variant_n35(this._uploadFile, this._downloadFile, result);
-    }
-  }
-  async setFrntrLedger(arg0) {
-    if (this.processError) {
-      try {
-        const result = await this.actor.setFrntrLedger(arg0);
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.setFrntrLedger(arg0);
-      return result;
-    }
-  }
-  async setGameCanisterPrincipal(arg0) {
-    if (this.processError) {
-      try {
-        const result = await this.actor.setGameCanisterPrincipal(arg0);
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.setGameCanisterPrincipal(arg0);
-      return result;
-    }
-  }
-  async setSelfPrincipal() {
-    if (this.processError) {
-      try {
-        const result = await this.actor.setSelfPrincipal();
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.setSelfPrincipal();
-      return result;
-    }
-  }
-  async setTreasuryPrincipal(arg0) {
-    if (this.processError) {
-      try {
-        const result = await this.actor.setTreasuryPrincipal(arg0);
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.setTreasuryPrincipal(arg0);
-      return result;
-    }
-  }
-  async setUsername(arg0) {
-    if (this.processError) {
-      try {
-        const result = await this.actor.setUsername(arg0);
-        return from_candid_variant_n35(this._uploadFile, this._downloadFile, result);
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.setUsername(arg0);
-      return from_candid_variant_n35(this._uploadFile, this._downloadFile, result);
-    }
-  }
-  async startSurvey(arg0) {
-    if (this.processError) {
-      try {
-        const result = await this.actor.startSurvey(arg0);
-        return from_candid_variant_n24(this._uploadFile, this._downloadFile, result);
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.startSurvey(arg0);
-      return from_candid_variant_n24(this._uploadFile, this._downloadFile, result);
-    }
-  }
-  async stressBuyPlots(arg0) {
-    if (this.processError) {
-      try {
-        const result = await this.actor.stressBuyPlots(arg0);
-        return from_candid_StressTestResult_n36(this._uploadFile, this._downloadFile, result);
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.stressBuyPlots(arg0);
-      return from_candid_StressTestResult_n36(this._uploadFile, this._downloadFile, result);
-    }
-  }
-  async stressMintPlots(arg0) {
-    if (this.processError) {
-      try {
-        const result = await this.actor.stressMintPlots(arg0);
-        return from_candid_StressTestResult_n36(this._uploadFile, this._downloadFile, result);
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.stressMintPlots(arg0);
-      return from_candid_StressTestResult_n36(this._uploadFile, this._downloadFile, result);
-    }
-  }
-  async stressUpgradePlots(arg0) {
-    if (this.processError) {
-      try {
-        const result = await this.actor.stressUpgradePlots(arg0);
-        return from_candid_StressTestResult_n36(this._uploadFile, this._downloadFile, result);
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.stressUpgradePlots(arg0);
-      return from_candid_StressTestResult_n36(this._uploadFile, this._downloadFile, result);
-    }
-  }
-  async testFaucet() {
-    if (this.processError) {
-      try {
-        const result = await this.actor.testFaucet();
-        return from_candid_variant_n30(this._uploadFile, this._downloadFile, result);
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.testFaucet();
-      return from_candid_variant_n30(this._uploadFile, this._downloadFile, result);
-    }
-  }
-  async testFaucetV2() {
-    if (this.processError) {
-      try {
-        const result = await this.actor.testFaucetV2();
-        return from_candid_FaucetResult_n41(this._uploadFile, this._downloadFile, result);
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.testFaucetV2();
-      return from_candid_FaucetResult_n41(this._uploadFile, this._downloadFile, result);
-    }
-  }
-  async updateAdminPrincipalAuth(arg0) {
-    if (this.processError) {
-      try {
-        const result = await this.actor.updateAdminPrincipalAuth(arg0);
-        return result;
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.updateAdminPrincipalAuth(arg0);
-      return result;
-    }
-  }
-  async upgradeGenerator(arg0) {
-    if (this.processError) {
-      try {
-        const result = await this.actor.upgradeGenerator(arg0);
-        return from_candid_variant_n43(this._uploadFile, this._downloadFile, result);
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.upgradeGenerator(arg0);
-      return from_candid_variant_n43(this._uploadFile, this._downloadFile, result);
-    }
-  }
-  async withdrawLiquidityPot(arg0, arg1) {
-    if (this.processError) {
-      try {
-        const result = await this.actor.withdrawLiquidityPot(arg0, arg1);
-        return from_candid_variant_n35(this._uploadFile, this._downloadFile, result);
-      } catch (e) {
-        this.processError(e);
-        throw new Error("unreachable");
-      }
-    } else {
-      const result = await this.actor.withdrawLiquidityPot(arg0, arg1);
-      return from_candid_variant_n35(this._uploadFile, this._downloadFile, result);
-    }
-  }
-}
-function from_candid_Biome_n22(_uploadFile, _downloadFile, value) {
-  return from_candid_variant_n23(_uploadFile, _downloadFile, value);
-}
-function from_candid_CombatEvent_n4(_uploadFile, _downloadFile, value) {
-  return from_candid_record_n5(_uploadFile, _downloadFile, value);
-}
-function from_candid_FaucetClaimSummary_n6(_uploadFile, _downloadFile, value) {
-  return from_candid_record_n7(_uploadFile, _downloadFile, value);
-}
-function from_candid_FaucetResult_n41(_uploadFile, _downloadFile, value) {
-  return from_candid_variant_n42(_uploadFile, _downloadFile, value);
-}
-function from_candid_GeneratorTier_n48(_uploadFile, _downloadFile, value) {
-  return from_candid_variant_n49(_uploadFile, _downloadFile, value);
-}
-function from_candid_MineResult_n32(_uploadFile, _downloadFile, value) {
-  return from_candid_record_n33(_uploadFile, _downloadFile, value);
-}
-function from_candid_PlotUpgradesView_n44(_uploadFile, _downloadFile, value) {
-  return from_candid_record_n45(_uploadFile, _downloadFile, value);
-}
-function from_candid_ResetResult_n34(_uploadFile, _downloadFile, value) {
-  return from_candid_variant_n30(_uploadFile, _downloadFile, value);
-}
-function from_candid_ResourceType_n14(_uploadFile, _downloadFile, value) {
-  return from_candid_variant_n15(_uploadFile, _downloadFile, value);
-}
-function from_candid_StressActionResult_n39(_uploadFile, _downloadFile, value) {
-  return from_candid_record_n40(_uploadFile, _downloadFile, value);
-}
-function from_candid_StressTestResult_n36(_uploadFile, _downloadFile, value) {
-  return from_candid_variant_n37(_uploadFile, _downloadFile, value);
-}
-function from_candid_SubParcel_n17(_uploadFile, _downloadFile, value) {
-  return from_candid_record_n18(_uploadFile, _downloadFile, value);
-}
-function from_candid_SurveyResult_n20(_uploadFile, _downloadFile, value) {
-  return from_candid_record_n21(_uploadFile, _downloadFile, value);
-}
-function from_candid_SurveyStatus_n27(_uploadFile, _downloadFile, value) {
-  return from_candid_variant_n28(_uploadFile, _downloadFile, value);
-}
-function from_candid_SurveyView_n25(_uploadFile, _downloadFile, value) {
-  return from_candid_record_n26(_uploadFile, _downloadFile, value);
-}
-function from_candid_UpgradeError_n50(_uploadFile, _downloadFile, value) {
-  return from_candid_variant_n51(_uploadFile, _downloadFile, value);
-}
-function from_candid_opt_n2(_uploadFile, _downloadFile, value) {
-  return value.length === 0 ? null : value[0];
-}
-function from_candid_opt_n29(_uploadFile, _downloadFile, value) {
-  return value.length === 0 ? null : from_candid_SurveyResult_n20(_uploadFile, _downloadFile, value[0]);
-}
-function from_candid_opt_n46(_uploadFile, _downloadFile, value) {
-  return value.length === 0 ? null : value[0];
-}
-function from_candid_opt_n47(_uploadFile, _downloadFile, value) {
-  return value.length === 0 ? null : value[0];
-}
-function from_candid_opt_n8(_uploadFile, _downloadFile, value) {
-  return value.length === 0 ? null : value[0];
-}
-function from_candid_record_n10(_uploadFile, _downloadFile, value) {
-  return {
-    principal: value.principal,
-    username: record_opt_to_undefined(from_candid_opt_n2(_uploadFile, _downloadFile, value.username)),
-    rank: value.rank,
-    frntBalance: value.frntBalance,
-    plotsOwned: value.plotsOwned
-  };
-}
-function from_candid_record_n11(_uploadFile, _downloadFile, value) {
-  return {
-    resourceBalances: from_candid_vec_n12(_uploadFile, _downloadFile, value.resourceBalances),
-    username: record_opt_to_undefined(from_candid_opt_n2(_uploadFile, _downloadFile, value.username)),
-    fuel: value.fuel,
-    iron: value.iron,
-    icpBalance: value.icpBalance,
-    frntBalance: value.frntBalance,
-    totalFRNTRBurned: value.totalFRNTRBurned,
-    plotsOwned: value.plotsOwned,
-    plotIds: value.plotIds,
-    lastFaucetTime: record_opt_to_undefined(from_candid_opt_n8(_uploadFile, _downloadFile, value.lastFaucetTime)),
-    crystal: value.crystal,
-    ownedPlots: value.ownedPlots,
-    combatVictories: value.combatVictories,
-    generatorTiersMap: value.generatorTiersMap,
-    passiveIncomePerDay: value.passiveIncomePerDay
-  };
-}
-function from_candid_record_n18(_uploadFile, _downloadFile, value) {
-  return {
-    subParcelId: value.subParcelId,
-    cooldownEnds: value.cooldownEnds,
-    plotId: value.plotId,
-    building: record_opt_to_undefined(from_candid_opt_n2(_uploadFile, _downloadFile, value.building)),
-    slotIndex: value.slotIndex,
-    specialization: value.specialization
-  };
-}
-function from_candid_record_n21(_uploadFile, _downloadFile, value) {
-  return {
-    resourcePercentage: value.resourcePercentage,
-    bonusInfo: record_opt_to_undefined(from_candid_opt_n2(_uploadFile, _downloadFile, value.bonusInfo)),
-    biome: from_candid_Biome_n22(_uploadFile, _downloadFile, value.biome)
-  };
-}
-function from_candid_record_n26(_uploadFile, _downloadFile, value) {
-  return {
-    startTime: value.startTime,
-    status: from_candid_SurveyStatus_n27(_uploadFile, _downloadFile, value.status),
-    result: record_opt_to_undefined(from_candid_opt_n29(_uploadFile, _downloadFile, value.result)),
-    unlockCost: value.unlockCost,
-    secondsRemaining: value.secondsRemaining,
-    plotId: value.plotId
-  };
-}
-function from_candid_record_n33(_uploadFile, _downloadFile, value) {
-  return {
-    efficiency: value.efficiency,
-    plotId: value.plotId,
-    resourceYields: from_candid_vec_n12(_uploadFile, _downloadFile, value.resourceYields),
-    frntRate: value.frntRate
-  };
-}
-function from_candid_record_n40(_uploadFile, _downloadFile, value) {
-  return {
-    ok: value.ok,
-    action: value.action,
-    index: value.index,
-    errorMsg: record_opt_to_undefined(from_candid_opt_n2(_uploadFile, _downloadFile, value.errorMsg)),
-    durationMs: value.durationMs
-  };
-}
-function from_candid_record_n45(_uploadFile, _downloadFile, value) {
-  return {
-    tierName: value.tierName,
-    plotId: value.plotId,
-    installedAt: record_opt_to_undefined(from_candid_opt_n46(_uploadFile, _downloadFile, value.installedAt)),
-    bonusPerDay: value.bonusPerDay,
-    nextTierCost: record_opt_to_undefined(from_candid_opt_n47(_uploadFile, _downloadFile, value.nextTierCost)),
-    generatorTier: from_candid_GeneratorTier_n48(_uploadFile, _downloadFile, value.generatorTier)
-  };
-}
-function from_candid_record_n5(_uploadFile, _downloadFile, value) {
-  return {
-    attacker: value.attacker,
-    intercepted: value.intercepted,
-    interceptorType: record_opt_to_undefined(from_candid_opt_n2(_uploadFile, _downloadFile, value.interceptorType)),
-    toPlot: value.toPlot,
-    atkPower: value.atkPower,
-    timestamp: value.timestamp,
-    fromPlot: value.fromPlot,
-    success: value.success,
-    missileType: record_opt_to_undefined(from_candid_opt_n2(_uploadFile, _downloadFile, value.missileType)),
-    defPower: value.defPower
-  };
-}
-function from_candid_record_n7(_uploadFile, _downloadFile, value) {
-  return {
-    principal: value.principal,
-    lastClaim: record_opt_to_undefined(from_candid_opt_n8(_uploadFile, _downloadFile, value.lastClaim)),
-    totalClaims: value.totalClaims
-  };
-}
-function from_candid_tuple_n13(_uploadFile, _downloadFile, value) {
-  return [
-    from_candid_ResourceType_n14(_uploadFile, _downloadFile, value[0]),
-    value[1]
-  ];
-}
-function from_candid_variant_n1(_uploadFile, _downloadFile, value) {
-  return "ok" in value ? {
-    __kind__: "ok",
-    ok: value.ok
-  } : "err" in value ? {
-    __kind__: "err",
-    err: value.err
-  } : value;
-}
-function from_candid_variant_n15(_uploadFile, _downloadFile, value) {
-  return "RareEarth" in value ? "RareEarth" : "Fuel" in value ? "Fuel" : "Iron" in value ? "Iron" : "Crystal" in value ? "Crystal" : value;
-}
-function from_candid_variant_n19(_uploadFile, _downloadFile, value) {
-  return "ok" in value ? {
-    __kind__: "ok",
-    ok: from_candid_SurveyResult_n20(_uploadFile, _downloadFile, value.ok)
-  } : "err" in value ? {
-    __kind__: "err",
-    err: value.err
-  } : value;
-}
-function from_candid_variant_n23(_uploadFile, _downloadFile, value) {
-  return "Tropical" in value ? "Tropical" : "AsteroidImpact" in value ? "AsteroidImpact" : "DeepOcean" in value ? "DeepOcean" : "Desert" in value ? "Desert" : "Volcanic" in value ? "Volcanic" : "Temperate" in value ? "Temperate" : "Ocean" in value ? "Ocean" : "Arctic" in value ? "Arctic" : value;
-}
-function from_candid_variant_n24(_uploadFile, _downloadFile, value) {
-  return "ok" in value ? {
-    __kind__: "ok",
-    ok: from_candid_SurveyView_n25(_uploadFile, _downloadFile, value.ok)
-  } : "err" in value ? {
-    __kind__: "err",
-    err: value.err
-  } : value;
-}
-function from_candid_variant_n28(_uploadFile, _downloadFile, value) {
-  return "Locked" in value ? "Locked" : "InProgress" in value ? "InProgress" : "Completed" in value ? "Completed" : value;
-}
-function from_candid_variant_n30(_uploadFile, _downloadFile, value) {
-  return "ok" in value ? {
-    __kind__: "ok",
-    ok: value.ok
-  } : "err" in value ? {
-    __kind__: "err",
-    err: value.err
-  } : value;
-}
-function from_candid_variant_n31(_uploadFile, _downloadFile, value) {
-  return "ok" in value ? {
-    __kind__: "ok",
-    ok: from_candid_MineResult_n32(_uploadFile, _downloadFile, value.ok)
-  } : "err" in value ? {
-    __kind__: "err",
-    err: value.err
-  } : value;
-}
-function from_candid_variant_n35(_uploadFile, _downloadFile, value) {
-  return "ok" in value ? {
-    __kind__: "ok",
-    ok: value.ok
-  } : "err" in value ? {
-    __kind__: "err",
-    err: value.err
-  } : value;
-}
-function from_candid_variant_n37(_uploadFile, _downloadFile, value) {
-  return "ok" in value ? {
-    __kind__: "ok",
-    ok: from_candid_vec_n38(_uploadFile, _downloadFile, value.ok)
-  } : "err" in value ? {
-    __kind__: "err",
-    err: value.err
-  } : value;
-}
-function from_candid_variant_n42(_uploadFile, _downloadFile, value) {
-  return "ok" in value ? {
-    __kind__: "ok",
-    ok: value.ok
-  } : "err" in value ? {
-    __kind__: "err",
-    err: value.err
-  } : value;
-}
-function from_candid_variant_n43(_uploadFile, _downloadFile, value) {
-  return "ok" in value ? {
-    __kind__: "ok",
-    ok: from_candid_PlotUpgradesView_n44(_uploadFile, _downloadFile, value.ok)
-  } : "err" in value ? {
-    __kind__: "err",
-    err: from_candid_UpgradeError_n50(_uploadFile, _downloadFile, value.err)
-  } : value;
-}
-function from_candid_variant_n49(_uploadFile, _downloadFile, value) {
-  return "TierIII" in value ? "TierIII" : "None" in value ? "None" : "TierII" in value ? "TierII" : "TierIV" in value ? "TierIV" : "TierVI" in value ? "TierVI" : "TierI" in value ? "TierI" : "TierV" in value ? "TierV" : value;
-}
-function from_candid_variant_n51(_uploadFile, _downloadFile, value) {
-  return "SubParcelLocked" in value ? "SubParcelLocked" : "PlotNotFound" in value ? "PlotNotFound" : "InvalidTier" in value ? "InvalidTier" : "NotOwner" in value ? "NotOwner" : "AlreadyMaxTier" in value ? "AlreadyMaxTier" : "InsufficientFRNTR" in value ? "InsufficientFRNTR" : value;
-}
-function from_candid_vec_n12(_uploadFile, _downloadFile, value) {
-  return value.map((x3) => from_candid_tuple_n13(_uploadFile, _downloadFile, x3));
-}
-function from_candid_vec_n16(_uploadFile, _downloadFile, value) {
-  return value.map((x3) => from_candid_SubParcel_n17(_uploadFile, _downloadFile, x3));
-}
-function from_candid_vec_n3(_uploadFile, _downloadFile, value) {
-  return value.map((x3) => from_candid_CombatEvent_n4(_uploadFile, _downloadFile, x3));
-}
-function from_candid_vec_n38(_uploadFile, _downloadFile, value) {
-  return value.map((x3) => from_candid_StressActionResult_n39(_uploadFile, _downloadFile, x3));
-}
-function from_candid_vec_n9(_uploadFile, _downloadFile, value) {
-  return value.map((x3) => from_candid_record_n10(_uploadFile, _downloadFile, x3));
-}
-function createActor(canisterId, _uploadFile, _downloadFile, options = {}) {
-  const agent = options.agent || HttpAgent.createSync({
-    ...options.agentOptions
-  });
-  if (options.agent && options.agentOptions) {
-    console.warn("Detected both agent and agentOptions passed to createActor. Ignoring agentOptions and proceeding with the provided agent.");
-  }
-  const actor = Actor.createActor(idlFactory, {
-    agent,
-    canisterId,
-    ...options.actorOptions
-  });
-  return new Backend(actor, _uploadFile, _downloadFile, options.processError);
-}
-const CYAN$c = "#00ffcc";
-const GOLD$3 = "#ffd700";
-const AMBER = "#f59e0b";
-const BORDER$b = "rgba(0,255,204,0.18)";
-const PANEL = "rgba(0,20,40,0.72)";
-const TEXT$6 = "#e0f4ff";
-const TEXT_DIM$5 = "rgba(224,244,255,0.45)";
-function computeScore(plots, frntr, wins) {
-  return Math.round(
-    (plots ?? 0) * 100 + (frntr ?? 0) * 0.01 + (wins ?? 0) * 50
-  );
-}
-function RankMedal({ rank }) {
-  if (rank === 1)
-    return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 14 }, title: "1st Place", children: "🥇" });
-  if (rank === 2)
-    return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 14 }, title: "2nd Place", children: "🥈" });
-  if (rank === 3)
-    return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 14 }, title: "3rd Place", children: "🥉" });
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-    "span",
-    {
-      style: {
-        fontSize: 11,
-        fontWeight: 700,
-        fontFamily: "monospace",
-        color: TEXT_DIM$5
-      },
-      children: [
-        "#",
-        rank
-      ]
-    }
-  );
-}
-function SortIcon({
-  col,
-  active,
-  dir
-}) {
-  if (col !== active)
-    return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { opacity: 0.2, fontSize: 10 }, children: "↕" });
-  return dir === "asc" ? /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronUp, { size: 11, style: { color: CYAN$c } }) : /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronDown, { size: 11, style: { color: CYAN$c } });
-}
-function Leaderboard() {
-  const leaderboard = useGameStore((s2) => s2.leaderboard);
-  const player = useGameStore((s2) => s2.player);
-  const rankStats = useGameStore((s2) => s2.rankStats);
-  const { actor, isFetching } = useActor(createActor);
-  const [sortKey, setSortKey] = reactExports.useState("score");
-  const [sortDir, setSortDir] = reactExports.useState("desc");
-  const [isLoading, setIsLoading] = reactExports.useState(true);
-  const [lastRefresh, setLastRefresh] = reactExports.useState(Date.now());
-  const [refreshing, setRefreshing] = reactExports.useState(false);
-  const refreshTimerRef = reactExports.useRef(null);
-  const fetchLeaderboard = reactExports.useCallback(async () => {
-    if (!actor || isFetching) return;
-    try {
-      const data = await actor.getLeaderboard(50n);
-      const mapped = data.map((e) => ({
-        rank: Number(e.rank),
-        name: e.username ?? `${e.principal.slice(0, 8)}...${e.principal.slice(-4)}`,
-        principal: e.principal,
-        plotsOwned: Number(e.plotsOwned),
-        frntEarned: Number(e.frntBalance),
-        victories: 0
-      }));
-      useGameStore.setState({ leaderboard: mapped });
-    } catch {
-    }
-  }, [actor, isFetching]);
-  reactExports.useEffect(() => {
-    const load = async () => {
-      await fetchLeaderboard();
-      setIsLoading(false);
-    };
-    void load();
-    refreshTimerRef.current = setInterval(() => {
-      void fetchLeaderboard();
-      setLastRefresh(Date.now());
-    }, 3e4);
-    return () => {
-      if (refreshTimerRef.current) clearInterval(refreshTimerRef.current);
-    };
-  }, [fetchLeaderboard]);
-  const handleManualRefresh = async () => {
-    setRefreshing(true);
-    await fetchLeaderboard();
-    setLastRefresh(Date.now());
-    setRefreshing(false);
-  };
-  const entries = reactExports.useMemo(() => {
-    const base = leaderboard.map((e) => ({
-      id: e.name,
-      name: e.name,
-      principal: e.principal ?? "",
-      plots: e.plotsOwned,
-      frntr: e.frntEarned,
-      wins: e.victories,
-      score: computeScore(e.plotsOwned, e.frntEarned, e.victories),
-      isMe: !!(player.principal && e.principal === player.principal)
-    }));
-    const alreadyInList = base.some((e) => e.isMe);
-    const myEntry = {
-      id: "__me__",
-      name: player.principal ? `${player.principal.slice(0, 8)}...${player.principal.slice(-4)}` : "YOU",
-      principal: player.principal ?? "",
-      plots: player.plotsOwned.length,
-      frntr: Math.round(player.frntBalance),
-      wins: rankStats.combatWins,
-      score: computeScore(
-        player.plotsOwned.length,
-        player.frntBalance,
-        rankStats.combatWins
-      ),
-      isMe: true
-    };
-    const merged = alreadyInList ? base : [myEntry, ...base];
-    return merged.slice(0, 25);
-  }, [leaderboard, player, rankStats]);
-  const sorted = reactExports.useMemo(() => {
-    const copy = [...entries];
-    copy.sort((a2, b2) => {
-      let va = 0;
-      let vb = 0;
-      if (sortKey === "player") {
-        va = a2.name.toLowerCase();
-        vb = b2.name.toLowerCase();
-      } else if (sortKey === "plots") {
-        va = a2.plots ?? 0;
-        vb = b2.plots ?? 0;
-      } else if (sortKey === "frntr") {
-        va = a2.frntr ?? 0;
-        vb = b2.frntr ?? 0;
-      } else if (sortKey === "wins") {
-        va = a2.wins ?? 0;
-        vb = b2.wins ?? 0;
-      } else {
-        va = a2.score ?? 0;
-        vb = b2.score ?? 0;
-      }
-      if (typeof va === "string" && typeof vb === "string") {
-        return sortDir === "asc" ? va.localeCompare(vb) : vb.localeCompare(va);
-      }
-      return sortDir === "asc" ? va - vb : vb - va;
-    });
-    return copy.map((e, i2) => ({ ...e, rank: i2 + 1 }));
-  }, [entries, sortKey, sortDir]);
-  const handleSort = (key) => {
-    if (key === sortKey) {
-      setSortDir((d2) => d2 === "asc" ? "desc" : "asc");
-    } else {
-      setSortKey(key);
-      setSortDir("desc");
-    }
-  };
-  const myRank = sorted.findIndex(
-    (e) => e.isMe || player.principal && e.principal === player.principal
-  );
-  const timeSince = Math.floor((Date.now() - lastRefresh) / 1e3);
-  const colStyle = (key) => ({
-    cursor: "pointer",
-    userSelect: "none",
-    padding: "10px 12px",
-    fontSize: 9,
-    fontWeight: 700,
-    letterSpacing: 2,
-    textTransform: "uppercase",
-    color: sortKey === key ? CYAN$c : TEXT_DIM$5,
-    display: "flex",
-    alignItems: "center",
-    gap: 3,
-    whiteSpace: "nowrap",
-    transition: "color 0.15s"
-  });
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(
-    "div",
-    {
-      className: "min-h-screen",
-      style: {
-        background: "radial-gradient(ellipse at 50% 0%, #0a1628 0%, #04070d 70%)",
-        fontFamily: "'General Sans', 'Plus Jakarta Sans', sans-serif"
-      },
-      children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "pt-6 pb-12 px-4 max-w-4xl mx-auto", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs(
-          motion.div,
-          {
-            initial: { opacity: 0, y: -10 },
-            animate: { opacity: 1, y: 0 },
-            transition: { duration: 0.3 },
-            className: "flex items-center justify-between mb-6",
-            children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "div",
-                  {
-                    style: {
-                      width: 38,
-                      height: 38,
-                      borderRadius: 8,
-                      background: "rgba(0,255,204,0.1)",
-                      border: `1px solid ${BORDER$b}`,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center"
-                    },
-                    children: /* @__PURE__ */ jsxRuntimeExports.jsx(Trophy, { size: 18, style: { color: GOLD$3 } })
-                  }
-                ),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "h1",
-                    {
-                      style: {
-                        fontSize: 20,
-                        fontWeight: 800,
-                        letterSpacing: 4,
-                        color: TEXT$6,
-                        textTransform: "uppercase",
-                        lineHeight: 1
-                      },
-                      children: "LEADERBOARD"
-                    }
-                  ),
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                    "p",
-                    {
-                      style: {
-                        fontSize: 9,
-                        color: TEXT_DIM$5,
-                        letterSpacing: 2,
-                        marginTop: 2
-                      },
-                      children: [
-                        "GLOBAL RANKING · TOP ",
-                        sorted.length,
-                        " COMMANDERS"
-                      ]
-                    }
-                  )
-                ] })
-              ] }),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 9, color: TEXT_DIM$5, letterSpacing: 1 }, children: refreshing ? "SYNCING..." : `${timeSince}s AGO` }),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                  "button",
-                  {
-                    type: "button",
-                    "data-ocid": "leaderboard.button",
-                    onClick: handleManualRefresh,
-                    disabled: refreshing,
-                    style: {
-                      background: "rgba(0,255,204,0.07)",
-                      border: `1px solid ${BORDER$b}`,
-                      borderRadius: 6,
-                      color: CYAN$c,
-                      padding: "6px 10px",
-                      cursor: refreshing ? "not-allowed" : "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 5,
-                      fontSize: 9,
-                      fontWeight: 700,
-                      letterSpacing: 2,
-                      textTransform: "uppercase",
-                      opacity: refreshing ? 0.6 : 1
-                    },
-                    children: [
-                      /* @__PURE__ */ jsxRuntimeExports.jsx(
-                        RefreshCw,
-                        {
-                          size: 11,
-                          style: {
-                            animation: refreshing ? "spin 1s linear infinite" : "none"
-                          }
-                        }
-                      ),
-                      "REFRESH"
-                    ]
-                  }
-                )
-              ] })
-            ]
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-wrap gap-2 mb-5", children: [
-          { key: "score", label: "SCORE", icon: "🎯" },
-          {
-            key: "plots",
-            label: "PLOTS",
-            icon: null,
-            lucide: Globe
-          },
-          {
-            key: "frntr",
-            label: "FRNTR",
-            icon: null,
-            lucide: Zap
-          },
-          {
-            key: "wins",
-            label: "WINS",
-            icon: null,
-            lucide: Sword
-          }
-        ].map((tab) => {
-          const active = sortKey === tab.key;
-          const LucideIcon = tab.lucide;
-          return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "button",
-            {
-              type: "button",
-              "data-ocid": "leaderboard.tab",
-              onClick: () => handleSort(tab.key),
-              className: "flex items-center gap-1.5 min-h-[44px] px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all rounded-lg",
-              style: {
-                background: active ? "rgba(0,255,204,0.15)" : "rgba(0,20,40,0.5)",
-                border: `1px solid ${active ? CYAN$c : BORDER$b}`,
-                color: active ? CYAN$c : TEXT_DIM$5,
-                boxShadow: active ? "0 0 10px rgba(0,255,204,0.15)" : "none"
-              },
-              children: [
-                tab.icon && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: tab.icon }),
-                LucideIcon && /* @__PURE__ */ jsxRuntimeExports.jsx(LucideIcon, { size: 13 }),
-                tab.label,
-                active && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 9 }, children: sortDir === "desc" ? "▼" : "▲" })
-              ]
-            },
-            tab.key
-          );
-        }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs(
-          "div",
-          {
-            className: "mb-4 inline-flex items-center gap-2 rounded-full px-4 py-1.5",
-            style: {
-              background: "rgba(0,255,204,0.05)",
-              border: `1px solid ${BORDER$b}`,
-              fontSize: 9,
-              color: TEXT_DIM$5,
-              letterSpacing: 1.5
-            },
-            children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$c }, children: "⚡" }),
-              "SCORE = (PLOTS × 100) + (FRNTR × 0.01) + (WINS × 50)"
-            ]
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs(
-          motion.div,
-          {
-            initial: { opacity: 0, y: 10 },
-            animate: { opacity: 1, y: 0 },
-            transition: { duration: 0.35, delay: 0.1 },
-            "data-ocid": "leaderboard.table",
-            style: {
-              background: PANEL,
-              backdropFilter: "blur(16px)",
-              WebkitBackdropFilter: "blur(16px)",
-              border: `1px solid ${BORDER$b}`,
-              borderRadius: 12,
-              overflow: "hidden"
-            },
-            children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                "div",
-                {
-                  style: {
-                    display: "grid",
-                    gridTemplateColumns: "42px 48px 1fr 70px 110px 60px 90px",
-                    borderBottom: `1px solid ${BORDER$b}`,
-                    background: "rgba(0,255,204,0.03)"
-                  },
-                  children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsx(
-                      "div",
-                      {
-                        style: {
-                          padding: "10px 12px",
-                          fontSize: 9,
-                          fontWeight: 700,
-                          letterSpacing: 2,
-                          color: TEXT_DIM$5,
-                          textTransform: "uppercase"
-                        },
-                        children: "#"
-                      }
-                    ),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { padding: "10px 4px" } }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                      "button",
-                      {
-                        type: "button",
-                        style: colStyle("player"),
-                        onClick: () => handleSort("player"),
-                        children: [
-                          "PLAYER ",
-                          /* @__PURE__ */ jsxRuntimeExports.jsx(SortIcon, { col: "player", active: sortKey, dir: sortDir })
-                        ]
-                      }
-                    ),
-                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                      "button",
-                      {
-                        type: "button",
-                        style: { ...colStyle("plots"), justifyContent: "flex-end" },
-                        onClick: () => handleSort("plots"),
-                        children: [
-                          "PLOTS ",
-                          /* @__PURE__ */ jsxRuntimeExports.jsx(SortIcon, { col: "plots", active: sortKey, dir: sortDir })
-                        ]
-                      }
-                    ),
-                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                      "button",
-                      {
-                        type: "button",
-                        style: { ...colStyle("frntr"), justifyContent: "flex-end" },
-                        onClick: () => handleSort("frntr"),
-                        children: [
-                          "FRNTR ",
-                          /* @__PURE__ */ jsxRuntimeExports.jsx(SortIcon, { col: "frntr", active: sortKey, dir: sortDir })
-                        ]
-                      }
-                    ),
-                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                      "button",
-                      {
-                        type: "button",
-                        style: { ...colStyle("wins"), justifyContent: "flex-end" },
-                        onClick: () => handleSort("wins"),
-                        children: [
-                          "WINS ",
-                          /* @__PURE__ */ jsxRuntimeExports.jsx(SortIcon, { col: "wins", active: sortKey, dir: sortDir })
-                        ]
-                      }
-                    ),
-                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                      "button",
-                      {
-                        type: "button",
-                        style: { ...colStyle("score"), justifyContent: "flex-end" },
-                        onClick: () => handleSort("score"),
-                        children: [
-                          "SCORE ",
-                          /* @__PURE__ */ jsxRuntimeExports.jsx(SortIcon, { col: "score", active: sortKey, dir: sortDir })
-                        ]
-                      }
-                    )
-                  ]
-                }
-              ),
-              isLoading ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { "data-ocid": "leaderboard.loading_state", style: { padding: 12 }, children: Array.from({ length: 5 }).map((_2, i2) => /* @__PURE__ */ jsxRuntimeExports.jsx(
-                Skeleton2,
-                {
-                  className: "w-full h-10 mb-2 rounded-md",
-                  style: { background: "rgba(0,255,204,0.06)" }
-                },
-                i2
-              )) }) : sorted.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                "div",
-                {
-                  "data-ocid": "leaderboard.empty_state",
-                  style: {
-                    padding: "40px 20px",
-                    textAlign: "center",
-                    color: TEXT_DIM$5,
-                    fontSize: 12,
-                    letterSpacing: 2
-                  },
-                  children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 28, marginBottom: 8 }, children: "📡" }),
-                    "NO PLAYERS YET — BE THE FIRST TO REGISTER!"
-                  ]
-                }
-              ) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { "data-ocid": "leaderboard.list", children: sorted.map((entry, idx) => {
-                const isTop3 = entry.rank <= 3;
-                const rowBg = entry.isMe ? "rgba(0,255,204,0.08)" : isTop3 ? `rgba(0,255,204,${0.04 - idx * 0.01})` : "transparent";
-                const borderColor = entry.isMe ? "rgba(0,255,204,0.25)" : "rgba(0,255,204,0.06)";
-                const rankColor = entry.rank === 1 ? GOLD$3 : entry.rank === 2 ? "#c0c0c0" : entry.rank === 3 ? AMBER : TEXT_DIM$5;
-                return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                  motion.div,
-                  {
-                    initial: { opacity: 0 },
-                    animate: { opacity: 1 },
-                    transition: { delay: idx * 0.03 },
-                    "data-ocid": `leaderboard.item.${idx + 1}`,
-                    style: {
-                      display: "grid",
-                      gridTemplateColumns: "42px 48px 1fr 70px 110px 60px 90px",
-                      background: rowBg,
-                      borderBottom: `1px solid ${borderColor}`,
-                      alignItems: "center",
-                      transition: "background 0.15s",
-                      ...entry.isMe ? {
-                        boxShadow: "inset 2px 0 0 rgba(0,255,204,0.6)"
-                      } : {}
-                    },
-                    children: [
-                      /* @__PURE__ */ jsxRuntimeExports.jsx(
-                        "div",
-                        {
-                          style: {
-                            padding: "11px 12px",
-                            fontSize: 10,
-                            fontWeight: 700,
-                            fontFamily: "monospace",
-                            color: rankColor
-                          },
-                          children: entry.rank
-                        }
-                      ),
-                      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { padding: "11px 4px" }, children: /* @__PURE__ */ jsxRuntimeExports.jsx(RankMedal, { rank: entry.rank }) }),
-                      /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                        "div",
-                        {
-                          style: {
-                            padding: "11px 12px",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 8,
-                            overflow: "hidden"
-                          },
-                          children: [
-                            /* @__PURE__ */ jsxRuntimeExports.jsx(
-                              "div",
-                              {
-                                style: {
-                                  width: 22,
-                                  height: 22,
-                                  borderRadius: 4,
-                                  background: `oklch(55% 0.2 ${entry.name.charCodeAt(0) * 23 % 360})`,
-                                  flexShrink: 0,
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  fontSize: 9,
-                                  fontWeight: 700,
-                                  color: "#fff"
-                                },
-                                children: entry.name.slice(0, 1).toUpperCase()
-                              }
-                            ),
-                            /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                              "span",
-                              {
-                                style: {
-                                  fontSize: 11,
-                                  fontWeight: entry.isMe ? 800 : 500,
-                                  color: entry.isMe ? CYAN$c : TEXT$6,
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                  whiteSpace: "nowrap",
-                                  letterSpacing: 0.5
-                                },
-                                children: [
-                                  entry.name,
-                                  entry.isMe && /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                    "span",
-                                    {
-                                      style: {
-                                        marginLeft: 6,
-                                        fontSize: 7,
-                                        fontWeight: 700,
-                                        color: CYAN$c,
-                                        border: "1px solid rgba(0,255,204,0.4)",
-                                        borderRadius: 3,
-                                        padding: "1px 4px",
-                                        letterSpacing: 1
-                                      },
-                                      children: "YOU"
-                                    }
-                                  )
-                                ]
-                              }
-                            )
-                          ]
-                        }
-                      ),
-                      /* @__PURE__ */ jsxRuntimeExports.jsx(
-                        "div",
-                        {
-                          style: {
-                            padding: "11px 12px",
-                            textAlign: "right",
-                            fontSize: 11,
-                            fontWeight: 700,
-                            fontFamily: "monospace",
-                            color: TEXT$6
-                          },
-                          children: entry.plots
-                        }
-                      ),
-                      /* @__PURE__ */ jsxRuntimeExports.jsx(
-                        "div",
-                        {
-                          style: {
-                            padding: "11px 12px",
-                            textAlign: "right",
-                            fontSize: 11,
-                            fontWeight: 700,
-                            fontFamily: "monospace",
-                            color: entry.isMe ? CYAN$c : "rgba(0,255,204,0.7)"
-                          },
-                          children: entry.frntr.toLocaleString()
-                        }
-                      ),
-                      /* @__PURE__ */ jsxRuntimeExports.jsx(
-                        "div",
-                        {
-                          style: {
-                            padding: "11px 12px",
-                            textAlign: "right",
-                            fontSize: 11,
-                            fontWeight: 700,
-                            fontFamily: "monospace",
-                            color: "#22c55e"
-                          },
-                          children: entry.wins
-                        }
-                      ),
-                      /* @__PURE__ */ jsxRuntimeExports.jsx(
-                        "div",
-                        {
-                          style: {
-                            padding: "11px 12px",
-                            textAlign: "right",
-                            fontSize: 11,
-                            fontWeight: 800,
-                            fontFamily: "monospace",
-                            color: entry.isMe ? GOLD$3 : AMBER
-                          },
-                          children: entry.score.toLocaleString()
-                        }
-                      )
-                    ]
-                  },
-                  entry.id
-                );
-              }) })
-            ]
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs(
-          motion.div,
-          {
-            initial: { opacity: 0, y: 6 },
-            animate: { opacity: 1, y: 0 },
-            transition: { duration: 0.3, delay: 0.2 },
-            "data-ocid": "leaderboard.your_rank_card",
-            className: "mt-4 flex items-center justify-between rounded-xl px-5 py-4",
-            style: {
-              background: "rgba(0,255,204,0.06)",
-              border: "1px solid rgba(0,255,204,0.25)",
-              backdropFilter: "blur(12px)"
-            },
-            children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(Trophy, { size: 16, style: { color: GOLD$3 } }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "span",
-                  {
-                    style: {
-                      fontSize: 10,
-                      fontWeight: 700,
-                      letterSpacing: 2,
-                      color: TEXT_DIM$5,
-                      textTransform: "uppercase"
-                    },
-                    children: "YOUR RANK"
-                  }
-                )
-              ] }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "span",
-                {
-                  style: {
-                    fontSize: 18,
-                    fontWeight: 900,
-                    fontFamily: "monospace",
-                    color: myRank >= 0 ? CYAN$c : TEXT_DIM$5,
-                    letterSpacing: 1
-                  },
-                  children: myRank >= 0 ? `#${myRank + 1}` : "UNRANKED"
-                }
-              )
-            ]
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs(
-          "div",
-          {
-            className: "mt-3 flex items-center justify-end gap-2",
-            style: { fontSize: 9, color: TEXT_DIM$5, letterSpacing: 1.5 },
-            children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "div",
-                {
-                  style: {
-                    width: 6,
-                    height: 6,
-                    borderRadius: "50%",
-                    background: CYAN$c,
-                    animation: "pulse 2s infinite",
-                    boxShadow: "0 0 6px rgba(0,255,204,0.7)"
-                  }
-                }
-              ),
-              "AUTO-REFRESH EVERY 30S"
-            ]
-          }
-        )
-      ] })
-    }
-  );
-}
 var jt = (n) => {
   switch (n) {
     case "success":
@@ -89055,6 +83072,8266 @@ reactExports.forwardRef(function(e, t) {
     })) : null;
   }));
 });
+const Biome = Variant({
+  "Tropical": Null,
+  "AsteroidImpact": Null,
+  "DeepOcean": Null,
+  "Desert": Null,
+  "Volcanic": Null,
+  "Temperate": Null,
+  "Ocean": Null,
+  "Arctic": Null
+});
+const SurveyResult = Record({
+  "resourcePercentage": Nat,
+  "bonusInfo": Opt(Text),
+  "biome": Biome
+});
+const Result = Variant({ "ok": Nat, "err": Text });
+const ActionAuditEntry = Record({
+  "action": Text,
+  "decision": Text,
+  "plotId": Opt(Text),
+  "tier": Opt(Text),
+  "timestamp": Int,
+  "details": Text,
+  "caller": Principal2,
+  "amount": Opt(Nat)
+});
+const CombatEvent = Record({
+  "attacker": Principal2,
+  "intercepted": Bool,
+  "interceptorType": Opt(Text),
+  "toPlot": Text,
+  "atkPower": Nat,
+  "timestamp": Int,
+  "fromPlot": Text,
+  "success": Bool,
+  "missileType": Opt(Text),
+  "defPower": Nat
+});
+const GeneratorTierInfo = Record({
+  "name": Text,
+  "tierIndex": Nat,
+  "bonusPerDay": Float64,
+  "costFRNTR": Nat
+});
+const FaucetClaimSummary = Record({
+  "principal": Text,
+  "lastClaim": Opt(Int),
+  "totalClaims": Nat
+});
+const GlobalStats = Record({
+  "circulatingSupply": Nat,
+  "activePlayers": Nat,
+  "totalPlotsOwned": Nat,
+  "dailyEmission": Nat,
+  "totalBurned": Nat
+});
+const MissionRequirementKind = Variant({
+  "purchasePlots": Nat,
+  "upgradeToTier": Nat,
+  "holdFRNTR": Nat,
+  "reachLeaderboardTop": Nat,
+  "surveyPlot": Null,
+  "claimTokens": Nat
+});
+const Mission = Record({
+  "id": Text,
+  "title": Text,
+  "description": Text,
+  "rewardE8s": Nat,
+  "requirement": MissionRequirementKind
+});
+const ResourceType = Variant({
+  "RareEarth": Null,
+  "Fuel": Null,
+  "Iron": Null,
+  "Crystal": Null
+});
+const PlotProductionRate = Record({
+  "totalPerDay": Float64,
+  "plotId": Text,
+  "tierBonus": Float64,
+  "baseFRNTRPerDay": Float64,
+  "generatorTier": Nat,
+  "nexusBonus": Float64
+});
+const PrincipalDisplay = Record({
+  "full": Text,
+  "short": Text,
+  "isAuthed": Bool
+});
+const SubParcelInfo = Record({
+  "resourceRate": Float64,
+  "slotIndex": Nat,
+  "isLocked": Bool,
+  "buildingType": Text,
+  "cooldownSecondsRemaining": Nat
+});
+const SubParcel = Record({
+  "subParcelId": Text,
+  "cooldownEnds": Int,
+  "plotId": Text,
+  "building": Opt(Text),
+  "slotIndex": Nat,
+  "specialization": Text
+});
+const SurveyStatus = Variant({
+  "Locked": Null,
+  "InProgress": Null,
+  "Completed": Null
+});
+const PlotId = Text;
+const SurveyView = Record({
+  "startTime": Int,
+  "status": SurveyStatus,
+  "result": Opt(SurveyResult),
+  "unlockCost": Nat,
+  "secondsRemaining": Nat,
+  "plotId": PlotId
+});
+const Tokenomics = Record({
+  "burnRate": Nat,
+  "emissionRate": Nat,
+  "circulatingSupply": Nat,
+  "daysUntilMilestone": Nat,
+  "totalBurned": Nat,
+  "maxSupply": Nat,
+  "remainingMineable": Nat
+});
+const MineResult = Record({
+  "efficiency": Float64,
+  "plotId": PlotId,
+  "resourceYields": Vec(Tuple(ResourceType, Float64)),
+  "frntRate": Float64
+});
+const ResetResult = Variant({ "ok": Text, "err": Text });
+const StressActionResult = Record({
+  "ok": Bool,
+  "action": Text,
+  "index": Nat,
+  "errorMsg": Opt(Text),
+  "durationMs": Int
+});
+const StressTestResult = Variant({
+  "ok": Vec(StressActionResult),
+  "err": Text
+});
+const FaucetGrant = Record({
+  "icpGranted": Nat,
+  "frntGranted": Nat
+});
+const FaucetResult = Variant({
+  "ok": FaucetGrant,
+  "err": Text
+});
+const Timestamp = Int;
+const GeneratorTier = Variant({
+  "TierIII": Null,
+  "None": Null,
+  "TierII": Null,
+  "TierIV": Null,
+  "TierVI": Null,
+  "TierI": Null,
+  "TierV": Null
+});
+const PlotUpgradesView = Record({
+  "tierName": Text,
+  "plotId": PlotId,
+  "installedAt": Opt(Timestamp),
+  "bonusPerDay": Float64,
+  "nextTierCost": Opt(Nat),
+  "generatorTier": GeneratorTier
+});
+const UpgradeError = Variant({
+  "SubParcelLocked": Null,
+  "PlotNotFound": Null,
+  "InvalidTier": Null,
+  "NotOwner": Null,
+  "AlreadyMaxTier": Null,
+  "InsufficientFRNTR": Null
+});
+Service({
+  "assignInterceptor": Func([Text, Text], [], []),
+  "claimAccumulatedTokens": Func(
+    [Text],
+    [Variant({ "ok": Nat, "err": Text })],
+    []
+  ),
+  "claimAllPlots": Func(
+    [],
+    [
+      Variant({
+        "ok": Record({ "amount": Nat, "plotsClaimed": Nat }),
+        "err": Text
+      })
+    ],
+    []
+  ),
+  "claimSurveyReward": Func(
+    [Text],
+    [
+      Variant({
+        "ok": Record({ "report": SurveyResult, "rewardE8s": Nat }),
+        "err": Text
+      })
+    ],
+    []
+  ),
+  "completeMission": Func(
+    [Text],
+    [Variant({ "ok": Nat, "err": Text })],
+    []
+  ),
+  "completeSurvey": Func([Text], [Result], []),
+  "getAdjacentPlots": Func([Text], [Vec(Text)], ["query"]),
+  "getAdminPrincipal": Func([], [Text], ["query"]),
+  "getAllPlotOwners": Func(
+    [],
+    [Vec(Tuple(Text, Text))],
+    ["query"]
+  ),
+  "getApprovedLiquidityCanister": Func([], [Opt(Text)], ["query"]),
+  "getAssignedInterceptor": Func(
+    [Text],
+    [Opt(Text)],
+    ["query"]
+  ),
+  "getAuditLogCount": Func([], [Nat], ["query"]),
+  "getAuditLogForPrincipal": Func(
+    [Principal2],
+    [
+      Variant({
+        "ok": Vec(Tuple(Int, ActionAuditEntry)),
+        "err": Text
+      })
+    ],
+    ["query"]
+  ),
+  "getCombatLog": Func([Nat], [Vec(CombatEvent)], ["query"]),
+  "getCoreGeneratorTiers": Func(
+    [],
+    [Vec(GeneratorTierInfo)],
+    ["query"]
+  ),
+  "getFaucetClaims": Func(
+    [Principal2],
+    [FaucetClaimSummary],
+    ["query"]
+  ),
+  "getFirstAvailablePlot": Func([], [Opt(Text)], ["query"]),
+  "getFrntrLedger": Func([], [Text], ["query"]),
+  "getFullAuditLog": Func(
+    [],
+    [
+      Variant({
+        "ok": Vec(Tuple(Int, ActionAuditEntry)),
+        "err": Text
+      })
+    ],
+    ["query"]
+  ),
+  "getGameCanisterPrincipal": Func([], [Text], ["query"]),
+  "getGameStats": Func(
+    [],
+    [
+      Record({
+        "totalPlayers": Nat,
+        "totalFrntrBurned": Nat,
+        "totalActionCount": Nat,
+        "totalSupply": Nat,
+        "totalBurned": Nat,
+        "totalPlots": Nat,
+        "emissionRatePerDay": Nat,
+        "totalDailyOutput": Nat,
+        "remainingMineable": Nat,
+        "globalUnclaimedTokens": Nat
+      })
+    ],
+    ["query"]
+  ),
+  "getGeneratorTierCatalog": Func(
+    [],
+    [
+      Vec(
+        Record({
+          "cost": Nat,
+          "tierIndex": Nat,
+          "bonusPerDay": Float64
+        })
+      )
+    ],
+    ["query"]
+  ),
+  "getGlobalStats": Func([], [GlobalStats], ["query"]),
+  "getGlobalUnclaimedTokens": Func([], [Nat], ["query"]),
+  "getIcpBalance": Func([Principal2], [Nat], []),
+  "getIcpUsdPrice": Func([], [Float64], []),
+  "getIcpUsdPriceCached": Func([], [Float64], ["query"]),
+  "getIsAdmin": Func([], [Bool], ["query"]),
+  "getLeaderboard": Func(
+    [Nat],
+    [
+      Vec(
+        Record({
+          "principal": Text,
+          "username": Opt(Text),
+          "rank": Nat,
+          "frntBalance": Nat,
+          "plotsOwned": Nat
+        })
+      )
+    ],
+    ["query"]
+  ),
+  "getLeaderboardStats": Func(
+    [],
+    [
+      Record({
+        "leaderboardPrizePool": Nat,
+        "nextPayoutAt": Nat,
+        "activePlayers": Nat,
+        "totalPlotsOwned": Nat,
+        "totalFRNTRMined": Nat,
+        "totalFRNTRBurned": Nat
+      })
+    ],
+    ["query"]
+  ),
+  "getLivePlotOwners": Func(
+    [],
+    [Vec(Tuple(Text, Text))],
+    ["query"]
+  ),
+  "getMissions": Func([], [Vec(Mission)], ["query"]),
+  "getMyAuditLog": Func(
+    [],
+    [Vec(Tuple(Int, ActionAuditEntry))],
+    ["query"]
+  ),
+  "getPassiveIncome": Func([Text], [Float64], ["query"]),
+  "getPlayerMissions": Func(
+    [],
+    [Vec(Record({ "mission": Mission, "completed": Bool }))],
+    ["query"]
+  ),
+  "getPlayerState": Func(
+    [],
+    [
+      Record({
+        "resourceBalances": Vec(Tuple(ResourceType, Float64)),
+        "username": Opt(Text),
+        "fuel": Nat,
+        "iron": Nat,
+        "icpBalance": Nat,
+        "frntBalance": Nat,
+        "totalFRNTRBurned": Float64,
+        "plotsOwned": Nat,
+        "plotIds": Vec(Text),
+        "lastFaucetTime": Opt(Int),
+        "crystal": Nat,
+        "ownedPlots": Vec(Text),
+        "combatVictories": Nat,
+        "generatorTiersMap": Vec(Tuple(Text, Nat)),
+        "passiveIncomePerDay": Float64
+      })
+    ],
+    []
+  ),
+  "getPlayerStateByPrincipal": Func(
+    [Principal2],
+    [
+      Record({
+        "resourceBalances": Vec(Tuple(ResourceType, Float64)),
+        "username": Opt(Text),
+        "fuel": Nat,
+        "iron": Nat,
+        "icpBalance": Nat,
+        "frntBalance": Nat,
+        "totalFRNTRBurned": Float64,
+        "plotsOwned": Nat,
+        "plotIds": Vec(Text),
+        "lastFaucetTime": Opt(Int),
+        "crystal": Nat,
+        "ownedPlots": Vec(Text),
+        "combatVictories": Nat,
+        "generatorTiersMap": Vec(Tuple(Text, Nat)),
+        "passiveIncomePerDay": Float64
+      })
+    ],
+    []
+  ),
+  "getPlotCount": Func([], [Nat], ["query"]),
+  "getPlotPrice": Func([Text], [Nat], ["query"]),
+  "getPlotPriceById": Func([Text], [Nat], ["query"]),
+  "getPlotProductionRate": Func(
+    [Text],
+    [PlotProductionRate],
+    ["query"]
+  ),
+  "getPlotsByOwner": Func([Principal2], [Vec(Text)], ["query"]),
+  "getPrincipal": Func([], [PrincipalDisplay], ["query"]),
+  "getSubParcelStatus": Func(
+    [Text],
+    [Vec(SubParcelInfo)],
+    ["query"]
+  ),
+  "getSubParcels": Func([Text], [Vec(SubParcel)], ["query"]),
+  "getSurveyCost": Func([Text], [Nat], ["query"]),
+  "getSurveyResult": Func(
+    [Text],
+    [Variant({ "ok": SurveyResult, "err": Text })],
+    []
+  ),
+  "getSurveyStatus": Func(
+    [Text],
+    [Variant({ "ok": SurveyView, "err": Text })],
+    []
+  ),
+  "getTokenomics": Func([], [Tokenomics], ["query"]),
+  "getTotalBurned": Func([], [Nat], ["query"]),
+  "getTotalGlobalDailyOutput": Func([], [Nat], ["query"]),
+  "getTreasuryBalances": Func(
+    [],
+    [
+      Record({
+        "leaderboardPot": Nat,
+        "devPot": Nat,
+        "liquidityPot": Nat
+      })
+    ],
+    []
+  ),
+  "getTreasuryPrincipal": Func([], [Text], ["query"]),
+  "getTreasuryState": Func(
+    [],
+    [
+      Record({
+        "leaderboard": Nat,
+        "liquidity": Nat,
+        "developer": Nat
+      })
+    ],
+    ["query"]
+  ),
+  "initPlots": Func(
+    [
+      Vec(
+        Tuple(Text, Text, Float64, Float64, Nat)
+      )
+    ],
+    [],
+    []
+  ),
+  "isSubParcelLocked": Func([Text], [Bool], ["query"]),
+  "launchMissile": Func(
+    [Text, Text, Text],
+    [Variant({ "ok": Text, "err": Text })],
+    []
+  ),
+  "logCancelledAction": Func(
+    [Text, Opt(Text), Opt(Nat), Text],
+    [],
+    []
+  ),
+  "mineResources": Func(
+    [Text],
+    [Variant({ "ok": MineResult, "err": Text })],
+    []
+  ),
+  "purchasePlot": Func(
+    [Text],
+    [Variant({ "ok": Text, "err": Text })],
+    []
+  ),
+  "resetAllData": Func([], [], []),
+  "resetTestState": Func([], [ResetResult], []),
+  "setAdminPrincipal": Func([Principal2], [], []),
+  "setApprovedLiquidityCanister": Func(
+    [Principal2],
+    [Variant({ "ok": Null, "err": Text })],
+    []
+  ),
+  "setFrntrLedger": Func([Principal2], [], []),
+  "setGameCanisterPrincipal": Func([Text], [], []),
+  "setSelfPrincipal": Func([], [], []),
+  "setTreasuryPrincipal": Func([Principal2], [], []),
+  "setUsername": Func(
+    [Text],
+    [Variant({ "ok": Null, "err": Text })],
+    []
+  ),
+  "startSurvey": Func(
+    [Text],
+    [Variant({ "ok": SurveyView, "err": Text })],
+    []
+  ),
+  "stressBuyPlots": Func([Nat], [StressTestResult], []),
+  "stressMintPlots": Func([Nat], [StressTestResult], []),
+  "stressUpgradePlots": Func([Nat], [StressTestResult], []),
+  "testFaucet": Func(
+    [],
+    [Variant({ "ok": Text, "err": Text })],
+    []
+  ),
+  "testFaucetV2": Func([], [FaucetResult], []),
+  "updateAdminPrincipalAuth": Func([Text], [], []),
+  "upgradeGenerator": Func(
+    [Text],
+    [Variant({ "ok": PlotUpgradesView, "err": UpgradeError })],
+    []
+  ),
+  "withdrawLiquidityPot": Func(
+    [Nat, Principal2],
+    [Variant({ "ok": Null, "err": Text })],
+    []
+  )
+});
+const idlFactory = ({ IDL: IDL2 }) => {
+  const Biome2 = IDL2.Variant({
+    "Tropical": IDL2.Null,
+    "AsteroidImpact": IDL2.Null,
+    "DeepOcean": IDL2.Null,
+    "Desert": IDL2.Null,
+    "Volcanic": IDL2.Null,
+    "Temperate": IDL2.Null,
+    "Ocean": IDL2.Null,
+    "Arctic": IDL2.Null
+  });
+  const SurveyResult2 = IDL2.Record({
+    "resourcePercentage": IDL2.Nat,
+    "bonusInfo": IDL2.Opt(IDL2.Text),
+    "biome": Biome2
+  });
+  const Result2 = IDL2.Variant({ "ok": IDL2.Nat, "err": IDL2.Text });
+  const ActionAuditEntry2 = IDL2.Record({
+    "action": IDL2.Text,
+    "decision": IDL2.Text,
+    "plotId": IDL2.Opt(IDL2.Text),
+    "tier": IDL2.Opt(IDL2.Text),
+    "timestamp": IDL2.Int,
+    "details": IDL2.Text,
+    "caller": IDL2.Principal,
+    "amount": IDL2.Opt(IDL2.Nat)
+  });
+  const CombatEvent2 = IDL2.Record({
+    "attacker": IDL2.Principal,
+    "intercepted": IDL2.Bool,
+    "interceptorType": IDL2.Opt(IDL2.Text),
+    "toPlot": IDL2.Text,
+    "atkPower": IDL2.Nat,
+    "timestamp": IDL2.Int,
+    "fromPlot": IDL2.Text,
+    "success": IDL2.Bool,
+    "missileType": IDL2.Opt(IDL2.Text),
+    "defPower": IDL2.Nat
+  });
+  const GeneratorTierInfo2 = IDL2.Record({
+    "name": IDL2.Text,
+    "tierIndex": IDL2.Nat,
+    "bonusPerDay": IDL2.Float64,
+    "costFRNTR": IDL2.Nat
+  });
+  const FaucetClaimSummary2 = IDL2.Record({
+    "principal": IDL2.Text,
+    "lastClaim": IDL2.Opt(IDL2.Int),
+    "totalClaims": IDL2.Nat
+  });
+  const GlobalStats2 = IDL2.Record({
+    "circulatingSupply": IDL2.Nat,
+    "activePlayers": IDL2.Nat,
+    "totalPlotsOwned": IDL2.Nat,
+    "dailyEmission": IDL2.Nat,
+    "totalBurned": IDL2.Nat
+  });
+  const MissionRequirementKind2 = IDL2.Variant({
+    "purchasePlots": IDL2.Nat,
+    "upgradeToTier": IDL2.Nat,
+    "holdFRNTR": IDL2.Nat,
+    "reachLeaderboardTop": IDL2.Nat,
+    "surveyPlot": IDL2.Null,
+    "claimTokens": IDL2.Nat
+  });
+  const Mission2 = IDL2.Record({
+    "id": IDL2.Text,
+    "title": IDL2.Text,
+    "description": IDL2.Text,
+    "rewardE8s": IDL2.Nat,
+    "requirement": MissionRequirementKind2
+  });
+  const ResourceType2 = IDL2.Variant({
+    "RareEarth": IDL2.Null,
+    "Fuel": IDL2.Null,
+    "Iron": IDL2.Null,
+    "Crystal": IDL2.Null
+  });
+  const PlotProductionRate2 = IDL2.Record({
+    "totalPerDay": IDL2.Float64,
+    "plotId": IDL2.Text,
+    "tierBonus": IDL2.Float64,
+    "baseFRNTRPerDay": IDL2.Float64,
+    "generatorTier": IDL2.Nat,
+    "nexusBonus": IDL2.Float64
+  });
+  const PrincipalDisplay2 = IDL2.Record({
+    "full": IDL2.Text,
+    "short": IDL2.Text,
+    "isAuthed": IDL2.Bool
+  });
+  const SubParcelInfo2 = IDL2.Record({
+    "resourceRate": IDL2.Float64,
+    "slotIndex": IDL2.Nat,
+    "isLocked": IDL2.Bool,
+    "buildingType": IDL2.Text,
+    "cooldownSecondsRemaining": IDL2.Nat
+  });
+  const SubParcel2 = IDL2.Record({
+    "subParcelId": IDL2.Text,
+    "cooldownEnds": IDL2.Int,
+    "plotId": IDL2.Text,
+    "building": IDL2.Opt(IDL2.Text),
+    "slotIndex": IDL2.Nat,
+    "specialization": IDL2.Text
+  });
+  const SurveyStatus2 = IDL2.Variant({
+    "Locked": IDL2.Null,
+    "InProgress": IDL2.Null,
+    "Completed": IDL2.Null
+  });
+  const PlotId2 = IDL2.Text;
+  const SurveyView2 = IDL2.Record({
+    "startTime": IDL2.Int,
+    "status": SurveyStatus2,
+    "result": IDL2.Opt(SurveyResult2),
+    "unlockCost": IDL2.Nat,
+    "secondsRemaining": IDL2.Nat,
+    "plotId": PlotId2
+  });
+  const Tokenomics2 = IDL2.Record({
+    "burnRate": IDL2.Nat,
+    "emissionRate": IDL2.Nat,
+    "circulatingSupply": IDL2.Nat,
+    "daysUntilMilestone": IDL2.Nat,
+    "totalBurned": IDL2.Nat,
+    "maxSupply": IDL2.Nat,
+    "remainingMineable": IDL2.Nat
+  });
+  const MineResult2 = IDL2.Record({
+    "efficiency": IDL2.Float64,
+    "plotId": PlotId2,
+    "resourceYields": IDL2.Vec(IDL2.Tuple(ResourceType2, IDL2.Float64)),
+    "frntRate": IDL2.Float64
+  });
+  const ResetResult2 = IDL2.Variant({ "ok": IDL2.Text, "err": IDL2.Text });
+  const StressActionResult2 = IDL2.Record({
+    "ok": IDL2.Bool,
+    "action": IDL2.Text,
+    "index": IDL2.Nat,
+    "errorMsg": IDL2.Opt(IDL2.Text),
+    "durationMs": IDL2.Int
+  });
+  const StressTestResult2 = IDL2.Variant({
+    "ok": IDL2.Vec(StressActionResult2),
+    "err": IDL2.Text
+  });
+  const FaucetGrant2 = IDL2.Record({
+    "icpGranted": IDL2.Nat,
+    "frntGranted": IDL2.Nat
+  });
+  const FaucetResult2 = IDL2.Variant({ "ok": FaucetGrant2, "err": IDL2.Text });
+  const Timestamp2 = IDL2.Int;
+  const GeneratorTier2 = IDL2.Variant({
+    "TierIII": IDL2.Null,
+    "None": IDL2.Null,
+    "TierII": IDL2.Null,
+    "TierIV": IDL2.Null,
+    "TierVI": IDL2.Null,
+    "TierI": IDL2.Null,
+    "TierV": IDL2.Null
+  });
+  const PlotUpgradesView2 = IDL2.Record({
+    "tierName": IDL2.Text,
+    "plotId": PlotId2,
+    "installedAt": IDL2.Opt(Timestamp2),
+    "bonusPerDay": IDL2.Float64,
+    "nextTierCost": IDL2.Opt(IDL2.Nat),
+    "generatorTier": GeneratorTier2
+  });
+  const UpgradeError2 = IDL2.Variant({
+    "SubParcelLocked": IDL2.Null,
+    "PlotNotFound": IDL2.Null,
+    "InvalidTier": IDL2.Null,
+    "NotOwner": IDL2.Null,
+    "AlreadyMaxTier": IDL2.Null,
+    "InsufficientFRNTR": IDL2.Null
+  });
+  return IDL2.Service({
+    "assignInterceptor": IDL2.Func([IDL2.Text, IDL2.Text], [], []),
+    "claimAccumulatedTokens": IDL2.Func(
+      [IDL2.Text],
+      [IDL2.Variant({ "ok": IDL2.Nat, "err": IDL2.Text })],
+      []
+    ),
+    "claimAllPlots": IDL2.Func(
+      [],
+      [
+        IDL2.Variant({
+          "ok": IDL2.Record({ "amount": IDL2.Nat, "plotsClaimed": IDL2.Nat }),
+          "err": IDL2.Text
+        })
+      ],
+      []
+    ),
+    "claimSurveyReward": IDL2.Func(
+      [IDL2.Text],
+      [
+        IDL2.Variant({
+          "ok": IDL2.Record({
+            "report": SurveyResult2,
+            "rewardE8s": IDL2.Nat
+          }),
+          "err": IDL2.Text
+        })
+      ],
+      []
+    ),
+    "completeMission": IDL2.Func(
+      [IDL2.Text],
+      [IDL2.Variant({ "ok": IDL2.Nat, "err": IDL2.Text })],
+      []
+    ),
+    "completeSurvey": IDL2.Func([IDL2.Text], [Result2], []),
+    "getAdjacentPlots": IDL2.Func([IDL2.Text], [IDL2.Vec(IDL2.Text)], ["query"]),
+    "getAdminPrincipal": IDL2.Func([], [IDL2.Text], ["query"]),
+    "getAllPlotOwners": IDL2.Func(
+      [],
+      [IDL2.Vec(IDL2.Tuple(IDL2.Text, IDL2.Text))],
+      ["query"]
+    ),
+    "getApprovedLiquidityCanister": IDL2.Func(
+      [],
+      [IDL2.Opt(IDL2.Text)],
+      ["query"]
+    ),
+    "getAssignedInterceptor": IDL2.Func(
+      [IDL2.Text],
+      [IDL2.Opt(IDL2.Text)],
+      ["query"]
+    ),
+    "getAuditLogCount": IDL2.Func([], [IDL2.Nat], ["query"]),
+    "getAuditLogForPrincipal": IDL2.Func(
+      [IDL2.Principal],
+      [
+        IDL2.Variant({
+          "ok": IDL2.Vec(IDL2.Tuple(IDL2.Int, ActionAuditEntry2)),
+          "err": IDL2.Text
+        })
+      ],
+      ["query"]
+    ),
+    "getCombatLog": IDL2.Func([IDL2.Nat], [IDL2.Vec(CombatEvent2)], ["query"]),
+    "getCoreGeneratorTiers": IDL2.Func(
+      [],
+      [IDL2.Vec(GeneratorTierInfo2)],
+      ["query"]
+    ),
+    "getFaucetClaims": IDL2.Func(
+      [IDL2.Principal],
+      [FaucetClaimSummary2],
+      ["query"]
+    ),
+    "getFirstAvailablePlot": IDL2.Func([], [IDL2.Opt(IDL2.Text)], ["query"]),
+    "getFrntrLedger": IDL2.Func([], [IDL2.Text], ["query"]),
+    "getFullAuditLog": IDL2.Func(
+      [],
+      [
+        IDL2.Variant({
+          "ok": IDL2.Vec(IDL2.Tuple(IDL2.Int, ActionAuditEntry2)),
+          "err": IDL2.Text
+        })
+      ],
+      ["query"]
+    ),
+    "getGameCanisterPrincipal": IDL2.Func([], [IDL2.Text], ["query"]),
+    "getGameStats": IDL2.Func(
+      [],
+      [
+        IDL2.Record({
+          "totalPlayers": IDL2.Nat,
+          "totalFrntrBurned": IDL2.Nat,
+          "totalActionCount": IDL2.Nat,
+          "totalSupply": IDL2.Nat,
+          "totalBurned": IDL2.Nat,
+          "totalPlots": IDL2.Nat,
+          "emissionRatePerDay": IDL2.Nat,
+          "totalDailyOutput": IDL2.Nat,
+          "remainingMineable": IDL2.Nat,
+          "globalUnclaimedTokens": IDL2.Nat
+        })
+      ],
+      ["query"]
+    ),
+    "getGeneratorTierCatalog": IDL2.Func(
+      [],
+      [
+        IDL2.Vec(
+          IDL2.Record({
+            "cost": IDL2.Nat,
+            "tierIndex": IDL2.Nat,
+            "bonusPerDay": IDL2.Float64
+          })
+        )
+      ],
+      ["query"]
+    ),
+    "getGlobalStats": IDL2.Func([], [GlobalStats2], ["query"]),
+    "getGlobalUnclaimedTokens": IDL2.Func([], [IDL2.Nat], ["query"]),
+    "getIcpBalance": IDL2.Func([IDL2.Principal], [IDL2.Nat], []),
+    "getIcpUsdPrice": IDL2.Func([], [IDL2.Float64], []),
+    "getIcpUsdPriceCached": IDL2.Func([], [IDL2.Float64], ["query"]),
+    "getIsAdmin": IDL2.Func([], [IDL2.Bool], ["query"]),
+    "getLeaderboard": IDL2.Func(
+      [IDL2.Nat],
+      [
+        IDL2.Vec(
+          IDL2.Record({
+            "principal": IDL2.Text,
+            "username": IDL2.Opt(IDL2.Text),
+            "rank": IDL2.Nat,
+            "frntBalance": IDL2.Nat,
+            "plotsOwned": IDL2.Nat
+          })
+        )
+      ],
+      ["query"]
+    ),
+    "getLeaderboardStats": IDL2.Func(
+      [],
+      [
+        IDL2.Record({
+          "leaderboardPrizePool": IDL2.Nat,
+          "nextPayoutAt": IDL2.Nat,
+          "activePlayers": IDL2.Nat,
+          "totalPlotsOwned": IDL2.Nat,
+          "totalFRNTRMined": IDL2.Nat,
+          "totalFRNTRBurned": IDL2.Nat
+        })
+      ],
+      ["query"]
+    ),
+    "getLivePlotOwners": IDL2.Func(
+      [],
+      [IDL2.Vec(IDL2.Tuple(IDL2.Text, IDL2.Text))],
+      ["query"]
+    ),
+    "getMissions": IDL2.Func([], [IDL2.Vec(Mission2)], ["query"]),
+    "getMyAuditLog": IDL2.Func(
+      [],
+      [IDL2.Vec(IDL2.Tuple(IDL2.Int, ActionAuditEntry2))],
+      ["query"]
+    ),
+    "getPassiveIncome": IDL2.Func([IDL2.Text], [IDL2.Float64], ["query"]),
+    "getPlayerMissions": IDL2.Func(
+      [],
+      [IDL2.Vec(IDL2.Record({ "mission": Mission2, "completed": IDL2.Bool }))],
+      ["query"]
+    ),
+    "getPlayerState": IDL2.Func(
+      [],
+      [
+        IDL2.Record({
+          "resourceBalances": IDL2.Vec(IDL2.Tuple(ResourceType2, IDL2.Float64)),
+          "username": IDL2.Opt(IDL2.Text),
+          "fuel": IDL2.Nat,
+          "iron": IDL2.Nat,
+          "icpBalance": IDL2.Nat,
+          "frntBalance": IDL2.Nat,
+          "totalFRNTRBurned": IDL2.Float64,
+          "plotsOwned": IDL2.Nat,
+          "plotIds": IDL2.Vec(IDL2.Text),
+          "lastFaucetTime": IDL2.Opt(IDL2.Int),
+          "crystal": IDL2.Nat,
+          "ownedPlots": IDL2.Vec(IDL2.Text),
+          "combatVictories": IDL2.Nat,
+          "generatorTiersMap": IDL2.Vec(IDL2.Tuple(IDL2.Text, IDL2.Nat)),
+          "passiveIncomePerDay": IDL2.Float64
+        })
+      ],
+      []
+    ),
+    "getPlayerStateByPrincipal": IDL2.Func(
+      [IDL2.Principal],
+      [
+        IDL2.Record({
+          "resourceBalances": IDL2.Vec(IDL2.Tuple(ResourceType2, IDL2.Float64)),
+          "username": IDL2.Opt(IDL2.Text),
+          "fuel": IDL2.Nat,
+          "iron": IDL2.Nat,
+          "icpBalance": IDL2.Nat,
+          "frntBalance": IDL2.Nat,
+          "totalFRNTRBurned": IDL2.Float64,
+          "plotsOwned": IDL2.Nat,
+          "plotIds": IDL2.Vec(IDL2.Text),
+          "lastFaucetTime": IDL2.Opt(IDL2.Int),
+          "crystal": IDL2.Nat,
+          "ownedPlots": IDL2.Vec(IDL2.Text),
+          "combatVictories": IDL2.Nat,
+          "generatorTiersMap": IDL2.Vec(IDL2.Tuple(IDL2.Text, IDL2.Nat)),
+          "passiveIncomePerDay": IDL2.Float64
+        })
+      ],
+      []
+    ),
+    "getPlotCount": IDL2.Func([], [IDL2.Nat], ["query"]),
+    "getPlotPrice": IDL2.Func([IDL2.Text], [IDL2.Nat], ["query"]),
+    "getPlotPriceById": IDL2.Func([IDL2.Text], [IDL2.Nat], ["query"]),
+    "getPlotProductionRate": IDL2.Func(
+      [IDL2.Text],
+      [PlotProductionRate2],
+      ["query"]
+    ),
+    "getPlotsByOwner": IDL2.Func(
+      [IDL2.Principal],
+      [IDL2.Vec(IDL2.Text)],
+      ["query"]
+    ),
+    "getPrincipal": IDL2.Func([], [PrincipalDisplay2], ["query"]),
+    "getSubParcelStatus": IDL2.Func(
+      [IDL2.Text],
+      [IDL2.Vec(SubParcelInfo2)],
+      ["query"]
+    ),
+    "getSubParcels": IDL2.Func([IDL2.Text], [IDL2.Vec(SubParcel2)], ["query"]),
+    "getSurveyCost": IDL2.Func([IDL2.Text], [IDL2.Nat], ["query"]),
+    "getSurveyResult": IDL2.Func(
+      [IDL2.Text],
+      [IDL2.Variant({ "ok": SurveyResult2, "err": IDL2.Text })],
+      []
+    ),
+    "getSurveyStatus": IDL2.Func(
+      [IDL2.Text],
+      [IDL2.Variant({ "ok": SurveyView2, "err": IDL2.Text })],
+      []
+    ),
+    "getTokenomics": IDL2.Func([], [Tokenomics2], ["query"]),
+    "getTotalBurned": IDL2.Func([], [IDL2.Nat], ["query"]),
+    "getTotalGlobalDailyOutput": IDL2.Func([], [IDL2.Nat], ["query"]),
+    "getTreasuryBalances": IDL2.Func(
+      [],
+      [
+        IDL2.Record({
+          "leaderboardPot": IDL2.Nat,
+          "devPot": IDL2.Nat,
+          "liquidityPot": IDL2.Nat
+        })
+      ],
+      []
+    ),
+    "getTreasuryPrincipal": IDL2.Func([], [IDL2.Text], ["query"]),
+    "getTreasuryState": IDL2.Func(
+      [],
+      [
+        IDL2.Record({
+          "leaderboard": IDL2.Nat,
+          "liquidity": IDL2.Nat,
+          "developer": IDL2.Nat
+        })
+      ],
+      ["query"]
+    ),
+    "initPlots": IDL2.Func(
+      [
+        IDL2.Vec(
+          IDL2.Tuple(IDL2.Text, IDL2.Text, IDL2.Float64, IDL2.Float64, IDL2.Nat)
+        )
+      ],
+      [],
+      []
+    ),
+    "isSubParcelLocked": IDL2.Func([IDL2.Text], [IDL2.Bool], ["query"]),
+    "launchMissile": IDL2.Func(
+      [IDL2.Text, IDL2.Text, IDL2.Text],
+      [IDL2.Variant({ "ok": IDL2.Text, "err": IDL2.Text })],
+      []
+    ),
+    "logCancelledAction": IDL2.Func(
+      [IDL2.Text, IDL2.Opt(IDL2.Text), IDL2.Opt(IDL2.Nat), IDL2.Text],
+      [],
+      []
+    ),
+    "mineResources": IDL2.Func(
+      [IDL2.Text],
+      [IDL2.Variant({ "ok": MineResult2, "err": IDL2.Text })],
+      []
+    ),
+    "purchasePlot": IDL2.Func(
+      [IDL2.Text],
+      [IDL2.Variant({ "ok": IDL2.Text, "err": IDL2.Text })],
+      []
+    ),
+    "resetAllData": IDL2.Func([], [], []),
+    "resetTestState": IDL2.Func([], [ResetResult2], []),
+    "setAdminPrincipal": IDL2.Func([IDL2.Principal], [], []),
+    "setApprovedLiquidityCanister": IDL2.Func(
+      [IDL2.Principal],
+      [IDL2.Variant({ "ok": IDL2.Null, "err": IDL2.Text })],
+      []
+    ),
+    "setFrntrLedger": IDL2.Func([IDL2.Principal], [], []),
+    "setGameCanisterPrincipal": IDL2.Func([IDL2.Text], [], []),
+    "setSelfPrincipal": IDL2.Func([], [], []),
+    "setTreasuryPrincipal": IDL2.Func([IDL2.Principal], [], []),
+    "setUsername": IDL2.Func(
+      [IDL2.Text],
+      [IDL2.Variant({ "ok": IDL2.Null, "err": IDL2.Text })],
+      []
+    ),
+    "startSurvey": IDL2.Func(
+      [IDL2.Text],
+      [IDL2.Variant({ "ok": SurveyView2, "err": IDL2.Text })],
+      []
+    ),
+    "stressBuyPlots": IDL2.Func([IDL2.Nat], [StressTestResult2], []),
+    "stressMintPlots": IDL2.Func([IDL2.Nat], [StressTestResult2], []),
+    "stressUpgradePlots": IDL2.Func([IDL2.Nat], [StressTestResult2], []),
+    "testFaucet": IDL2.Func(
+      [],
+      [IDL2.Variant({ "ok": IDL2.Text, "err": IDL2.Text })],
+      []
+    ),
+    "testFaucetV2": IDL2.Func([], [FaucetResult2], []),
+    "updateAdminPrincipalAuth": IDL2.Func([IDL2.Text], [], []),
+    "upgradeGenerator": IDL2.Func(
+      [IDL2.Text],
+      [IDL2.Variant({ "ok": PlotUpgradesView2, "err": UpgradeError2 })],
+      []
+    ),
+    "withdrawLiquidityPot": IDL2.Func(
+      [IDL2.Nat, IDL2.Principal],
+      [IDL2.Variant({ "ok": IDL2.Null, "err": IDL2.Text })],
+      []
+    )
+  });
+};
+function candid_some(value) {
+  return [
+    value
+  ];
+}
+function candid_none() {
+  return [];
+}
+function record_opt_to_undefined(arg) {
+  return arg == null ? void 0 : arg;
+}
+class Backend {
+  constructor(actor, _uploadFile, _downloadFile, processError2) {
+    this.actor = actor;
+    this._uploadFile = _uploadFile;
+    this._downloadFile = _downloadFile;
+    this.processError = processError2;
+  }
+  async assignInterceptor(arg0, arg1) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.assignInterceptor(arg0, arg1);
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.assignInterceptor(arg0, arg1);
+      return result;
+    }
+  }
+  async claimAccumulatedTokens(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.claimAccumulatedTokens(arg0);
+        return from_candid_variant_n1(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.claimAccumulatedTokens(arg0);
+      return from_candid_variant_n1(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async claimAllPlots() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.claimAllPlots();
+        return from_candid_variant_n2(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.claimAllPlots();
+      return from_candid_variant_n2(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async claimSurveyReward(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.claimSurveyReward(arg0);
+        return from_candid_variant_n3(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.claimSurveyReward(arg0);
+      return from_candid_variant_n3(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async completeMission(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.completeMission(arg0);
+        return from_candid_variant_n1(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.completeMission(arg0);
+      return from_candid_variant_n1(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async completeSurvey(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.completeSurvey(arg0);
+        return from_candid_Result_n10(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.completeSurvey(arg0);
+      return from_candid_Result_n10(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async getAdjacentPlots(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getAdjacentPlots(arg0);
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getAdjacentPlots(arg0);
+      return result;
+    }
+  }
+  async getAdminPrincipal() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getAdminPrincipal();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getAdminPrincipal();
+      return result;
+    }
+  }
+  async getAllPlotOwners() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getAllPlotOwners();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getAllPlotOwners();
+      return result;
+    }
+  }
+  async getApprovedLiquidityCanister() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getApprovedLiquidityCanister();
+        return from_candid_opt_n7(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getApprovedLiquidityCanister();
+      return from_candid_opt_n7(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async getAssignedInterceptor(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getAssignedInterceptor(arg0);
+        return from_candid_opt_n7(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getAssignedInterceptor(arg0);
+      return from_candid_opt_n7(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async getAuditLogCount() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getAuditLogCount();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getAuditLogCount();
+      return result;
+    }
+  }
+  async getAuditLogForPrincipal(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getAuditLogForPrincipal(arg0);
+        return from_candid_variant_n11(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getAuditLogForPrincipal(arg0);
+      return from_candid_variant_n11(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async getCombatLog(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getCombatLog(arg0);
+        return from_candid_vec_n17(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getCombatLog(arg0);
+      return from_candid_vec_n17(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async getCoreGeneratorTiers() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getCoreGeneratorTiers();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getCoreGeneratorTiers();
+      return result;
+    }
+  }
+  async getFaucetClaims(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getFaucetClaims(arg0);
+        return from_candid_FaucetClaimSummary_n20(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getFaucetClaims(arg0);
+      return from_candid_FaucetClaimSummary_n20(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async getFirstAvailablePlot() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getFirstAvailablePlot();
+        return from_candid_opt_n7(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getFirstAvailablePlot();
+      return from_candid_opt_n7(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async getFrntrLedger() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getFrntrLedger();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getFrntrLedger();
+      return result;
+    }
+  }
+  async getFullAuditLog() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getFullAuditLog();
+        return from_candid_variant_n11(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getFullAuditLog();
+      return from_candid_variant_n11(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async getGameCanisterPrincipal() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getGameCanisterPrincipal();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getGameCanisterPrincipal();
+      return result;
+    }
+  }
+  async getGameStats() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getGameStats();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getGameStats();
+      return result;
+    }
+  }
+  async getGeneratorTierCatalog() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getGeneratorTierCatalog();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getGeneratorTierCatalog();
+      return result;
+    }
+  }
+  async getGlobalStats() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getGlobalStats();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getGlobalStats();
+      return result;
+    }
+  }
+  async getGlobalUnclaimedTokens() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getGlobalUnclaimedTokens();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getGlobalUnclaimedTokens();
+      return result;
+    }
+  }
+  async getIcpBalance(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getIcpBalance(arg0);
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getIcpBalance(arg0);
+      return result;
+    }
+  }
+  async getIcpUsdPrice() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getIcpUsdPrice();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getIcpUsdPrice();
+      return result;
+    }
+  }
+  async getIcpUsdPriceCached() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getIcpUsdPriceCached();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getIcpUsdPriceCached();
+      return result;
+    }
+  }
+  async getIsAdmin() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getIsAdmin();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getIsAdmin();
+      return result;
+    }
+  }
+  async getLeaderboard(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getLeaderboard(arg0);
+        return from_candid_vec_n23(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getLeaderboard(arg0);
+      return from_candid_vec_n23(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async getLeaderboardStats() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getLeaderboardStats();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getLeaderboardStats();
+      return result;
+    }
+  }
+  async getLivePlotOwners() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getLivePlotOwners();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getLivePlotOwners();
+      return result;
+    }
+  }
+  async getMissions() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getMissions();
+        return from_candid_vec_n25(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getMissions();
+      return from_candid_vec_n25(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async getMyAuditLog() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getMyAuditLog();
+        return from_candid_vec_n12(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getMyAuditLog();
+      return from_candid_vec_n12(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async getPassiveIncome(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getPassiveIncome(arg0);
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getPassiveIncome(arg0);
+      return result;
+    }
+  }
+  async getPlayerMissions() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getPlayerMissions();
+        return from_candid_vec_n30(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getPlayerMissions();
+      return from_candid_vec_n30(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async getPlayerState() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getPlayerState();
+        return from_candid_record_n32(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getPlayerState();
+      return from_candid_record_n32(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async getPlayerStateByPrincipal(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getPlayerStateByPrincipal(arg0);
+        return from_candid_record_n32(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getPlayerStateByPrincipal(arg0);
+      return from_candid_record_n32(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async getPlotCount() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getPlotCount();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getPlotCount();
+      return result;
+    }
+  }
+  async getPlotPrice(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getPlotPrice(arg0);
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getPlotPrice(arg0);
+      return result;
+    }
+  }
+  async getPlotPriceById(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getPlotPriceById(arg0);
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getPlotPriceById(arg0);
+      return result;
+    }
+  }
+  async getPlotProductionRate(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getPlotProductionRate(arg0);
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getPlotProductionRate(arg0);
+      return result;
+    }
+  }
+  async getPlotsByOwner(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getPlotsByOwner(arg0);
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getPlotsByOwner(arg0);
+      return result;
+    }
+  }
+  async getPrincipal() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getPrincipal();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getPrincipal();
+      return result;
+    }
+  }
+  async getSubParcelStatus(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getSubParcelStatus(arg0);
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getSubParcelStatus(arg0);
+      return result;
+    }
+  }
+  async getSubParcels(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getSubParcels(arg0);
+        return from_candid_vec_n37(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getSubParcels(arg0);
+      return from_candid_vec_n37(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async getSurveyCost(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getSurveyCost(arg0);
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getSurveyCost(arg0);
+      return result;
+    }
+  }
+  async getSurveyResult(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getSurveyResult(arg0);
+        return from_candid_variant_n40(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getSurveyResult(arg0);
+      return from_candid_variant_n40(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async getSurveyStatus(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getSurveyStatus(arg0);
+        return from_candid_variant_n41(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getSurveyStatus(arg0);
+      return from_candid_variant_n41(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async getTokenomics() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getTokenomics();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getTokenomics();
+      return result;
+    }
+  }
+  async getTotalBurned() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getTotalBurned();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getTotalBurned();
+      return result;
+    }
+  }
+  async getTotalGlobalDailyOutput() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getTotalGlobalDailyOutput();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getTotalGlobalDailyOutput();
+      return result;
+    }
+  }
+  async getTreasuryBalances() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getTreasuryBalances();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getTreasuryBalances();
+      return result;
+    }
+  }
+  async getTreasuryPrincipal() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getTreasuryPrincipal();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getTreasuryPrincipal();
+      return result;
+    }
+  }
+  async getTreasuryState() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getTreasuryState();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getTreasuryState();
+      return result;
+    }
+  }
+  async initPlots(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.initPlots(arg0);
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.initPlots(arg0);
+      return result;
+    }
+  }
+  async isSubParcelLocked(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.isSubParcelLocked(arg0);
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.isSubParcelLocked(arg0);
+      return result;
+    }
+  }
+  async launchMissile(arg0, arg1, arg2) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.launchMissile(arg0, arg1, arg2);
+        return from_candid_variant_n47(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.launchMissile(arg0, arg1, arg2);
+      return from_candid_variant_n47(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async logCancelledAction(arg0, arg1, arg2, arg3) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.logCancelledAction(arg0, to_candid_opt_n48(this._uploadFile, this._downloadFile, arg1), to_candid_opt_n49(this._uploadFile, this._downloadFile, arg2), arg3);
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.logCancelledAction(arg0, to_candid_opt_n48(this._uploadFile, this._downloadFile, arg1), to_candid_opt_n49(this._uploadFile, this._downloadFile, arg2), arg3);
+      return result;
+    }
+  }
+  async mineResources(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.mineResources(arg0);
+        return from_candid_variant_n50(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.mineResources(arg0);
+      return from_candid_variant_n50(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async purchasePlot(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.purchasePlot(arg0);
+        return from_candid_variant_n47(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.purchasePlot(arg0);
+      return from_candid_variant_n47(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async resetAllData() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.resetAllData();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.resetAllData();
+      return result;
+    }
+  }
+  async resetTestState() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.resetTestState();
+        return from_candid_ResetResult_n53(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.resetTestState();
+      return from_candid_ResetResult_n53(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async setAdminPrincipal(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.setAdminPrincipal(arg0);
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.setAdminPrincipal(arg0);
+      return result;
+    }
+  }
+  async setApprovedLiquidityCanister(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.setApprovedLiquidityCanister(arg0);
+        return from_candid_variant_n54(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.setApprovedLiquidityCanister(arg0);
+      return from_candid_variant_n54(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async setFrntrLedger(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.setFrntrLedger(arg0);
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.setFrntrLedger(arg0);
+      return result;
+    }
+  }
+  async setGameCanisterPrincipal(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.setGameCanisterPrincipal(arg0);
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.setGameCanisterPrincipal(arg0);
+      return result;
+    }
+  }
+  async setSelfPrincipal() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.setSelfPrincipal();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.setSelfPrincipal();
+      return result;
+    }
+  }
+  async setTreasuryPrincipal(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.setTreasuryPrincipal(arg0);
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.setTreasuryPrincipal(arg0);
+      return result;
+    }
+  }
+  async setUsername(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.setUsername(arg0);
+        return from_candid_variant_n54(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.setUsername(arg0);
+      return from_candid_variant_n54(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async startSurvey(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.startSurvey(arg0);
+        return from_candid_variant_n41(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.startSurvey(arg0);
+      return from_candid_variant_n41(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async stressBuyPlots(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.stressBuyPlots(arg0);
+        return from_candid_StressTestResult_n55(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.stressBuyPlots(arg0);
+      return from_candid_StressTestResult_n55(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async stressMintPlots(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.stressMintPlots(arg0);
+        return from_candid_StressTestResult_n55(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.stressMintPlots(arg0);
+      return from_candid_StressTestResult_n55(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async stressUpgradePlots(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.stressUpgradePlots(arg0);
+        return from_candid_StressTestResult_n55(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.stressUpgradePlots(arg0);
+      return from_candid_StressTestResult_n55(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async testFaucet() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.testFaucet();
+        return from_candid_variant_n47(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.testFaucet();
+      return from_candid_variant_n47(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async testFaucetV2() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.testFaucetV2();
+        return from_candid_FaucetResult_n60(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.testFaucetV2();
+      return from_candid_FaucetResult_n60(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async updateAdminPrincipalAuth(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.updateAdminPrincipalAuth(arg0);
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.updateAdminPrincipalAuth(arg0);
+      return result;
+    }
+  }
+  async upgradeGenerator(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.upgradeGenerator(arg0);
+        return from_candid_variant_n62(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.upgradeGenerator(arg0);
+      return from_candid_variant_n62(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async withdrawLiquidityPot(arg0, arg1) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.withdrawLiquidityPot(arg0, arg1);
+        return from_candid_variant_n54(this._uploadFile, this._downloadFile, result);
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.withdrawLiquidityPot(arg0, arg1);
+      return from_candid_variant_n54(this._uploadFile, this._downloadFile, result);
+    }
+  }
+}
+function from_candid_ActionAuditEntry_n14(_uploadFile, _downloadFile, value) {
+  return from_candid_record_n15(_uploadFile, _downloadFile, value);
+}
+function from_candid_Biome_n8(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n9(_uploadFile, _downloadFile, value);
+}
+function from_candid_CombatEvent_n18(_uploadFile, _downloadFile, value) {
+  return from_candid_record_n19(_uploadFile, _downloadFile, value);
+}
+function from_candid_FaucetClaimSummary_n20(_uploadFile, _downloadFile, value) {
+  return from_candid_record_n21(_uploadFile, _downloadFile, value);
+}
+function from_candid_FaucetResult_n60(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n61(_uploadFile, _downloadFile, value);
+}
+function from_candid_GeneratorTier_n66(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n67(_uploadFile, _downloadFile, value);
+}
+function from_candid_MineResult_n51(_uploadFile, _downloadFile, value) {
+  return from_candid_record_n52(_uploadFile, _downloadFile, value);
+}
+function from_candid_MissionRequirementKind_n28(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n29(_uploadFile, _downloadFile, value);
+}
+function from_candid_Mission_n26(_uploadFile, _downloadFile, value) {
+  return from_candid_record_n27(_uploadFile, _downloadFile, value);
+}
+function from_candid_PlotUpgradesView_n63(_uploadFile, _downloadFile, value) {
+  return from_candid_record_n64(_uploadFile, _downloadFile, value);
+}
+function from_candid_ResetResult_n53(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n47(_uploadFile, _downloadFile, value);
+}
+function from_candid_ResourceType_n35(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n36(_uploadFile, _downloadFile, value);
+}
+function from_candid_Result_n10(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n1(_uploadFile, _downloadFile, value);
+}
+function from_candid_StressActionResult_n58(_uploadFile, _downloadFile, value) {
+  return from_candid_record_n59(_uploadFile, _downloadFile, value);
+}
+function from_candid_StressTestResult_n55(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n56(_uploadFile, _downloadFile, value);
+}
+function from_candid_SubParcel_n38(_uploadFile, _downloadFile, value) {
+  return from_candid_record_n39(_uploadFile, _downloadFile, value);
+}
+function from_candid_SurveyResult_n5(_uploadFile, _downloadFile, value) {
+  return from_candid_record_n6(_uploadFile, _downloadFile, value);
+}
+function from_candid_SurveyStatus_n44(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n45(_uploadFile, _downloadFile, value);
+}
+function from_candid_SurveyView_n42(_uploadFile, _downloadFile, value) {
+  return from_candid_record_n43(_uploadFile, _downloadFile, value);
+}
+function from_candid_UpgradeError_n68(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n69(_uploadFile, _downloadFile, value);
+}
+function from_candid_opt_n16(_uploadFile, _downloadFile, value) {
+  return value.length === 0 ? null : value[0];
+}
+function from_candid_opt_n22(_uploadFile, _downloadFile, value) {
+  return value.length === 0 ? null : value[0];
+}
+function from_candid_opt_n46(_uploadFile, _downloadFile, value) {
+  return value.length === 0 ? null : from_candid_SurveyResult_n5(_uploadFile, _downloadFile, value[0]);
+}
+function from_candid_opt_n65(_uploadFile, _downloadFile, value) {
+  return value.length === 0 ? null : value[0];
+}
+function from_candid_opt_n7(_uploadFile, _downloadFile, value) {
+  return value.length === 0 ? null : value[0];
+}
+function from_candid_record_n15(_uploadFile, _downloadFile, value) {
+  return {
+    action: value.action,
+    decision: value.decision,
+    plotId: record_opt_to_undefined(from_candid_opt_n7(_uploadFile, _downloadFile, value.plotId)),
+    tier: record_opt_to_undefined(from_candid_opt_n7(_uploadFile, _downloadFile, value.tier)),
+    timestamp: value.timestamp,
+    details: value.details,
+    caller: value.caller,
+    amount: record_opt_to_undefined(from_candid_opt_n16(_uploadFile, _downloadFile, value.amount))
+  };
+}
+function from_candid_record_n19(_uploadFile, _downloadFile, value) {
+  return {
+    attacker: value.attacker,
+    intercepted: value.intercepted,
+    interceptorType: record_opt_to_undefined(from_candid_opt_n7(_uploadFile, _downloadFile, value.interceptorType)),
+    toPlot: value.toPlot,
+    atkPower: value.atkPower,
+    timestamp: value.timestamp,
+    fromPlot: value.fromPlot,
+    success: value.success,
+    missileType: record_opt_to_undefined(from_candid_opt_n7(_uploadFile, _downloadFile, value.missileType)),
+    defPower: value.defPower
+  };
+}
+function from_candid_record_n21(_uploadFile, _downloadFile, value) {
+  return {
+    principal: value.principal,
+    lastClaim: record_opt_to_undefined(from_candid_opt_n22(_uploadFile, _downloadFile, value.lastClaim)),
+    totalClaims: value.totalClaims
+  };
+}
+function from_candid_record_n24(_uploadFile, _downloadFile, value) {
+  return {
+    principal: value.principal,
+    username: record_opt_to_undefined(from_candid_opt_n7(_uploadFile, _downloadFile, value.username)),
+    rank: value.rank,
+    frntBalance: value.frntBalance,
+    plotsOwned: value.plotsOwned
+  };
+}
+function from_candid_record_n27(_uploadFile, _downloadFile, value) {
+  return {
+    id: value.id,
+    title: value.title,
+    description: value.description,
+    rewardE8s: value.rewardE8s,
+    requirement: from_candid_MissionRequirementKind_n28(_uploadFile, _downloadFile, value.requirement)
+  };
+}
+function from_candid_record_n31(_uploadFile, _downloadFile, value) {
+  return {
+    mission: from_candid_Mission_n26(_uploadFile, _downloadFile, value.mission),
+    completed: value.completed
+  };
+}
+function from_candid_record_n32(_uploadFile, _downloadFile, value) {
+  return {
+    resourceBalances: from_candid_vec_n33(_uploadFile, _downloadFile, value.resourceBalances),
+    username: record_opt_to_undefined(from_candid_opt_n7(_uploadFile, _downloadFile, value.username)),
+    fuel: value.fuel,
+    iron: value.iron,
+    icpBalance: value.icpBalance,
+    frntBalance: value.frntBalance,
+    totalFRNTRBurned: value.totalFRNTRBurned,
+    plotsOwned: value.plotsOwned,
+    plotIds: value.plotIds,
+    lastFaucetTime: record_opt_to_undefined(from_candid_opt_n22(_uploadFile, _downloadFile, value.lastFaucetTime)),
+    crystal: value.crystal,
+    ownedPlots: value.ownedPlots,
+    combatVictories: value.combatVictories,
+    generatorTiersMap: value.generatorTiersMap,
+    passiveIncomePerDay: value.passiveIncomePerDay
+  };
+}
+function from_candid_record_n39(_uploadFile, _downloadFile, value) {
+  return {
+    subParcelId: value.subParcelId,
+    cooldownEnds: value.cooldownEnds,
+    plotId: value.plotId,
+    building: record_opt_to_undefined(from_candid_opt_n7(_uploadFile, _downloadFile, value.building)),
+    slotIndex: value.slotIndex,
+    specialization: value.specialization
+  };
+}
+function from_candid_record_n4(_uploadFile, _downloadFile, value) {
+  return {
+    report: from_candid_SurveyResult_n5(_uploadFile, _downloadFile, value.report),
+    rewardE8s: value.rewardE8s
+  };
+}
+function from_candid_record_n43(_uploadFile, _downloadFile, value) {
+  return {
+    startTime: value.startTime,
+    status: from_candid_SurveyStatus_n44(_uploadFile, _downloadFile, value.status),
+    result: record_opt_to_undefined(from_candid_opt_n46(_uploadFile, _downloadFile, value.result)),
+    unlockCost: value.unlockCost,
+    secondsRemaining: value.secondsRemaining,
+    plotId: value.plotId
+  };
+}
+function from_candid_record_n52(_uploadFile, _downloadFile, value) {
+  return {
+    efficiency: value.efficiency,
+    plotId: value.plotId,
+    resourceYields: from_candid_vec_n33(_uploadFile, _downloadFile, value.resourceYields),
+    frntRate: value.frntRate
+  };
+}
+function from_candid_record_n59(_uploadFile, _downloadFile, value) {
+  return {
+    ok: value.ok,
+    action: value.action,
+    index: value.index,
+    errorMsg: record_opt_to_undefined(from_candid_opt_n7(_uploadFile, _downloadFile, value.errorMsg)),
+    durationMs: value.durationMs
+  };
+}
+function from_candid_record_n6(_uploadFile, _downloadFile, value) {
+  return {
+    resourcePercentage: value.resourcePercentage,
+    bonusInfo: record_opt_to_undefined(from_candid_opt_n7(_uploadFile, _downloadFile, value.bonusInfo)),
+    biome: from_candid_Biome_n8(_uploadFile, _downloadFile, value.biome)
+  };
+}
+function from_candid_record_n64(_uploadFile, _downloadFile, value) {
+  return {
+    tierName: value.tierName,
+    plotId: value.plotId,
+    installedAt: record_opt_to_undefined(from_candid_opt_n65(_uploadFile, _downloadFile, value.installedAt)),
+    bonusPerDay: value.bonusPerDay,
+    nextTierCost: record_opt_to_undefined(from_candid_opt_n16(_uploadFile, _downloadFile, value.nextTierCost)),
+    generatorTier: from_candid_GeneratorTier_n66(_uploadFile, _downloadFile, value.generatorTier)
+  };
+}
+function from_candid_tuple_n13(_uploadFile, _downloadFile, value) {
+  return [
+    value[0],
+    from_candid_ActionAuditEntry_n14(_uploadFile, _downloadFile, value[1])
+  ];
+}
+function from_candid_tuple_n34(_uploadFile, _downloadFile, value) {
+  return [
+    from_candid_ResourceType_n35(_uploadFile, _downloadFile, value[0]),
+    value[1]
+  ];
+}
+function from_candid_variant_n1(_uploadFile, _downloadFile, value) {
+  return "ok" in value ? {
+    __kind__: "ok",
+    ok: value.ok
+  } : "err" in value ? {
+    __kind__: "err",
+    err: value.err
+  } : value;
+}
+function from_candid_variant_n11(_uploadFile, _downloadFile, value) {
+  return "ok" in value ? {
+    __kind__: "ok",
+    ok: from_candid_vec_n12(_uploadFile, _downloadFile, value.ok)
+  } : "err" in value ? {
+    __kind__: "err",
+    err: value.err
+  } : value;
+}
+function from_candid_variant_n2(_uploadFile, _downloadFile, value) {
+  return "ok" in value ? {
+    __kind__: "ok",
+    ok: value.ok
+  } : "err" in value ? {
+    __kind__: "err",
+    err: value.err
+  } : value;
+}
+function from_candid_variant_n29(_uploadFile, _downloadFile, value) {
+  return "purchasePlots" in value ? {
+    __kind__: "purchasePlots",
+    purchasePlots: value.purchasePlots
+  } : "upgradeToTier" in value ? {
+    __kind__: "upgradeToTier",
+    upgradeToTier: value.upgradeToTier
+  } : "holdFRNTR" in value ? {
+    __kind__: "holdFRNTR",
+    holdFRNTR: value.holdFRNTR
+  } : "reachLeaderboardTop" in value ? {
+    __kind__: "reachLeaderboardTop",
+    reachLeaderboardTop: value.reachLeaderboardTop
+  } : "surveyPlot" in value ? {
+    __kind__: "surveyPlot",
+    surveyPlot: value.surveyPlot
+  } : "claimTokens" in value ? {
+    __kind__: "claimTokens",
+    claimTokens: value.claimTokens
+  } : value;
+}
+function from_candid_variant_n3(_uploadFile, _downloadFile, value) {
+  return "ok" in value ? {
+    __kind__: "ok",
+    ok: from_candid_record_n4(_uploadFile, _downloadFile, value.ok)
+  } : "err" in value ? {
+    __kind__: "err",
+    err: value.err
+  } : value;
+}
+function from_candid_variant_n36(_uploadFile, _downloadFile, value) {
+  return "RareEarth" in value ? "RareEarth" : "Fuel" in value ? "Fuel" : "Iron" in value ? "Iron" : "Crystal" in value ? "Crystal" : value;
+}
+function from_candid_variant_n40(_uploadFile, _downloadFile, value) {
+  return "ok" in value ? {
+    __kind__: "ok",
+    ok: from_candid_SurveyResult_n5(_uploadFile, _downloadFile, value.ok)
+  } : "err" in value ? {
+    __kind__: "err",
+    err: value.err
+  } : value;
+}
+function from_candid_variant_n41(_uploadFile, _downloadFile, value) {
+  return "ok" in value ? {
+    __kind__: "ok",
+    ok: from_candid_SurveyView_n42(_uploadFile, _downloadFile, value.ok)
+  } : "err" in value ? {
+    __kind__: "err",
+    err: value.err
+  } : value;
+}
+function from_candid_variant_n45(_uploadFile, _downloadFile, value) {
+  return "Locked" in value ? "Locked" : "InProgress" in value ? "InProgress" : "Completed" in value ? "Completed" : value;
+}
+function from_candid_variant_n47(_uploadFile, _downloadFile, value) {
+  return "ok" in value ? {
+    __kind__: "ok",
+    ok: value.ok
+  } : "err" in value ? {
+    __kind__: "err",
+    err: value.err
+  } : value;
+}
+function from_candid_variant_n50(_uploadFile, _downloadFile, value) {
+  return "ok" in value ? {
+    __kind__: "ok",
+    ok: from_candid_MineResult_n51(_uploadFile, _downloadFile, value.ok)
+  } : "err" in value ? {
+    __kind__: "err",
+    err: value.err
+  } : value;
+}
+function from_candid_variant_n54(_uploadFile, _downloadFile, value) {
+  return "ok" in value ? {
+    __kind__: "ok",
+    ok: value.ok
+  } : "err" in value ? {
+    __kind__: "err",
+    err: value.err
+  } : value;
+}
+function from_candid_variant_n56(_uploadFile, _downloadFile, value) {
+  return "ok" in value ? {
+    __kind__: "ok",
+    ok: from_candid_vec_n57(_uploadFile, _downloadFile, value.ok)
+  } : "err" in value ? {
+    __kind__: "err",
+    err: value.err
+  } : value;
+}
+function from_candid_variant_n61(_uploadFile, _downloadFile, value) {
+  return "ok" in value ? {
+    __kind__: "ok",
+    ok: value.ok
+  } : "err" in value ? {
+    __kind__: "err",
+    err: value.err
+  } : value;
+}
+function from_candid_variant_n62(_uploadFile, _downloadFile, value) {
+  return "ok" in value ? {
+    __kind__: "ok",
+    ok: from_candid_PlotUpgradesView_n63(_uploadFile, _downloadFile, value.ok)
+  } : "err" in value ? {
+    __kind__: "err",
+    err: from_candid_UpgradeError_n68(_uploadFile, _downloadFile, value.err)
+  } : value;
+}
+function from_candid_variant_n67(_uploadFile, _downloadFile, value) {
+  return "TierIII" in value ? "TierIII" : "None" in value ? "None" : "TierII" in value ? "TierII" : "TierIV" in value ? "TierIV" : "TierVI" in value ? "TierVI" : "TierI" in value ? "TierI" : "TierV" in value ? "TierV" : value;
+}
+function from_candid_variant_n69(_uploadFile, _downloadFile, value) {
+  return "SubParcelLocked" in value ? "SubParcelLocked" : "PlotNotFound" in value ? "PlotNotFound" : "InvalidTier" in value ? "InvalidTier" : "NotOwner" in value ? "NotOwner" : "AlreadyMaxTier" in value ? "AlreadyMaxTier" : "InsufficientFRNTR" in value ? "InsufficientFRNTR" : value;
+}
+function from_candid_variant_n9(_uploadFile, _downloadFile, value) {
+  return "Tropical" in value ? "Tropical" : "AsteroidImpact" in value ? "AsteroidImpact" : "DeepOcean" in value ? "DeepOcean" : "Desert" in value ? "Desert" : "Volcanic" in value ? "Volcanic" : "Temperate" in value ? "Temperate" : "Ocean" in value ? "Ocean" : "Arctic" in value ? "Arctic" : value;
+}
+function from_candid_vec_n12(_uploadFile, _downloadFile, value) {
+  return value.map((x3) => from_candid_tuple_n13(_uploadFile, _downloadFile, x3));
+}
+function from_candid_vec_n17(_uploadFile, _downloadFile, value) {
+  return value.map((x3) => from_candid_CombatEvent_n18(_uploadFile, _downloadFile, x3));
+}
+function from_candid_vec_n23(_uploadFile, _downloadFile, value) {
+  return value.map((x3) => from_candid_record_n24(_uploadFile, _downloadFile, x3));
+}
+function from_candid_vec_n25(_uploadFile, _downloadFile, value) {
+  return value.map((x3) => from_candid_Mission_n26(_uploadFile, _downloadFile, x3));
+}
+function from_candid_vec_n30(_uploadFile, _downloadFile, value) {
+  return value.map((x3) => from_candid_record_n31(_uploadFile, _downloadFile, x3));
+}
+function from_candid_vec_n33(_uploadFile, _downloadFile, value) {
+  return value.map((x3) => from_candid_tuple_n34(_uploadFile, _downloadFile, x3));
+}
+function from_candid_vec_n37(_uploadFile, _downloadFile, value) {
+  return value.map((x3) => from_candid_SubParcel_n38(_uploadFile, _downloadFile, x3));
+}
+function from_candid_vec_n57(_uploadFile, _downloadFile, value) {
+  return value.map((x3) => from_candid_StressActionResult_n58(_uploadFile, _downloadFile, x3));
+}
+function to_candid_opt_n48(_uploadFile, _downloadFile, value) {
+  return value === null ? candid_none() : candid_some(value);
+}
+function to_candid_opt_n49(_uploadFile, _downloadFile, value) {
+  return value === null ? candid_none() : candid_some(value);
+}
+function createActor(canisterId, _uploadFile, _downloadFile, options = {}) {
+  const agent = options.agent || HttpAgent.createSync({
+    ...options.agentOptions
+  });
+  if (options.agent && options.agentOptions) {
+    console.warn("Detected both agent and agentOptions passed to createActor. Ignoring agentOptions and proceeding with the provided agent.");
+  }
+  const actor = Actor.createActor(idlFactory, {
+    agent,
+    canisterId,
+    ...options.actorOptions
+  });
+  return new Backend(actor, _uploadFile, _downloadFile, options.processError);
+}
+const CYAN$g = "#00ffcc";
+const GOLD$6 = "#ffd700";
+const BG = "rgba(0,10,20,0.92)";
+const BORDER$e = "rgba(0,255,204,0.28)";
+const TEXT$9 = "#e0f4ff";
+const TEXT_DIM$9 = "rgba(224,244,255,0.55)";
+const ACTION_COLORS = {
+  purchase: CYAN$g,
+  upgrade: GOLD$6,
+  claim: "#22c55e",
+  survey: "#a78bfa",
+  mission: GOLD$6
+};
+const ACTION_LABELS = {
+  purchase: "CONFIRM PURCHASE",
+  upgrade: "CONFIRM UPGRADE",
+  claim: "CONFIRM CLAIM",
+  survey: "CONFIRM SURVEY",
+  mission: "CLAIM MISSION REWARD"
+};
+function ActionConfirmModal(props) {
+  return _ActionConfirmModal(props);
+}
+function _ActionConfirmModal({
+  isOpen,
+  onConfirm,
+  onCancel,
+  title,
+  actionType,
+  details,
+  costLabel,
+  warningText,
+  isLoading = false
+}) {
+  if (!isOpen) return null;
+  const accentColor = ACTION_COLORS[actionType] ?? CYAN$g;
+  const headerLabel = ACTION_LABELS[actionType] ?? "CONFIRM ACTION";
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "dialog",
+    {
+      "data-ocid": "action_confirm.dialog",
+      open: true,
+      "aria-labelledby": "action-confirm-title",
+      style: {
+        position: "fixed",
+        inset: 0,
+        zIndex: 9e3,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "rgba(0,0,0,0.72)",
+        backdropFilter: "blur(6px)",
+        WebkitBackdropFilter: "blur(6px)",
+        padding: 16,
+        border: "none",
+        margin: 0,
+        maxWidth: "100vw",
+        maxHeight: "100vh",
+        width: "100vw",
+        height: "100vh"
+      },
+      onClick: (e) => {
+        if (e.target === e.currentTarget) onCancel();
+      },
+      onKeyDown: (e) => {
+        if (e.key === "Escape") onCancel();
+      },
+      children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        "div",
+        {
+          style: {
+            background: BG,
+            backdropFilter: "blur(24px)",
+            WebkitBackdropFilter: "blur(24px)",
+            border: `1px solid ${BORDER$e}`,
+            boxShadow: `0 0 40px ${accentColor}22, 0 0 80px rgba(0,0,0,0.6), inset 0 0 30px rgba(0,255,204,0.03)`,
+            borderRadius: 14,
+            width: "100%",
+            maxWidth: 380,
+            overflow: "hidden",
+            position: "relative"
+          },
+          children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "div",
+              {
+                style: {
+                  height: 2,
+                  background: `linear-gradient(90deg, transparent, ${accentColor}, transparent)`
+                }
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "div",
+              {
+                "aria-hidden": "true",
+                style: {
+                  position: "absolute",
+                  inset: 0,
+                  backgroundImage: "repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,255,255,0.015) 3px,rgba(0,255,255,0.015) 4px)",
+                  pointerEvents: "none",
+                  borderRadius: 14
+                }
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { padding: "18px 20px 20px", position: "relative" }, children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { marginBottom: 14 }, children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      fontSize: 8,
+                      fontWeight: 700,
+                      letterSpacing: 3,
+                      color: accentColor,
+                      textTransform: "uppercase",
+                      marginBottom: 4,
+                      fontFamily: "monospace",
+                      textShadow: `0 0 8px ${accentColor}88`
+                    },
+                    children: headerLabel
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    id: "action-confirm-title",
+                    style: {
+                      fontSize: 15,
+                      fontWeight: 800,
+                      color: TEXT$9,
+                      letterSpacing: 0.5,
+                      lineHeight: 1.2
+                    },
+                    children: title
+                  }
+                )
+              ] }),
+              (details ?? []).length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "div",
+                {
+                  style: {
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: "6px 12px",
+                    padding: "10px 12px",
+                    background: "rgba(0,255,204,0.03)",
+                    border: `1px solid ${BORDER$e}`,
+                    borderRadius: 8,
+                    marginBottom: 12
+                  },
+                  children: (details ?? []).map((d2) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "div",
+                      {
+                        style: {
+                          fontSize: 7,
+                          color: TEXT_DIM$9,
+                          letterSpacing: 1,
+                          textTransform: "uppercase",
+                          fontFamily: "monospace",
+                          marginBottom: 1
+                        },
+                        children: d2.label
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "div",
+                      {
+                        style: {
+                          fontSize: 10,
+                          fontWeight: 700,
+                          color: TEXT$9,
+                          fontFamily: "monospace",
+                          wordBreak: "break-all"
+                        },
+                        children: d2.value
+                      }
+                    )
+                  ] }, d2.label))
+                }
+              ),
+              costLabel && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "div",
+                {
+                  style: {
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "8px 12px",
+                    background: `${accentColor}0a`,
+                    border: `1px solid ${accentColor}33`,
+                    borderRadius: 8,
+                    marginBottom: 12
+                  },
+                  children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "span",
+                      {
+                        style: {
+                          fontSize: 8,
+                          color: TEXT_DIM$9,
+                          letterSpacing: 1,
+                          textTransform: "uppercase",
+                          fontFamily: "monospace"
+                        },
+                        children: "COST"
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "span",
+                      {
+                        style: {
+                          fontSize: 13,
+                          fontWeight: 900,
+                          color: accentColor,
+                          fontFamily: "monospace",
+                          textShadow: `0 0 10px ${accentColor}66`
+                        },
+                        children: costLabel
+                      }
+                    )
+                  ]
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "div",
+                {
+                  style: {
+                    padding: "8px 10px",
+                    background: "rgba(239,68,68,0.07)",
+                    border: "1px solid rgba(239,68,68,0.25)",
+                    borderRadius: 7,
+                    marginBottom: 16,
+                    fontSize: 8,
+                    color: "rgba(252,165,165,0.85)",
+                    lineHeight: 1.6,
+                    letterSpacing: 0.3
+                  },
+                  children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { marginRight: 4 }, children: "⚠" }),
+                    warningText
+                  ]
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "div",
+                {
+                  style: {
+                    fontSize: 7,
+                    color: "rgba(252,165,165,0.6)",
+                    letterSpacing: 0.5,
+                    textAlign: "center",
+                    marginBottom: 16,
+                    fontFamily: "monospace"
+                  },
+                  children: "THIS ACTION CANNOT BE UNDONE. IT WILL BE PERMANENTLY RECORDED ON-CHAIN."
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", gap: 8 }, children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "button",
+                  {
+                    type: "button",
+                    "data-ocid": "action_confirm.cancel_button",
+                    onClick: onCancel,
+                    disabled: isLoading,
+                    style: {
+                      flex: 1,
+                      padding: "10px 0",
+                      background: "rgba(255,255,255,0.04)",
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      borderRadius: 8,
+                      color: isLoading ? "rgba(255,255,255,0.3)" : TEXT_DIM$9,
+                      fontSize: 9,
+                      fontWeight: 700,
+                      letterSpacing: 1.5,
+                      cursor: isLoading ? "not-allowed" : "pointer",
+                      textTransform: "uppercase",
+                      transition: "all 0.15s"
+                    },
+                    children: "CANCEL"
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "button",
+                  {
+                    type: "button",
+                    "data-ocid": "action_confirm.confirm_button",
+                    onClick: onConfirm,
+                    disabled: isLoading,
+                    style: {
+                      flex: 2,
+                      padding: "10px 0",
+                      background: isLoading ? `${accentColor}18` : `${accentColor}22`,
+                      border: `1px solid ${isLoading ? `${accentColor}44` : `${accentColor}88`}`,
+                      borderRadius: 8,
+                      color: isLoading ? `${accentColor}66` : accentColor,
+                      fontSize: 9,
+                      fontWeight: 700,
+                      letterSpacing: 1.5,
+                      cursor: isLoading ? "not-allowed" : "pointer",
+                      textTransform: "uppercase",
+                      boxShadow: isLoading ? "none" : `0 0 12px ${accentColor}33`,
+                      transition: "all 0.15s"
+                    },
+                    children: isLoading ? "PROCESSING..." : "CONFIRM"
+                  }
+                )
+              ] })
+            ] })
+          ]
+        }
+      )
+    }
+  );
+}
+function PotCard({
+  label,
+  value,
+  usdPrice,
+  colorClass,
+  bgStyle,
+  borderStyle
+}) {
+  const icp = Number(value) / 1e8;
+  const usd = usdPrice !== null ? icp * usdPrice : null;
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "div",
+    {
+      className: "rounded-xl p-3 flex flex-col gap-1",
+      style: { background: bgStyle, border: `1px solid ${borderStyle}` },
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "div",
+          {
+            className: `text-[9px] font-bold tracking-widest uppercase ${colorClass}`,
+            children: label
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "font-mono text-sm font-bold", style: { color: "#e0f4ff" }, children: [
+          icp.toFixed(4),
+          " ",
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[9px] opacity-60", children: "ICP" })
+        ] }),
+        usd !== null && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            className: "text-[10px] font-medium",
+            style: { color: "rgba(224,244,255,0.5)" },
+            children: [
+              "≈ $",
+              usd.toFixed(2),
+              " USD"
+            ]
+          }
+        )
+      ]
+    }
+  );
+}
+function LiquiditySeedingPanel() {
+  const player = useGameStore((s2) => s2.player);
+  const treasuryState = useGameStore((s2) => s2.treasuryState);
+  const icpUsdPrice = useGameStore((s2) => s2.icpUsdPrice);
+  const { actor } = useActor(createActor);
+  const [expanded, setExpanded] = reactExports.useState(false);
+  const [confirmOpen, setConfirmOpen] = reactExports.useState(false);
+  const [confirmDetails, setConfirmDetails] = reactExports.useState([]);
+  const [pendingAction, setPendingAction] = reactExports.useState(null);
+  const [confirmLoading, setConfirmLoading] = reactExports.useState(false);
+  const [confirmTitle, setConfirmTitle] = reactExports.useState("");
+  if (!player.isAdmin) return null;
+  const liquidityIcp = Number(treasuryState.liquidity) / 1e8;
+  const totalPlayers = treasuryState.totalPlayers ?? 0;
+  const totalPlotsSold = treasuryState.totalPlotsSold ?? 0;
+  async function handleConfirm() {
+    if (!pendingAction) return;
+    setConfirmLoading(true);
+    try {
+      await pendingAction();
+    } finally {
+      setConfirmLoading(false);
+      setConfirmOpen(false);
+      setPendingAction(null);
+    }
+  }
+  function triggerSeedLiquidity() {
+    setConfirmTitle("Seed Liquidity Pool");
+    setConfirmDetails([
+      { label: "Liquidity Pot", value: `${liquidityIcp.toFixed(4)} ICP` },
+      { label: "Destination", value: "ICPSwap ASCEND/ICP Pool" },
+      { label: "Action", value: "Irreversible on-chain transfer" }
+    ]);
+    setPendingAction(() => async () => {
+      var _a3;
+      if (!actor) return;
+      try {
+        await ((_a3 = actor.seedLiquidity) == null ? void 0 : _a3.call(actor));
+        ue.success(
+          "Liquidity seeding initiated. Check ICPSwap for confirmation."
+        );
+      } catch (e) {
+        ue.error(
+          `Seed failed: ${e instanceof Error ? e.message : String(e)}`
+        );
+      }
+    });
+    setConfirmOpen(true);
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      motion.div,
+      {
+        "data-ocid": "admin.liquidity_panel",
+        initial: { opacity: 0, y: -8 },
+        animate: { opacity: 1, y: 0 },
+        className: "mb-3",
+        children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "button",
+            {
+              type: "button",
+              "data-ocid": "admin.liquidity_toggle",
+              onClick: () => setExpanded((v2) => !v2),
+              className: "w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200",
+              style: {
+                background: expanded ? "rgba(255,200,100,0.1)" : "rgba(255,200,100,0.05)",
+                border: `1px solid ${expanded ? "rgba(255,200,100,0.4)" : "rgba(255,200,100,0.2)"}`
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[10px]", children: "🛡️" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "span",
+                    {
+                      className: "text-[10px] font-bold tracking-widest uppercase",
+                      style: { color: "#ffc864" },
+                      children: "Admin Dashboard"
+                    }
+                  )
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "span",
+                    {
+                      className: "px-1.5 py-0.5 rounded text-[8px] font-bold",
+                      style: {
+                        background: "rgba(255,200,100,0.15)",
+                        color: "#ffc864",
+                        border: "1px solid rgba(255,200,100,0.3)"
+                      },
+                      children: "ADMIN ONLY"
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "span",
+                    {
+                      className: "text-[10px]",
+                      style: { color: "rgba(224,244,255,0.5)" },
+                      children: expanded ? "▲" : "▼"
+                    }
+                  )
+                ] })
+              ]
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(AnimatePresence, { children: expanded && /* @__PURE__ */ jsxRuntimeExports.jsx(
+            motion.div,
+            {
+              initial: { opacity: 0, height: 0 },
+              animate: { opacity: 1, height: "auto" },
+              exit: { opacity: 0, height: 0 },
+              transition: { duration: 0.22 },
+              className: "overflow-hidden",
+              children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "div",
+                {
+                  className: "mt-1 rounded-xl p-3",
+                  style: {
+                    background: "rgba(5,15,28,0.85)",
+                    border: "1px solid rgba(255,200,100,0.2)"
+                  },
+                  children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "div",
+                      {
+                        className: "text-[9px] font-bold tracking-widest uppercase mb-3",
+                        style: { color: "rgba(255,200,100,0.7)" },
+                        children: "Treasury Overview"
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-3 gap-2 mb-3", children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        PotCard,
+                        {
+                          label: "Dev Pot",
+                          value: treasuryState.developer,
+                          usdPrice: icpUsdPrice,
+                          colorClass: "text-amber-300",
+                          bgStyle: "rgba(255,200,100,0.06)",
+                          borderStyle: "rgba(255,200,100,0.2)"
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        PotCard,
+                        {
+                          label: "Leaderboard",
+                          value: treasuryState.leaderboard,
+                          usdPrice: icpUsdPrice,
+                          colorClass: "text-cyan-300",
+                          bgStyle: "rgba(100,220,230,0.06)",
+                          borderStyle: "rgba(100,220,230,0.2)"
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        PotCard,
+                        {
+                          label: "Liquidity",
+                          value: treasuryState.liquidity,
+                          usdPrice: icpUsdPrice,
+                          colorClass: "text-emerald-300",
+                          bgStyle: "rgba(0,255,204,0.06)",
+                          borderStyle: "rgba(0,255,204,0.2)"
+                        }
+                      )
+                    ] }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "div",
+                      {
+                        className: "grid grid-cols-2 gap-2 mb-3 p-2.5 rounded-lg",
+                        style: {
+                          background: "rgba(0,255,204,0.03)",
+                          border: "1px solid rgba(0,255,204,0.08)"
+                        },
+                        children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsx(
+                              "div",
+                              {
+                                className: "text-[8px] mb-0.5",
+                                style: { color: "rgba(224,244,255,0.4)" },
+                                children: "TOTAL PLAYERS"
+                              }
+                            ),
+                            /* @__PURE__ */ jsxRuntimeExports.jsx(
+                              "div",
+                              {
+                                className: "text-sm font-bold font-mono",
+                                style: { color: "#e0f4ff" },
+                                children: totalPlayers.toLocaleString()
+                              }
+                            )
+                          ] }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsx(
+                              "div",
+                              {
+                                className: "text-[8px] mb-0.5",
+                                style: { color: "rgba(224,244,255,0.4)" },
+                                children: "PLOTS SOLD"
+                              }
+                            ),
+                            /* @__PURE__ */ jsxRuntimeExports.jsx(
+                              "div",
+                              {
+                                className: "text-sm font-bold font-mono",
+                                style: { color: "#e0f4ff" },
+                                children: totalPlotsSold.toLocaleString()
+                              }
+                            )
+                          ] })
+                        ]
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "div",
+                      {
+                        className: "p-2.5 rounded-lg mb-2",
+                        style: {
+                          background: "rgba(0,255,204,0.04)",
+                          border: "1px solid rgba(0,255,204,0.12)"
+                        },
+                        children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "div",
+                            {
+                              className: "text-[9px] font-semibold mb-1",
+                              style: { color: "rgba(224,244,255,0.6)" },
+                              children: "Seed ICPSwap Liquidity Pool"
+                            }
+                          ),
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                            "div",
+                            {
+                              className: "text-[8px] mb-2",
+                              style: { color: "rgba(224,244,255,0.4)" },
+                              children: [
+                                "Transfers the full liquidity pot (",
+                                liquidityIcp.toFixed(4),
+                                " ",
+                                "ICP) to seed the ASCEND/ICP pool on ICPSwap. This action is permanent and irreversible."
+                              ]
+                            }
+                          ),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "button",
+                            {
+                              type: "button",
+                              "data-ocid": "admin.seed_liquidity_button",
+                              onClick: triggerSeedLiquidity,
+                              disabled: liquidityIcp === 0,
+                              className: "w-full py-2 rounded-lg text-[9px] font-bold tracking-widest uppercase transition-all duration-200",
+                              style: {
+                                background: liquidityIcp > 0 ? "rgba(0,255,204,0.12)" : "rgba(255,255,255,0.04)",
+                                border: `1px solid ${liquidityIcp > 0 ? "rgba(0,255,204,0.3)" : "rgba(255,255,255,0.08)"}`,
+                                color: liquidityIcp > 0 ? "#00ffcc" : "rgba(224,244,255,0.3)",
+                                cursor: liquidityIcp > 0 ? "pointer" : "not-allowed"
+                              },
+                              children: liquidityIcp > 0 ? `SEED ${liquidityIcp.toFixed(4)} ICP → ICPSWAP` : "NO LIQUIDITY TO SEED"
+                            }
+                          )
+                        ]
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "p",
+                      {
+                        className: "text-[8px] text-center",
+                        style: { color: "rgba(224,244,255,0.3)" },
+                        children: "All admin actions are logged on-chain with your principal and timestamp."
+                      }
+                    )
+                  ]
+                }
+              )
+            }
+          ) })
+        ]
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      _ActionConfirmModal,
+      {
+        isOpen: confirmOpen,
+        onConfirm: handleConfirm,
+        onCancel: () => {
+          setConfirmOpen(false);
+          setPendingAction(null);
+        },
+        title: confirmTitle,
+        actionType: "purchase",
+        details: confirmDetails,
+        costLabel: "",
+        warningText: "This action is permanent, irreversible, and logged on-chain.",
+        isLoading: confirmLoading
+      }
+    )
+  ] });
+}
+const CYAN$f = "#00ffcc";
+const TEXT_DIM$8 = "rgba(224,244,255,0.55)";
+const SHOWN_KEY = "shown_toasts";
+const MESSAGES = {
+  purchase: "Plot acquired! View your new land.",
+  upgrade: "Generator upgraded! Production increased.",
+  claim: "Tokens claimed to your wallet.",
+  survey: "Survey started! Results will be ready soon.",
+  mission: "Mission complete! Reward minted to your wallet."
+};
+const ICONS = {
+  purchase: "🌍",
+  upgrade: "⚡",
+  claim: "💰",
+  survey: "🔭",
+  mission: "🏆"
+};
+function getShownToasts() {
+  try {
+    const raw = sessionStorage.getItem(SHOWN_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+function markToastShown(type) {
+  try {
+    const shown = getShownToasts();
+    if (!shown.includes(type)) {
+      sessionStorage.setItem(SHOWN_KEY, JSON.stringify([...shown, type]));
+    }
+  } catch {
+  }
+}
+function PostActionToast({
+  actionType,
+  message: _msg,
+  onNavigate,
+  onClose
+}) {
+  const safeType = actionType in MESSAGES ? actionType : "claim";
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    _PostActionToast,
+    {
+      actionType: safeType,
+      onNavigate: (tab) => onNavigate(tab),
+      onDismiss: onClose
+    }
+  );
+}
+function _PostActionToast({
+  actionType,
+  onNavigate,
+  onDismiss
+}) {
+  const [visible, setVisible] = reactExports.useState(false);
+  const [sliding, setSliding] = reactExports.useState(false);
+  const timerRef = reactExports.useRef(null);
+  const mountedRef = reactExports.useRef(false);
+  reactExports.useEffect(() => {
+    const id2 = "post-action-toast-kf";
+    if (!document.getElementById(id2)) {
+      const el = document.createElement("style");
+      el.id = id2;
+      el.textContent = [
+        "@keyframes slideInFromRight {",
+        "  from { transform: translateX(110%); opacity: 0; }",
+        "  to   { transform: translateX(0);    opacity: 1; }",
+        "}",
+        "@keyframes slideOutToRight {",
+        "  from { transform: translateX(0);    opacity: 1; }",
+        "  to   { transform: translateX(110%); opacity: 0; }",
+        "}"
+      ].join("\n");
+      document.head.appendChild(el);
+    }
+  }, []);
+  reactExports.useEffect(() => {
+    if (!actionType) return;
+    const shown = getShownToasts();
+    if (shown.includes(actionType)) return;
+    const showDelay = setTimeout(() => {
+      markToastShown(actionType);
+      setSliding(false);
+      setVisible(true);
+      mountedRef.current = true;
+      timerRef.current = setTimeout(() => {
+        dismiss();
+      }, 8e3);
+    }, 600);
+    return () => clearTimeout(showDelay);
+  }, [actionType]);
+  function dismiss() {
+    setSliding(true);
+    setTimeout(() => {
+      setVisible(false);
+      setSliding(false);
+      onDismiss();
+    }, 350);
+  }
+  function handleNav(tab) {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    onNavigate(tab);
+    dismiss();
+  }
+  if (!visible && !sliding) return null;
+  const msg = actionType ? MESSAGES[actionType] : "";
+  const icon = actionType ? ICONS[actionType] : "✓";
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "output",
+    {
+      "data-ocid": "post_action.toast",
+      "aria-live": "polite",
+      style: {
+        position: "fixed",
+        bottom: 86,
+        right: 14,
+        zIndex: 8500,
+        width: 290,
+        background: "rgba(0,10,22,0.92)",
+        backdropFilter: "blur(20px)",
+        WebkitBackdropFilter: "blur(20px)",
+        border: `1px solid ${CYAN$f}44`,
+        borderLeft: `3px solid ${CYAN$f}`,
+        borderRadius: 10,
+        boxShadow: `0 0 24px ${CYAN$f}18, 0 4px 32px rgba(0,0,0,0.55)`,
+        animation: sliding ? "slideOutToRight 0.35s cubic-bezier(0.4,0,1,1) forwards" : "slideInFromRight 0.38s cubic-bezier(0.22,1,0.36,1) forwards",
+        overflow: "hidden"
+      },
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "div",
+          {
+            style: {
+              height: 1,
+              background: `linear-gradient(90deg, ${CYAN$f}, transparent)`
+            }
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { padding: "12px 14px 10px" }, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              style: {
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 6
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "div",
+                  {
+                    style: {
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6
+                    },
+                    children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 16 }, children: icon }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "span",
+                        {
+                          style: {
+                            fontSize: 10,
+                            fontWeight: 700,
+                            color: CYAN$f,
+                            letterSpacing: 0.5
+                          },
+                          children: msg
+                        }
+                      )
+                    ]
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "button",
+                  {
+                    type: "button",
+                    "data-ocid": "post_action.close_button",
+                    onClick: dismiss,
+                    "aria-label": "Dismiss notification",
+                    style: {
+                      background: "transparent",
+                      border: "none",
+                      color: TEXT_DIM$8,
+                      fontSize: 14,
+                      cursor: "pointer",
+                      lineHeight: 1,
+                      padding: "0 2px",
+                      flexShrink: 0
+                    },
+                    children: "×"
+                  }
+                )
+              ]
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              style: {
+                display: "flex",
+                gap: 5,
+                marginTop: 4
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "button",
+                  {
+                    type: "button",
+                    "data-ocid": "post_action.inventory_button",
+                    onClick: () => handleNav("inventory"),
+                    style: {
+                      flex: 1,
+                      padding: "5px 4px",
+                      background: "rgba(0,255,204,0.07)",
+                      border: `1px solid ${CYAN$f}33`,
+                      borderRadius: 6,
+                      color: CYAN$f,
+                      fontSize: 7.5,
+                      fontWeight: 700,
+                      letterSpacing: 0.8,
+                      cursor: "pointer",
+                      textTransform: "uppercase",
+                      transition: "all 0.15s"
+                    },
+                    children: "Inventory"
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "button",
+                  {
+                    type: "button",
+                    "data-ocid": "post_action.balance_button",
+                    onClick: () => handleNav("balance"),
+                    style: {
+                      flex: 1,
+                      padding: "5px 4px",
+                      background: "rgba(0,255,204,0.07)",
+                      border: `1px solid ${CYAN$f}33`,
+                      borderRadius: 6,
+                      color: CYAN$f,
+                      fontSize: 7.5,
+                      fontWeight: 700,
+                      letterSpacing: 0.8,
+                      cursor: "pointer",
+                      textTransform: "uppercase",
+                      transition: "all 0.15s"
+                    },
+                    children: "Balance"
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "button",
+                  {
+                    type: "button",
+                    "data-ocid": "post_action.leaderboard_button",
+                    onClick: () => handleNav("leaderboard"),
+                    style: {
+                      flex: 1,
+                      padding: "5px 4px",
+                      background: "rgba(0,255,204,0.07)",
+                      border: `1px solid ${CYAN$f}33`,
+                      borderRadius: 6,
+                      color: CYAN$f,
+                      fontSize: 7.5,
+                      fontWeight: 700,
+                      letterSpacing: 0.8,
+                      cursor: "pointer",
+                      textTransform: "uppercase",
+                      transition: "all 0.15s"
+                    },
+                    children: "Leaderboard"
+                  }
+                )
+              ]
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
+            {
+              style: {
+                marginTop: 8,
+                height: 2,
+                background: "rgba(0,255,204,0.12)",
+                borderRadius: 1,
+                overflow: "hidden"
+              },
+              children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "div",
+                {
+                  style: {
+                    height: "100%",
+                    background: CYAN$f,
+                    borderRadius: 1,
+                    animation: "toastProgress 8s linear forwards"
+                  }
+                }
+              )
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("style", { children: "@keyframes toastProgress { from { width: 100%; } to { width: 0%; } }" })
+      ]
+    }
+  );
+}
+function efficiencyColor(eff) {
+  if (eff >= 85) return "text-green-400";
+  if (eff >= 70) return "text-amber-400";
+  return "text-red-400";
+}
+function UnclaimedCounter({
+  plotId,
+  tier
+}) {
+  const perSecond = TIER_DAILY_RATES[tier] / 86400;
+  const [unclaimed, setUnclaimed] = reactExports.useState(0);
+  reactExports.useEffect(() => {
+    setUnclaimed(0);
+    const id2 = setInterval(() => setUnclaimed((v2) => v2 + perSecond), 1e3);
+    return () => clearInterval(id2);
+  }, [plotId]);
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-amber-400", children: unclaimed.toFixed(6) });
+}
+function PlotCard({ plotId, index: index2 }) {
+  const plot = useGameStore(
+    (s2) => s2.plots.find((p2) => String(p2.id) === plotId)
+  );
+  const generatorTiers = useGameStore((s2) => s2.generatorTiers);
+  const spendFrntr = useGameStore((s2) => s2.spendFrntr);
+  const setFrntrBalance = useGameStore((s2) => s2.setFrntrBalance);
+  const incrementClaimCount = useGameStore((s2) => s2.incrementClaimCount);
+  const player = useGameStore((s2) => s2.player);
+  const { actor } = useActor(createActor);
+  const [upgradeOpen, setUpgradeOpen] = reactExports.useState(false);
+  const [claiming, setClaiming] = reactExports.useState(false);
+  const [upgrading, setUpgrading] = reactExports.useState(false);
+  const [confirmOpen, setConfirmOpen] = reactExports.useState(false);
+  const [confirmPending, setConfirmPending] = reactExports.useState(null);
+  const [confirmTitle, setConfirmTitle] = reactExports.useState("");
+  const [confirmActionType, setConfirmActionType] = reactExports.useState("claim");
+  const [confirmDetails, setConfirmDetails] = reactExports.useState([]);
+  const [confirmCostLabel, setConfirmCostLabel] = reactExports.useState("");
+  const [confirmWarning, setConfirmWarning] = reactExports.useState("");
+  const [confirmLoading, setConfirmLoading] = reactExports.useState(false);
+  const [postActionType, setPostActionType] = reactExports.useState(
+    null
+  );
+  function openConfirmModal(title, actionType, details, costLabel, warning2, fn) {
+    setConfirmTitle(title);
+    setConfirmActionType(actionType);
+    setConfirmDetails(details);
+    setConfirmCostLabel(costLabel);
+    setConfirmWarning(warning2);
+    setConfirmPending(() => fn);
+    setConfirmOpen(true);
+  }
+  async function handleConfirmAction() {
+    if (!confirmPending) return;
+    setConfirmLoading(true);
+    try {
+      await confirmPending();
+    } finally {
+      setConfirmLoading(false);
+      setConfirmOpen(false);
+      setConfirmPending(null);
+    }
+  }
+  function handleCancelConfirm() {
+    setConfirmOpen(false);
+    setConfirmPending(null);
+    actor == null ? void 0 : actor.logCancelledAction(
+      confirmTitle,
+      plotId,
+      null,
+      "User cancelled from inventory"
+    ).catch(() => {
+    });
+  }
+  if (!plot) return null;
+  const tier = generatorTiers[plotId] ?? 0;
+  const dailyRate = TIER_DAILY_RATES[tier];
+  const hourlyRate = (dailyRate / 24).toFixed(2);
+  const minRate = (dailyRate / 1440).toFixed(4);
+  const biomeColor = BIOME_DOT[plot.biome] ?? "#00ffcc";
+  const plotTitle = `Plot #${String(plot.id).slice(0, 8).toUpperCase()}`;
+  const nextTier = tier + 1;
+  const upgradeCost = tier < 6 ? UPGRADE_COSTS[nextTier] : null;
+  const nextDailyRate = tier < 6 ? TIER_DAILY_RATES[nextTier] : null;
+  const surveyed = !!plot.surveyed;
+  const isLoggedIn = !!player.principal;
+  const tierProgress = tier / 6 * 100;
+  const executeClaim = async () => {
+    if (!actor || claiming) return;
+    setClaiming(true);
+    try {
+      const res = await actor.claimAccumulatedTokens(String(plot.id));
+      if ("ok" in res) {
+        incrementClaimCount();
+        try {
+          const state2 = await actor.getPlayerState();
+          if (state2) setFrntrBalance(BigInt(state2.frntBalance));
+        } catch {
+        }
+        ue.success(`Tokens claimed from ${plotTitle}`);
+        setPostActionType("claim");
+      } else {
+        ue.error(`Claim failed: ${JSON.stringify(res.err)}`);
+      }
+    } catch {
+      ue.error("Claim failed");
+    } finally {
+      setClaiming(false);
+    }
+  };
+  const handleClaim = () => {
+    openConfirmModal(
+      "Claim Tokens",
+      "claim",
+      [
+        { label: "Plot", value: plotTitle },
+        { label: "Daily Rate", value: `${dailyRate} FRNTR/day` },
+        { label: "Est. Unclaimed", value: "See ticker above" }
+      ],
+      "",
+      "Claimed tokens are transferred on-chain. This action cannot be reversed.",
+      executeClaim
+    );
+  };
+  const executeUpgrade = async () => {
+    if (!actor || upgrading || upgradeCost === null) return;
+    setUpgrading(true);
+    try {
+      const res = await actor.upgradeGenerator(String(plot.id));
+      if ("ok" in res) {
+        spendFrntr(upgradeCost);
+        ue.success(`${plotTitle} upgraded to ${TIER_NAMES[nextTier]}`);
+        setUpgradeOpen(false);
+        setPostActionType("upgrade");
+      } else {
+        ue.error(`Upgrade failed: ${JSON.stringify(res.err)}`);
+      }
+    } catch {
+      ue.error("Upgrade failed");
+    } finally {
+      setUpgrading(false);
+    }
+  };
+  const handleUpgrade = () => {
+    if (upgradeCost === null) return;
+    openConfirmModal(
+      "Upgrade Generator",
+      "upgrade",
+      [
+        { label: "Plot", value: plotTitle },
+        { label: "Current Tier", value: TIER_NAMES[tier] },
+        { label: "Next Tier", value: TIER_NAMES[nextTier] },
+        { label: "New Rate", value: `${nextDailyRate} FRNTR/day` }
+      ],
+      `${upgradeCost.toLocaleString()} FRNTR`,
+      "Upgrading burns FRNTR permanently from your balance and the total supply.",
+      executeUpgrade
+    );
+  };
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    motion.div,
+    {
+      "data-ocid": `inventory.item.${index2}`,
+      initial: { opacity: 0, y: 12 },
+      animate: { opacity: 1, y: 0 },
+      transition: { duration: 0.25, delay: index2 * 0.04 },
+      className: "relative overflow-hidden rounded-xl",
+      style: {
+        background: "rgba(0,20,40,0.55)",
+        border: "1px solid rgba(0,255,204,0.15)",
+        boxShadow: tier > 0 ? "0 0 20px rgba(0,255,204,0.06)" : "none"
+      },
+      children: [
+        tier > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "div",
+          {
+            className: "absolute top-0 left-0 h-0.5 transition-all duration-700",
+            style: {
+              width: `${tierProgress}%`,
+              background: "linear-gradient(90deg, #00ffcc, #ffd700)"
+            }
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-3", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 mb-3", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "div",
+              {
+                className: "w-2.5 h-2.5 rounded-full flex-shrink-0",
+                style: {
+                  background: biomeColor,
+                  boxShadow: `0 0 6px ${biomeColor}99`
+                }
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 min-w-0", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "div",
+                {
+                  className: "text-xs font-bold font-mono tracking-wide",
+                  style: { color: "#e0f4ff" },
+                  children: plotTitle
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "div",
+                {
+                  className: "text-[10px] font-medium",
+                  style: { color: "rgba(224,244,255,0.5)" },
+                  children: plot.biome
+                }
+              )
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "span",
+              {
+                className: "px-2 py-0.5 rounded text-[10px] font-bold tracking-wider",
+                style: {
+                  background: tier > 0 ? "rgba(0,255,204,0.12)" : "rgba(255,255,255,0.05)",
+                  border: `1px solid ${tier > 0 ? "rgba(0,255,204,0.3)" : "rgba(255,255,255,0.08)"}`,
+                  color: tier > 0 ? "#00ffcc" : "rgba(224,244,255,0.45)"
+                },
+                children: TIER_NAMES[tier]
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "span",
+              {
+                className: "px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider",
+                style: {
+                  background: surveyed ? "rgba(0,255,100,0.1)" : "rgba(255,255,255,0.04)",
+                  border: `1px solid ${surveyed ? "rgba(0,255,100,0.25)" : "rgba(255,255,255,0.08)"}`,
+                  color: surveyed ? "#00ff64" : "rgba(224,244,255,0.4)"
+                },
+                children: surveyed ? "SURVEYED" : "UNSRVY"
+              }
+            )
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
+            {
+              className: "grid grid-cols-3 gap-1.5 mb-3 px-2.5 py-2 rounded-lg",
+              style: {
+                background: "rgba(0,255,204,0.03)",
+                border: "1px solid rgba(0,255,204,0.07)"
+              },
+              children: [
+                { label: "FRNTR/MIN", value: minRate },
+                { label: "FRNTR/HR", value: hourlyRate },
+                { label: "FRNTR/DAY", value: String(dailyRate) }
+              ].map(({ label, value }) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-center", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    className: "text-[8px] mb-0.5",
+                    style: { color: "rgba(224,244,255,0.4)" },
+                    children: label
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[11px] font-bold font-mono text-amber-400", children: value })
+              ] }, label))
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              className: "flex items-center justify-between mb-3 px-2.5 py-1.5 rounded-lg",
+              style: {
+                background: "rgba(255,215,0,0.04)",
+                border: "1px solid rgba(255,215,0,0.1)"
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "span",
+                  {
+                    className: "text-[9px] font-semibold tracking-widest",
+                    style: { color: "rgba(224,244,255,0.45)" },
+                    children: "ACCUMULATING"
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(UnclaimedCounter, { plotId, tier }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "span",
+                    {
+                      className: "text-[8px] font-bold",
+                      style: { color: "rgba(255,215,0,0.55)" },
+                      children: "FRNTR"
+                    }
+                  )
+                ] })
+              ]
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mb-3", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between mb-1", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "span",
+                {
+                  className: "text-[8px] tracking-widest",
+                  style: { color: "rgba(224,244,255,0.4)" },
+                  children: "EFFICIENCY"
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "span",
+                {
+                  className: `text-[10px] font-bold font-mono ${efficiencyColor(plot.efficiency)}`,
+                  children: [
+                    plot.efficiency,
+                    "%"
+                  ]
+                }
+              )
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "div",
+              {
+                className: "h-0.5 rounded-full",
+                style: { background: "rgba(255,255,255,0.08)" },
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    className: "h-0.5 rounded-full transition-all duration-500",
+                    style: {
+                      width: `${plot.efficiency}%`,
+                      background: plot.efficiency >= 85 ? "linear-gradient(90deg, #22c55e, #4ade80)" : plot.efficiency >= 70 ? "linear-gradient(90deg, #f59e0b, #fbbf24)" : "linear-gradient(90deg, #ef4444, #f87171)"
+                    }
+                  }
+                )
+              }
+            )
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-wrap gap-1 mb-3", children: [1, 2, 3, 4, 5, 6, 7].map((n) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "span",
+            {
+              className: "px-1.5 py-0.5 rounded text-[8px] font-medium",
+              style: {
+                background: "rgba(255,255,255,0.03)",
+                border: "1px solid rgba(255,255,255,0.07)",
+                color: "rgba(224,244,255,0.35)"
+              },
+              children: [
+                "SUB-",
+                n,
+                ": SOON"
+              ]
+            },
+            n
+          )) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              className: "flex gap-2",
+              style: { marginBottom: upgradeOpen ? 8 : 0 },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "button",
+                  {
+                    type: "button",
+                    "data-ocid": `inventory.claim_button.${index2}`,
+                    onClick: handleClaim,
+                    disabled: !isLoggedIn || claiming,
+                    className: "flex-1 py-2 rounded-lg text-[9px] font-bold tracking-widest uppercase transition-all duration-200",
+                    style: {
+                      background: "rgba(0,255,204,0.08)",
+                      border: "1px solid rgba(0,255,204,0.22)",
+                      color: isLoggedIn && !claiming ? "#00ffcc" : "rgba(224,244,255,0.35)",
+                      cursor: isLoggedIn && !claiming ? "pointer" : "not-allowed",
+                      opacity: isLoggedIn && !claiming ? 1 : 0.45
+                    },
+                    children: claiming ? "CLAIMING..." : "CLAIM"
+                  }
+                ),
+                upgradeCost !== null && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "button",
+                  {
+                    type: "button",
+                    "data-ocid": `inventory.upgrade_button.${index2}`,
+                    onClick: () => setUpgradeOpen((v2) => !v2),
+                    disabled: !isLoggedIn,
+                    className: "flex-1 py-2 rounded-lg text-[9px] font-bold tracking-wider uppercase transition-all duration-200",
+                    style: {
+                      background: upgradeOpen ? "rgba(255,215,0,0.14)" : "rgba(255,215,0,0.06)",
+                      border: `1px solid ${upgradeOpen ? "rgba(255,215,0,0.45)" : "rgba(255,215,0,0.2)"}`,
+                      color: isLoggedIn ? "#ffd700" : "rgba(224,244,255,0.35)",
+                      cursor: isLoggedIn ? "pointer" : "not-allowed",
+                      opacity: isLoggedIn ? 1 : 0.45
+                    },
+                    children: upgradeOpen ? "CANCEL" : "UPGRADE"
+                  }
+                )
+              ]
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(AnimatePresence, { children: upgradeOpen && upgradeCost !== null && nextDailyRate !== null && /* @__PURE__ */ jsxRuntimeExports.jsx(
+            motion.div,
+            {
+              initial: { opacity: 0, height: 0 },
+              animate: { opacity: 1, height: "auto" },
+              exit: { opacity: 0, height: 0 },
+              transition: { duration: 0.2 },
+              className: "overflow-hidden mt-2",
+              children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "div",
+                {
+                  className: "p-3 rounded-lg",
+                  style: {
+                    background: "rgba(255,215,0,0.05)",
+                    border: "1px solid rgba(255,215,0,0.2)"
+                  },
+                  children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "div",
+                      {
+                        className: "text-[9px] mb-2",
+                        style: { color: "rgba(224,244,255,0.5)" },
+                        children: [
+                          "Cost:",
+                          " ",
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-mono font-bold text-amber-400", children: [
+                            upgradeCost.toLocaleString(),
+                            " FRNTR"
+                          ] }),
+                          " · ",
+                          "New rate:",
+                          " ",
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-mono font-bold text-amber-400", children: [
+                            nextDailyRate,
+                            " FRNTR/day"
+                          ] })
+                        ]
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-2", children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "button",
+                        {
+                          type: "button",
+                          "data-ocid": `inventory.confirm_button.${index2}`,
+                          onClick: handleUpgrade,
+                          disabled: upgrading,
+                          className: "flex-1 py-1.5 rounded-lg text-[9px] font-bold tracking-wider uppercase transition-all duration-200",
+                          style: {
+                            background: "rgba(255,215,0,0.15)",
+                            border: "1px solid rgba(255,215,0,0.4)",
+                            color: "#ffd700",
+                            cursor: upgrading ? "not-allowed" : "pointer",
+                            opacity: upgrading ? 0.5 : 1
+                          },
+                          children: upgrading ? "UPGRADING..." : "CONFIRM UPGRADE"
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "button",
+                        {
+                          type: "button",
+                          "data-ocid": `inventory.cancel_button.${index2}`,
+                          onClick: () => setUpgradeOpen(false),
+                          className: "flex-1 py-1.5 rounded-lg text-[9px] font-bold tracking-wider uppercase",
+                          style: {
+                            background: "rgba(255,255,255,0.04)",
+                            border: "1px solid rgba(255,255,255,0.1)",
+                            color: "rgba(224,244,255,0.45)",
+                            cursor: "pointer"
+                          },
+                          children: "CANCEL"
+                        }
+                      )
+                    ] })
+                  ]
+                }
+              )
+            }
+          ) })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          _ActionConfirmModal,
+          {
+            isOpen: confirmOpen,
+            onConfirm: handleConfirmAction,
+            onCancel: handleCancelConfirm,
+            title: confirmTitle,
+            actionType: confirmActionType,
+            details: confirmDetails,
+            costLabel: confirmCostLabel,
+            warningText: confirmWarning,
+            isLoading: confirmLoading
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          _PostActionToast,
+          {
+            actionType: postActionType,
+            onNavigate: (tab) => {
+              window.dispatchEvent(
+                new CustomEvent("navigate-tab", { detail: { tab } })
+              );
+            },
+            onDismiss: () => setPostActionType(null)
+          }
+        )
+      ]
+    }
+  );
+}
+function GlobalUnclaimedCounter({ plotsOwned }) {
+  const generatorTiers = useGameStore((s2) => s2.generatorTiers);
+  const [total, setTotal] = reactExports.useState(0);
+  reactExports.useEffect(() => {
+    setTotal(0);
+    const perSecond = plotsOwned.reduce((sum, id22) => {
+      const tier = generatorTiers[id22] ?? 0;
+      return sum + TIER_DAILY_RATES[tier] / 86400;
+    }, 0);
+    if (perSecond === 0) return;
+    const id2 = setInterval(() => setTotal((v2) => v2 + perSecond), 1e3);
+    return () => clearInterval(id2);
+  }, [plotsOwned.join(",")]);
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-amber-400 font-bold text-sm", children: total.toFixed(6) });
+}
+function BalanceHeader() {
+  const confirmedFrntBalance = useGameStore((s2) => s2.confirmedFrntBalance);
+  const accruedFrntSinceSync = useGameStore((s2) => s2.accruedFrntSinceSync);
+  const plotsOwned = useGameStore((s2) => s2.player.plotsOwned);
+  const setFrntrBalance = useGameStore((s2) => s2.setFrntrBalance);
+  const incrementClaimCount = useGameStore((s2) => s2.incrementClaimCount);
+  const { actor } = useActor(createActor);
+  const [claimingAll, setClaimingAll] = reactExports.useState(false);
+  const totalBalance = confirmedFrntBalance + accruedFrntSinceSync;
+  const plotCount = plotsOwned.length;
+  const fmtFrntr2 = (n) => n >= 1e6 ? n.toLocaleString(void 0, { maximumFractionDigits: 2 }) : n >= 1e3 ? n.toLocaleString(void 0, { maximumFractionDigits: 4 }) : n.toLocaleString(void 0, {
+    minimumFractionDigits: 8,
+    maximumFractionDigits: 8
+  });
+  const handleClaimAll = async () => {
+    if (!actor || claimingAll || plotsOwned.length === 0) return;
+    setClaimingAll(true);
+    let successCount = 0;
+    try {
+      for (const plotId of plotsOwned) {
+        try {
+          const res = await actor.claimAccumulatedTokens(plotId);
+          if ("ok" in res) successCount++;
+        } catch {
+        }
+      }
+      if (successCount > 0) {
+        incrementClaimCount();
+        try {
+          const state2 = await actor.getPlayerState();
+          if (state2) setFrntrBalance(BigInt(state2.frntBalance));
+        } catch {
+        }
+        ue.success(
+          `Claimed tokens from ${successCount} plot${successCount !== 1 ? "s" : ""}`
+        );
+      } else {
+        ue.error("No tokens available to claim yet.");
+      }
+    } catch {
+      ue.error("Claim All failed");
+    } finally {
+      setClaimingAll(false);
+    }
+  };
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    motion.div,
+    {
+      "data-ocid": "inventory.balance_header",
+      initial: { opacity: 0, y: -8 },
+      animate: { opacity: 1, y: 0 },
+      className: "rounded-xl mb-3 overflow-hidden",
+      style: {
+        background: "rgba(0,20,40,0.70)",
+        backdropFilter: "blur(16px)",
+        WebkitBackdropFilter: "blur(16px)",
+        border: "1px solid rgba(0,255,204,0.18)"
+      },
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "div",
+          {
+            className: "h-0.5 w-full",
+            style: {
+              background: "linear-gradient(90deg, #00ffcc, #ffd700, #00ffcc)"
+            }
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-3.5", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start justify-between gap-3 mb-3", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 min-w-0", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "div",
+                {
+                  className: "text-[9px] font-bold tracking-widest uppercase mb-1",
+                  style: { color: "#00ffcc" },
+                  children: "FRNTR BALANCE"
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "div",
+                {
+                  "data-ocid": "inventory.frntr_counter",
+                  className: "font-mono font-black leading-none",
+                  style: {
+                    fontSize: 26,
+                    color: "#ffd700",
+                    textShadow: "0 0 16px rgba(255,215,0,0.3)"
+                  },
+                  children: fmtFrntr2(totalBalance)
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "div",
+                {
+                  className: "text-[8px] mt-1",
+                  style: { color: "rgba(224,244,255,0.45)" },
+                  children: [
+                    "FRNTR  ·  ",
+                    plotCount,
+                    " PLOT",
+                    plotCount !== 1 ? "S" : "",
+                    " ACTIVE"
+                  ]
+                }
+              )
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "button",
+              {
+                type: "button",
+                "data-ocid": "inventory.claim_all_button",
+                onClick: handleClaimAll,
+                disabled: !actor || claimingAll || plotCount === 0,
+                className: "flex-shrink-0 px-3 py-2 rounded-lg text-[9px] font-bold tracking-widest uppercase transition-all duration-200",
+                style: {
+                  background: actor && !claimingAll && plotCount > 0 ? "rgba(0,255,204,0.12)" : "rgba(255,255,255,0.04)",
+                  border: `1px solid ${actor && !claimingAll && plotCount > 0 ? "rgba(0,255,204,0.35)" : "rgba(255,255,255,0.08)"}`,
+                  color: actor && !claimingAll && plotCount > 0 ? "#00ffcc" : "rgba(224,244,255,0.35)",
+                  cursor: actor && !claimingAll && plotCount > 0 ? "pointer" : "not-allowed"
+                },
+                children: claimingAll ? "CLAIMING..." : "CLAIM ALL"
+              }
+            )
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              className: "flex items-center justify-between rounded-lg px-2.5 py-2",
+              style: {
+                background: "rgba(255,215,0,0.04)",
+                border: "1px solid rgba(255,215,0,0.1)"
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      className: "text-[8px] font-bold tracking-widest uppercase mb-0.5",
+                      style: { color: "rgba(224,244,255,0.4)" },
+                      children: "ACCUMULATING ACROSS ALL PLOTS"
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      className: "text-[8px]",
+                      style: { color: "rgba(224,244,255,0.35)" },
+                      children: "Since last sync — claim to add to your balance"
+                    }
+                  )
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1 flex-shrink-0", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(GlobalUnclaimedCounter, { plotsOwned }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "span",
+                    {
+                      className: "text-[8px] font-bold",
+                      style: { color: "rgba(255,215,0,0.55)" },
+                      children: "FRNTR"
+                    }
+                  )
+                ] })
+              ]
+            }
+          )
+        ] })
+      ]
+    }
+  );
+}
+function Inventory() {
+  const plotsOwned = useGameStore((s2) => s2.player.plotsOwned);
+  const player = useGameStore((s2) => s2.player);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "div",
+    {
+      "data-ocid": "inventory.page",
+      className: "flex flex-col h-full overflow-y-auto",
+      style: { padding: "12px 12px 4px" },
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(BalanceHeader, {}),
+        player.isAdmin && /* @__PURE__ */ jsxRuntimeExports.jsx(LiquiditySeedingPanel, {}),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            className: "flex items-center justify-between mb-2.5",
+            style: { color: "#00ffcc" },
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[9px] font-bold tracking-widest uppercase", children: "OWNED PLOTS" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "span",
+                {
+                  className: "text-[10px] font-extrabold font-mono",
+                  style: { color: "#e0f4ff" },
+                  children: plotsOwned.length
+                }
+              )
+            ]
+          }
+        ),
+        plotsOwned.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            "data-ocid": "inventory.empty_state",
+            className: "flex-1 flex flex-col items-center justify-center text-center gap-2.5 px-5 py-8",
+            style: { color: "rgba(224,244,255,0.45)" },
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-3xl", children: "🌍" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "div",
+                {
+                  className: "text-[11px] font-bold tracking-widest",
+                  style: { color: "#e0f4ff" },
+                  children: "NO PLOTS OWNED YET"
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "div",
+                {
+                  className: "text-[9px] max-w-[260px] leading-relaxed",
+                  style: { color: "rgba(224,244,255,0.45)" },
+                  children: "Purchase your first plot on the globe to start earning FRNTR tokens and resources passively."
+                }
+              )
+            ]
+          }
+        ) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-col gap-2.5 pb-3", children: plotsOwned.map((plotId, idx) => /* @__PURE__ */ jsxRuntimeExports.jsx(PlotCard, { plotId, index: idx + 1 }, plotId)) })
+      ]
+    }
+  );
+}
+function r(e) {
+  var t, f, n = "";
+  if ("string" == typeof e || "number" == typeof e) n += e;
+  else if ("object" == typeof e) if (Array.isArray(e)) {
+    var o2 = e.length;
+    for (t = 0; t < o2; t++) e[t] && (f = r(e[t])) && (n && (n += " "), n += f);
+  } else for (f in e) e[f] && (n && (n += " "), n += f);
+  return n;
+}
+function clsx() {
+  for (var e, t, f = 0, n = "", o2 = arguments.length; f < o2; f++) (e = arguments[f]) && (t = r(e)) && (n && (n += " "), n += t);
+  return n;
+}
+const CLASS_PART_SEPARATOR = "-";
+const createClassGroupUtils = (config) => {
+  const classMap = createClassMap(config);
+  const {
+    conflictingClassGroups,
+    conflictingClassGroupModifiers
+  } = config;
+  const getClassGroupId = (className) => {
+    const classParts = className.split(CLASS_PART_SEPARATOR);
+    if (classParts[0] === "" && classParts.length !== 1) {
+      classParts.shift();
+    }
+    return getGroupRecursive(classParts, classMap) || getGroupIdForArbitraryProperty(className);
+  };
+  const getConflictingClassGroupIds = (classGroupId, hasPostfixModifier) => {
+    const conflicts = conflictingClassGroups[classGroupId] || [];
+    if (hasPostfixModifier && conflictingClassGroupModifiers[classGroupId]) {
+      return [...conflicts, ...conflictingClassGroupModifiers[classGroupId]];
+    }
+    return conflicts;
+  };
+  return {
+    getClassGroupId,
+    getConflictingClassGroupIds
+  };
+};
+const getGroupRecursive = (classParts, classPartObject) => {
+  var _a3;
+  if (classParts.length === 0) {
+    return classPartObject.classGroupId;
+  }
+  const currentClassPart = classParts[0];
+  const nextClassPartObject = classPartObject.nextPart.get(currentClassPart);
+  const classGroupFromNextClassPart = nextClassPartObject ? getGroupRecursive(classParts.slice(1), nextClassPartObject) : void 0;
+  if (classGroupFromNextClassPart) {
+    return classGroupFromNextClassPart;
+  }
+  if (classPartObject.validators.length === 0) {
+    return void 0;
+  }
+  const classRest = classParts.join(CLASS_PART_SEPARATOR);
+  return (_a3 = classPartObject.validators.find(({
+    validator
+  }) => validator(classRest))) == null ? void 0 : _a3.classGroupId;
+};
+const arbitraryPropertyRegex = /^\[(.+)\]$/;
+const getGroupIdForArbitraryProperty = (className) => {
+  if (arbitraryPropertyRegex.test(className)) {
+    const arbitraryPropertyClassName = arbitraryPropertyRegex.exec(className)[1];
+    const property = arbitraryPropertyClassName == null ? void 0 : arbitraryPropertyClassName.substring(0, arbitraryPropertyClassName.indexOf(":"));
+    if (property) {
+      return "arbitrary.." + property;
+    }
+  }
+};
+const createClassMap = (config) => {
+  const {
+    theme,
+    prefix: prefix2
+  } = config;
+  const classMap = {
+    nextPart: /* @__PURE__ */ new Map(),
+    validators: []
+  };
+  const prefixedClassGroupEntries = getPrefixedClassGroupEntries(Object.entries(config.classGroups), prefix2);
+  prefixedClassGroupEntries.forEach(([classGroupId, classGroup]) => {
+    processClassesRecursively(classGroup, classMap, classGroupId, theme);
+  });
+  return classMap;
+};
+const processClassesRecursively = (classGroup, classPartObject, classGroupId, theme) => {
+  classGroup.forEach((classDefinition) => {
+    if (typeof classDefinition === "string") {
+      const classPartObjectToEdit = classDefinition === "" ? classPartObject : getPart(classPartObject, classDefinition);
+      classPartObjectToEdit.classGroupId = classGroupId;
+      return;
+    }
+    if (typeof classDefinition === "function") {
+      if (isThemeGetter(classDefinition)) {
+        processClassesRecursively(classDefinition(theme), classPartObject, classGroupId, theme);
+        return;
+      }
+      classPartObject.validators.push({
+        validator: classDefinition,
+        classGroupId
+      });
+      return;
+    }
+    Object.entries(classDefinition).forEach(([key, classGroup2]) => {
+      processClassesRecursively(classGroup2, getPart(classPartObject, key), classGroupId, theme);
+    });
+  });
+};
+const getPart = (classPartObject, path) => {
+  let currentClassPartObject = classPartObject;
+  path.split(CLASS_PART_SEPARATOR).forEach((pathPart) => {
+    if (!currentClassPartObject.nextPart.has(pathPart)) {
+      currentClassPartObject.nextPart.set(pathPart, {
+        nextPart: /* @__PURE__ */ new Map(),
+        validators: []
+      });
+    }
+    currentClassPartObject = currentClassPartObject.nextPart.get(pathPart);
+  });
+  return currentClassPartObject;
+};
+const isThemeGetter = (func) => func.isThemeGetter;
+const getPrefixedClassGroupEntries = (classGroupEntries, prefix2) => {
+  if (!prefix2) {
+    return classGroupEntries;
+  }
+  return classGroupEntries.map(([classGroupId, classGroup]) => {
+    const prefixedClassGroup = classGroup.map((classDefinition) => {
+      if (typeof classDefinition === "string") {
+        return prefix2 + classDefinition;
+      }
+      if (typeof classDefinition === "object") {
+        return Object.fromEntries(Object.entries(classDefinition).map(([key, value]) => [prefix2 + key, value]));
+      }
+      return classDefinition;
+    });
+    return [classGroupId, prefixedClassGroup];
+  });
+};
+const createLruCache = (maxCacheSize) => {
+  if (maxCacheSize < 1) {
+    return {
+      get: () => void 0,
+      set: () => {
+      }
+    };
+  }
+  let cacheSize = 0;
+  let cache = /* @__PURE__ */ new Map();
+  let previousCache = /* @__PURE__ */ new Map();
+  const update2 = (key, value) => {
+    cache.set(key, value);
+    cacheSize++;
+    if (cacheSize > maxCacheSize) {
+      cacheSize = 0;
+      previousCache = cache;
+      cache = /* @__PURE__ */ new Map();
+    }
+  };
+  return {
+    get(key) {
+      let value = cache.get(key);
+      if (value !== void 0) {
+        return value;
+      }
+      if ((value = previousCache.get(key)) !== void 0) {
+        update2(key, value);
+        return value;
+      }
+    },
+    set(key, value) {
+      if (cache.has(key)) {
+        cache.set(key, value);
+      } else {
+        update2(key, value);
+      }
+    }
+  };
+};
+const IMPORTANT_MODIFIER = "!";
+const createParseClassName = (config) => {
+  const {
+    separator,
+    experimentalParseClassName
+  } = config;
+  const isSeparatorSingleCharacter = separator.length === 1;
+  const firstSeparatorCharacter = separator[0];
+  const separatorLength = separator.length;
+  const parseClassName = (className) => {
+    const modifiers = [];
+    let bracketDepth = 0;
+    let modifierStart = 0;
+    let postfixModifierPosition;
+    for (let index2 = 0; index2 < className.length; index2++) {
+      let currentCharacter = className[index2];
+      if (bracketDepth === 0) {
+        if (currentCharacter === firstSeparatorCharacter && (isSeparatorSingleCharacter || className.slice(index2, index2 + separatorLength) === separator)) {
+          modifiers.push(className.slice(modifierStart, index2));
+          modifierStart = index2 + separatorLength;
+          continue;
+        }
+        if (currentCharacter === "/") {
+          postfixModifierPosition = index2;
+          continue;
+        }
+      }
+      if (currentCharacter === "[") {
+        bracketDepth++;
+      } else if (currentCharacter === "]") {
+        bracketDepth--;
+      }
+    }
+    const baseClassNameWithImportantModifier = modifiers.length === 0 ? className : className.substring(modifierStart);
+    const hasImportantModifier = baseClassNameWithImportantModifier.startsWith(IMPORTANT_MODIFIER);
+    const baseClassName = hasImportantModifier ? baseClassNameWithImportantModifier.substring(1) : baseClassNameWithImportantModifier;
+    const maybePostfixModifierPosition = postfixModifierPosition && postfixModifierPosition > modifierStart ? postfixModifierPosition - modifierStart : void 0;
+    return {
+      modifiers,
+      hasImportantModifier,
+      baseClassName,
+      maybePostfixModifierPosition
+    };
+  };
+  if (experimentalParseClassName) {
+    return (className) => experimentalParseClassName({
+      className,
+      parseClassName
+    });
+  }
+  return parseClassName;
+};
+const sortModifiers = (modifiers) => {
+  if (modifiers.length <= 1) {
+    return modifiers;
+  }
+  const sortedModifiers = [];
+  let unsortedModifiers = [];
+  modifiers.forEach((modifier) => {
+    const isArbitraryVariant = modifier[0] === "[";
+    if (isArbitraryVariant) {
+      sortedModifiers.push(...unsortedModifiers.sort(), modifier);
+      unsortedModifiers = [];
+    } else {
+      unsortedModifiers.push(modifier);
+    }
+  });
+  sortedModifiers.push(...unsortedModifiers.sort());
+  return sortedModifiers;
+};
+const createConfigUtils = (config) => ({
+  cache: createLruCache(config.cacheSize),
+  parseClassName: createParseClassName(config),
+  ...createClassGroupUtils(config)
+});
+const SPLIT_CLASSES_REGEX = /\s+/;
+const mergeClassList = (classList, configUtils) => {
+  const {
+    parseClassName,
+    getClassGroupId,
+    getConflictingClassGroupIds
+  } = configUtils;
+  const classGroupsInConflict = [];
+  const classNames = classList.trim().split(SPLIT_CLASSES_REGEX);
+  let result = "";
+  for (let index2 = classNames.length - 1; index2 >= 0; index2 -= 1) {
+    const originalClassName = classNames[index2];
+    const {
+      modifiers,
+      hasImportantModifier,
+      baseClassName,
+      maybePostfixModifierPosition
+    } = parseClassName(originalClassName);
+    let hasPostfixModifier = Boolean(maybePostfixModifierPosition);
+    let classGroupId = getClassGroupId(hasPostfixModifier ? baseClassName.substring(0, maybePostfixModifierPosition) : baseClassName);
+    if (!classGroupId) {
+      if (!hasPostfixModifier) {
+        result = originalClassName + (result.length > 0 ? " " + result : result);
+        continue;
+      }
+      classGroupId = getClassGroupId(baseClassName);
+      if (!classGroupId) {
+        result = originalClassName + (result.length > 0 ? " " + result : result);
+        continue;
+      }
+      hasPostfixModifier = false;
+    }
+    const variantModifier = sortModifiers(modifiers).join(":");
+    const modifierId = hasImportantModifier ? variantModifier + IMPORTANT_MODIFIER : variantModifier;
+    const classId = modifierId + classGroupId;
+    if (classGroupsInConflict.includes(classId)) {
+      continue;
+    }
+    classGroupsInConflict.push(classId);
+    const conflictGroups = getConflictingClassGroupIds(classGroupId, hasPostfixModifier);
+    for (let i2 = 0; i2 < conflictGroups.length; ++i2) {
+      const group = conflictGroups[i2];
+      classGroupsInConflict.push(modifierId + group);
+    }
+    result = originalClassName + (result.length > 0 ? " " + result : result);
+  }
+  return result;
+};
+function twJoin() {
+  let index2 = 0;
+  let argument;
+  let resolvedValue;
+  let string = "";
+  while (index2 < arguments.length) {
+    if (argument = arguments[index2++]) {
+      if (resolvedValue = toValue(argument)) {
+        string && (string += " ");
+        string += resolvedValue;
+      }
+    }
+  }
+  return string;
+}
+const toValue = (mix2) => {
+  if (typeof mix2 === "string") {
+    return mix2;
+  }
+  let resolvedValue;
+  let string = "";
+  for (let k2 = 0; k2 < mix2.length; k2++) {
+    if (mix2[k2]) {
+      if (resolvedValue = toValue(mix2[k2])) {
+        string && (string += " ");
+        string += resolvedValue;
+      }
+    }
+  }
+  return string;
+};
+function createTailwindMerge(createConfigFirst, ...createConfigRest) {
+  let configUtils;
+  let cacheGet;
+  let cacheSet;
+  let functionToCall = initTailwindMerge;
+  function initTailwindMerge(classList) {
+    const config = createConfigRest.reduce((previousConfig, createConfigCurrent) => createConfigCurrent(previousConfig), createConfigFirst());
+    configUtils = createConfigUtils(config);
+    cacheGet = configUtils.cache.get;
+    cacheSet = configUtils.cache.set;
+    functionToCall = tailwindMerge;
+    return tailwindMerge(classList);
+  }
+  function tailwindMerge(classList) {
+    const cachedResult = cacheGet(classList);
+    if (cachedResult) {
+      return cachedResult;
+    }
+    const result = mergeClassList(classList, configUtils);
+    cacheSet(classList, result);
+    return result;
+  }
+  return function callTailwindMerge() {
+    return functionToCall(twJoin.apply(null, arguments));
+  };
+}
+const fromTheme = (key) => {
+  const themeGetter = (theme) => theme[key] || [];
+  themeGetter.isThemeGetter = true;
+  return themeGetter;
+};
+const arbitraryValueRegex = /^\[(?:([a-z-]+):)?(.+)\]$/i;
+const fractionRegex = /^\d+\/\d+$/;
+const stringLengths = /* @__PURE__ */ new Set(["px", "full", "screen"]);
+const tshirtUnitRegex = /^(\d+(\.\d+)?)?(xs|sm|md|lg|xl)$/;
+const lengthUnitRegex = /\d+(%|px|r?em|[sdl]?v([hwib]|min|max)|pt|pc|in|cm|mm|cap|ch|ex|r?lh|cq(w|h|i|b|min|max))|\b(calc|min|max|clamp)\(.+\)|^0$/;
+const colorFunctionRegex = /^(rgba?|hsla?|hwb|(ok)?(lab|lch)|color-mix)\(.+\)$/;
+const shadowRegex = /^(inset_)?-?((\d+)?\.?(\d+)[a-z]+|0)_-?((\d+)?\.?(\d+)[a-z]+|0)/;
+const imageRegex = /^(url|image|image-set|cross-fade|element|(repeating-)?(linear|radial|conic)-gradient)\(.+\)$/;
+const isLength = (value) => isNumber(value) || stringLengths.has(value) || fractionRegex.test(value);
+const isArbitraryLength = (value) => getIsArbitraryValue(value, "length", isLengthOnly);
+const isNumber = (value) => Boolean(value) && !Number.isNaN(Number(value));
+const isArbitraryNumber = (value) => getIsArbitraryValue(value, "number", isNumber);
+const isInteger = (value) => Boolean(value) && Number.isInteger(Number(value));
+const isPercent = (value) => value.endsWith("%") && isNumber(value.slice(0, -1));
+const isArbitraryValue = (value) => arbitraryValueRegex.test(value);
+const isTshirtSize = (value) => tshirtUnitRegex.test(value);
+const sizeLabels = /* @__PURE__ */ new Set(["length", "size", "percentage"]);
+const isArbitrarySize = (value) => getIsArbitraryValue(value, sizeLabels, isNever);
+const isArbitraryPosition = (value) => getIsArbitraryValue(value, "position", isNever);
+const imageLabels = /* @__PURE__ */ new Set(["image", "url"]);
+const isArbitraryImage = (value) => getIsArbitraryValue(value, imageLabels, isImage);
+const isArbitraryShadow = (value) => getIsArbitraryValue(value, "", isShadow);
+const isAny = () => true;
+const getIsArbitraryValue = (value, label, testValue) => {
+  const result = arbitraryValueRegex.exec(value);
+  if (result) {
+    if (result[1]) {
+      return typeof label === "string" ? result[1] === label : label.has(result[1]);
+    }
+    return testValue(result[2]);
+  }
+  return false;
+};
+const isLengthOnly = (value) => (
+  // `colorFunctionRegex` check is necessary because color functions can have percentages in them which which would be incorrectly classified as lengths.
+  // For example, `hsl(0 0% 0%)` would be classified as a length without this check.
+  // I could also use lookbehind assertion in `lengthUnitRegex` but that isn't supported widely enough.
+  lengthUnitRegex.test(value) && !colorFunctionRegex.test(value)
+);
+const isNever = () => false;
+const isShadow = (value) => shadowRegex.test(value);
+const isImage = (value) => imageRegex.test(value);
+const getDefaultConfig = () => {
+  const colors = fromTheme("colors");
+  const spacing = fromTheme("spacing");
+  const blur = fromTheme("blur");
+  const brightness = fromTheme("brightness");
+  const borderColor = fromTheme("borderColor");
+  const borderRadius = fromTheme("borderRadius");
+  const borderSpacing = fromTheme("borderSpacing");
+  const borderWidth = fromTheme("borderWidth");
+  const contrast = fromTheme("contrast");
+  const grayscale = fromTheme("grayscale");
+  const hueRotate = fromTheme("hueRotate");
+  const invert2 = fromTheme("invert");
+  const gap = fromTheme("gap");
+  const gradientColorStops = fromTheme("gradientColorStops");
+  const gradientColorStopPositions = fromTheme("gradientColorStopPositions");
+  const inset = fromTheme("inset");
+  const margin = fromTheme("margin");
+  const opacity = fromTheme("opacity");
+  const padding = fromTheme("padding");
+  const saturate = fromTheme("saturate");
+  const scale2 = fromTheme("scale");
+  const sepia = fromTheme("sepia");
+  const skew = fromTheme("skew");
+  const space = fromTheme("space");
+  const translate = fromTheme("translate");
+  const getOverscroll = () => ["auto", "contain", "none"];
+  const getOverflow = () => ["auto", "hidden", "clip", "visible", "scroll"];
+  const getSpacingWithAutoAndArbitrary = () => ["auto", isArbitraryValue, spacing];
+  const getSpacingWithArbitrary = () => [isArbitraryValue, spacing];
+  const getLengthWithEmptyAndArbitrary = () => ["", isLength, isArbitraryLength];
+  const getNumberWithAutoAndArbitrary = () => ["auto", isNumber, isArbitraryValue];
+  const getPositions = () => ["bottom", "center", "left", "left-bottom", "left-top", "right", "right-bottom", "right-top", "top"];
+  const getLineStyles = () => ["solid", "dashed", "dotted", "double", "none"];
+  const getBlendModes = () => ["normal", "multiply", "screen", "overlay", "darken", "lighten", "color-dodge", "color-burn", "hard-light", "soft-light", "difference", "exclusion", "hue", "saturation", "color", "luminosity"];
+  const getAlign = () => ["start", "end", "center", "between", "around", "evenly", "stretch"];
+  const getZeroAndEmpty = () => ["", "0", isArbitraryValue];
+  const getBreaks = () => ["auto", "avoid", "all", "avoid-page", "page", "left", "right", "column"];
+  const getNumberAndArbitrary = () => [isNumber, isArbitraryValue];
+  return {
+    cacheSize: 500,
+    separator: ":",
+    theme: {
+      colors: [isAny],
+      spacing: [isLength, isArbitraryLength],
+      blur: ["none", "", isTshirtSize, isArbitraryValue],
+      brightness: getNumberAndArbitrary(),
+      borderColor: [colors],
+      borderRadius: ["none", "", "full", isTshirtSize, isArbitraryValue],
+      borderSpacing: getSpacingWithArbitrary(),
+      borderWidth: getLengthWithEmptyAndArbitrary(),
+      contrast: getNumberAndArbitrary(),
+      grayscale: getZeroAndEmpty(),
+      hueRotate: getNumberAndArbitrary(),
+      invert: getZeroAndEmpty(),
+      gap: getSpacingWithArbitrary(),
+      gradientColorStops: [colors],
+      gradientColorStopPositions: [isPercent, isArbitraryLength],
+      inset: getSpacingWithAutoAndArbitrary(),
+      margin: getSpacingWithAutoAndArbitrary(),
+      opacity: getNumberAndArbitrary(),
+      padding: getSpacingWithArbitrary(),
+      saturate: getNumberAndArbitrary(),
+      scale: getNumberAndArbitrary(),
+      sepia: getZeroAndEmpty(),
+      skew: getNumberAndArbitrary(),
+      space: getSpacingWithArbitrary(),
+      translate: getSpacingWithArbitrary()
+    },
+    classGroups: {
+      // Layout
+      /**
+       * Aspect Ratio
+       * @see https://tailwindcss.com/docs/aspect-ratio
+       */
+      aspect: [{
+        aspect: ["auto", "square", "video", isArbitraryValue]
+      }],
+      /**
+       * Container
+       * @see https://tailwindcss.com/docs/container
+       */
+      container: ["container"],
+      /**
+       * Columns
+       * @see https://tailwindcss.com/docs/columns
+       */
+      columns: [{
+        columns: [isTshirtSize]
+      }],
+      /**
+       * Break After
+       * @see https://tailwindcss.com/docs/break-after
+       */
+      "break-after": [{
+        "break-after": getBreaks()
+      }],
+      /**
+       * Break Before
+       * @see https://tailwindcss.com/docs/break-before
+       */
+      "break-before": [{
+        "break-before": getBreaks()
+      }],
+      /**
+       * Break Inside
+       * @see https://tailwindcss.com/docs/break-inside
+       */
+      "break-inside": [{
+        "break-inside": ["auto", "avoid", "avoid-page", "avoid-column"]
+      }],
+      /**
+       * Box Decoration Break
+       * @see https://tailwindcss.com/docs/box-decoration-break
+       */
+      "box-decoration": [{
+        "box-decoration": ["slice", "clone"]
+      }],
+      /**
+       * Box Sizing
+       * @see https://tailwindcss.com/docs/box-sizing
+       */
+      box: [{
+        box: ["border", "content"]
+      }],
+      /**
+       * Display
+       * @see https://tailwindcss.com/docs/display
+       */
+      display: ["block", "inline-block", "inline", "flex", "inline-flex", "table", "inline-table", "table-caption", "table-cell", "table-column", "table-column-group", "table-footer-group", "table-header-group", "table-row-group", "table-row", "flow-root", "grid", "inline-grid", "contents", "list-item", "hidden"],
+      /**
+       * Floats
+       * @see https://tailwindcss.com/docs/float
+       */
+      float: [{
+        float: ["right", "left", "none", "start", "end"]
+      }],
+      /**
+       * Clear
+       * @see https://tailwindcss.com/docs/clear
+       */
+      clear: [{
+        clear: ["left", "right", "both", "none", "start", "end"]
+      }],
+      /**
+       * Isolation
+       * @see https://tailwindcss.com/docs/isolation
+       */
+      isolation: ["isolate", "isolation-auto"],
+      /**
+       * Object Fit
+       * @see https://tailwindcss.com/docs/object-fit
+       */
+      "object-fit": [{
+        object: ["contain", "cover", "fill", "none", "scale-down"]
+      }],
+      /**
+       * Object Position
+       * @see https://tailwindcss.com/docs/object-position
+       */
+      "object-position": [{
+        object: [...getPositions(), isArbitraryValue]
+      }],
+      /**
+       * Overflow
+       * @see https://tailwindcss.com/docs/overflow
+       */
+      overflow: [{
+        overflow: getOverflow()
+      }],
+      /**
+       * Overflow X
+       * @see https://tailwindcss.com/docs/overflow
+       */
+      "overflow-x": [{
+        "overflow-x": getOverflow()
+      }],
+      /**
+       * Overflow Y
+       * @see https://tailwindcss.com/docs/overflow
+       */
+      "overflow-y": [{
+        "overflow-y": getOverflow()
+      }],
+      /**
+       * Overscroll Behavior
+       * @see https://tailwindcss.com/docs/overscroll-behavior
+       */
+      overscroll: [{
+        overscroll: getOverscroll()
+      }],
+      /**
+       * Overscroll Behavior X
+       * @see https://tailwindcss.com/docs/overscroll-behavior
+       */
+      "overscroll-x": [{
+        "overscroll-x": getOverscroll()
+      }],
+      /**
+       * Overscroll Behavior Y
+       * @see https://tailwindcss.com/docs/overscroll-behavior
+       */
+      "overscroll-y": [{
+        "overscroll-y": getOverscroll()
+      }],
+      /**
+       * Position
+       * @see https://tailwindcss.com/docs/position
+       */
+      position: ["static", "fixed", "absolute", "relative", "sticky"],
+      /**
+       * Top / Right / Bottom / Left
+       * @see https://tailwindcss.com/docs/top-right-bottom-left
+       */
+      inset: [{
+        inset: [inset]
+      }],
+      /**
+       * Right / Left
+       * @see https://tailwindcss.com/docs/top-right-bottom-left
+       */
+      "inset-x": [{
+        "inset-x": [inset]
+      }],
+      /**
+       * Top / Bottom
+       * @see https://tailwindcss.com/docs/top-right-bottom-left
+       */
+      "inset-y": [{
+        "inset-y": [inset]
+      }],
+      /**
+       * Start
+       * @see https://tailwindcss.com/docs/top-right-bottom-left
+       */
+      start: [{
+        start: [inset]
+      }],
+      /**
+       * End
+       * @see https://tailwindcss.com/docs/top-right-bottom-left
+       */
+      end: [{
+        end: [inset]
+      }],
+      /**
+       * Top
+       * @see https://tailwindcss.com/docs/top-right-bottom-left
+       */
+      top: [{
+        top: [inset]
+      }],
+      /**
+       * Right
+       * @see https://tailwindcss.com/docs/top-right-bottom-left
+       */
+      right: [{
+        right: [inset]
+      }],
+      /**
+       * Bottom
+       * @see https://tailwindcss.com/docs/top-right-bottom-left
+       */
+      bottom: [{
+        bottom: [inset]
+      }],
+      /**
+       * Left
+       * @see https://tailwindcss.com/docs/top-right-bottom-left
+       */
+      left: [{
+        left: [inset]
+      }],
+      /**
+       * Visibility
+       * @see https://tailwindcss.com/docs/visibility
+       */
+      visibility: ["visible", "invisible", "collapse"],
+      /**
+       * Z-Index
+       * @see https://tailwindcss.com/docs/z-index
+       */
+      z: [{
+        z: ["auto", isInteger, isArbitraryValue]
+      }],
+      // Flexbox and Grid
+      /**
+       * Flex Basis
+       * @see https://tailwindcss.com/docs/flex-basis
+       */
+      basis: [{
+        basis: getSpacingWithAutoAndArbitrary()
+      }],
+      /**
+       * Flex Direction
+       * @see https://tailwindcss.com/docs/flex-direction
+       */
+      "flex-direction": [{
+        flex: ["row", "row-reverse", "col", "col-reverse"]
+      }],
+      /**
+       * Flex Wrap
+       * @see https://tailwindcss.com/docs/flex-wrap
+       */
+      "flex-wrap": [{
+        flex: ["wrap", "wrap-reverse", "nowrap"]
+      }],
+      /**
+       * Flex
+       * @see https://tailwindcss.com/docs/flex
+       */
+      flex: [{
+        flex: ["1", "auto", "initial", "none", isArbitraryValue]
+      }],
+      /**
+       * Flex Grow
+       * @see https://tailwindcss.com/docs/flex-grow
+       */
+      grow: [{
+        grow: getZeroAndEmpty()
+      }],
+      /**
+       * Flex Shrink
+       * @see https://tailwindcss.com/docs/flex-shrink
+       */
+      shrink: [{
+        shrink: getZeroAndEmpty()
+      }],
+      /**
+       * Order
+       * @see https://tailwindcss.com/docs/order
+       */
+      order: [{
+        order: ["first", "last", "none", isInteger, isArbitraryValue]
+      }],
+      /**
+       * Grid Template Columns
+       * @see https://tailwindcss.com/docs/grid-template-columns
+       */
+      "grid-cols": [{
+        "grid-cols": [isAny]
+      }],
+      /**
+       * Grid Column Start / End
+       * @see https://tailwindcss.com/docs/grid-column
+       */
+      "col-start-end": [{
+        col: ["auto", {
+          span: ["full", isInteger, isArbitraryValue]
+        }, isArbitraryValue]
+      }],
+      /**
+       * Grid Column Start
+       * @see https://tailwindcss.com/docs/grid-column
+       */
+      "col-start": [{
+        "col-start": getNumberWithAutoAndArbitrary()
+      }],
+      /**
+       * Grid Column End
+       * @see https://tailwindcss.com/docs/grid-column
+       */
+      "col-end": [{
+        "col-end": getNumberWithAutoAndArbitrary()
+      }],
+      /**
+       * Grid Template Rows
+       * @see https://tailwindcss.com/docs/grid-template-rows
+       */
+      "grid-rows": [{
+        "grid-rows": [isAny]
+      }],
+      /**
+       * Grid Row Start / End
+       * @see https://tailwindcss.com/docs/grid-row
+       */
+      "row-start-end": [{
+        row: ["auto", {
+          span: [isInteger, isArbitraryValue]
+        }, isArbitraryValue]
+      }],
+      /**
+       * Grid Row Start
+       * @see https://tailwindcss.com/docs/grid-row
+       */
+      "row-start": [{
+        "row-start": getNumberWithAutoAndArbitrary()
+      }],
+      /**
+       * Grid Row End
+       * @see https://tailwindcss.com/docs/grid-row
+       */
+      "row-end": [{
+        "row-end": getNumberWithAutoAndArbitrary()
+      }],
+      /**
+       * Grid Auto Flow
+       * @see https://tailwindcss.com/docs/grid-auto-flow
+       */
+      "grid-flow": [{
+        "grid-flow": ["row", "col", "dense", "row-dense", "col-dense"]
+      }],
+      /**
+       * Grid Auto Columns
+       * @see https://tailwindcss.com/docs/grid-auto-columns
+       */
+      "auto-cols": [{
+        "auto-cols": ["auto", "min", "max", "fr", isArbitraryValue]
+      }],
+      /**
+       * Grid Auto Rows
+       * @see https://tailwindcss.com/docs/grid-auto-rows
+       */
+      "auto-rows": [{
+        "auto-rows": ["auto", "min", "max", "fr", isArbitraryValue]
+      }],
+      /**
+       * Gap
+       * @see https://tailwindcss.com/docs/gap
+       */
+      gap: [{
+        gap: [gap]
+      }],
+      /**
+       * Gap X
+       * @see https://tailwindcss.com/docs/gap
+       */
+      "gap-x": [{
+        "gap-x": [gap]
+      }],
+      /**
+       * Gap Y
+       * @see https://tailwindcss.com/docs/gap
+       */
+      "gap-y": [{
+        "gap-y": [gap]
+      }],
+      /**
+       * Justify Content
+       * @see https://tailwindcss.com/docs/justify-content
+       */
+      "justify-content": [{
+        justify: ["normal", ...getAlign()]
+      }],
+      /**
+       * Justify Items
+       * @see https://tailwindcss.com/docs/justify-items
+       */
+      "justify-items": [{
+        "justify-items": ["start", "end", "center", "stretch"]
+      }],
+      /**
+       * Justify Self
+       * @see https://tailwindcss.com/docs/justify-self
+       */
+      "justify-self": [{
+        "justify-self": ["auto", "start", "end", "center", "stretch"]
+      }],
+      /**
+       * Align Content
+       * @see https://tailwindcss.com/docs/align-content
+       */
+      "align-content": [{
+        content: ["normal", ...getAlign(), "baseline"]
+      }],
+      /**
+       * Align Items
+       * @see https://tailwindcss.com/docs/align-items
+       */
+      "align-items": [{
+        items: ["start", "end", "center", "baseline", "stretch"]
+      }],
+      /**
+       * Align Self
+       * @see https://tailwindcss.com/docs/align-self
+       */
+      "align-self": [{
+        self: ["auto", "start", "end", "center", "stretch", "baseline"]
+      }],
+      /**
+       * Place Content
+       * @see https://tailwindcss.com/docs/place-content
+       */
+      "place-content": [{
+        "place-content": [...getAlign(), "baseline"]
+      }],
+      /**
+       * Place Items
+       * @see https://tailwindcss.com/docs/place-items
+       */
+      "place-items": [{
+        "place-items": ["start", "end", "center", "baseline", "stretch"]
+      }],
+      /**
+       * Place Self
+       * @see https://tailwindcss.com/docs/place-self
+       */
+      "place-self": [{
+        "place-self": ["auto", "start", "end", "center", "stretch"]
+      }],
+      // Spacing
+      /**
+       * Padding
+       * @see https://tailwindcss.com/docs/padding
+       */
+      p: [{
+        p: [padding]
+      }],
+      /**
+       * Padding X
+       * @see https://tailwindcss.com/docs/padding
+       */
+      px: [{
+        px: [padding]
+      }],
+      /**
+       * Padding Y
+       * @see https://tailwindcss.com/docs/padding
+       */
+      py: [{
+        py: [padding]
+      }],
+      /**
+       * Padding Start
+       * @see https://tailwindcss.com/docs/padding
+       */
+      ps: [{
+        ps: [padding]
+      }],
+      /**
+       * Padding End
+       * @see https://tailwindcss.com/docs/padding
+       */
+      pe: [{
+        pe: [padding]
+      }],
+      /**
+       * Padding Top
+       * @see https://tailwindcss.com/docs/padding
+       */
+      pt: [{
+        pt: [padding]
+      }],
+      /**
+       * Padding Right
+       * @see https://tailwindcss.com/docs/padding
+       */
+      pr: [{
+        pr: [padding]
+      }],
+      /**
+       * Padding Bottom
+       * @see https://tailwindcss.com/docs/padding
+       */
+      pb: [{
+        pb: [padding]
+      }],
+      /**
+       * Padding Left
+       * @see https://tailwindcss.com/docs/padding
+       */
+      pl: [{
+        pl: [padding]
+      }],
+      /**
+       * Margin
+       * @see https://tailwindcss.com/docs/margin
+       */
+      m: [{
+        m: [margin]
+      }],
+      /**
+       * Margin X
+       * @see https://tailwindcss.com/docs/margin
+       */
+      mx: [{
+        mx: [margin]
+      }],
+      /**
+       * Margin Y
+       * @see https://tailwindcss.com/docs/margin
+       */
+      my: [{
+        my: [margin]
+      }],
+      /**
+       * Margin Start
+       * @see https://tailwindcss.com/docs/margin
+       */
+      ms: [{
+        ms: [margin]
+      }],
+      /**
+       * Margin End
+       * @see https://tailwindcss.com/docs/margin
+       */
+      me: [{
+        me: [margin]
+      }],
+      /**
+       * Margin Top
+       * @see https://tailwindcss.com/docs/margin
+       */
+      mt: [{
+        mt: [margin]
+      }],
+      /**
+       * Margin Right
+       * @see https://tailwindcss.com/docs/margin
+       */
+      mr: [{
+        mr: [margin]
+      }],
+      /**
+       * Margin Bottom
+       * @see https://tailwindcss.com/docs/margin
+       */
+      mb: [{
+        mb: [margin]
+      }],
+      /**
+       * Margin Left
+       * @see https://tailwindcss.com/docs/margin
+       */
+      ml: [{
+        ml: [margin]
+      }],
+      /**
+       * Space Between X
+       * @see https://tailwindcss.com/docs/space
+       */
+      "space-x": [{
+        "space-x": [space]
+      }],
+      /**
+       * Space Between X Reverse
+       * @see https://tailwindcss.com/docs/space
+       */
+      "space-x-reverse": ["space-x-reverse"],
+      /**
+       * Space Between Y
+       * @see https://tailwindcss.com/docs/space
+       */
+      "space-y": [{
+        "space-y": [space]
+      }],
+      /**
+       * Space Between Y Reverse
+       * @see https://tailwindcss.com/docs/space
+       */
+      "space-y-reverse": ["space-y-reverse"],
+      // Sizing
+      /**
+       * Width
+       * @see https://tailwindcss.com/docs/width
+       */
+      w: [{
+        w: ["auto", "min", "max", "fit", "svw", "lvw", "dvw", isArbitraryValue, spacing]
+      }],
+      /**
+       * Min-Width
+       * @see https://tailwindcss.com/docs/min-width
+       */
+      "min-w": [{
+        "min-w": [isArbitraryValue, spacing, "min", "max", "fit"]
+      }],
+      /**
+       * Max-Width
+       * @see https://tailwindcss.com/docs/max-width
+       */
+      "max-w": [{
+        "max-w": [isArbitraryValue, spacing, "none", "full", "min", "max", "fit", "prose", {
+          screen: [isTshirtSize]
+        }, isTshirtSize]
+      }],
+      /**
+       * Height
+       * @see https://tailwindcss.com/docs/height
+       */
+      h: [{
+        h: [isArbitraryValue, spacing, "auto", "min", "max", "fit", "svh", "lvh", "dvh"]
+      }],
+      /**
+       * Min-Height
+       * @see https://tailwindcss.com/docs/min-height
+       */
+      "min-h": [{
+        "min-h": [isArbitraryValue, spacing, "min", "max", "fit", "svh", "lvh", "dvh"]
+      }],
+      /**
+       * Max-Height
+       * @see https://tailwindcss.com/docs/max-height
+       */
+      "max-h": [{
+        "max-h": [isArbitraryValue, spacing, "min", "max", "fit", "svh", "lvh", "dvh"]
+      }],
+      /**
+       * Size
+       * @see https://tailwindcss.com/docs/size
+       */
+      size: [{
+        size: [isArbitraryValue, spacing, "auto", "min", "max", "fit"]
+      }],
+      // Typography
+      /**
+       * Font Size
+       * @see https://tailwindcss.com/docs/font-size
+       */
+      "font-size": [{
+        text: ["base", isTshirtSize, isArbitraryLength]
+      }],
+      /**
+       * Font Smoothing
+       * @see https://tailwindcss.com/docs/font-smoothing
+       */
+      "font-smoothing": ["antialiased", "subpixel-antialiased"],
+      /**
+       * Font Style
+       * @see https://tailwindcss.com/docs/font-style
+       */
+      "font-style": ["italic", "not-italic"],
+      /**
+       * Font Weight
+       * @see https://tailwindcss.com/docs/font-weight
+       */
+      "font-weight": [{
+        font: ["thin", "extralight", "light", "normal", "medium", "semibold", "bold", "extrabold", "black", isArbitraryNumber]
+      }],
+      /**
+       * Font Family
+       * @see https://tailwindcss.com/docs/font-family
+       */
+      "font-family": [{
+        font: [isAny]
+      }],
+      /**
+       * Font Variant Numeric
+       * @see https://tailwindcss.com/docs/font-variant-numeric
+       */
+      "fvn-normal": ["normal-nums"],
+      /**
+       * Font Variant Numeric
+       * @see https://tailwindcss.com/docs/font-variant-numeric
+       */
+      "fvn-ordinal": ["ordinal"],
+      /**
+       * Font Variant Numeric
+       * @see https://tailwindcss.com/docs/font-variant-numeric
+       */
+      "fvn-slashed-zero": ["slashed-zero"],
+      /**
+       * Font Variant Numeric
+       * @see https://tailwindcss.com/docs/font-variant-numeric
+       */
+      "fvn-figure": ["lining-nums", "oldstyle-nums"],
+      /**
+       * Font Variant Numeric
+       * @see https://tailwindcss.com/docs/font-variant-numeric
+       */
+      "fvn-spacing": ["proportional-nums", "tabular-nums"],
+      /**
+       * Font Variant Numeric
+       * @see https://tailwindcss.com/docs/font-variant-numeric
+       */
+      "fvn-fraction": ["diagonal-fractions", "stacked-fractions"],
+      /**
+       * Letter Spacing
+       * @see https://tailwindcss.com/docs/letter-spacing
+       */
+      tracking: [{
+        tracking: ["tighter", "tight", "normal", "wide", "wider", "widest", isArbitraryValue]
+      }],
+      /**
+       * Line Clamp
+       * @see https://tailwindcss.com/docs/line-clamp
+       */
+      "line-clamp": [{
+        "line-clamp": ["none", isNumber, isArbitraryNumber]
+      }],
+      /**
+       * Line Height
+       * @see https://tailwindcss.com/docs/line-height
+       */
+      leading: [{
+        leading: ["none", "tight", "snug", "normal", "relaxed", "loose", isLength, isArbitraryValue]
+      }],
+      /**
+       * List Style Image
+       * @see https://tailwindcss.com/docs/list-style-image
+       */
+      "list-image": [{
+        "list-image": ["none", isArbitraryValue]
+      }],
+      /**
+       * List Style Type
+       * @see https://tailwindcss.com/docs/list-style-type
+       */
+      "list-style-type": [{
+        list: ["none", "disc", "decimal", isArbitraryValue]
+      }],
+      /**
+       * List Style Position
+       * @see https://tailwindcss.com/docs/list-style-position
+       */
+      "list-style-position": [{
+        list: ["inside", "outside"]
+      }],
+      /**
+       * Placeholder Color
+       * @deprecated since Tailwind CSS v3.0.0
+       * @see https://tailwindcss.com/docs/placeholder-color
+       */
+      "placeholder-color": [{
+        placeholder: [colors]
+      }],
+      /**
+       * Placeholder Opacity
+       * @see https://tailwindcss.com/docs/placeholder-opacity
+       */
+      "placeholder-opacity": [{
+        "placeholder-opacity": [opacity]
+      }],
+      /**
+       * Text Alignment
+       * @see https://tailwindcss.com/docs/text-align
+       */
+      "text-alignment": [{
+        text: ["left", "center", "right", "justify", "start", "end"]
+      }],
+      /**
+       * Text Color
+       * @see https://tailwindcss.com/docs/text-color
+       */
+      "text-color": [{
+        text: [colors]
+      }],
+      /**
+       * Text Opacity
+       * @see https://tailwindcss.com/docs/text-opacity
+       */
+      "text-opacity": [{
+        "text-opacity": [opacity]
+      }],
+      /**
+       * Text Decoration
+       * @see https://tailwindcss.com/docs/text-decoration
+       */
+      "text-decoration": ["underline", "overline", "line-through", "no-underline"],
+      /**
+       * Text Decoration Style
+       * @see https://tailwindcss.com/docs/text-decoration-style
+       */
+      "text-decoration-style": [{
+        decoration: [...getLineStyles(), "wavy"]
+      }],
+      /**
+       * Text Decoration Thickness
+       * @see https://tailwindcss.com/docs/text-decoration-thickness
+       */
+      "text-decoration-thickness": [{
+        decoration: ["auto", "from-font", isLength, isArbitraryLength]
+      }],
+      /**
+       * Text Underline Offset
+       * @see https://tailwindcss.com/docs/text-underline-offset
+       */
+      "underline-offset": [{
+        "underline-offset": ["auto", isLength, isArbitraryValue]
+      }],
+      /**
+       * Text Decoration Color
+       * @see https://tailwindcss.com/docs/text-decoration-color
+       */
+      "text-decoration-color": [{
+        decoration: [colors]
+      }],
+      /**
+       * Text Transform
+       * @see https://tailwindcss.com/docs/text-transform
+       */
+      "text-transform": ["uppercase", "lowercase", "capitalize", "normal-case"],
+      /**
+       * Text Overflow
+       * @see https://tailwindcss.com/docs/text-overflow
+       */
+      "text-overflow": ["truncate", "text-ellipsis", "text-clip"],
+      /**
+       * Text Wrap
+       * @see https://tailwindcss.com/docs/text-wrap
+       */
+      "text-wrap": [{
+        text: ["wrap", "nowrap", "balance", "pretty"]
+      }],
+      /**
+       * Text Indent
+       * @see https://tailwindcss.com/docs/text-indent
+       */
+      indent: [{
+        indent: getSpacingWithArbitrary()
+      }],
+      /**
+       * Vertical Alignment
+       * @see https://tailwindcss.com/docs/vertical-align
+       */
+      "vertical-align": [{
+        align: ["baseline", "top", "middle", "bottom", "text-top", "text-bottom", "sub", "super", isArbitraryValue]
+      }],
+      /**
+       * Whitespace
+       * @see https://tailwindcss.com/docs/whitespace
+       */
+      whitespace: [{
+        whitespace: ["normal", "nowrap", "pre", "pre-line", "pre-wrap", "break-spaces"]
+      }],
+      /**
+       * Word Break
+       * @see https://tailwindcss.com/docs/word-break
+       */
+      break: [{
+        break: ["normal", "words", "all", "keep"]
+      }],
+      /**
+       * Hyphens
+       * @see https://tailwindcss.com/docs/hyphens
+       */
+      hyphens: [{
+        hyphens: ["none", "manual", "auto"]
+      }],
+      /**
+       * Content
+       * @see https://tailwindcss.com/docs/content
+       */
+      content: [{
+        content: ["none", isArbitraryValue]
+      }],
+      // Backgrounds
+      /**
+       * Background Attachment
+       * @see https://tailwindcss.com/docs/background-attachment
+       */
+      "bg-attachment": [{
+        bg: ["fixed", "local", "scroll"]
+      }],
+      /**
+       * Background Clip
+       * @see https://tailwindcss.com/docs/background-clip
+       */
+      "bg-clip": [{
+        "bg-clip": ["border", "padding", "content", "text"]
+      }],
+      /**
+       * Background Opacity
+       * @deprecated since Tailwind CSS v3.0.0
+       * @see https://tailwindcss.com/docs/background-opacity
+       */
+      "bg-opacity": [{
+        "bg-opacity": [opacity]
+      }],
+      /**
+       * Background Origin
+       * @see https://tailwindcss.com/docs/background-origin
+       */
+      "bg-origin": [{
+        "bg-origin": ["border", "padding", "content"]
+      }],
+      /**
+       * Background Position
+       * @see https://tailwindcss.com/docs/background-position
+       */
+      "bg-position": [{
+        bg: [...getPositions(), isArbitraryPosition]
+      }],
+      /**
+       * Background Repeat
+       * @see https://tailwindcss.com/docs/background-repeat
+       */
+      "bg-repeat": [{
+        bg: ["no-repeat", {
+          repeat: ["", "x", "y", "round", "space"]
+        }]
+      }],
+      /**
+       * Background Size
+       * @see https://tailwindcss.com/docs/background-size
+       */
+      "bg-size": [{
+        bg: ["auto", "cover", "contain", isArbitrarySize]
+      }],
+      /**
+       * Background Image
+       * @see https://tailwindcss.com/docs/background-image
+       */
+      "bg-image": [{
+        bg: ["none", {
+          "gradient-to": ["t", "tr", "r", "br", "b", "bl", "l", "tl"]
+        }, isArbitraryImage]
+      }],
+      /**
+       * Background Color
+       * @see https://tailwindcss.com/docs/background-color
+       */
+      "bg-color": [{
+        bg: [colors]
+      }],
+      /**
+       * Gradient Color Stops From Position
+       * @see https://tailwindcss.com/docs/gradient-color-stops
+       */
+      "gradient-from-pos": [{
+        from: [gradientColorStopPositions]
+      }],
+      /**
+       * Gradient Color Stops Via Position
+       * @see https://tailwindcss.com/docs/gradient-color-stops
+       */
+      "gradient-via-pos": [{
+        via: [gradientColorStopPositions]
+      }],
+      /**
+       * Gradient Color Stops To Position
+       * @see https://tailwindcss.com/docs/gradient-color-stops
+       */
+      "gradient-to-pos": [{
+        to: [gradientColorStopPositions]
+      }],
+      /**
+       * Gradient Color Stops From
+       * @see https://tailwindcss.com/docs/gradient-color-stops
+       */
+      "gradient-from": [{
+        from: [gradientColorStops]
+      }],
+      /**
+       * Gradient Color Stops Via
+       * @see https://tailwindcss.com/docs/gradient-color-stops
+       */
+      "gradient-via": [{
+        via: [gradientColorStops]
+      }],
+      /**
+       * Gradient Color Stops To
+       * @see https://tailwindcss.com/docs/gradient-color-stops
+       */
+      "gradient-to": [{
+        to: [gradientColorStops]
+      }],
+      // Borders
+      /**
+       * Border Radius
+       * @see https://tailwindcss.com/docs/border-radius
+       */
+      rounded: [{
+        rounded: [borderRadius]
+      }],
+      /**
+       * Border Radius Start
+       * @see https://tailwindcss.com/docs/border-radius
+       */
+      "rounded-s": [{
+        "rounded-s": [borderRadius]
+      }],
+      /**
+       * Border Radius End
+       * @see https://tailwindcss.com/docs/border-radius
+       */
+      "rounded-e": [{
+        "rounded-e": [borderRadius]
+      }],
+      /**
+       * Border Radius Top
+       * @see https://tailwindcss.com/docs/border-radius
+       */
+      "rounded-t": [{
+        "rounded-t": [borderRadius]
+      }],
+      /**
+       * Border Radius Right
+       * @see https://tailwindcss.com/docs/border-radius
+       */
+      "rounded-r": [{
+        "rounded-r": [borderRadius]
+      }],
+      /**
+       * Border Radius Bottom
+       * @see https://tailwindcss.com/docs/border-radius
+       */
+      "rounded-b": [{
+        "rounded-b": [borderRadius]
+      }],
+      /**
+       * Border Radius Left
+       * @see https://tailwindcss.com/docs/border-radius
+       */
+      "rounded-l": [{
+        "rounded-l": [borderRadius]
+      }],
+      /**
+       * Border Radius Start Start
+       * @see https://tailwindcss.com/docs/border-radius
+       */
+      "rounded-ss": [{
+        "rounded-ss": [borderRadius]
+      }],
+      /**
+       * Border Radius Start End
+       * @see https://tailwindcss.com/docs/border-radius
+       */
+      "rounded-se": [{
+        "rounded-se": [borderRadius]
+      }],
+      /**
+       * Border Radius End End
+       * @see https://tailwindcss.com/docs/border-radius
+       */
+      "rounded-ee": [{
+        "rounded-ee": [borderRadius]
+      }],
+      /**
+       * Border Radius End Start
+       * @see https://tailwindcss.com/docs/border-radius
+       */
+      "rounded-es": [{
+        "rounded-es": [borderRadius]
+      }],
+      /**
+       * Border Radius Top Left
+       * @see https://tailwindcss.com/docs/border-radius
+       */
+      "rounded-tl": [{
+        "rounded-tl": [borderRadius]
+      }],
+      /**
+       * Border Radius Top Right
+       * @see https://tailwindcss.com/docs/border-radius
+       */
+      "rounded-tr": [{
+        "rounded-tr": [borderRadius]
+      }],
+      /**
+       * Border Radius Bottom Right
+       * @see https://tailwindcss.com/docs/border-radius
+       */
+      "rounded-br": [{
+        "rounded-br": [borderRadius]
+      }],
+      /**
+       * Border Radius Bottom Left
+       * @see https://tailwindcss.com/docs/border-radius
+       */
+      "rounded-bl": [{
+        "rounded-bl": [borderRadius]
+      }],
+      /**
+       * Border Width
+       * @see https://tailwindcss.com/docs/border-width
+       */
+      "border-w": [{
+        border: [borderWidth]
+      }],
+      /**
+       * Border Width X
+       * @see https://tailwindcss.com/docs/border-width
+       */
+      "border-w-x": [{
+        "border-x": [borderWidth]
+      }],
+      /**
+       * Border Width Y
+       * @see https://tailwindcss.com/docs/border-width
+       */
+      "border-w-y": [{
+        "border-y": [borderWidth]
+      }],
+      /**
+       * Border Width Start
+       * @see https://tailwindcss.com/docs/border-width
+       */
+      "border-w-s": [{
+        "border-s": [borderWidth]
+      }],
+      /**
+       * Border Width End
+       * @see https://tailwindcss.com/docs/border-width
+       */
+      "border-w-e": [{
+        "border-e": [borderWidth]
+      }],
+      /**
+       * Border Width Top
+       * @see https://tailwindcss.com/docs/border-width
+       */
+      "border-w-t": [{
+        "border-t": [borderWidth]
+      }],
+      /**
+       * Border Width Right
+       * @see https://tailwindcss.com/docs/border-width
+       */
+      "border-w-r": [{
+        "border-r": [borderWidth]
+      }],
+      /**
+       * Border Width Bottom
+       * @see https://tailwindcss.com/docs/border-width
+       */
+      "border-w-b": [{
+        "border-b": [borderWidth]
+      }],
+      /**
+       * Border Width Left
+       * @see https://tailwindcss.com/docs/border-width
+       */
+      "border-w-l": [{
+        "border-l": [borderWidth]
+      }],
+      /**
+       * Border Opacity
+       * @see https://tailwindcss.com/docs/border-opacity
+       */
+      "border-opacity": [{
+        "border-opacity": [opacity]
+      }],
+      /**
+       * Border Style
+       * @see https://tailwindcss.com/docs/border-style
+       */
+      "border-style": [{
+        border: [...getLineStyles(), "hidden"]
+      }],
+      /**
+       * Divide Width X
+       * @see https://tailwindcss.com/docs/divide-width
+       */
+      "divide-x": [{
+        "divide-x": [borderWidth]
+      }],
+      /**
+       * Divide Width X Reverse
+       * @see https://tailwindcss.com/docs/divide-width
+       */
+      "divide-x-reverse": ["divide-x-reverse"],
+      /**
+       * Divide Width Y
+       * @see https://tailwindcss.com/docs/divide-width
+       */
+      "divide-y": [{
+        "divide-y": [borderWidth]
+      }],
+      /**
+       * Divide Width Y Reverse
+       * @see https://tailwindcss.com/docs/divide-width
+       */
+      "divide-y-reverse": ["divide-y-reverse"],
+      /**
+       * Divide Opacity
+       * @see https://tailwindcss.com/docs/divide-opacity
+       */
+      "divide-opacity": [{
+        "divide-opacity": [opacity]
+      }],
+      /**
+       * Divide Style
+       * @see https://tailwindcss.com/docs/divide-style
+       */
+      "divide-style": [{
+        divide: getLineStyles()
+      }],
+      /**
+       * Border Color
+       * @see https://tailwindcss.com/docs/border-color
+       */
+      "border-color": [{
+        border: [borderColor]
+      }],
+      /**
+       * Border Color X
+       * @see https://tailwindcss.com/docs/border-color
+       */
+      "border-color-x": [{
+        "border-x": [borderColor]
+      }],
+      /**
+       * Border Color Y
+       * @see https://tailwindcss.com/docs/border-color
+       */
+      "border-color-y": [{
+        "border-y": [borderColor]
+      }],
+      /**
+       * Border Color S
+       * @see https://tailwindcss.com/docs/border-color
+       */
+      "border-color-s": [{
+        "border-s": [borderColor]
+      }],
+      /**
+       * Border Color E
+       * @see https://tailwindcss.com/docs/border-color
+       */
+      "border-color-e": [{
+        "border-e": [borderColor]
+      }],
+      /**
+       * Border Color Top
+       * @see https://tailwindcss.com/docs/border-color
+       */
+      "border-color-t": [{
+        "border-t": [borderColor]
+      }],
+      /**
+       * Border Color Right
+       * @see https://tailwindcss.com/docs/border-color
+       */
+      "border-color-r": [{
+        "border-r": [borderColor]
+      }],
+      /**
+       * Border Color Bottom
+       * @see https://tailwindcss.com/docs/border-color
+       */
+      "border-color-b": [{
+        "border-b": [borderColor]
+      }],
+      /**
+       * Border Color Left
+       * @see https://tailwindcss.com/docs/border-color
+       */
+      "border-color-l": [{
+        "border-l": [borderColor]
+      }],
+      /**
+       * Divide Color
+       * @see https://tailwindcss.com/docs/divide-color
+       */
+      "divide-color": [{
+        divide: [borderColor]
+      }],
+      /**
+       * Outline Style
+       * @see https://tailwindcss.com/docs/outline-style
+       */
+      "outline-style": [{
+        outline: ["", ...getLineStyles()]
+      }],
+      /**
+       * Outline Offset
+       * @see https://tailwindcss.com/docs/outline-offset
+       */
+      "outline-offset": [{
+        "outline-offset": [isLength, isArbitraryValue]
+      }],
+      /**
+       * Outline Width
+       * @see https://tailwindcss.com/docs/outline-width
+       */
+      "outline-w": [{
+        outline: [isLength, isArbitraryLength]
+      }],
+      /**
+       * Outline Color
+       * @see https://tailwindcss.com/docs/outline-color
+       */
+      "outline-color": [{
+        outline: [colors]
+      }],
+      /**
+       * Ring Width
+       * @see https://tailwindcss.com/docs/ring-width
+       */
+      "ring-w": [{
+        ring: getLengthWithEmptyAndArbitrary()
+      }],
+      /**
+       * Ring Width Inset
+       * @see https://tailwindcss.com/docs/ring-width
+       */
+      "ring-w-inset": ["ring-inset"],
+      /**
+       * Ring Color
+       * @see https://tailwindcss.com/docs/ring-color
+       */
+      "ring-color": [{
+        ring: [colors]
+      }],
+      /**
+       * Ring Opacity
+       * @see https://tailwindcss.com/docs/ring-opacity
+       */
+      "ring-opacity": [{
+        "ring-opacity": [opacity]
+      }],
+      /**
+       * Ring Offset Width
+       * @see https://tailwindcss.com/docs/ring-offset-width
+       */
+      "ring-offset-w": [{
+        "ring-offset": [isLength, isArbitraryLength]
+      }],
+      /**
+       * Ring Offset Color
+       * @see https://tailwindcss.com/docs/ring-offset-color
+       */
+      "ring-offset-color": [{
+        "ring-offset": [colors]
+      }],
+      // Effects
+      /**
+       * Box Shadow
+       * @see https://tailwindcss.com/docs/box-shadow
+       */
+      shadow: [{
+        shadow: ["", "inner", "none", isTshirtSize, isArbitraryShadow]
+      }],
+      /**
+       * Box Shadow Color
+       * @see https://tailwindcss.com/docs/box-shadow-color
+       */
+      "shadow-color": [{
+        shadow: [isAny]
+      }],
+      /**
+       * Opacity
+       * @see https://tailwindcss.com/docs/opacity
+       */
+      opacity: [{
+        opacity: [opacity]
+      }],
+      /**
+       * Mix Blend Mode
+       * @see https://tailwindcss.com/docs/mix-blend-mode
+       */
+      "mix-blend": [{
+        "mix-blend": [...getBlendModes(), "plus-lighter", "plus-darker"]
+      }],
+      /**
+       * Background Blend Mode
+       * @see https://tailwindcss.com/docs/background-blend-mode
+       */
+      "bg-blend": [{
+        "bg-blend": getBlendModes()
+      }],
+      // Filters
+      /**
+       * Filter
+       * @deprecated since Tailwind CSS v3.0.0
+       * @see https://tailwindcss.com/docs/filter
+       */
+      filter: [{
+        filter: ["", "none"]
+      }],
+      /**
+       * Blur
+       * @see https://tailwindcss.com/docs/blur
+       */
+      blur: [{
+        blur: [blur]
+      }],
+      /**
+       * Brightness
+       * @see https://tailwindcss.com/docs/brightness
+       */
+      brightness: [{
+        brightness: [brightness]
+      }],
+      /**
+       * Contrast
+       * @see https://tailwindcss.com/docs/contrast
+       */
+      contrast: [{
+        contrast: [contrast]
+      }],
+      /**
+       * Drop Shadow
+       * @see https://tailwindcss.com/docs/drop-shadow
+       */
+      "drop-shadow": [{
+        "drop-shadow": ["", "none", isTshirtSize, isArbitraryValue]
+      }],
+      /**
+       * Grayscale
+       * @see https://tailwindcss.com/docs/grayscale
+       */
+      grayscale: [{
+        grayscale: [grayscale]
+      }],
+      /**
+       * Hue Rotate
+       * @see https://tailwindcss.com/docs/hue-rotate
+       */
+      "hue-rotate": [{
+        "hue-rotate": [hueRotate]
+      }],
+      /**
+       * Invert
+       * @see https://tailwindcss.com/docs/invert
+       */
+      invert: [{
+        invert: [invert2]
+      }],
+      /**
+       * Saturate
+       * @see https://tailwindcss.com/docs/saturate
+       */
+      saturate: [{
+        saturate: [saturate]
+      }],
+      /**
+       * Sepia
+       * @see https://tailwindcss.com/docs/sepia
+       */
+      sepia: [{
+        sepia: [sepia]
+      }],
+      /**
+       * Backdrop Filter
+       * @deprecated since Tailwind CSS v3.0.0
+       * @see https://tailwindcss.com/docs/backdrop-filter
+       */
+      "backdrop-filter": [{
+        "backdrop-filter": ["", "none"]
+      }],
+      /**
+       * Backdrop Blur
+       * @see https://tailwindcss.com/docs/backdrop-blur
+       */
+      "backdrop-blur": [{
+        "backdrop-blur": [blur]
+      }],
+      /**
+       * Backdrop Brightness
+       * @see https://tailwindcss.com/docs/backdrop-brightness
+       */
+      "backdrop-brightness": [{
+        "backdrop-brightness": [brightness]
+      }],
+      /**
+       * Backdrop Contrast
+       * @see https://tailwindcss.com/docs/backdrop-contrast
+       */
+      "backdrop-contrast": [{
+        "backdrop-contrast": [contrast]
+      }],
+      /**
+       * Backdrop Grayscale
+       * @see https://tailwindcss.com/docs/backdrop-grayscale
+       */
+      "backdrop-grayscale": [{
+        "backdrop-grayscale": [grayscale]
+      }],
+      /**
+       * Backdrop Hue Rotate
+       * @see https://tailwindcss.com/docs/backdrop-hue-rotate
+       */
+      "backdrop-hue-rotate": [{
+        "backdrop-hue-rotate": [hueRotate]
+      }],
+      /**
+       * Backdrop Invert
+       * @see https://tailwindcss.com/docs/backdrop-invert
+       */
+      "backdrop-invert": [{
+        "backdrop-invert": [invert2]
+      }],
+      /**
+       * Backdrop Opacity
+       * @see https://tailwindcss.com/docs/backdrop-opacity
+       */
+      "backdrop-opacity": [{
+        "backdrop-opacity": [opacity]
+      }],
+      /**
+       * Backdrop Saturate
+       * @see https://tailwindcss.com/docs/backdrop-saturate
+       */
+      "backdrop-saturate": [{
+        "backdrop-saturate": [saturate]
+      }],
+      /**
+       * Backdrop Sepia
+       * @see https://tailwindcss.com/docs/backdrop-sepia
+       */
+      "backdrop-sepia": [{
+        "backdrop-sepia": [sepia]
+      }],
+      // Tables
+      /**
+       * Border Collapse
+       * @see https://tailwindcss.com/docs/border-collapse
+       */
+      "border-collapse": [{
+        border: ["collapse", "separate"]
+      }],
+      /**
+       * Border Spacing
+       * @see https://tailwindcss.com/docs/border-spacing
+       */
+      "border-spacing": [{
+        "border-spacing": [borderSpacing]
+      }],
+      /**
+       * Border Spacing X
+       * @see https://tailwindcss.com/docs/border-spacing
+       */
+      "border-spacing-x": [{
+        "border-spacing-x": [borderSpacing]
+      }],
+      /**
+       * Border Spacing Y
+       * @see https://tailwindcss.com/docs/border-spacing
+       */
+      "border-spacing-y": [{
+        "border-spacing-y": [borderSpacing]
+      }],
+      /**
+       * Table Layout
+       * @see https://tailwindcss.com/docs/table-layout
+       */
+      "table-layout": [{
+        table: ["auto", "fixed"]
+      }],
+      /**
+       * Caption Side
+       * @see https://tailwindcss.com/docs/caption-side
+       */
+      caption: [{
+        caption: ["top", "bottom"]
+      }],
+      // Transitions and Animation
+      /**
+       * Tranisition Property
+       * @see https://tailwindcss.com/docs/transition-property
+       */
+      transition: [{
+        transition: ["none", "all", "", "colors", "opacity", "shadow", "transform", isArbitraryValue]
+      }],
+      /**
+       * Transition Duration
+       * @see https://tailwindcss.com/docs/transition-duration
+       */
+      duration: [{
+        duration: getNumberAndArbitrary()
+      }],
+      /**
+       * Transition Timing Function
+       * @see https://tailwindcss.com/docs/transition-timing-function
+       */
+      ease: [{
+        ease: ["linear", "in", "out", "in-out", isArbitraryValue]
+      }],
+      /**
+       * Transition Delay
+       * @see https://tailwindcss.com/docs/transition-delay
+       */
+      delay: [{
+        delay: getNumberAndArbitrary()
+      }],
+      /**
+       * Animation
+       * @see https://tailwindcss.com/docs/animation
+       */
+      animate: [{
+        animate: ["none", "spin", "ping", "pulse", "bounce", isArbitraryValue]
+      }],
+      // Transforms
+      /**
+       * Transform
+       * @see https://tailwindcss.com/docs/transform
+       */
+      transform: [{
+        transform: ["", "gpu", "none"]
+      }],
+      /**
+       * Scale
+       * @see https://tailwindcss.com/docs/scale
+       */
+      scale: [{
+        scale: [scale2]
+      }],
+      /**
+       * Scale X
+       * @see https://tailwindcss.com/docs/scale
+       */
+      "scale-x": [{
+        "scale-x": [scale2]
+      }],
+      /**
+       * Scale Y
+       * @see https://tailwindcss.com/docs/scale
+       */
+      "scale-y": [{
+        "scale-y": [scale2]
+      }],
+      /**
+       * Rotate
+       * @see https://tailwindcss.com/docs/rotate
+       */
+      rotate: [{
+        rotate: [isInteger, isArbitraryValue]
+      }],
+      /**
+       * Translate X
+       * @see https://tailwindcss.com/docs/translate
+       */
+      "translate-x": [{
+        "translate-x": [translate]
+      }],
+      /**
+       * Translate Y
+       * @see https://tailwindcss.com/docs/translate
+       */
+      "translate-y": [{
+        "translate-y": [translate]
+      }],
+      /**
+       * Skew X
+       * @see https://tailwindcss.com/docs/skew
+       */
+      "skew-x": [{
+        "skew-x": [skew]
+      }],
+      /**
+       * Skew Y
+       * @see https://tailwindcss.com/docs/skew
+       */
+      "skew-y": [{
+        "skew-y": [skew]
+      }],
+      /**
+       * Transform Origin
+       * @see https://tailwindcss.com/docs/transform-origin
+       */
+      "transform-origin": [{
+        origin: ["center", "top", "top-right", "right", "bottom-right", "bottom", "bottom-left", "left", "top-left", isArbitraryValue]
+      }],
+      // Interactivity
+      /**
+       * Accent Color
+       * @see https://tailwindcss.com/docs/accent-color
+       */
+      accent: [{
+        accent: ["auto", colors]
+      }],
+      /**
+       * Appearance
+       * @see https://tailwindcss.com/docs/appearance
+       */
+      appearance: [{
+        appearance: ["none", "auto"]
+      }],
+      /**
+       * Cursor
+       * @see https://tailwindcss.com/docs/cursor
+       */
+      cursor: [{
+        cursor: ["auto", "default", "pointer", "wait", "text", "move", "help", "not-allowed", "none", "context-menu", "progress", "cell", "crosshair", "vertical-text", "alias", "copy", "no-drop", "grab", "grabbing", "all-scroll", "col-resize", "row-resize", "n-resize", "e-resize", "s-resize", "w-resize", "ne-resize", "nw-resize", "se-resize", "sw-resize", "ew-resize", "ns-resize", "nesw-resize", "nwse-resize", "zoom-in", "zoom-out", isArbitraryValue]
+      }],
+      /**
+       * Caret Color
+       * @see https://tailwindcss.com/docs/just-in-time-mode#caret-color-utilities
+       */
+      "caret-color": [{
+        caret: [colors]
+      }],
+      /**
+       * Pointer Events
+       * @see https://tailwindcss.com/docs/pointer-events
+       */
+      "pointer-events": [{
+        "pointer-events": ["none", "auto"]
+      }],
+      /**
+       * Resize
+       * @see https://tailwindcss.com/docs/resize
+       */
+      resize: [{
+        resize: ["none", "y", "x", ""]
+      }],
+      /**
+       * Scroll Behavior
+       * @see https://tailwindcss.com/docs/scroll-behavior
+       */
+      "scroll-behavior": [{
+        scroll: ["auto", "smooth"]
+      }],
+      /**
+       * Scroll Margin
+       * @see https://tailwindcss.com/docs/scroll-margin
+       */
+      "scroll-m": [{
+        "scroll-m": getSpacingWithArbitrary()
+      }],
+      /**
+       * Scroll Margin X
+       * @see https://tailwindcss.com/docs/scroll-margin
+       */
+      "scroll-mx": [{
+        "scroll-mx": getSpacingWithArbitrary()
+      }],
+      /**
+       * Scroll Margin Y
+       * @see https://tailwindcss.com/docs/scroll-margin
+       */
+      "scroll-my": [{
+        "scroll-my": getSpacingWithArbitrary()
+      }],
+      /**
+       * Scroll Margin Start
+       * @see https://tailwindcss.com/docs/scroll-margin
+       */
+      "scroll-ms": [{
+        "scroll-ms": getSpacingWithArbitrary()
+      }],
+      /**
+       * Scroll Margin End
+       * @see https://tailwindcss.com/docs/scroll-margin
+       */
+      "scroll-me": [{
+        "scroll-me": getSpacingWithArbitrary()
+      }],
+      /**
+       * Scroll Margin Top
+       * @see https://tailwindcss.com/docs/scroll-margin
+       */
+      "scroll-mt": [{
+        "scroll-mt": getSpacingWithArbitrary()
+      }],
+      /**
+       * Scroll Margin Right
+       * @see https://tailwindcss.com/docs/scroll-margin
+       */
+      "scroll-mr": [{
+        "scroll-mr": getSpacingWithArbitrary()
+      }],
+      /**
+       * Scroll Margin Bottom
+       * @see https://tailwindcss.com/docs/scroll-margin
+       */
+      "scroll-mb": [{
+        "scroll-mb": getSpacingWithArbitrary()
+      }],
+      /**
+       * Scroll Margin Left
+       * @see https://tailwindcss.com/docs/scroll-margin
+       */
+      "scroll-ml": [{
+        "scroll-ml": getSpacingWithArbitrary()
+      }],
+      /**
+       * Scroll Padding
+       * @see https://tailwindcss.com/docs/scroll-padding
+       */
+      "scroll-p": [{
+        "scroll-p": getSpacingWithArbitrary()
+      }],
+      /**
+       * Scroll Padding X
+       * @see https://tailwindcss.com/docs/scroll-padding
+       */
+      "scroll-px": [{
+        "scroll-px": getSpacingWithArbitrary()
+      }],
+      /**
+       * Scroll Padding Y
+       * @see https://tailwindcss.com/docs/scroll-padding
+       */
+      "scroll-py": [{
+        "scroll-py": getSpacingWithArbitrary()
+      }],
+      /**
+       * Scroll Padding Start
+       * @see https://tailwindcss.com/docs/scroll-padding
+       */
+      "scroll-ps": [{
+        "scroll-ps": getSpacingWithArbitrary()
+      }],
+      /**
+       * Scroll Padding End
+       * @see https://tailwindcss.com/docs/scroll-padding
+       */
+      "scroll-pe": [{
+        "scroll-pe": getSpacingWithArbitrary()
+      }],
+      /**
+       * Scroll Padding Top
+       * @see https://tailwindcss.com/docs/scroll-padding
+       */
+      "scroll-pt": [{
+        "scroll-pt": getSpacingWithArbitrary()
+      }],
+      /**
+       * Scroll Padding Right
+       * @see https://tailwindcss.com/docs/scroll-padding
+       */
+      "scroll-pr": [{
+        "scroll-pr": getSpacingWithArbitrary()
+      }],
+      /**
+       * Scroll Padding Bottom
+       * @see https://tailwindcss.com/docs/scroll-padding
+       */
+      "scroll-pb": [{
+        "scroll-pb": getSpacingWithArbitrary()
+      }],
+      /**
+       * Scroll Padding Left
+       * @see https://tailwindcss.com/docs/scroll-padding
+       */
+      "scroll-pl": [{
+        "scroll-pl": getSpacingWithArbitrary()
+      }],
+      /**
+       * Scroll Snap Align
+       * @see https://tailwindcss.com/docs/scroll-snap-align
+       */
+      "snap-align": [{
+        snap: ["start", "end", "center", "align-none"]
+      }],
+      /**
+       * Scroll Snap Stop
+       * @see https://tailwindcss.com/docs/scroll-snap-stop
+       */
+      "snap-stop": [{
+        snap: ["normal", "always"]
+      }],
+      /**
+       * Scroll Snap Type
+       * @see https://tailwindcss.com/docs/scroll-snap-type
+       */
+      "snap-type": [{
+        snap: ["none", "x", "y", "both"]
+      }],
+      /**
+       * Scroll Snap Type Strictness
+       * @see https://tailwindcss.com/docs/scroll-snap-type
+       */
+      "snap-strictness": [{
+        snap: ["mandatory", "proximity"]
+      }],
+      /**
+       * Touch Action
+       * @see https://tailwindcss.com/docs/touch-action
+       */
+      touch: [{
+        touch: ["auto", "none", "manipulation"]
+      }],
+      /**
+       * Touch Action X
+       * @see https://tailwindcss.com/docs/touch-action
+       */
+      "touch-x": [{
+        "touch-pan": ["x", "left", "right"]
+      }],
+      /**
+       * Touch Action Y
+       * @see https://tailwindcss.com/docs/touch-action
+       */
+      "touch-y": [{
+        "touch-pan": ["y", "up", "down"]
+      }],
+      /**
+       * Touch Action Pinch Zoom
+       * @see https://tailwindcss.com/docs/touch-action
+       */
+      "touch-pz": ["touch-pinch-zoom"],
+      /**
+       * User Select
+       * @see https://tailwindcss.com/docs/user-select
+       */
+      select: [{
+        select: ["none", "text", "all", "auto"]
+      }],
+      /**
+       * Will Change
+       * @see https://tailwindcss.com/docs/will-change
+       */
+      "will-change": [{
+        "will-change": ["auto", "scroll", "contents", "transform", isArbitraryValue]
+      }],
+      // SVG
+      /**
+       * Fill
+       * @see https://tailwindcss.com/docs/fill
+       */
+      fill: [{
+        fill: [colors, "none"]
+      }],
+      /**
+       * Stroke Width
+       * @see https://tailwindcss.com/docs/stroke-width
+       */
+      "stroke-w": [{
+        stroke: [isLength, isArbitraryLength, isArbitraryNumber]
+      }],
+      /**
+       * Stroke
+       * @see https://tailwindcss.com/docs/stroke
+       */
+      stroke: [{
+        stroke: [colors, "none"]
+      }],
+      // Accessibility
+      /**
+       * Screen Readers
+       * @see https://tailwindcss.com/docs/screen-readers
+       */
+      sr: ["sr-only", "not-sr-only"],
+      /**
+       * Forced Color Adjust
+       * @see https://tailwindcss.com/docs/forced-color-adjust
+       */
+      "forced-color-adjust": [{
+        "forced-color-adjust": ["auto", "none"]
+      }]
+    },
+    conflictingClassGroups: {
+      overflow: ["overflow-x", "overflow-y"],
+      overscroll: ["overscroll-x", "overscroll-y"],
+      inset: ["inset-x", "inset-y", "start", "end", "top", "right", "bottom", "left"],
+      "inset-x": ["right", "left"],
+      "inset-y": ["top", "bottom"],
+      flex: ["basis", "grow", "shrink"],
+      gap: ["gap-x", "gap-y"],
+      p: ["px", "py", "ps", "pe", "pt", "pr", "pb", "pl"],
+      px: ["pr", "pl"],
+      py: ["pt", "pb"],
+      m: ["mx", "my", "ms", "me", "mt", "mr", "mb", "ml"],
+      mx: ["mr", "ml"],
+      my: ["mt", "mb"],
+      size: ["w", "h"],
+      "font-size": ["leading"],
+      "fvn-normal": ["fvn-ordinal", "fvn-slashed-zero", "fvn-figure", "fvn-spacing", "fvn-fraction"],
+      "fvn-ordinal": ["fvn-normal"],
+      "fvn-slashed-zero": ["fvn-normal"],
+      "fvn-figure": ["fvn-normal"],
+      "fvn-spacing": ["fvn-normal"],
+      "fvn-fraction": ["fvn-normal"],
+      "line-clamp": ["display", "overflow"],
+      rounded: ["rounded-s", "rounded-e", "rounded-t", "rounded-r", "rounded-b", "rounded-l", "rounded-ss", "rounded-se", "rounded-ee", "rounded-es", "rounded-tl", "rounded-tr", "rounded-br", "rounded-bl"],
+      "rounded-s": ["rounded-ss", "rounded-es"],
+      "rounded-e": ["rounded-se", "rounded-ee"],
+      "rounded-t": ["rounded-tl", "rounded-tr"],
+      "rounded-r": ["rounded-tr", "rounded-br"],
+      "rounded-b": ["rounded-br", "rounded-bl"],
+      "rounded-l": ["rounded-tl", "rounded-bl"],
+      "border-spacing": ["border-spacing-x", "border-spacing-y"],
+      "border-w": ["border-w-s", "border-w-e", "border-w-t", "border-w-r", "border-w-b", "border-w-l"],
+      "border-w-x": ["border-w-r", "border-w-l"],
+      "border-w-y": ["border-w-t", "border-w-b"],
+      "border-color": ["border-color-s", "border-color-e", "border-color-t", "border-color-r", "border-color-b", "border-color-l"],
+      "border-color-x": ["border-color-r", "border-color-l"],
+      "border-color-y": ["border-color-t", "border-color-b"],
+      "scroll-m": ["scroll-mx", "scroll-my", "scroll-ms", "scroll-me", "scroll-mt", "scroll-mr", "scroll-mb", "scroll-ml"],
+      "scroll-mx": ["scroll-mr", "scroll-ml"],
+      "scroll-my": ["scroll-mt", "scroll-mb"],
+      "scroll-p": ["scroll-px", "scroll-py", "scroll-ps", "scroll-pe", "scroll-pt", "scroll-pr", "scroll-pb", "scroll-pl"],
+      "scroll-px": ["scroll-pr", "scroll-pl"],
+      "scroll-py": ["scroll-pt", "scroll-pb"],
+      touch: ["touch-x", "touch-y", "touch-pz"],
+      "touch-x": ["touch"],
+      "touch-y": ["touch"],
+      "touch-pz": ["touch"]
+    },
+    conflictingClassGroupModifiers: {
+      "font-size": ["leading"]
+    }
+  };
+};
+const twMerge = /* @__PURE__ */ createTailwindMerge(getDefaultConfig);
+function cn(...inputs) {
+  return twMerge(clsx(inputs));
+}
+function Skeleton2({ className, ...props }) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "div",
+    {
+      "data-slot": "skeleton",
+      className: cn("bg-accent animate-pulse rounded-md", className),
+      ...props
+    }
+  );
+}
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const toKebabCase = (string) => string.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
+const toCamelCase = (string) => string.replace(
+  /^([A-Z])|[\s-_]+(\w)/g,
+  (match, p1, p2) => p2 ? p2.toUpperCase() : p1.toLowerCase()
+);
+const toPascalCase$1 = (string) => {
+  const camelCase = toCamelCase(string);
+  return camelCase.charAt(0).toUpperCase() + camelCase.slice(1);
+};
+const mergeClasses = (...classes) => classes.filter((className, index2, array) => {
+  return Boolean(className) && className.trim() !== "" && array.indexOf(className) === index2;
+}).join(" ").trim();
+const hasA11yProp = (props) => {
+  for (const prop in props) {
+    if (prop.startsWith("aria-") || prop === "role" || prop === "title") {
+      return true;
+    }
+  }
+};
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+var defaultAttributes = {
+  xmlns: "http://www.w3.org/2000/svg",
+  width: 24,
+  height: 24,
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 2,
+  strokeLinecap: "round",
+  strokeLinejoin: "round"
+};
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const Icon = reactExports.forwardRef(
+  ({
+    color: color2 = "currentColor",
+    size = 24,
+    strokeWidth = 2,
+    absoluteStrokeWidth,
+    className = "",
+    children,
+    iconNode,
+    ...rest
+  }, ref) => reactExports.createElement(
+    "svg",
+    {
+      ref,
+      ...defaultAttributes,
+      width: size,
+      height: size,
+      stroke: color2,
+      strokeWidth: absoluteStrokeWidth ? Number(strokeWidth) * 24 / Number(size) : strokeWidth,
+      className: mergeClasses("lucide", className),
+      ...!children && !hasA11yProp(rest) && { "aria-hidden": "true" },
+      ...rest
+    },
+    [
+      ...iconNode.map(([tag, attrs]) => reactExports.createElement(tag, attrs)),
+      ...Array.isArray(children) ? children : [children]
+    ]
+  )
+);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const createLucideIcon = (iconName, iconNode) => {
+  const Component2 = reactExports.forwardRef(
+    ({ className, ...props }, ref) => reactExports.createElement(Icon, {
+      ref,
+      iconNode,
+      className: mergeClasses(
+        `lucide-${toKebabCase(toPascalCase$1(iconName))}`,
+        `lucide-${iconName}`,
+        className
+      ),
+      ...props
+    })
+  );
+  Component2.displayName = toPascalCase$1(iconName);
+  return Component2;
+};
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$l = [
+  ["path", { d: "M12 7v14", key: "1akyts" }],
+  [
+    "path",
+    {
+      d: "M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z",
+      key: "ruj8y"
+    }
+  ]
+];
+const BookOpen = createLucideIcon("book-open", __iconNode$l);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$k = [["path", { d: "m6 9 6 6 6-6", key: "qrunsl" }]];
+const ChevronDown = createLucideIcon("chevron-down", __iconNode$k);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$j = [["path", { d: "m9 18 6-6-6-6", key: "mthhwq" }]];
+const ChevronRight = createLucideIcon("chevron-right", __iconNode$j);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$i = [["path", { d: "m18 15-6-6-6 6", key: "153udz" }]];
+const ChevronUp = createLucideIcon("chevron-up", __iconNode$i);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$h = [
+  ["path", { d: "M21.801 10A10 10 0 1 1 17 3.335", key: "yps3ct" }],
+  ["path", { d: "m9 11 3 3L22 4", key: "1pflzl" }]
+];
+const CircleCheckBig = createLucideIcon("circle-check-big", __iconNode$h);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$g = [["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }]];
+const Circle = createLucideIcon("circle", __iconNode$g);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$f = [
+  [
+    "path",
+    {
+      d: "M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z",
+      key: "96xj49"
+    }
+  ]
+];
+const Flame = createLucideIcon("flame", __iconNode$f);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$e = [
+  [
+    "path",
+    {
+      d: "M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2",
+      key: "18mbvz"
+    }
+  ],
+  ["path", { d: "M6.453 15h11.094", key: "3shlmq" }],
+  ["path", { d: "M8.5 2h7", key: "csnxdl" }]
+];
+const FlaskConical = createLucideIcon("flask-conical", __iconNode$e);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$d = [
+  ["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }],
+  ["path", { d: "M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20", key: "13o1zl" }],
+  ["path", { d: "M2 12h20", key: "9i4pu4" }]
+];
+const Globe = createLucideIcon("globe", __iconNode$d);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$c = [
+  ["rect", { width: "7", height: "9", x: "3", y: "3", rx: "1", key: "10lvy0" }],
+  ["rect", { width: "7", height: "5", x: "14", y: "3", rx: "1", key: "16une8" }],
+  ["rect", { width: "7", height: "9", x: "14", y: "12", rx: "1", key: "1hutg5" }],
+  ["rect", { width: "7", height: "5", x: "3", y: "16", rx: "1", key: "ldoo1y" }]
+];
+const LayoutDashboard = createLucideIcon("layout-dashboard", __iconNode$c);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$b = [
+  [
+    "path",
+    {
+      d: "M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z",
+      key: "169xi5"
+    }
+  ],
+  ["path", { d: "M15 5.764v15", key: "1pn4in" }],
+  ["path", { d: "M9 3.236v15", key: "1uimfh" }]
+];
+const Map$1 = createLucideIcon("map", __iconNode$b);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$a = [
+  [
+    "path",
+    {
+      d: "M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z",
+      key: "1a0edw"
+    }
+  ],
+  ["path", { d: "M12 22V12", key: "d0xqtd" }],
+  ["polyline", { points: "3.29 7 12 12 20.71 7", key: "ousv84" }],
+  ["path", { d: "m7.5 4.27 9 5.15", key: "1c824w" }]
+];
+const Package = createLucideIcon("package", __iconNode$a);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$9 = [
+  ["path", { d: "M4.9 19.1C1 15.2 1 8.8 4.9 4.9", key: "1vaf9d" }],
+  ["path", { d: "M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5", key: "u1ii0m" }],
+  ["circle", { cx: "12", cy: "12", r: "2", key: "1c9p78" }],
+  ["path", { d: "M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5", key: "1j5fej" }],
+  ["path", { d: "M19.1 4.9C23 8.8 23 15.1 19.1 19", key: "10b0cb" }]
+];
+const Radio = createLucideIcon("radio", __iconNode$9);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$8 = [
+  ["path", { d: "M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8", key: "v9h5vc" }],
+  ["path", { d: "M21 3v5h-5", key: "1q7to0" }],
+  ["path", { d: "M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16", key: "3uifl3" }],
+  ["path", { d: "M8 16H3v5", key: "1cv678" }]
+];
+const RefreshCw = createLucideIcon("refresh-cw", __iconNode$8);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$7 = [
+  ["path", { d: "M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8", key: "1357e3" }],
+  ["path", { d: "M3 3v5h5", key: "1xhq8a" }]
+];
+const RotateCcw = createLucideIcon("rotate-ccw", __iconNode$7);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$6 = [
+  [
+    "path",
+    {
+      d: "M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z",
+      key: "oel41y"
+    }
+  ]
+];
+const Shield = createLucideIcon("shield", __iconNode$6);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$5 = [
+  ["polyline", { points: "14.5 17.5 3 6 3 3 6 3 17.5 14.5", key: "1hfsw2" }],
+  ["line", { x1: "13", x2: "19", y1: "19", y2: "13", key: "1vrmhu" }],
+  ["line", { x1: "16", x2: "20", y1: "16", y2: "20", key: "1bron3" }],
+  ["line", { x1: "19", x2: "21", y1: "21", y2: "19", key: "13pww6" }]
+];
+const Sword = createLucideIcon("sword", __iconNode$5);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$4 = [
+  ["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }],
+  ["circle", { cx: "12", cy: "12", r: "6", key: "1vlfrh" }],
+  ["circle", { cx: "12", cy: "12", r: "2", key: "1c9p78" }]
+];
+const Target = createLucideIcon("target", __iconNode$4);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$3 = [
+  ["path", { d: "M16 7h6v6", key: "box55l" }],
+  ["path", { d: "m22 7-8.5 8.5-5-5L2 17", key: "1t1m79" }]
+];
+const TrendingUp = createLucideIcon("trending-up", __iconNode$3);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$2 = [
+  ["path", { d: "M6 9H4.5a2.5 2.5 0 0 1 0-5H6", key: "17hqa7" }],
+  ["path", { d: "M18 9h1.5a2.5 2.5 0 0 0 0-5H18", key: "lmptdp" }],
+  ["path", { d: "M4 22h16", key: "57wxv0" }],
+  ["path", { d: "M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22", key: "1nw9bq" }],
+  ["path", { d: "M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22", key: "1np0yb" }],
+  ["path", { d: "M18 2H6v7a6 6 0 0 0 12 0V2Z", key: "u46fv3" }]
+];
+const Trophy = createLucideIcon("trophy", __iconNode$2);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$1 = [
+  ["path", { d: "M18 6 6 18", key: "1bl5f8" }],
+  ["path", { d: "m6 6 12 12", key: "d8bk6v" }]
+];
+const X$1 = createLucideIcon("x", __iconNode$1);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode = [
+  [
+    "path",
+    {
+      d: "M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z",
+      key: "1xq2db"
+    }
+  ]
+];
+const Zap = createLucideIcon("zap", __iconNode);
+const CYAN$e = "#00ffcc";
+const GOLD$5 = "#ffd700";
+const AMBER = "#f59e0b";
+const BORDER$d = "rgba(0,255,204,0.18)";
+const PANEL = "rgba(0,20,40,0.72)";
+const TEXT$8 = "#e0f4ff";
+const TEXT_DIM$7 = "rgba(224,244,255,0.45)";
+function computeScore(plots, frntr, wins) {
+  return Math.round(
+    (plots ?? 0) * 100 + (frntr ?? 0) * 0.01 + (wins ?? 0) * 50
+  );
+}
+function RankMedal({ rank }) {
+  if (rank === 1)
+    return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 14 }, title: "1st Place", children: "🥇" });
+  if (rank === 2)
+    return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 14 }, title: "2nd Place", children: "🥈" });
+  if (rank === 3)
+    return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 14 }, title: "3rd Place", children: "🥉" });
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "span",
+    {
+      style: {
+        fontSize: 11,
+        fontWeight: 700,
+        fontFamily: "monospace",
+        color: TEXT_DIM$7
+      },
+      children: [
+        "#",
+        rank
+      ]
+    }
+  );
+}
+function SortIcon({
+  col,
+  active,
+  dir
+}) {
+  if (col !== active)
+    return /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { opacity: 0.2, fontSize: 10 }, children: "↕" });
+  return dir === "asc" ? /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronUp, { size: 11, style: { color: CYAN$e } }) : /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronDown, { size: 11, style: { color: CYAN$e } });
+}
+function useCountUp(target, duration = 1500) {
+  const [display, setDisplay] = reactExports.useState(target);
+  const prev = reactExports.useRef(target);
+  reactExports.useEffect(() => {
+    const start = prev.current;
+    const end = target;
+    const startTime = performance.now();
+    const tick = (now2) => {
+      const elapsed = now2 - startTime;
+      const progress2 = Math.min(elapsed / duration, 1);
+      const eased = 1 - (1 - progress2) ** 3;
+      setDisplay(start + (end - start) * eased);
+      if (progress2 < 1) requestAnimationFrame(tick);
+      else prev.current = end;
+    };
+    requestAnimationFrame(tick);
+  }, [target, duration]);
+  return display;
+}
+function GrandPrizes({
+  leaderboardPot,
+  totalPlotsOwned
+}) {
+  const animatedPot = useCountUp(leaderboardPot);
+  const progress2 = Math.min(totalPlotsOwned % 1500 / 1500, 1);
+  const plotsUntilPayout = 1500 - totalPlotsOwned % 1500;
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    motion.div,
+    {
+      initial: { opacity: 0, y: 8 },
+      animate: { opacity: 1, y: 0 },
+      transition: { duration: 0.35, delay: 0.3 },
+      "data-ocid": "leaderboard.prizes_section",
+      className: "mt-6",
+      style: {
+        background: PANEL,
+        backdropFilter: "blur(16px)",
+        WebkitBackdropFilter: "blur(16px)",
+        border: `1px solid ${BORDER$d}`,
+        borderRadius: 12,
+        overflow: "hidden"
+      },
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            style: {
+              background: "rgba(255,215,0,0.06)",
+              borderBottom: "1px solid rgba(255,215,0,0.15)",
+              padding: "14px 18px",
+              display: "flex",
+              alignItems: "center",
+              gap: 10
+            },
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Trophy, { size: 16, style: { color: GOLD$5 } }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      fontSize: 12,
+                      fontWeight: 800,
+                      letterSpacing: 3,
+                      color: GOLD$5,
+                      textTransform: "uppercase"
+                    },
+                    children: "LEADERBOARD GRAND PRIZE POOL"
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      fontSize: 8,
+                      color: TEXT_DIM$7,
+                      letterSpacing: 1.5,
+                      marginTop: 2
+                    },
+                    children: "AWARDED EVERY 1,500 PLOTS MINTED"
+                  }
+                )
+              ] })
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { padding: "16px 18px" }, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              style: {
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 14
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        fontSize: 8,
+                        color: TEXT_DIM$7,
+                        letterSpacing: 1.5,
+                        marginBottom: 3
+                      },
+                      children: "CURRENT POT"
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        fontSize: 22,
+                        fontWeight: 900,
+                        fontFamily: "monospace",
+                        color: GOLD$5,
+                        textShadow: `0 0 12px ${GOLD$5}55`
+                      },
+                      children: leaderboardPot > 0 ? `${animatedPot.toFixed(4)} ICP` : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 14, color: TEXT_DIM$7 }, children: "Loading..." })
+                    }
+                  )
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { textAlign: "right" }, children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        fontSize: 8,
+                        color: TEXT_DIM$7,
+                        letterSpacing: 1.5,
+                        marginBottom: 3
+                      },
+                      children: "NEXT PAYOUT IN"
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "div",
+                    {
+                      style: {
+                        fontSize: 16,
+                        fontWeight: 900,
+                        fontFamily: "monospace",
+                        color: CYAN$e
+                      },
+                      children: [
+                        plotsUntilPayout.toLocaleString(),
+                        " PLOTS"
+                      ]
+                    }
+                  )
+                ] })
+              ]
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { marginBottom: 16 }, children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "div",
+              {
+                style: {
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginBottom: 4
+                },
+                children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 8, color: TEXT_DIM$7, letterSpacing: 1 }, children: "PROGRESS TO PAYOUT" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "span",
+                    {
+                      style: {
+                        fontSize: 8,
+                        fontWeight: 700,
+                        color: CYAN$e,
+                        fontFamily: "monospace"
+                      },
+                      children: [
+                        (progress2 * 100).toFixed(1),
+                        "%"
+                      ]
+                    }
+                  )
+                ]
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "div",
+              {
+                style: {
+                  height: 6,
+                  background: "rgba(255,255,255,0.07)",
+                  borderRadius: 3,
+                  overflow: "hidden"
+                },
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      height: "100%",
+                      width: `${progress2 * 100}%`,
+                      background: `linear-gradient(90deg, ${CYAN$e}, ${GOLD$5})`,
+                      borderRadius: 3,
+                      transition: "width 0.6s ease",
+                      boxShadow: `0 0 8px ${CYAN$e}55`
+                    }
+                  }
+                )
+              }
+            )
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { marginBottom: 14 }, children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "div",
+              {
+                style: {
+                  fontSize: 9,
+                  fontWeight: 700,
+                  letterSpacing: 2,
+                  color: CYAN$e,
+                  textTransform: "uppercase",
+                  marginBottom: 10
+                },
+                children: "PRIZE DISTRIBUTION"
+              }
+            ),
+            [
+              { place: 1, label: "1ST PLACE", pct: 50, color: GOLD$5, medal: "🥇" },
+              {
+                place: 2,
+                label: "2ND PLACE",
+                pct: 30,
+                color: "#c0c0c0",
+                medal: "🥈"
+              },
+              {
+                place: 3,
+                label: "3RD PLACE",
+                pct: 20,
+                color: AMBER,
+                medal: "🥉"
+              }
+            ].map((row) => {
+              leaderboardPot * (row.pct / 100);
+              return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "div",
+                {
+                  "data-ocid": `leaderboard.prize_row.${row.place}`,
+                  style: {
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "8px 12px",
+                    marginBottom: 6,
+                    background: "rgba(255,255,255,0.03)",
+                    border: "1px solid rgba(255,255,255,0.07)",
+                    borderRadius: 8
+                  },
+                  children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 14 }, children: row.medal }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "span",
+                        {
+                          style: {
+                            fontSize: 10,
+                            fontWeight: 700,
+                            color: row.color,
+                            letterSpacing: 1
+                          },
+                          children: row.label
+                        }
+                      )
+                    ] }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { textAlign: "right" }, children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                        "div",
+                        {
+                          style: {
+                            fontSize: 12,
+                            fontWeight: 900,
+                            fontFamily: "monospace",
+                            color: row.color
+                          },
+                          children: [
+                            row.pct,
+                            "%"
+                          ]
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "div",
+                        {
+                          style: {
+                            fontSize: 8,
+                            color: TEXT_DIM$7,
+                            fontFamily: "monospace"
+                          },
+                          children: leaderboardPot > 0 ? `${(animatedPot * (row.pct / 100)).toFixed(4)} ICP` : "—"
+                        }
+                      )
+                    ] })
+                  ]
+                },
+                row.place
+              );
+            })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              "data-ocid": "leaderboard.prizes_coming_soon",
+              style: {
+                textAlign: "center",
+                padding: "10px",
+                background: "rgba(0,255,204,0.04)",
+                border: `1px solid ${BORDER$d}`,
+                borderRadius: 8,
+                fontSize: 9,
+                color: TEXT_DIM$7,
+                letterSpacing: 1.5
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$e }, children: "⚡" }),
+                " FULL RANKINGS & MORE PRIZE TIERS COMING SOON"
+              ]
+            }
+          )
+        ] })
+      ]
+    }
+  );
+}
+function Leaderboard() {
+  const leaderboard = useGameStore((s2) => s2.leaderboard);
+  const player = useGameStore((s2) => s2.player);
+  const rankStats = useGameStore((s2) => s2.rankStats);
+  const treasuryState = useGameStore((s2) => s2.treasuryState);
+  const globalStats = useGameStore((s2) => s2.globalStats);
+  const { actor, isFetching } = useActor(createActor);
+  const leaderboardPot = Number(treasuryState.leaderboard) / 1e8;
+  const totalPlotsOwned = (globalStats == null ? void 0 : globalStats.totalPlotsOwned) ?? 0;
+  const [sortKey, setSortKey] = reactExports.useState("score");
+  const [sortDir, setSortDir] = reactExports.useState("desc");
+  const [pageTab, setPageTab] = reactExports.useState("rankings");
+  const [isLoading, setIsLoading] = reactExports.useState(true);
+  const [lastRefresh, setLastRefresh] = reactExports.useState(Date.now());
+  const [refreshing, setRefreshing] = reactExports.useState(false);
+  const refreshTimerRef = reactExports.useRef(null);
+  const fetchLeaderboard = reactExports.useCallback(async () => {
+    if (!actor || isFetching) return;
+    try {
+      const data = await actor.getLeaderboard(50n);
+      const mapped = data.map((e) => ({
+        rank: Number(e.rank),
+        name: e.username ?? `${e.principal.slice(0, 8)}...${e.principal.slice(-4)}`,
+        principal: e.principal,
+        plotsOwned: Number(e.plotsOwned),
+        frntEarned: Number(e.frntBalance),
+        victories: 0
+      }));
+      useGameStore.setState({ leaderboard: mapped });
+    } catch {
+    }
+  }, [actor, isFetching]);
+  reactExports.useEffect(() => {
+    const load = async () => {
+      await fetchLeaderboard();
+      setIsLoading(false);
+    };
+    void load();
+    refreshTimerRef.current = setInterval(() => {
+      void fetchLeaderboard();
+      setLastRefresh(Date.now());
+    }, 3e4);
+    return () => {
+      if (refreshTimerRef.current) clearInterval(refreshTimerRef.current);
+    };
+  }, [fetchLeaderboard]);
+  const handleManualRefresh = async () => {
+    setRefreshing(true);
+    await fetchLeaderboard();
+    setLastRefresh(Date.now());
+    setRefreshing(false);
+  };
+  const entries = reactExports.useMemo(() => {
+    const base = leaderboard.map((e) => ({
+      id: e.name,
+      name: e.name,
+      principal: e.principal ?? "",
+      plots: e.plotsOwned,
+      frntr: e.frntEarned,
+      wins: e.victories,
+      score: computeScore(e.plotsOwned, e.frntEarned, e.victories),
+      isMe: !!(player.principal && e.principal === player.principal)
+    }));
+    const alreadyInList = base.some((e) => e.isMe);
+    const myEntry = {
+      id: "__me__",
+      name: player.principal ? `${player.principal.slice(0, 8)}...${player.principal.slice(-4)}` : "YOU",
+      principal: player.principal ?? "",
+      plots: player.plotsOwned.length,
+      frntr: Math.round(player.frntBalance),
+      wins: rankStats.combatWins,
+      score: computeScore(
+        player.plotsOwned.length,
+        player.frntBalance,
+        rankStats.combatWins
+      ),
+      isMe: true
+    };
+    const merged = alreadyInList ? base : [myEntry, ...base];
+    return merged.slice(0, 25);
+  }, [leaderboard, player, rankStats]);
+  const sorted = reactExports.useMemo(() => {
+    const copy = [...entries];
+    copy.sort((a2, b2) => {
+      let va = 0;
+      let vb = 0;
+      if (sortKey === "player") {
+        va = a2.name.toLowerCase();
+        vb = b2.name.toLowerCase();
+      } else if (sortKey === "plots") {
+        va = a2.plots ?? 0;
+        vb = b2.plots ?? 0;
+      } else if (sortKey === "frntr") {
+        va = a2.frntr ?? 0;
+        vb = b2.frntr ?? 0;
+      } else if (sortKey === "wins") {
+        va = a2.wins ?? 0;
+        vb = b2.wins ?? 0;
+      } else {
+        va = a2.score ?? 0;
+        vb = b2.score ?? 0;
+      }
+      if (typeof va === "string" && typeof vb === "string") {
+        return sortDir === "asc" ? va.localeCompare(vb) : vb.localeCompare(va);
+      }
+      return sortDir === "asc" ? va - vb : vb - va;
+    });
+    return copy.map((e, i2) => ({ ...e, rank: i2 + 1 }));
+  }, [entries, sortKey, sortDir]);
+  const handleSort = (key) => {
+    if (key === sortKey) {
+      setSortDir((d2) => d2 === "asc" ? "desc" : "asc");
+    } else {
+      setSortKey(key);
+      setSortDir("desc");
+    }
+  };
+  const myRank = sorted.findIndex(
+    (e) => e.isMe || player.principal && e.principal === player.principal
+  );
+  const timeSince = Math.floor((Date.now() - lastRefresh) / 1e3);
+  const colStyle = (key) => ({
+    cursor: "pointer",
+    userSelect: "none",
+    padding: "10px 12px",
+    fontSize: 9,
+    fontWeight: 700,
+    letterSpacing: 2,
+    textTransform: "uppercase",
+    color: sortKey === key ? CYAN$e : TEXT_DIM$7,
+    display: "flex",
+    alignItems: "center",
+    gap: 3,
+    whiteSpace: "nowrap",
+    transition: "color 0.15s"
+  });
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "div",
+    {
+      className: "min-h-screen",
+      style: {
+        background: "radial-gradient(ellipse at 50% 0%, #0a1628 0%, #04070d 70%)",
+        fontFamily: "'General Sans', 'Plus Jakarta Sans', sans-serif"
+      },
+      children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "pt-6 pb-12 px-4 max-w-4xl mx-auto", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          motion.div,
+          {
+            initial: { opacity: 0, y: -10 },
+            animate: { opacity: 1, y: 0 },
+            transition: { duration: 0.3 },
+            className: "flex items-center justify-between mb-6",
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      width: 38,
+                      height: 38,
+                      borderRadius: 8,
+                      background: "rgba(0,255,204,0.1)",
+                      border: `1px solid ${BORDER$d}`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center"
+                    },
+                    children: /* @__PURE__ */ jsxRuntimeExports.jsx(Trophy, { size: 18, style: { color: GOLD$5 } })
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "h1",
+                    {
+                      style: {
+                        fontSize: 20,
+                        fontWeight: 800,
+                        letterSpacing: 4,
+                        color: TEXT$8,
+                        textTransform: "uppercase",
+                        lineHeight: 1
+                      },
+                      children: "LEADERBOARD"
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "p",
+                    {
+                      style: {
+                        fontSize: 9,
+                        color: TEXT_DIM$7,
+                        letterSpacing: 2,
+                        marginTop: 2
+                      },
+                      children: [
+                        "GLOBAL RANKING · TOP ",
+                        sorted.length,
+                        " COMMANDERS"
+                      ]
+                    }
+                  )
+                ] })
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 9, color: TEXT_DIM$7, letterSpacing: 1 }, children: refreshing ? "SYNCING..." : `${timeSince}s AGO` }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "button",
+                  {
+                    type: "button",
+                    "data-ocid": "leaderboard.button",
+                    onClick: handleManualRefresh,
+                    disabled: refreshing,
+                    style: {
+                      background: "rgba(0,255,204,0.07)",
+                      border: `1px solid ${BORDER$d}`,
+                      borderRadius: 6,
+                      color: CYAN$e,
+                      padding: "6px 10px",
+                      cursor: refreshing ? "not-allowed" : "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 5,
+                      fontSize: 9,
+                      fontWeight: 700,
+                      letterSpacing: 2,
+                      textTransform: "uppercase",
+                      opacity: refreshing ? 0.6 : 1
+                    },
+                    children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        RefreshCw,
+                        {
+                          size: 11,
+                          style: {
+                            animation: refreshing ? "spin 1s linear infinite" : "none"
+                          }
+                        }
+                      ),
+                      "REFRESH"
+                    ]
+                  }
+                )
+              ] })
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "div",
+          {
+            className: "flex gap-2 mb-5",
+            "data-ocid": "leaderboard.page_tab_switcher",
+            children: [
+              { id: "rankings", label: "RANKINGS", emoji: "🎯" },
+              { id: "prizes", label: "PRIZES", emoji: "🏆" }
+            ].map((t) => {
+              const active = pageTab === t.id;
+              return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "button",
+                {
+                  type: "button",
+                  "data-ocid": `leaderboard.page_tab.${t.id}`,
+                  onClick: () => setPageTab(t.id),
+                  className: "flex items-center gap-2 min-h-[40px] px-5 py-2 text-xs font-bold uppercase tracking-widest transition-all rounded-lg",
+                  style: {
+                    background: active ? "rgba(0,255,204,0.15)" : "rgba(0,20,40,0.5)",
+                    border: `1px solid ${active ? CYAN$e : BORDER$d}`,
+                    color: active ? CYAN$e : TEXT_DIM$7,
+                    boxShadow: active ? "0 0 14px rgba(0,255,204,0.18)" : "none",
+                    letterSpacing: 3
+                  },
+                  children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: t.emoji }),
+                    t.label
+                  ]
+                },
+                t.id
+              );
+            })
+          }
+        ),
+        pageTab === "rankings" && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-wrap gap-2 mb-5", children: [
+          { key: "score", label: "SCORE", icon: "🎯" },
+          {
+            key: "plots",
+            label: "PLOTS",
+            icon: null,
+            lucide: Globe
+          },
+          {
+            key: "frntr",
+            label: "FRNTR",
+            icon: null,
+            lucide: Zap
+          },
+          {
+            key: "wins",
+            label: "WINS",
+            icon: null,
+            lucide: Sword
+          }
+        ].map((tab) => {
+          const active = sortKey === tab.key;
+          const LucideIcon = tab.lucide;
+          return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "button",
+            {
+              type: "button",
+              "data-ocid": "leaderboard.tab",
+              onClick: () => handleSort(tab.key),
+              className: "flex items-center gap-1.5 min-h-[44px] px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all rounded-lg",
+              style: {
+                background: active ? "rgba(0,255,204,0.15)" : "rgba(0,20,40,0.5)",
+                border: `1px solid ${active ? CYAN$e : BORDER$d}`,
+                color: active ? CYAN$e : TEXT_DIM$7,
+                boxShadow: active ? "0 0 10px rgba(0,255,204,0.15)" : "none"
+              },
+              children: [
+                tab.icon && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: tab.icon }),
+                LucideIcon && /* @__PURE__ */ jsxRuntimeExports.jsx(LucideIcon, { size: 13 }),
+                tab.label,
+                active && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 9 }, children: sortDir === "desc" ? "▼" : "▲" })
+              ]
+            },
+            tab.key
+          );
+        }) }),
+        pageTab === "rankings" && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              className: "mb-4 inline-flex items-center gap-2 rounded-full px-4 py-1.5",
+              style: {
+                background: "rgba(0,255,204,0.05)",
+                border: `1px solid ${BORDER$d}`,
+                fontSize: 9,
+                color: TEXT_DIM$7,
+                letterSpacing: 1.5
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$e }, children: "⚡" }),
+                "SCORE = (PLOTS × 100) + (FRNTR × 0.01) + (WINS × 50)"
+              ]
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            motion.div,
+            {
+              initial: { opacity: 0, y: 10 },
+              animate: { opacity: 1, y: 0 },
+              transition: { duration: 0.35, delay: 0.1 },
+              "data-ocid": "leaderboard.table",
+              style: {
+                background: PANEL,
+                backdropFilter: "blur(16px)",
+                WebkitBackdropFilter: "blur(16px)",
+                border: `1px solid ${BORDER$d}`,
+                borderRadius: 12,
+                overflow: "hidden"
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "div",
+                  {
+                    style: {
+                      display: "grid",
+                      gridTemplateColumns: "42px 48px 1fr 70px 110px 60px 90px",
+                      borderBottom: `1px solid ${BORDER$d}`,
+                      background: "rgba(0,255,204,0.03)"
+                    },
+                    children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "div",
+                        {
+                          style: {
+                            padding: "10px 12px",
+                            fontSize: 9,
+                            fontWeight: 700,
+                            letterSpacing: 2,
+                            color: TEXT_DIM$7,
+                            textTransform: "uppercase"
+                          },
+                          children: "#"
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { padding: "10px 4px" } }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                        "button",
+                        {
+                          type: "button",
+                          style: colStyle("player"),
+                          onClick: () => handleSort("player"),
+                          children: [
+                            "PLAYER",
+                            " ",
+                            /* @__PURE__ */ jsxRuntimeExports.jsx(SortIcon, { col: "player", active: sortKey, dir: sortDir })
+                          ]
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                        "button",
+                        {
+                          type: "button",
+                          style: { ...colStyle("plots"), justifyContent: "flex-end" },
+                          onClick: () => handleSort("plots"),
+                          children: [
+                            "PLOTS ",
+                            /* @__PURE__ */ jsxRuntimeExports.jsx(SortIcon, { col: "plots", active: sortKey, dir: sortDir })
+                          ]
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                        "button",
+                        {
+                          type: "button",
+                          style: { ...colStyle("frntr"), justifyContent: "flex-end" },
+                          onClick: () => handleSort("frntr"),
+                          children: [
+                            "FRNTR ",
+                            /* @__PURE__ */ jsxRuntimeExports.jsx(SortIcon, { col: "frntr", active: sortKey, dir: sortDir })
+                          ]
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                        "button",
+                        {
+                          type: "button",
+                          style: { ...colStyle("wins"), justifyContent: "flex-end" },
+                          onClick: () => handleSort("wins"),
+                          children: [
+                            "WINS ",
+                            /* @__PURE__ */ jsxRuntimeExports.jsx(SortIcon, { col: "wins", active: sortKey, dir: sortDir })
+                          ]
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                        "button",
+                        {
+                          type: "button",
+                          style: { ...colStyle("score"), justifyContent: "flex-end" },
+                          onClick: () => handleSort("score"),
+                          children: [
+                            "SCORE ",
+                            /* @__PURE__ */ jsxRuntimeExports.jsx(SortIcon, { col: "score", active: sortKey, dir: sortDir })
+                          ]
+                        }
+                      )
+                    ]
+                  }
+                ),
+                isLoading ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    "data-ocid": "leaderboard.loading_state",
+                    style: { padding: 12 },
+                    children: Array.from({ length: 5 }).map((_2, i2) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      Skeleton2,
+                      {
+                        className: "w-full h-10 mb-2 rounded-md",
+                        style: { background: "rgba(0,255,204,0.06)" }
+                      },
+                      i2
+                    ))
+                  }
+                ) : sorted.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "div",
+                  {
+                    "data-ocid": "leaderboard.empty_state",
+                    style: {
+                      padding: "40px 20px",
+                      textAlign: "center",
+                      color: TEXT_DIM$7,
+                      fontSize: 12,
+                      letterSpacing: 2
+                    },
+                    children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 28, marginBottom: 8 }, children: "📡" }),
+                      "NO PLAYERS YET — BE THE FIRST TO REGISTER!"
+                    ]
+                  }
+                ) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { "data-ocid": "leaderboard.list", children: sorted.map((entry, idx) => {
+                  const isTop3 = entry.rank <= 3;
+                  const rowBg = entry.isMe ? "rgba(0,255,204,0.08)" : isTop3 ? `rgba(0,255,204,${0.04 - idx * 0.01})` : "transparent";
+                  const borderColor = entry.isMe ? "rgba(0,255,204,0.25)" : "rgba(0,255,204,0.06)";
+                  const rankColor = entry.rank === 1 ? GOLD$5 : entry.rank === 2 ? "#c0c0c0" : entry.rank === 3 ? AMBER : TEXT_DIM$7;
+                  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    motion.div,
+                    {
+                      initial: { opacity: 0 },
+                      animate: { opacity: 1 },
+                      transition: { delay: idx * 0.03 },
+                      "data-ocid": `leaderboard.item.${idx + 1}`,
+                      style: {
+                        display: "grid",
+                        gridTemplateColumns: "42px 48px 1fr 70px 110px 60px 90px",
+                        background: rowBg,
+                        borderBottom: `1px solid ${borderColor}`,
+                        alignItems: "center",
+                        transition: "background 0.15s",
+                        ...entry.isMe ? {
+                          boxShadow: "inset 2px 0 0 rgba(0,255,204,0.6)"
+                        } : {}
+                      },
+                      children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "div",
+                          {
+                            style: {
+                              padding: "11px 12px",
+                              fontSize: 10,
+                              fontWeight: 700,
+                              fontFamily: "monospace",
+                              color: rankColor
+                            },
+                            children: entry.rank
+                          }
+                        ),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { padding: "11px 4px" }, children: /* @__PURE__ */ jsxRuntimeExports.jsx(RankMedal, { rank: entry.rank }) }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                          "div",
+                          {
+                            style: {
+                              padding: "11px 12px",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 8,
+                              overflow: "hidden"
+                            },
+                            children: [
+                              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                "div",
+                                {
+                                  style: {
+                                    width: 22,
+                                    height: 22,
+                                    borderRadius: 4,
+                                    background: `oklch(55% 0.2 ${entry.name.charCodeAt(0) * 23 % 360})`,
+                                    flexShrink: 0,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    fontSize: 9,
+                                    fontWeight: 700,
+                                    color: "#fff"
+                                  },
+                                  children: entry.name.slice(0, 1).toUpperCase()
+                                }
+                              ),
+                              /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                                "span",
+                                {
+                                  style: {
+                                    fontSize: 11,
+                                    fontWeight: entry.isMe ? 800 : 500,
+                                    color: entry.isMe ? CYAN$e : TEXT$8,
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
+                                    letterSpacing: 0.5
+                                  },
+                                  children: [
+                                    entry.name,
+                                    entry.isMe && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                      "span",
+                                      {
+                                        style: {
+                                          marginLeft: 6,
+                                          fontSize: 7,
+                                          fontWeight: 700,
+                                          color: CYAN$e,
+                                          border: "1px solid rgba(0,255,204,0.4)",
+                                          borderRadius: 3,
+                                          padding: "1px 4px",
+                                          letterSpacing: 1
+                                        },
+                                        children: "YOU"
+                                      }
+                                    )
+                                  ]
+                                }
+                              )
+                            ]
+                          }
+                        ),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "div",
+                          {
+                            style: {
+                              padding: "11px 12px",
+                              textAlign: "right",
+                              fontSize: 11,
+                              fontWeight: 700,
+                              fontFamily: "monospace",
+                              color: TEXT$8
+                            },
+                            children: entry.plots
+                          }
+                        ),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "div",
+                          {
+                            style: {
+                              padding: "11px 12px",
+                              textAlign: "right",
+                              fontSize: 11,
+                              fontWeight: 700,
+                              fontFamily: "monospace",
+                              color: entry.isMe ? CYAN$e : "rgba(0,255,204,0.7)"
+                            },
+                            children: entry.frntr.toLocaleString()
+                          }
+                        ),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "div",
+                          {
+                            style: {
+                              padding: "11px 12px",
+                              textAlign: "right",
+                              fontSize: 11,
+                              fontWeight: 700,
+                              fontFamily: "monospace",
+                              color: "#22c55e"
+                            },
+                            children: entry.wins
+                          }
+                        ),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "div",
+                          {
+                            style: {
+                              padding: "11px 12px",
+                              textAlign: "right",
+                              fontSize: 11,
+                              fontWeight: 800,
+                              fontFamily: "monospace",
+                              color: entry.isMe ? GOLD$5 : AMBER
+                            },
+                            children: entry.score.toLocaleString()
+                          }
+                        )
+                      ]
+                    },
+                    entry.id
+                  );
+                }) })
+              ]
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            motion.div,
+            {
+              initial: { opacity: 0, y: 6 },
+              animate: { opacity: 1, y: 0 },
+              transition: { duration: 0.3, delay: 0.2 },
+              "data-ocid": "leaderboard.your_rank_card",
+              className: "mt-4 flex items-center justify-between rounded-xl px-5 py-4",
+              style: {
+                background: "rgba(0,255,204,0.06)",
+                border: "1px solid rgba(0,255,204,0.25)",
+                backdropFilter: "blur(12px)"
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(Trophy, { size: 16, style: { color: GOLD$5 } }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "span",
+                    {
+                      style: {
+                        fontSize: 10,
+                        fontWeight: 700,
+                        letterSpacing: 2,
+                        color: TEXT_DIM$7,
+                        textTransform: "uppercase"
+                      },
+                      children: "YOUR RANK"
+                    }
+                  )
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "span",
+                  {
+                    style: {
+                      fontSize: 18,
+                      fontWeight: 900,
+                      fontFamily: "monospace",
+                      color: myRank >= 0 ? CYAN$e : TEXT_DIM$7,
+                      letterSpacing: 1
+                    },
+                    children: myRank >= 0 ? `#${myRank + 1}` : "UNRANKED"
+                  }
+                )
+              ]
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              className: "mt-3 flex items-center justify-end gap-2",
+              style: { fontSize: 9, color: TEXT_DIM$7, letterSpacing: 1.5 },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      width: 6,
+                      height: 6,
+                      borderRadius: "50%",
+                      background: CYAN$e,
+                      animation: "pulse 2s infinite",
+                      boxShadow: "0 0 6px rgba(0,255,204,0.7)"
+                    }
+                  }
+                ),
+                "AUTO-REFRESH EVERY 30S"
+              ]
+            }
+          )
+        ] }),
+        pageTab === "prizes" && /* @__PURE__ */ jsxRuntimeExports.jsx(
+          GrandPrizes,
+          {
+            leaderboardPot,
+            totalPlotsOwned
+          }
+        )
+      ] })
+    }
+  );
+}
 function applyConfirmedFrntrBalance(rawE8s) {
   useGameStore.getState().setFrntrBalance(rawE8s);
 }
@@ -89155,14 +91432,15 @@ function usePlayerSync() {
     };
     const syncGlobalStats = async () => {
       try {
-        const [g2, t, treasury] = await Promise.all([
+        const [g2, t, treasury, gameStats] = await Promise.all([
           actor.getGlobalStats(),
           actor.getTokenomics(),
           actor.getTreasuryBalances().catch(() => ({
             devPot: 0n,
             leaderboardPot: 0n,
             liquidityPot: 0n
-          }))
+          })),
+          actor.getGameStats().catch(() => null)
         ]);
         const stats = {
           totalPlotsOwned: Number(g2.totalPlotsOwned),
@@ -89185,12 +91463,26 @@ function usePlayerSync() {
           leaderboardPotICP: Number(treasury.leaderboardPot) / 1e8,
           liquidityPotICP: Number(treasury.liquidityPot) / 1e8
         };
+        if (gameStats && gameStats.totalActionCount !== void 0) {
+          stats.totalActionCount = Number(gameStats.totalActionCount);
+        }
         useGameStore.getState().setGlobalStats(stats);
         useGameStore.getState().setTreasuryState({
           developer: BigInt(Math.floor(Number(treasury.devPot))),
           leaderboard: BigInt(Math.floor(Number(treasury.leaderboardPot))),
-          liquidity: BigInt(Math.floor(Number(treasury.liquidityPot)))
+          liquidity: BigInt(Math.floor(Number(treasury.liquidityPot))),
+          totalPlayers: gameStats ? Number(gameStats.totalPlayers) : void 0,
+          totalPlotsSold: gameStats ? Number(gameStats.totalPlots) : void 0
         });
+        if (gameStats) {
+          const store = useGameStore.getState();
+          store.setTotalGlobalDailyOutput(
+            Number(gameStats.totalDailyOutput) / 1e8
+          );
+          store.setGlobalUnclaimedTokens(
+            Number(gameStats.globalUnclaimedTokens) / 1e8
+          );
+        }
       } catch {
       }
     };
@@ -89288,10 +91580,10 @@ function usePlayerSync() {
     void seed();
   }, [actor, isFetching]);
 }
-const CYAN$b = "#00ffcc";
-const BORDER$a = "rgba(0,255,204,0.22)";
-const TEXT$5 = "#e0f4ff";
-const TEXT_DIM$4 = "rgba(224,244,255,0.45)";
+const CYAN$d = "#00ffcc";
+const BORDER$c = "rgba(0,255,204,0.22)";
+const TEXT$7 = "#e0f4ff";
+const TEXT_DIM$6 = "rgba(224,244,255,0.45)";
 function AdminButton({
   label,
   icon: Icon2,
@@ -89314,7 +91606,7 @@ function AdminButton({
         borderRadius: 8,
         background: danger ? "rgba(255,68,68,0.10)" : "rgba(0,255,204,0.08)",
         border: `1px solid ${danger ? "rgba(255,68,68,0.35)" : "rgba(0,255,204,0.3)"}`,
-        color: danger ? "#ff6666" : CYAN$b,
+        color: danger ? "#ff6666" : CYAN$d,
         fontSize: 11,
         fontWeight: 700,
         letterSpacing: 1.5,
@@ -89452,8 +91744,8 @@ function AdminPanel() {
             Shield,
             {
               size: 18,
-              color: CYAN$b,
-              style: { filter: `drop-shadow(0 0 6px ${CYAN$b})` }
+              color: CYAN$d,
+              style: { filter: `drop-shadow(0 0 6px ${CYAN$d})` }
             }
           ),
           /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -89462,10 +91754,10 @@ function AdminPanel() {
               style: {
                 fontSize: 13,
                 fontWeight: 900,
-                color: CYAN$b,
+                color: CYAN$d,
                 letterSpacing: 3,
                 textTransform: "uppercase",
-                textShadow: `0 0 10px ${CYAN$b}`
+                textShadow: `0 0 10px ${CYAN$d}`
               },
               children: "ADMIN CONTROL"
             }
@@ -89478,17 +91770,17 @@ function AdminPanel() {
                 padding: "2px 8px",
                 borderRadius: 10,
                 background: "rgba(0,255,204,0.12)",
-                border: `1px solid ${CYAN$b}55`,
+                border: `1px solid ${CYAN$d}55`,
                 fontSize: 7,
                 fontWeight: 700,
-                color: CYAN$b,
+                color: CYAN$d,
                 letterSpacing: 2
               },
               children: "ADMIN"
             }
           )
         ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { height: 1, background: BORDER$a } }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { height: 1, background: BORDER$c } }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs(
           "div",
           {
@@ -89496,7 +91788,7 @@ function AdminPanel() {
               padding: "8px 12px",
               borderRadius: 8,
               background: "rgba(0,255,204,0.04)",
-              border: `1px solid ${BORDER$a}`
+              border: `1px solid ${BORDER$c}`
             },
             children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -89504,7 +91796,7 @@ function AdminPanel() {
                 {
                   style: {
                     fontSize: 7,
-                    color: TEXT_DIM$4,
+                    color: TEXT_DIM$6,
                     letterSpacing: 1.5,
                     marginBottom: 3
                   },
@@ -89515,7 +91807,7 @@ function AdminPanel() {
                 "div",
                 {
                   className: "font-mono",
-                  style: { fontSize: 9, color: TEXT$5, wordBreak: "break-all" },
+                  style: { fontSize: 9, color: TEXT$7, wordBreak: "break-all" },
                   children: player.principal ?? "—"
                 }
               )
@@ -89528,7 +91820,7 @@ function AdminPanel() {
             {
               style: {
                 fontSize: 8,
-                color: TEXT_DIM$4,
+                color: TEXT_DIM$6,
                 letterSpacing: 2,
                 marginBottom: 2
               },
@@ -89620,8 +91912,8 @@ function AdminPanel() {
                         padding: "8px",
                         borderRadius: 6,
                         background: "rgba(0,255,204,0.06)",
-                        border: `1px solid ${BORDER$a}`,
-                        color: CYAN$b,
+                        border: `1px solid ${BORDER$c}`,
+                        color: CYAN$d,
                         fontSize: 10,
                         fontWeight: 700,
                         cursor: "pointer",
@@ -89642,9 +91934,9 @@ function AdminPanel() {
               padding: "8px 12px",
               borderRadius: 8,
               background: "rgba(0,10,20,0.4)",
-              border: `1px solid ${BORDER$a}`,
+              border: `1px solid ${BORDER$c}`,
               fontSize: 8,
-              color: TEXT_DIM$4,
+              color: TEXT_DIM$6,
               lineHeight: 1.7,
               letterSpacing: 0.3
             },
@@ -89655,12 +91947,13 @@ function AdminPanel() {
     }
   );
 }
-const CYAN$a = "#00ffcc";
-const CYAN_DIM$7 = "rgba(0,255,204,0.35)";
+const CYAN$c = "#00ffcc";
+const CYAN_DIM$8 = "rgba(0,255,204,0.35)";
 const BORDER_TOP = "rgba(0,255,204,0.28)";
 const BASE_NAV_ITEMS = [
   { id: "map", label: "MAP", Icon: Map$1 },
   { id: "command", label: "CMD", Icon: LayoutDashboard },
+  { id: "missions", label: "MISSIONS", Icon: Target },
   { id: "intel", label: "INTEL", Icon: Radio },
   { id: "universe", label: "UNI", Icon: Globe },
   { id: "leaderboard", label: "LEAD", Icon: Trophy },
@@ -89676,81 +91969,108 @@ function BottomNav({ activeTab, onTabClick }) {
     "div",
     {
       "data-ocid": "bottom_nav.panel",
-      className: "fixed left-0 right-0 z-50 flex items-stretch",
+      className: "flex md:hidden items-stretch no-scrollbar",
       style: {
+        position: "fixed",
         bottom: 0,
-        height: 64,
+        left: 0,
+        right: 0,
+        zIndex: 50,
+        paddingBottom: "env(safe-area-inset-bottom)",
         background: "rgba(2,10,20,0.97)",
         borderTop: `1px solid ${BORDER_TOP}`,
         backdropFilter: "blur(12px)",
-        WebkitBackdropFilter: "blur(12px)",
-        paddingBottom: "env(safe-area-inset-bottom)"
+        WebkitBackdropFilter: "blur(12px)"
       },
-      children: visibleItems.map(({ id: id2, label, Icon: Icon2 }) => {
-        const isActive = activeTab === id2;
-        return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-          "button",
-          {
-            type: "button",
-            "data-ocid": `bottom_nav.${id2}.tab`,
-            onClick: () => onTabClick(id2),
-            className: "flex-1 flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-all duration-150",
-            style: {
-              background: isActive ? "rgba(0,255,204,0.07)" : "transparent",
-              borderTop: isActive ? `2px solid ${CYAN$a}` : "2px solid transparent",
-              position: "relative"
-            },
-            children: [
-              isActive && /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "div",
-                {
-                  style: {
-                    position: "absolute",
-                    top: 0,
-                    left: "20%",
-                    right: "20%",
-                    height: 2,
-                    background: CYAN$a,
-                    borderRadius: "0 0 2px 2px",
-                    boxShadow: `0 0 8px ${CYAN$a}`,
-                    filter: "blur(1px)"
-                  }
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                Icon2,
-                {
-                  size: 18,
-                  color: isActive ? CYAN$a : id2 === "admin" ? "rgba(255,100,100,0.6)" : CYAN_DIM$7,
-                  style: {
-                    filter: isActive ? `drop-shadow(0 0 4px ${CYAN$a})` : "none",
-                    transition: "filter 0.15s"
-                  }
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "span",
-                {
-                  style: {
-                    fontSize: 7.5,
-                    letterSpacing: 0.5,
-                    color: isActive ? CYAN$a : CYAN_DIM$7,
-                    fontWeight: isActive ? 700 : 400
-                  },
-                  children: label
-                }
-              )
-            ]
+      children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "div",
+        {
+          className: "flex md:hidden items-stretch",
+          style: {
+            overflowX: "auto",
+            overflowY: "hidden",
+            scrollSnapType: "x mandatory",
+            WebkitOverflowScrolling: "touch",
+            /* hide scrollbar on mobile */
+            msOverflowStyle: "none",
+            scrollbarWidth: "none",
+            minHeight: 60
           },
-          id2
-        );
-      })
+          children: visibleItems.map(({ id: id2, label, Icon: Icon2 }) => {
+            const isActive = activeTab === id2;
+            return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "button",
+              {
+                type: "button",
+                "data-ocid": `bottom_nav.${id2}.tab`,
+                onClick: () => onTabClick(id2),
+                className: "flex flex-col items-center justify-center cursor-pointer transition-all duration-150 flex-shrink-0",
+                style: {
+                  scrollSnapAlign: "start",
+                  minWidth: 72,
+                  width: 72,
+                  background: isActive ? "rgba(0,255,204,0.07)" : "transparent",
+                  borderTop: isActive ? `2px solid ${CYAN$c}` : "2px solid transparent",
+                  position: "relative",
+                  paddingTop: 10,
+                  paddingBottom: 10,
+                  gap: 4
+                },
+                children: [
+                  isActive && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        position: "absolute",
+                        top: 0,
+                        left: "20%",
+                        right: "20%",
+                        height: 2,
+                        background: CYAN$c,
+                        borderRadius: "0 0 2px 2px",
+                        boxShadow: `0 0 8px ${CYAN$c}`,
+                        filter: "blur(1px)"
+                      }
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    Icon2,
+                    {
+                      size: 18,
+                      color: isActive ? CYAN$c : id2 === "admin" ? "rgba(255,100,100,0.6)" : CYAN_DIM$8,
+                      style: {
+                        filter: isActive ? `drop-shadow(0 0 4px ${CYAN$c})` : "none",
+                        transition: "filter 0.15s"
+                      }
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "span",
+                    {
+                      style: {
+                        fontSize: 8,
+                        letterSpacing: 0.6,
+                        color: isActive ? CYAN$c : CYAN_DIM$8,
+                        fontWeight: isActive ? 700 : 400,
+                        lineHeight: 1,
+                        whiteSpace: "nowrap"
+                      },
+                      children: label
+                    }
+                  )
+                ]
+              },
+              id2
+            );
+          })
+        }
+      )
     }
   );
 }
-const CYAN$9 = "#00ffcc";
-const BORDER$9 = "rgba(0,255,204,0.22)";
-const CYAN_DIM$6 = "rgba(0,255,204,0.35)";
+const CYAN$b = "#00ffcc";
+const BORDER$b = "rgba(0,255,204,0.22)";
+const CYAN_DIM$7 = "rgba(0,255,204,0.35)";
 function BottomSheet({
   isOpen,
   title,
@@ -89779,14 +92099,14 @@ function BottomSheet({
       "div",
       {
         "data-ocid": "bottom_sheet.panel",
-        className: "fixed left-0 right-0 z-50 flex flex-col",
+        className: "fixed left-0 right-0 z-[70] flex flex-col",
         style: {
-          bottom: 64,
+          bottom: "calc(64px + env(safe-area-inset-bottom))",
           height,
           background: "rgba(4,12,24,0.97)",
-          borderTop: `1px solid ${BORDER$9}`,
-          borderLeft: `1px solid ${BORDER$9}`,
-          borderRight: `1px solid ${BORDER$9}`,
+          borderTop: `1px solid ${BORDER$b}`,
+          borderLeft: `1px solid ${BORDER$b}`,
+          borderRight: `1px solid ${BORDER$b}`,
           borderRadius: "16px 16px 0 0",
           backdropFilter: "blur(20px)",
           WebkitBackdropFilter: "blur(20px)",
@@ -89801,7 +92121,7 @@ function BottomSheet({
             {
               className: "flex-shrink-0 flex items-center justify-between px-4 py-2.5",
               style: {
-                borderBottom: `1px solid ${BORDER$9}`,
+                borderBottom: `1px solid ${BORDER$b}`,
                 background: "rgba(0,255,204,0.03)"
               },
               children: [
@@ -89829,9 +92149,9 @@ function BottomSheet({
                     style: {
                       fontSize: 11,
                       fontWeight: 700,
-                      color: CYAN$9,
+                      color: CYAN$b,
                       letterSpacing: 2,
-                      textShadow: `0 0 10px ${CYAN$9}`,
+                      textShadow: `0 0 10px ${CYAN$b}`,
                       paddingTop: 4
                     },
                     children: title
@@ -89849,7 +92169,7 @@ function BottomSheet({
                       style: {
                         background: "none",
                         border: "none",
-                        color: CYAN_DIM$6,
+                        color: CYAN_DIM$7,
                         padding: 4
                       },
                       children: /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronDown, { size: 18 })
@@ -89864,8 +92184,8 @@ function BottomSheet({
                       className: "cursor-pointer flex items-center justify-center rounded",
                       style: {
                         background: "rgba(0,255,204,0.06)",
-                        border: `1px solid ${BORDER$9}`,
-                        color: CYAN_DIM$6,
+                        border: `1px solid ${BORDER$b}`,
+                        color: CYAN_DIM$7,
                         padding: 4
                       },
                       children: /* @__PURE__ */ jsxRuntimeExports.jsx(X$1, { size: 14 })
@@ -89881,25 +92201,458 @@ function BottomSheet({
     )
   ] });
 }
-const CYAN$8 = "#00ffcc";
-const CYAN_DIM$5 = "rgba(0,255,204,0.35)";
-const BORDER$8 = "rgba(0,255,204,0.22)";
-const TEXT$4 = "#e0f4ff";
-const TEXT_DIM$3 = "rgba(224,244,255,0.45)";
-const MiniBar = ({
-  value,
-  max,
-  color: color2
-}) => /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-full h-2 bg-slate-700 rounded overflow-hidden", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-  "div",
-  {
-    className: "h-full rounded",
-    style: {
-      width: `${Math.min(100, value / max * 100)}%`,
-      backgroundColor: color2
-    }
+const CYAN$a = "#00ffcc";
+const CYAN_DIM$6 = "rgba(0,255,204,0.35)";
+const BORDER$a = "rgba(0,255,204,0.22)";
+const TEXT$6 = "#e0f4ff";
+const TEXT_DIM$5 = "rgba(224,244,255,0.45)";
+function fmtTimestamp(ts) {
+  try {
+    const ms = Number(ts / 1000000n);
+    if (ms < 1e6) return "--";
+    return new Date(ms).toLocaleString();
+  } catch {
+    return "--";
   }
-) });
+}
+function fmtAmount(amount, action) {
+  if (amount === void 0 || amount === null) return "";
+  const isIcp = action.toLowerCase().includes("purchase");
+  const val = Number(amount) / 1e8;
+  return isIcp ? `${val.toFixed(4)} ICP` : `${val.toFixed(4)} FRNTR`;
+}
+const DECISION_COLORS = {
+  confirmed: "#22c55e",
+  cancelled: "#ef4444"
+};
+const ACTION_ICONS = {
+  purchasePlot: "🌍",
+  upgradeGenerator: "⚡",
+  claimAccumulatedTokens: "💰",
+  claimAllPlots: "💰",
+  startSurvey: "🔭",
+  completeMission: "🏆"
+};
+function AuditHistoryPanel({ isOpen, onClose }) {
+  const { actor } = useActor(createActor);
+  const [entries, setEntries] = reactExports.useState([]);
+  const [loading2, setLoading] = reactExports.useState(false);
+  const [error, setError] = reactExports.useState(null);
+  reactExports.useEffect(() => {
+    if (!isOpen || !actor) return;
+    setLoading(true);
+    setError(null);
+    actor.getMyAuditLog().then((log2) => {
+      const sorted = [...log2].sort((a2, b2) => Number(b2[0] - a2[0]));
+      setEntries(sorted);
+    }).catch(() => setError("Failed to load audit log.")).finally(() => setLoading(false));
+  }, [isOpen, actor]);
+  if (!isOpen) return null;
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "div",
+    {
+      "data-ocid": "audit.panel",
+      style: {
+        position: "fixed",
+        inset: 0,
+        zIndex: 1100,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "rgba(0,5,15,0.72)",
+        backdropFilter: "blur(8px)",
+        WebkitBackdropFilter: "blur(8px)"
+      },
+      onClick: (e) => {
+        if (e.target === e.currentTarget) onClose();
+      },
+      onKeyDown: (e) => {
+        if (e.key === "Escape") onClose();
+      },
+      tabIndex: -1,
+      children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        "div",
+        {
+          style: {
+            width: "min(520px, calc(100vw - 32px))",
+            maxHeight: "80vh",
+            display: "flex",
+            flexDirection: "column",
+            background: "rgba(2,10,22,0.95)",
+            backdropFilter: "blur(24px)",
+            WebkitBackdropFilter: "blur(24px)",
+            border: `1px solid ${BORDER$a}`,
+            borderRadius: 14,
+            boxShadow: "0 0 48px rgba(0,255,204,0.10), 0 8px 48px rgba(0,0,0,0.6)",
+            overflow: "hidden"
+          },
+          children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "div",
+              {
+                style: {
+                  position: "absolute",
+                  inset: 0,
+                  pointerEvents: "none",
+                  backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,255,204,0.012) 2px, rgba(0,255,204,0.012) 4px)",
+                  borderRadius: 14
+                }
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "div",
+              {
+                style: {
+                  padding: "14px 16px",
+                  borderBottom: `1px solid ${BORDER$a}`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  flexShrink: 0,
+                  background: "rgba(0,255,204,0.04)",
+                  position: "relative",
+                  zIndex: 1
+                },
+                children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 10 }, children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "div",
+                      {
+                        style: {
+                          width: 3,
+                          height: 18,
+                          background: CYAN$a,
+                          borderRadius: 2,
+                          boxShadow: `0 0 8px ${CYAN$a}`
+                        }
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "div",
+                        {
+                          style: {
+                            fontSize: 10,
+                            fontWeight: 900,
+                            color: CYAN$a,
+                            letterSpacing: 3,
+                            textTransform: "uppercase",
+                            textShadow: `0 0 10px ${CYAN$a}`
+                          },
+                          children: "Audit Log"
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$5, letterSpacing: 1 }, children: "On-chain tamperproof record" })
+                    ] })
+                  ] }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "button",
+                    {
+                      type: "button",
+                      "data-ocid": "audit.close_button",
+                      onClick: onClose,
+                      "aria-label": "Close audit log",
+                      style: {
+                        width: 30,
+                        height: 30,
+                        borderRadius: 6,
+                        background: "rgba(0,255,204,0.06)",
+                        border: `1px solid ${BORDER$a}`,
+                        color: CYAN_DIM$6,
+                        cursor: "pointer",
+                        fontSize: 18,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        lineHeight: 1
+                      },
+                      children: "×"
+                    }
+                  )
+                ]
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "div",
+              {
+                style: {
+                  overflowY: "auto",
+                  padding: "12px 14px",
+                  flex: 1,
+                  position: "relative",
+                  zIndex: 1
+                },
+                children: [
+                  loading2 && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "div",
+                    {
+                      "data-ocid": "audit.loading_state",
+                      style: {
+                        textAlign: "center",
+                        padding: "32px 0",
+                        color: CYAN_DIM$6,
+                        fontSize: 10,
+                        letterSpacing: 2
+                      },
+                      children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { marginBottom: 8, fontSize: 20 }, children: "⏳" }),
+                        "LOADING..."
+                      ]
+                    }
+                  ),
+                  error && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      "data-ocid": "audit.error_state",
+                      style: {
+                        textAlign: "center",
+                        padding: "24px 0",
+                        color: "#ef4444",
+                        fontSize: 9,
+                        letterSpacing: 1
+                      },
+                      children: error
+                    }
+                  ),
+                  !loading2 && !error && entries.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "div",
+                    {
+                      "data-ocid": "audit.empty_state",
+                      style: {
+                        textAlign: "center",
+                        padding: "40px 0",
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        gap: 8
+                      },
+                      children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 32, opacity: 0.4 }, children: "🔐" }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "div",
+                          {
+                            style: {
+                              fontSize: 10,
+                              fontWeight: 700,
+                              color: CYAN_DIM$6,
+                              letterSpacing: 2
+                            },
+                            children: "No actions recorded yet."
+                          }
+                        ),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "div",
+                          {
+                            style: {
+                              fontSize: 8,
+                              color: TEXT_DIM$5,
+                              maxWidth: 260,
+                              lineHeight: 1.6
+                            },
+                            children: "Every plot purchase, upgrade, survey, and mission you complete will appear here — permanently on-chain."
+                          }
+                        )
+                      ]
+                    }
+                  ),
+                  !loading2 && !error && entries.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "flex", flexDirection: "column", gap: 6 }, children: entries.map(([idx, entry], i2) => {
+                    const decisionColor = DECISION_COLORS[entry.decision] ?? TEXT_DIM$5;
+                    const icon = ACTION_ICONS[entry.action] ?? "📋";
+                    const amountStr = fmtAmount(entry.amount, entry.action);
+                    return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "div",
+                      {
+                        "data-ocid": `audit.item.${i2 + 1}`,
+                        style: {
+                          background: "rgba(0,10,20,0.55)",
+                          border: `1px solid ${BORDER$a}`,
+                          borderLeft: `3px solid ${decisionColor}44`,
+                          borderRadius: 8,
+                          padding: "10px 12px",
+                          display: "flex",
+                          gap: 10,
+                          alignItems: "flex-start"
+                        },
+                        children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "div",
+                            {
+                              style: {
+                                fontSize: 18,
+                                lineHeight: 1,
+                                flexShrink: 0,
+                                marginTop: 2
+                              },
+                              children: icon
+                            }
+                          ),
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { flex: 1, minWidth: 0 }, children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                              "div",
+                              {
+                                style: {
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "space-between",
+                                  gap: 8,
+                                  marginBottom: 3
+                                },
+                                children: [
+                                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                    "span",
+                                    {
+                                      style: {
+                                        fontSize: 9,
+                                        fontWeight: 700,
+                                        color: TEXT$6,
+                                        letterSpacing: 0.5,
+                                        fontFamily: "monospace"
+                                      },
+                                      children: entry.action
+                                    }
+                                  ),
+                                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                    "span",
+                                    {
+                                      style: {
+                                        fontSize: 8,
+                                        fontWeight: 900,
+                                        color: decisionColor,
+                                        letterSpacing: 1.5,
+                                        textTransform: "uppercase",
+                                        padding: "1px 6px",
+                                        borderRadius: 3,
+                                        background: `${decisionColor}18`,
+                                        border: `1px solid ${decisionColor}44`,
+                                        flexShrink: 0
+                                      },
+                                      children: entry.decision
+                                    }
+                                  )
+                                ]
+                              }
+                            ),
+                            /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                              "div",
+                              {
+                                style: {
+                                  display: "flex",
+                                  flexWrap: "wrap",
+                                  gap: "4px 12px",
+                                  marginBottom: 4
+                                },
+                                children: [
+                                  entry.plotId && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { style: { fontSize: 8, color: TEXT_DIM$5 }, children: [
+                                    "Plot:",
+                                    " ",
+                                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                                      "span",
+                                      {
+                                        style: {
+                                          color: CYAN$a,
+                                          fontFamily: "monospace"
+                                        },
+                                        children: [
+                                          "#",
+                                          entry.plotId
+                                        ]
+                                      }
+                                    )
+                                  ] }),
+                                  amountStr && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { style: { fontSize: 8, color: TEXT_DIM$5 }, children: [
+                                    "Amount:",
+                                    " ",
+                                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                      "span",
+                                      {
+                                        style: {
+                                          color: CYAN$a,
+                                          fontFamily: "monospace"
+                                        },
+                                        children: amountStr
+                                      }
+                                    )
+                                  ] })
+                                ]
+                              }
+                            ),
+                            /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                              "div",
+                              {
+                                style: {
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  alignItems: "center"
+                                },
+                                children: [
+                                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                    "span",
+                                    {
+                                      style: {
+                                        fontSize: 7.5,
+                                        color: "rgba(224,244,255,0.3)",
+                                        letterSpacing: 0.5
+                                      },
+                                      children: entry.details
+                                    }
+                                  ),
+                                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                    "span",
+                                    {
+                                      style: {
+                                        fontSize: 7,
+                                        color: TEXT_DIM$5,
+                                        fontFamily: "monospace",
+                                        letterSpacing: 0.5,
+                                        flexShrink: 0
+                                      },
+                                      children: fmtTimestamp(entry.timestamp)
+                                    }
+                                  )
+                                ]
+                              }
+                            )
+                          ] })
+                        ]
+                      },
+                      String(idx)
+                    );
+                  }) })
+                ]
+              }
+            ),
+            !loading2 && entries.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "div",
+              {
+                style: {
+                  padding: "8px 16px",
+                  borderTop: `1px solid ${BORDER$a}`,
+                  flexShrink: 0,
+                  textAlign: "right",
+                  fontSize: 8,
+                  color: TEXT_DIM$5,
+                  letterSpacing: 1,
+                  background: "rgba(0,255,204,0.02)"
+                },
+                children: [
+                  entries.length,
+                  " record",
+                  entries.length !== 1 ? "s" : ""
+                ]
+              }
+            )
+          ]
+        }
+      )
+    }
+  );
+}
+const CYAN$9 = "#00ffcc";
+const CYAN_DIM$5 = "rgba(0,255,204,0.35)";
+const BORDER$9 = "rgba(0,255,204,0.22)";
+const GOLD$4 = "#ffd700";
+const TEXT$5 = "#e0f4ff";
+const TEXT_DIM$4 = "rgba(224,244,255,0.45)";
 function fmtFrntr(n) {
   if (Number.isNaN(n) || n === void 0) return "0.00000000";
   if (n >= 1e6) return n.toFixed(2);
@@ -89913,10 +92666,12 @@ function CommandCenter() {
   const plots = useGameStore((s2) => s2.plots);
   const accruedFrntSinceSync = useGameStore((s2) => s2.accruedFrntSinceSync);
   const setFrntrBalance = useGameStore((s2) => s2.setFrntrBalance);
+  const incrementClaimCount = useGameStore((s2) => s2.incrementClaimCount);
   const addFrntr = useGameStore((s2) => s2.addFrntr);
   const { actor } = useActor(createActor);
   const [isClaiming, setIsClaiming] = reactExports.useState(false);
   const [activeTab, setActiveTab] = reactExports.useState("tokens");
+  const [auditOpen, setAuditOpen] = reactExports.useState(false);
   const MISSIONS_LS_KEY = "frontier_missions_v1";
   const loadMissions = () => {
     try {
@@ -89943,18 +92698,46 @@ function CommandCenter() {
         check: () => player.plotsOwned.length >= 1
       },
       {
+        id: "tier2_upgrade",
+        title: "Upgrade a plot to tier 2",
+        desc: "Reach Ion Capacitor tier on any plot",
+        reward: 350,
+        check: () => Object.values(generatorTiers).some((t) => t >= 2)
+      },
+      {
         id: "tier3_upgrade",
         title: "Upgrade a plot to tier 3",
-        desc: "Reach Generator tier 3 on any plot",
+        desc: "Reach Fusion Core tier on any plot",
         reward: 500,
         check: () => Object.values(generatorTiers).some((t) => t >= 3)
       },
       {
         id: "acc_1000",
-        title: "Accumulate 1000 FRNTR",
+        title: "Accumulate 1,000 FRNTR",
         desc: "Hold at least 1,000 FRNTR in your balance",
         reward: 300,
         check: () => player.frntBalance >= 1e3
+      },
+      {
+        id: "acc_5000",
+        title: "Accumulate 5,000 FRNTR",
+        desc: "Hold at least 5,000 FRNTR in your balance",
+        reward: 750,
+        check: () => player.frntBalance >= 5e3
+      },
+      {
+        id: "five_plots",
+        title: "Own 5 plots",
+        desc: "Expand your territory to 5 hex plots",
+        reward: 1e3,
+        check: () => player.plotsOwned.length >= 5
+      },
+      {
+        id: "claim_10",
+        title: "Claim tokens 10 times",
+        desc: "Use the Claim All button 10 times",
+        reward: 400,
+        check: () => (useGameStore.getState().claimCount ?? 0) >= 10
       }
     ],
     [player.plotsOwned, player.frntBalance, generatorTiers]
@@ -89985,53 +92768,53 @@ function CommandCenter() {
     }, 2e3);
     return () => clearInterval(interval);
   }, [MISSION_DEFS, addFrntr, saveMissions]);
-  const ownedPlotData = reactExports.useMemo(
-    () => plots.filter((p2) => player.plotsOwned.includes(String(p2.id))),
-    [plots, player.plotsOwned]
-  );
-  const TIER_DAILY2 = {
-    0: 7,
-    1: 9,
-    2: 12,
-    3: 17,
-    4: 25,
-    5: 37,
-    6: 55
-  };
-  const totalDailyFrntr = reactExports.useMemo(() => {
-    return ownedPlotData.reduce((sum, plot) => {
-      const tier = generatorTiers[String(plot.id)] ?? 0;
-      return sum + (TIER_DAILY2[tier] ?? 7);
-    }, 0);
-  }, [ownedPlotData, generatorTiers]);
   reactExports.useEffect(() => {
     const interval = setInterval(() => {
       useGameStore.getState().tickPassiveIncome();
     }, 1e3);
     return () => clearInterval(interval);
   }, []);
+  const ownedPlotData = reactExports.useMemo(
+    () => plots.filter((p2) => player.plotsOwned.includes(String(p2.id))),
+    [plots, player.plotsOwned]
+  );
+  const totalDailyFrntr = reactExports.useMemo(() => {
+    return ownedPlotData.reduce((sum, plot) => {
+      const tier = generatorTiers[String(plot.id)] ?? 0;
+      return sum + (TIER_DAILY_RATES[tier] ?? 7);
+    }, 0);
+  }, [ownedPlotData, generatorTiers]);
   const displayBalance = useGameStore(
     (s2) => s2.confirmedFrntBalance + s2.accruedFrntSinceSync
   );
+  const perHourRate = totalDailyFrntr / 24;
+  const perMinRate = totalDailyFrntr / 1440;
   const perSecRate = totalDailyFrntr / 86400;
   const displayBurned = totalFRNTRBurned;
-  const handleClaim = async () => {
-    if (!actor || isClaiming || accruedFrntSinceSync < 1e-3) return;
+  const highestTier = reactExports.useMemo(() => {
+    if (player.plotsOwned.length === 0) return 0;
+    return Math.max(
+      ...player.plotsOwned.map((id2) => generatorTiers[id2] ?? 0)
+    );
+  }, [player.plotsOwned, generatorTiers]);
+  const handleClaimAll = async () => {
+    if (!actor || isClaiming || player.plotsOwned.length === 0) return;
     setIsClaiming(true);
     try {
-      const res = await actor.claimAccumulatedTokens();
+      const res = await actor.claimAllPlots();
       if ("ok" in res) {
-        const claimed = Number(res.ok) / 1e8;
-        ue.success(`Claimed ${claimed.toFixed(4)} FRNTR!`, {
-          duration: 4e3
-        });
+        const { amount, plotsClaimed } = res.ok;
+        const claimed = Number(amount) / 1e8;
+        ue.success(
+          `Claimed ${fmtFrntr(claimed)} FRNTR from ${Number(plotsClaimed)} plot${Number(plotsClaimed) !== 1 ? "s" : ""}!`,
+          { duration: 4e3 }
+        );
+        incrementClaimCount();
         try {
           const state2 = await actor.getPlayerState();
-          if (state2) {
-            setFrntrBalance(state2.frntBalance);
-          }
+          if (state2) setFrntrBalance(state2.frntBalance);
         } catch {
-          addFrntr(accruedFrntSinceSync);
+          addFrntr(claimed);
         }
       } else {
         const errMsg = res.err;
@@ -90044,6 +92827,8 @@ function CommandCenter() {
       setIsClaiming(false);
     }
   };
+  const plotCount = player.plotsOwned.length;
+  const canClaim = plotCount > 0 && !isClaiming && !!actor;
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "div",
     {
@@ -90057,6 +92842,13 @@ function CommandCenter() {
         overflowY: "auto"
       },
       children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          AuditHistoryPanel,
+          {
+            isOpen: auditOpen,
+            onClose: () => setAuditOpen(false)
+          }
+        ),
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "flex", gap: 6 }, children: ["tokens", "missions"].map((tab) => /* @__PURE__ */ jsxRuntimeExports.jsx(
           "button",
           {
@@ -90068,14 +92860,14 @@ function CommandCenter() {
               padding: "7px 0",
               borderRadius: 6,
               background: activeTab === tab ? "rgba(0,255,204,0.12)" : "rgba(0,10,20,0.5)",
-              border: `1px solid ${activeTab === tab ? `${CYAN$8}66` : BORDER$8}`,
-              color: activeTab === tab ? CYAN$8 : TEXT_DIM$3,
+              border: `1px solid ${activeTab === tab ? `${CYAN$9}66` : BORDER$9}`,
+              color: activeTab === tab ? CYAN$9 : TEXT_DIM$4,
               fontSize: 7,
               fontWeight: 700,
               letterSpacing: 1.5,
               cursor: "pointer",
               textTransform: "uppercase",
-              borderBottom: activeTab === tab ? `2px solid ${CYAN$8}` : "1px solid transparent"
+              borderBottom: activeTab === tab ? `2px solid ${CYAN$9}` : "1px solid transparent"
             },
             children: tab === "tokens" ? "TOKEN ECONOMY" : "MISSIONS"
           },
@@ -90087,7 +92879,7 @@ function CommandCenter() {
             {
               style: {
                 background: "rgba(0,20,40,0.55)",
-                border: `1px solid ${BORDER$8}`,
+                border: `1px solid ${BORDER$9}`,
                 borderRadius: 10,
                 padding: "12px 14px"
               },
@@ -90097,58 +92889,150 @@ function CommandCenter() {
                   {
                     style: {
                       fontSize: 8,
-                      color: TEXT_DIM$3,
+                      color: TEXT_DIM$4,
                       letterSpacing: 2,
-                      marginBottom: 6
+                      marginBottom: 4
                     },
-                    children: "FRNTR BALANCE"
+                    children: "YOUR FRNTR BALANCE"
                   }
                 ),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "div",
                   {
                     style: {
-                      fontSize: 20,
+                      fontSize: 22,
                       fontWeight: 900,
-                      color: CYAN$8,
+                      color: CYAN$9,
                       fontFamily: "monospace",
-                      textShadow: `0 0 12px ${CYAN$8}`,
-                      marginBottom: 4
+                      textShadow: `0 0 12px ${CYAN$9}`,
+                      marginBottom: 2
                     },
                     children: fmtFrntr(displayBalance)
                   }
                 ),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { fontSize: 9, color: CYAN_DIM$5, marginBottom: 10 }, children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { fontSize: 8, color: CYAN_DIM$5, marginBottom: 10 }, children: [
                   "+",
-                  totalDailyFrntr.toLocaleString(),
-                  " FRNTR/DAY ·",
-                  " ",
+                  totalDailyFrntr.toFixed(2),
+                  " FRNTR/day  ·  +",
+                  perHourRate.toFixed(4),
+                  "/hr  ·  +",
                   perSecRate.toFixed(8),
-                  " FRNTR/SEC"
+                  "/sec"
                 ] }),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "button",
                   {
                     type: "button",
+                    "data-ocid": "command.audit_button",
+                    onClick: () => setAuditOpen(true),
+                    style: {
+                      width: "100%",
+                      padding: "7px 0",
+                      borderRadius: 6,
+                      background: "rgba(0,255,204,0.04)",
+                      border: `1px solid ${BORDER$9}`,
+                      color: CYAN_DIM$5,
+                      fontSize: 9,
+                      fontWeight: 700,
+                      letterSpacing: 1.5,
+                      cursor: "pointer",
+                      fontFamily: "monospace",
+                      marginBottom: 6
+                    },
+                    children: "🔐 AUDIT LOG"
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "button",
+                  {
+                    type: "button",
                     "data-ocid": "command.claim_button",
-                    onClick: handleClaim,
-                    disabled: isClaiming || accruedFrntSinceSync < 1e-3 || !actor,
+                    onClick: handleClaimAll,
+                    disabled: !canClaim,
                     style: {
                       width: "100%",
                       padding: "9px 0",
                       borderRadius: 6,
-                      background: accruedFrntSinceSync >= 1e-3 && !isClaiming ? "linear-gradient(135deg, rgba(0,255,204,0.18), rgba(0,255,204,0.07))" : "rgba(255,255,255,0.03)",
-                      border: `1px solid ${accruedFrntSinceSync >= 1e-3 && !isClaiming ? `${CYAN$8}99` : BORDER$8}`,
-                      color: accruedFrntSinceSync >= 1e-3 && !isClaiming ? CYAN$8 : "rgba(0,255,204,0.3)",
-                      fontSize: 11,
+                      background: canClaim ? "linear-gradient(135deg, rgba(0,255,204,0.18), rgba(0,255,204,0.07))" : "rgba(255,255,255,0.03)",
+                      border: `1px solid ${canClaim ? `${CYAN$9}99` : BORDER$9}`,
+                      color: canClaim ? CYAN$9 : "rgba(0,255,204,0.3)",
+                      fontSize: 10,
                       fontWeight: 900,
-                      letterSpacing: 2,
-                      cursor: accruedFrntSinceSync >= 1e-3 && !isClaiming && actor ? "pointer" : "not-allowed",
+                      letterSpacing: 1.5,
+                      cursor: canClaim ? "pointer" : "not-allowed",
                       fontFamily: "monospace",
-                      textShadow: accruedFrntSinceSync >= 1e-3 ? `0 0 8px ${CYAN$8}88` : "none",
+                      textShadow: canClaim ? `0 0 8px ${CYAN$9}88` : "none",
                       transition: "all 0.2s"
                     },
-                    children: isClaiming ? "CLAIMING…" : accruedFrntSinceSync < 1e-3 ? "CLAIM (ACCUMULATING…)" : `CLAIM +${fmtFrntr(accruedFrntSinceSync)} FRNTR`
+                    children: isClaiming ? "CLAIMING…" : plotCount === 0 ? "CLAIM ALL — (no plots owned)" : `CLAIM ALL — ${plotCount} plot${plotCount !== 1 ? "s" : ""} / ${totalDailyFrntr.toFixed(2)} FRNTR/day`
+                  }
+                )
+              ]
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              style: {
+                background: "rgba(0,20,40,0.40)",
+                border: `1px solid ${BORDER$9}`,
+                borderRadius: 10,
+                padding: "10px 14px"
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      fontSize: 8,
+                      color: TEXT_DIM$4,
+                      letterSpacing: 2,
+                      marginBottom: 8
+                    },
+                    children: "GENERATION RATES"
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr 1fr",
+                      gap: 8
+                    },
+                    children: [
+                      {
+                        label: "PER HOUR",
+                        value: perHourRate.toFixed(4),
+                        color: GOLD$4
+                      },
+                      { label: "PER MIN", value: perMinRate.toFixed(6), color: CYAN$9 },
+                      {
+                        label: "PER SEC",
+                        value: perSecRate.toFixed(8),
+                        color: "#22c55e"
+                      }
+                    ].map((r2) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "div",
+                        {
+                          style: { fontSize: 7, color: TEXT_DIM$4, marginBottom: 2 },
+                          children: r2.label
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "div",
+                        {
+                          style: {
+                            fontSize: 10,
+                            fontWeight: 700,
+                            color: r2.color,
+                            fontFamily: "monospace"
+                          },
+                          children: r2.value
+                        }
+                      )
+                    ] }, r2.label))
                   }
                 )
               ]
@@ -90160,39 +93044,39 @@ function CommandCenter() {
               style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 },
               children: [
                 {
-                  icon: Zap,
+                  icon: Globe,
                   label: "Plots Owned",
-                  value: player.plotsOwned.length,
-                  color: CYAN$8,
-                  sub: `${totalDailyFrntr} F/day`
+                  value: plotCount,
+                  color: CYAN$9,
+                  sub: `${totalDailyFrntr.toFixed(2)} FRNTR/day`
                 },
                 {
                   icon: Flame,
                   label: "FRNTR Burned",
                   value: fmtFrntr(displayBurned),
                   color: "#ef4444",
-                  sub: "out of circulation"
+                  sub: "your upgrades"
                 },
                 {
                   icon: TrendingUp,
-                  label: "Daily Yield",
-                  value: `${totalDailyFrntr}`,
-                  color: "#ffd700",
-                  sub: "FRNTR total"
+                  label: "Highest Tier",
+                  value: TIER_NAMES[highestTier] ?? "Outpost",
+                  color: GOLD$4,
+                  sub: `Tier ${highestTier} generator`
                 },
                 {
                   icon: Zap,
-                  label: "Rank Points",
-                  value: player.plotsOwned.length * 100,
+                  label: "Accruing Now",
+                  value: fmtFrntr(accruedFrntSinceSync),
                   color: "#a855f7",
-                  sub: "global score"
+                  sub: "since last sync"
                 }
               ].map((stat) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
                 "div",
                 {
                   style: {
                     background: "rgba(0,10,20,0.5)",
-                    border: `1px solid ${BORDER$8}`,
+                    border: `1px solid ${BORDER$9}`,
                     borderRadius: 8,
                     padding: "10px"
                   },
@@ -90211,7 +93095,7 @@ function CommandCenter() {
                           /* @__PURE__ */ jsxRuntimeExports.jsx(
                             "span",
                             {
-                              style: { fontSize: 7, color: TEXT_DIM$3, letterSpacing: 1.5 },
+                              style: { fontSize: 7, color: TEXT_DIM$4, letterSpacing: 1.5 },
                               children: stat.label.toUpperCase()
                             }
                           )
@@ -90222,7 +93106,7 @@ function CommandCenter() {
                       "div",
                       {
                         style: {
-                          fontSize: 14,
+                          fontSize: 12,
                           fontWeight: 900,
                           color: stat.color,
                           fontFamily: "monospace"
@@ -90230,86 +93114,11 @@ function CommandCenter() {
                         children: stat.value
                       }
                     ),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 7, color: TEXT_DIM$3, marginTop: 2 }, children: stat.sub })
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 7, color: TEXT_DIM$4, marginTop: 2 }, children: stat.sub })
                   ]
                 },
                 stat.label
               ))
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "div",
-            {
-              style: {
-                background: "rgba(0,20,40,0.55)",
-                border: `1px solid ${BORDER$8}`,
-                borderRadius: 10,
-                padding: "12px 14px"
-              },
-              children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "div",
-                  {
-                    style: {
-                      fontSize: 8,
-                      color: TEXT_DIM$3,
-                      letterSpacing: 2,
-                      marginBottom: 8
-                    },
-                    children: "TOKEN SUPPLY OVERVIEW"
-                  }
-                ),
-                [
-                  {
-                    label: "Pre-Minted",
-                    value: 5e9,
-                    total: 1e10,
-                    color: "#ffd700"
-                  },
-                  {
-                    label: "Mineable Left",
-                    value: 5e9 - totalFRNTRBurned,
-                    total: 1e10,
-                    color: CYAN$8
-                  }
-                ].map((item) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { marginBottom: 8 }, children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                    "div",
-                    {
-                      style: {
-                        display: "flex",
-                        justifyContent: "space-between",
-                        marginBottom: 3
-                      },
-                      children: [
-                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 8, color: TEXT_DIM$3 }, children: item.label }),
-                        /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                          "span",
-                          {
-                            style: {
-                              fontSize: 8,
-                              color: item.color,
-                              fontFamily: "monospace"
-                            },
-                            children: [
-                              (item.value / 1e9).toFixed(2),
-                              "B"
-                            ]
-                          }
-                        )
-                      ]
-                    }
-                  ),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    MiniBar,
-                    {
-                      value: item.value,
-                      max: item.total,
-                      color: item.color
-                    }
-                  )
-                ] }, item.label))
-              ]
             }
           )
         ] }),
@@ -90319,7 +93128,7 @@ function CommandCenter() {
             {
               style: {
                 fontSize: 8,
-                color: TEXT_DIM$3,
+                color: TEXT_DIM$4,
                 letterSpacing: 2,
                 marginBottom: 2
               },
@@ -90338,7 +93147,7 @@ function CommandCenter() {
                 "data-ocid": `command.mission.${m2.id}`,
                 style: {
                   background: isDone ? "rgba(0,255,204,0.07)" : "rgba(0,10,20,0.5)",
-                  border: `1px solid ${isDone ? `${CYAN$8}55` : BORDER$8}`,
+                  border: `1px solid ${isDone ? `${CYAN$9}55` : BORDER$9}`,
                   borderRadius: 10,
                   padding: "12px 14px",
                   display: "flex",
@@ -90346,7 +93155,7 @@ function CommandCenter() {
                   gap: 10
                 },
                 children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { flexShrink: 0, marginTop: 2 }, children: isDone ? /* @__PURE__ */ jsxRuntimeExports.jsx(CircleCheckBig, { size: 16, color: CYAN$8 }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Circle, { size: 16, color: "rgba(255,255,255,0.25)" }) }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { flexShrink: 0, marginTop: 2 }, children: isDone ? /* @__PURE__ */ jsxRuntimeExports.jsx(CircleCheckBig, { size: 16, color: CYAN$9 }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Circle, { size: 16, color: "rgba(255,255,255,0.25)" }) }),
                   /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { flex: 1, minWidth: 0 }, children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsx(
                       "div",
@@ -90354,7 +93163,7 @@ function CommandCenter() {
                         style: {
                           fontSize: 10,
                           fontWeight: 700,
-                          color: isDone ? CYAN$8 : TEXT$4,
+                          color: isDone ? CYAN$9 : TEXT$5,
                           letterSpacing: 0.5,
                           marginBottom: 3
                         },
@@ -90366,7 +93175,7 @@ function CommandCenter() {
                       {
                         style: {
                           fontSize: 8,
-                          color: TEXT_DIM$3,
+                          color: TEXT_DIM$4,
                           letterSpacing: 0.3,
                           marginBottom: 6
                         },
@@ -90482,8 +93291,8 @@ function useIcpBalance() {
   const icpBalanceFormatted = Number(icpBalance) / 1e8;
   return { icpBalance, icpBalanceFormatted, refetch };
 }
-const CYAN$7 = "#00ffcc";
-const BORDER$7 = "rgba(0,255,204,0.22)";
+const CYAN$8 = "#00ffcc";
+const BORDER$8 = "rgba(0,255,204,0.22)";
 function FaucetOverlay() {
   const { isAuthenticated } = useInternetIdentity();
   const { actor, isFetching } = useActor(createActor);
@@ -90560,8 +93369,8 @@ function FaucetOverlay() {
         padding: "6px 12px",
         borderRadius: 6,
         background: loading2 ? "rgba(0,255,204,0.05)" : "rgba(0,255,204,0.1)",
-        border: `1px solid ${BORDER$7}`,
-        color: CYAN$7,
+        border: `1px solid ${BORDER$8}`,
+        color: CYAN$8,
         fontSize: 9,
         fontWeight: 700,
         letterSpacing: 1.5,
@@ -102939,8 +105748,8 @@ const LORE_ENTRIES = [
     content: "Phase I of the Frontier rollout is live: land acquisition, token generation, and plot upgrades. Phase II — sub-plot specialization, factions, and advanced combat — is in development."
   }
 ];
-const CYAN$6 = "#00ffcc";
-const BORDER$6 = "rgba(0,255,204,0.22)";
+const CYAN$7 = "#00ffcc";
+const BORDER$7 = "rgba(0,255,204,0.22)";
 const CATEGORY_COLORS = {
   TRANSMISSION: "#00ffcc",
   INTEL: "#38bdf8",
@@ -102959,8 +105768,8 @@ function GameLoreWindow() {
         height: "100%",
         minHeight: 180,
         background: "rgba(5,10,22,0.85)",
-        border: `1px solid ${BORDER$6}`,
-        borderTop: `2px solid ${CYAN$6}`,
+        border: `1px solid ${BORDER$7}`,
+        borderTop: `2px solid ${CYAN$7}`,
         borderRadius: 8,
         boxShadow: "0 0 18px rgba(0,255,204,0.08), inset 0 0 40px rgba(0,0,0,0.4)",
         overflow: "hidden",
@@ -102985,7 +105794,7 @@ function GameLoreWindow() {
           {
             style: {
               padding: "8px 12px",
-              borderBottom: `1px solid ${BORDER$6}`,
+              borderBottom: `1px solid ${BORDER$7}`,
               background: "rgba(0,255,204,0.04)",
               display: "flex",
               alignItems: "center",
@@ -103002,8 +105811,8 @@ function GameLoreWindow() {
                     width: 6,
                     height: 6,
                     borderRadius: "50%",
-                    background: CYAN$6,
-                    boxShadow: `0 0 8px ${CYAN$6}`,
+                    background: CYAN$7,
+                    boxShadow: `0 0 8px ${CYAN$7}`,
                     animation: "pulse 2s ease-in-out infinite"
                   }
                 }
@@ -103014,7 +105823,7 @@ function GameLoreWindow() {
                   style: {
                     fontSize: 9,
                     fontFamily: "var(--font-mono, monospace)",
-                    color: CYAN$6,
+                    color: CYAN$7,
                     letterSpacing: 3,
                     fontWeight: 700,
                     textTransform: "uppercase"
@@ -103053,7 +105862,7 @@ function GameLoreWindow() {
             },
             children: [
               LORE_ENTRIES.map((entry) => {
-                const catColor = CATEGORY_COLORS[entry.category] ?? CYAN$6;
+                const catColor = CATEGORY_COLORS[entry.category] ?? CYAN$7;
                 const dateStr = new Date(entry.timestamp).toLocaleDateString(
                   void 0,
                   { month: "short", day: "numeric", year: "2-digit" }
@@ -103301,9 +106110,9 @@ function usePurchasePlot() {
   }
   return { purchasePlot, isPurchasing, lastResult };
 }
-const CYAN$5 = "#00ffcc";
+const CYAN$6 = "#00ffcc";
 const CYAN_DIM$4 = "rgba(0,255,204,0.5)";
-const BORDER$5 = "rgba(0,255,204,0.15)";
+const BORDER$6 = "rgba(0,255,204,0.15)";
 const BIOME_BADGE_COLORS = {
   Temperate: "#4a9b5f",
   Desert: "#e8c97a",
@@ -103375,7 +106184,7 @@ function actionBtnStyle(color2, bg) {
 }
 function SurveyReport({ plot, isOwnPlot: _isOwnPlot }) {
   const effPct = plot.efficiency;
-  const effColor2 = effPct > 80 ? "#22c55e" : effPct >= 60 ? "#f59e0b" : "#ef4444";
+  const effColor = effPct > 80 ? "#22c55e" : effPct >= 60 ? "#f59e0b" : "#ef4444";
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { marginBottom: 14 }, children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx(
       "div",
@@ -103419,9 +106228,9 @@ function SurveyReport({ plot, isOwnPlot: _isOwnPlot }) {
                 style: {
                   fontSize: 9,
                   fontWeight: 700,
-                  color: effColor2,
+                  color: effColor,
                   fontFamily: "monospace",
-                  textShadow: `0 0 6px ${effColor2}88`
+                  textShadow: `0 0 6px ${effColor}88`
                 },
                 children: [
                   effPct,
@@ -103448,7 +106257,7 @@ function SurveyReport({ plot, isOwnPlot: _isOwnPlot }) {
               style: {
                 height: "100%",
                 width: `${effPct}%`,
-                background: `linear-gradient(90deg, ${effColor2}, ${effColor2}aa)`,
+                background: `linear-gradient(90deg, ${effColor}, ${effColor}aa)`,
                 borderRadius: 2,
                 transition: "width 0.4s ease"
               }
@@ -103459,21 +106268,19 @@ function SurveyReport({ plot, isOwnPlot: _isOwnPlot }) {
     ] })
   ] });
 }
-const TIER_DAILY_RATES = {
-  0: 7,
-  1: 10,
-  2: 15,
-  3: 22,
-  4: 32,
-  5: 45
-};
-const TIER_COSTS = {
-  0: 500,
-  1: 1500,
-  2: 4e3,
-  3: 1e4,
-  4: 25e3,
-  5: 6e4
+const TIER_COSTS_BY_CURRENT = {
+  0: UPGRADE_COSTS[1],
+  // 500  — cost to go from 0→1
+  1: UPGRADE_COSTS[2],
+  // 1500 — cost to go from 1→2
+  2: UPGRADE_COSTS[3],
+  // 4000
+  3: UPGRADE_COSTS[4],
+  // 10000
+  4: UPGRADE_COSTS[5],
+  // 25000
+  5: UPGRADE_COSTS[6]
+  // 60000
 };
 function MapBottomSheet({
   onClose,
@@ -103484,6 +106291,7 @@ function MapBottomSheet({
   const [upgradeStatus, setUpgradeStatus] = reactExports.useState("idle");
   const [upgradeError, setUpgradeError] = reactExports.useState(null);
   const [claimStatus, setClaimStatus] = reactExports.useState("idle");
+  const [postActionType, setPostActionType] = reactExports.useState(null);
   const { actor } = useActor(createActor);
   const selectedPlotId = useGameStore((s2) => s2.selectedPlotId);
   const plots = useGameStore((s2) => s2.plots);
@@ -103535,7 +106343,7 @@ function MapBottomSheet({
           TierVI: 6
         };
         const numericTier = tierMap[newTier] ?? 1;
-        const burnCost = TIER_COSTS[numericTier - 1] ?? 0;
+        const burnCost = TIER_COSTS_BY_CURRENT[numericTier - 1] ?? 0;
         useGameStore.setState((s2) => ({
           generatorTiers: {
             ...s2.generatorTiers,
@@ -103597,6 +106405,7 @@ function MapBottomSheet({
         action: `Plot acquired! ${plot.biome} plot ${shortId}`,
         nextStep: "Open Command Center to track FRNTR generation."
       });
+      setPostActionType("purchase");
     } else {
       setPurchaseError(result.message);
     }
@@ -103649,7 +106458,7 @@ function MapBottomSheet({
       nextStep: "Select weapon and FIRE."
     });
   }
-  const biomeBadgeColor = plot ? BIOME_BADGE_COLORS[plot.biome] ?? CYAN$5 : CYAN$5;
+  const biomeBadgeColor = plot ? BIOME_BADGE_COLORS[plot.biome] ?? CYAN$6 : CYAN$6;
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx("style", { children: `
         @keyframes mapGlobePulse {
@@ -103697,7 +106506,7 @@ function MapBottomSheet({
                       {
                         size: 48,
                         style: {
-                          color: CYAN$5,
+                          color: CYAN$6,
                           animation: "mapGlobePulse 2s ease-in-out infinite"
                         }
                       }
@@ -103737,7 +106546,7 @@ function MapBottomSheet({
                             style: {
                               fontSize: 14,
                               fontWeight: 700,
-                              color: CYAN$5,
+                              color: CYAN$6,
                               letterSpacing: 1,
                               fontFamily: "monospace"
                             },
@@ -103805,13 +106614,13 @@ function MapBottomSheet({
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "div",
                   {
-                    style: { height: 1, background: BORDER$5, marginBottom: 12 }
+                    style: { height: 1, background: BORDER$6, marginBottom: 12 }
                   }
                 ),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "div",
                   {
-                    style: { height: 1, background: BORDER$5, marginBottom: 12 }
+                    style: { height: 1, background: BORDER$6, marginBottom: 12 }
                   }
                 ),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(SurveyReport, { plot, isOwnPlot })
@@ -103823,198 +106632,12 @@ function MapBottomSheet({
             {
               style: {
                 padding: "12px 16px",
-                borderTop: `1px solid ${BORDER$5}`,
+                borderTop: `1px solid ${BORDER$6}`,
                 flexShrink: 0
               },
               children: [
                 !isOwned && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                  showPurchaseConfirm && plot ? (
-                    /* NFT PURCHASE CONFIRMATION CARD */
-                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                      "div",
-                      {
-                        "data-ocid": "map.dialog",
-                        style: {
-                          background: "rgba(0,10,20,0.85)",
-                          border: "1px solid rgba(0,255,204,0.25)",
-                          borderRadius: 8,
-                          padding: "14px 14px 10px",
-                          backdropFilter: "blur(14px)",
-                          WebkitBackdropFilter: "blur(14px)"
-                        },
-                        children: [
-                          /* @__PURE__ */ jsxRuntimeExports.jsx(
-                            "div",
-                            {
-                              style: {
-                                fontSize: 9,
-                                color: CYAN_DIM$4,
-                                letterSpacing: 2,
-                                fontFamily: "monospace",
-                                marginBottom: 10
-                              },
-                              children: "CONFIRM PURCHASE"
-                            }
-                          ),
-                          /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                            "div",
-                            {
-                              style: {
-                                display: "flex",
-                                flexDirection: "column",
-                                gap: 5,
-                                marginBottom: 12
-                              },
-                              children: [
-                                /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                                  "div",
-                                  {
-                                    style: {
-                                      display: "flex",
-                                      justifyContent: "space-between",
-                                      fontSize: 9,
-                                      fontFamily: "monospace"
-                                    },
-                                    children: [
-                                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: "rgba(224,244,255,0.45)" }, children: "PLOT ID" }),
-                                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$5, fontWeight: 700 }, children: String(plot.id).slice(0, 8) })
-                                    ]
-                                  }
-                                ),
-                                /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                                  "div",
-                                  {
-                                    style: {
-                                      display: "flex",
-                                      justifyContent: "space-between",
-                                      alignItems: "center",
-                                      fontSize: 9,
-                                      fontFamily: "monospace"
-                                    },
-                                    children: [
-                                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: "rgba(224,244,255,0.45)" }, children: "BIOME" }),
-                                      /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                        "span",
-                                        {
-                                          style: {
-                                            padding: "1px 6px",
-                                            borderRadius: 3,
-                                            background: `${BIOME_BADGE_COLORS[plot.biome] ?? CYAN$5}22`,
-                                            border: `1px solid ${BIOME_BADGE_COLORS[plot.biome] ?? CYAN$5}`,
-                                            color: BIOME_BADGE_COLORS[plot.biome] ?? CYAN$5,
-                                            fontWeight: 700,
-                                            letterSpacing: 1
-                                          },
-                                          children: plot.biome.toUpperCase()
-                                        }
-                                      )
-                                    ]
-                                  }
-                                ),
-                                /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                                  "div",
-                                  {
-                                    style: {
-                                      display: "flex",
-                                      justifyContent: "space-between",
-                                      alignItems: "center",
-                                      fontSize: 9,
-                                      fontFamily: "monospace"
-                                    },
-                                    children: [
-                                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: "rgba(224,244,255,0.45)" }, children: "RARITY" }),
-                                      (() => {
-                                        const r2 = getRarity(plot.biome);
-                                        return /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                          "span",
-                                          {
-                                            style: {
-                                              padding: "1px 6px",
-                                              borderRadius: 3,
-                                              background: r2.bg,
-                                              border: `1px solid ${r2.color}`,
-                                              color: r2.color,
-                                              fontWeight: 700,
-                                              letterSpacing: 1
-                                            },
-                                            children: r2.label
-                                          }
-                                        );
-                                      })()
-                                    ]
-                                  }
-                                ),
-                                /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                                  "div",
-                                  {
-                                    style: {
-                                      display: "flex",
-                                      justifyContent: "space-between",
-                                      fontSize: 9,
-                                      fontFamily: "monospace"
-                                    },
-                                    children: [
-                                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: "rgba(224,244,255,0.45)" }, children: "PRICE" }),
-                                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: "#ffd700", fontWeight: 700 }, children: icpPriceDisplay })
-                                    ]
-                                  }
-                                )
-                              ]
-                            }
-                          ),
-                          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", gap: 8 }, children: [
-                            /* @__PURE__ */ jsxRuntimeExports.jsx(
-                              "button",
-                              {
-                                type: "button",
-                                "data-ocid": "map.confirm_button",
-                                onClick: handleConfirmPurchase,
-                                disabled: isPurchasing,
-                                style: {
-                                  flex: 1,
-                                  padding: "10px 0",
-                                  background: isPurchasing ? "rgba(34,197,94,0.06)" : "rgba(34,197,94,0.15)",
-                                  border: "1px solid #22c55e",
-                                  borderRadius: 6,
-                                  color: "#22c55e",
-                                  fontSize: 10,
-                                  fontWeight: 700,
-                                  letterSpacing: 2,
-                                  cursor: isPurchasing ? "not-allowed" : "pointer",
-                                  fontFamily: "monospace",
-                                  textShadow: "0 0 8px #22c55e80",
-                                  opacity: isPurchasing ? 0.6 : 1
-                                },
-                                children: isPurchasing ? "PROCESSING…" : "CONFIRM"
-                              }
-                            ),
-                            /* @__PURE__ */ jsxRuntimeExports.jsx(
-                              "button",
-                              {
-                                type: "button",
-                                "data-ocid": "map.cancel_button",
-                                onClick: () => setShowPurchaseConfirm(false),
-                                style: {
-                                  flex: 1,
-                                  padding: "10px 0",
-                                  background: "rgba(0,0,0,0.2)",
-                                  border: `1px solid ${BORDER$5}`,
-                                  borderRadius: 6,
-                                  color: CYAN_DIM$4,
-                                  fontSize: 10,
-                                  fontWeight: 700,
-                                  letterSpacing: 2,
-                                  cursor: "pointer",
-                                  fontFamily: "monospace"
-                                },
-                                children: "CANCEL"
-                              }
-                            )
-                          ] })
-                        ]
-                      }
-                    )
-                  ) : /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
                     "button",
                     {
                       type: "button",
@@ -104046,12 +106669,43 @@ function MapBottomSheet({
                       },
                       children: purchaseError
                     }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    ActionConfirmModal,
+                    {
+                      isOpen: showPurchaseConfirm,
+                      onConfirm: handleConfirmPurchase,
+                      onCancel: () => {
+                        (async () => {
+                          try {
+                            await (actor == null ? void 0 : actor.logCancelledAction(
+                              "purchasePlot",
+                              selectedPlotId ? String(selectedPlotId) : null,
+                              null,
+                              "User cancelled plot purchase"
+                            ));
+                          } catch {
+                          }
+                        })();
+                        setShowPurchaseConfirm(false);
+                      },
+                      title: `Acquire Plot ${String(plot.id).slice(0, 8)}`,
+                      actionType: "purchase",
+                      details: [
+                        { label: "Plot ID", value: String(plot.id).slice(0, 8) },
+                        { label: "Biome", value: plot.biome.toUpperCase() },
+                        { label: "Rarity", value: getRarity(plot.biome).label },
+                        { label: "Price", value: icpPriceDisplay }
+                      ],
+                      warningText: "This purchase is permanent and cannot be undone. Your ICP will be deducted immediately and the plot assigned to your wallet.",
+                      isLoading: isPurchasing
+                    }
                   )
                 ] }),
                 isOwnPlot && (() => {
                   const currentTier = generatorTiers[String(plot.id)] ?? 0;
                   const dailyRate = TIER_DAILY_RATES[currentTier] ?? 7;
-                  const upgradeCost = TIER_COSTS[currentTier] ?? null;
+                  const upgradeCost = TIER_COSTS_BY_CURRENT[currentTier] ?? null;
                   const displayBalance = confirmedFrntBalance + accruedSinceSync;
                   const canUpgrade = upgradeCost !== null && displayBalance >= upgradeCost && currentTier < 6;
                   const isMaxTier = currentTier >= 6;
@@ -104076,7 +106730,7 @@ function MapBottomSheet({
                             disabled: !canClaim || claimStatus === "claiming",
                             style: {
                               ...actionBtnStyle(
-                                canClaim ? CYAN$5 : "rgba(0,255,204,0.25)",
+                                canClaim ? CYAN$6 : "rgba(0,255,204,0.25)",
                                 canClaim ? "rgba(0,255,204,0.1)" : "rgba(0,0,0,0.2)"
                               ),
                               opacity: canClaim ? 1 : 0.5,
@@ -104109,7 +106763,7 @@ function MapBottomSheet({
                                 "span",
                                 {
                                   style: {
-                                    color: displayBalance >= upgradeCost ? CYAN$5 : "#ef4444"
+                                    color: displayBalance >= upgradeCost ? CYAN$6 : "#ef4444"
                                   },
                                   children: [
                                     "COST: ",
@@ -104129,10 +106783,10 @@ function MapBottomSheet({
                               padding: "10px 0",
                               fontSize: 10,
                               fontWeight: 700,
-                              color: CYAN$5,
+                              color: CYAN$6,
                               letterSpacing: 2,
                               fontFamily: "monospace",
-                              border: `1px solid ${CYAN$5}44`,
+                              border: `1px solid ${CYAN$6}44`,
                               borderRadius: 6
                             },
                             children: "MAX TIER"
@@ -104190,8 +106844,742 @@ function MapBottomSheet({
           )
         ]
       }
+    ),
+    postActionType && /* @__PURE__ */ jsxRuntimeExports.jsx(
+      PostActionToast,
+      {
+        actionType: postActionType,
+        message: "Plot purchased!",
+        onNavigate: (tab) => window.dispatchEvent(
+          new CustomEvent("navigate-tab", { detail: tab })
+        ),
+        onClose: () => setPostActionType(null)
+      }
     )
   ] });
+}
+const CYAN$5 = "#00ffcc";
+const GOLD$3 = "#ffd700";
+const BORDER$5 = "rgba(0,255,204,0.22)";
+const TEXT$4 = "#e0f4ff";
+const TEXT_DIM$3 = "rgba(224,244,255,0.45)";
+function getMissionProgress(req, plotsOwned, generatorTiers, frntBalance, claimCount) {
+  if (req.__kind__ === "purchasePlots") {
+    return {
+      current: plotsOwned.length,
+      target: Number(req.purchasePlots),
+      label: `${plotsOwned.length} / ${req.purchasePlots} plots owned`
+    };
+  }
+  if (req.__kind__ === "upgradeToTier") {
+    const maxTier = plotsOwned.length === 0 ? 0 : Math.max(
+      ...plotsOwned.map((id2) => generatorTiers[id2] ?? 0)
+    );
+    return {
+      current: maxTier,
+      target: Number(req.upgradeToTier),
+      label: `Highest tier: ${maxTier} / ${req.upgradeToTier}`
+    };
+  }
+  if (req.__kind__ === "holdFRNTR") {
+    const target = Number(req.holdFRNTR) / 1e8;
+    return {
+      current: frntBalance,
+      target,
+      label: `${frntBalance.toFixed(2)} / ${target.toFixed(2)} FRNTR`
+    };
+  }
+  if (req.__kind__ === "claimTokens") {
+    return {
+      current: claimCount,
+      target: Number(req.claimTokens),
+      label: `${claimCount} / ${req.claimTokens} claims made`
+    };
+  }
+  if (req.__kind__ === "surveyPlot") {
+    return { current: 0, target: 1, label: "Survey any owned plot" };
+  }
+  if (req.__kind__ === "reachLeaderboardTop") {
+    return {
+      current: 0,
+      target: Number(req.reachLeaderboardTop),
+      label: `Reach leaderboard top ${req.reachLeaderboardTop}`
+    };
+  }
+  return { current: 0, target: 1, label: "Check requirements on-chain" };
+}
+function isMissionMet(req, plotsOwned, generatorTiers, frntBalance, claimCount) {
+  const prog = getMissionProgress(
+    req,
+    plotsOwned,
+    generatorTiers,
+    frntBalance,
+    claimCount
+  );
+  return prog.current >= prog.target;
+}
+function ProgressBar({ current, target }) {
+  const pct = target > 0 ? Math.min(100, current / target * 100) : 0;
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "div",
+    {
+      style: {
+        height: 3,
+        background: "rgba(255,255,255,0.08)",
+        borderRadius: 2,
+        overflow: "hidden",
+        marginTop: 4
+      },
+      children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "div",
+        {
+          style: {
+            height: "100%",
+            width: `${pct}%`,
+            background: pct >= 100 ? `linear-gradient(90deg, ${CYAN$5}, #22c55e)` : `linear-gradient(90deg, ${CYAN$5}, rgba(0,255,204,0.4))`,
+            borderRadius: 2,
+            transition: "width 0.4s ease"
+          }
+        }
+      )
+    }
+  );
+}
+const COMING_SOON_MISSIONS = [
+  {
+    id: "cs_resource_pioneer",
+    title: "Resource Pioneer",
+    description: "Mine your first mineral deposit from a plot you own.",
+    rewardE8s: 500000000n,
+    icon: "⛏️"
+  },
+  {
+    id: "cs_combat_ready",
+    title: "Combat Ready",
+    description: "Engage in your first territorial dispute and emerge victorious.",
+    rewardE8s: 1000000000n,
+    icon: "⚔️"
+  },
+  {
+    id: "cs_alliance_builder",
+    title: "Alliance Builder",
+    description: "Join or create a faction with at least 3 other players.",
+    rewardE8s: 2000000000n,
+    icon: "🤝"
+  }
+];
+function MissionsTab() {
+  const { actor } = useActor(createActor);
+  const { isAuthenticated } = useInternetIdentity();
+  const player = useGameStore((s2) => s2.player);
+  const generatorTiers = useGameStore((s2) => s2.generatorTiers);
+  const confirmedFrntBalance = useGameStore((s2) => s2.confirmedFrntBalance);
+  const accruedFrntSinceSync = useGameStore((s2) => s2.accruedFrntSinceSync);
+  const setFrntrBalance = useGameStore((s2) => s2.setFrntrBalance);
+  const frntBalance = confirmedFrntBalance + accruedFrntSinceSync;
+  const plotsOwned = player.plotsOwned;
+  const claimCount = useGameStore((s2) => s2.totalFRNTRBurned > 0 ? 1 : 0);
+  const [playerMissions, setPlayerMissions] = reactExports.useState([]);
+  const [loading2, setLoading] = reactExports.useState(false);
+  const [claiming, setClaiming] = reactExports.useState(null);
+  const [error, setError] = reactExports.useState(null);
+  const [missionConfirmOpen, setMissionConfirmOpen] = reactExports.useState(false);
+  const [pendingMissionId, setPendingMissionId] = reactExports.useState(null);
+  const [pendingReward, setPendingReward] = reactExports.useState(0n);
+  const [postMissionType, setPostMissionType] = reactExports.useState(null);
+  const loadMissions = reactExports.useCallback(async () => {
+    if (!actor || !isAuthenticated) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await actor.getPlayerMissions();
+      setPlayerMissions(result);
+    } catch (e) {
+      setError("Failed to load missions. Please try again.");
+      console.error("MissionsTab load error:", e);
+    } finally {
+      setLoading(false);
+    }
+  }, [actor, isAuthenticated]);
+  reactExports.useEffect(() => {
+    loadMissions();
+  }, [loadMissions]);
+  const handleClaim = (missionId, rewardE8s) => {
+    setPendingMissionId(missionId);
+    setPendingReward(rewardE8s);
+    setMissionConfirmOpen(true);
+  };
+  const handleConfirmMission = async () => {
+    setMissionConfirmOpen(false);
+    if (pendingMissionId !== null)
+      await executeClaimMission(pendingMissionId, pendingReward);
+  };
+  const handleCancelMission = () => {
+    (async () => {
+      try {
+        await (actor == null ? void 0 : actor.logCancelledAction(
+          "completeMission",
+          pendingMissionId,
+          null,
+          "User cancelled mission completion"
+        ));
+      } catch {
+      }
+    })();
+    setMissionConfirmOpen(false);
+  };
+  async function executeClaimMission(missionId, rewardE8s) {
+    if (!actor) {
+      ue.error("Not connected to canister");
+      return;
+    }
+    setClaiming(missionId);
+    try {
+      const res = await actor.completeMission(missionId);
+      if ("ok" in res) {
+        const rewardFrntr = Number(res.ok) / 1e8;
+        setPostMissionType("mission");
+        ue.success(
+          `Mission complete! +${rewardFrntr.toFixed(2)} FRNTR minted to your wallet`,
+          {
+            duration: 5e3
+          }
+        );
+        const rewardAmount = Number(rewardE8s);
+        setFrntrBalance(
+          BigInt(Math.round(confirmedFrntBalance * 1e8 + rewardAmount))
+        );
+        await loadMissions();
+      } else {
+        ue.error(res.err || "Failed to claim reward", { duration: 5e3 });
+      }
+    } catch (e) {
+      ue.error("Claim failed. Please try again.");
+      console.error("MissionsTab claim error:", e);
+    } finally {
+      setClaiming(null);
+    }
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "div",
+    {
+      "data-ocid": "missions.panel",
+      style: {
+        padding: "14px 14px 80px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 16
+      },
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            style: {
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between"
+            },
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "div",
+                {
+                  style: {
+                    fontSize: 9,
+                    fontWeight: 700,
+                    letterSpacing: 3,
+                    color: CYAN$5,
+                    textTransform: "uppercase",
+                    textShadow: `0 0 8px ${CYAN$5}`,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6
+                  },
+                  children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "div",
+                      {
+                        style: { width: 2, height: 12, background: CYAN$5, borderRadius: 1 }
+                      }
+                    ),
+                    "ACTIVE MISSIONS"
+                  ]
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "button",
+                {
+                  type: "button",
+                  "data-ocid": "missions.refresh_button",
+                  onClick: loadMissions,
+                  disabled: loading2,
+                  style: {
+                    fontSize: 8,
+                    color: loading2 ? TEXT_DIM$3 : CYAN$5,
+                    background: "transparent",
+                    border: `1px solid ${loading2 ? "rgba(0,255,204,0.1)" : BORDER$5}`,
+                    borderRadius: 4,
+                    padding: "3px 8px",
+                    cursor: loading2 ? "default" : "pointer",
+                    letterSpacing: 1,
+                    fontWeight: 700
+                  },
+                  children: loading2 ? "LOADING..." : "REFRESH"
+                }
+              )
+            ]
+          }
+        ),
+        !isAuthenticated && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            "data-ocid": "missions.auth_required",
+            style: {
+              textAlign: "center",
+              padding: "32px 16px",
+              background: "rgba(0,20,40,0.55)",
+              border: `1px solid ${BORDER$5}`,
+              borderRadius: 10,
+              color: TEXT_DIM$3,
+              fontSize: 10
+            },
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 20, marginBottom: 8 }, children: "🔐" }),
+              "Connect your wallet to view missions"
+            ]
+          }
+        ),
+        error && /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "div",
+          {
+            "data-ocid": "missions.error_state",
+            style: {
+              padding: "10px 12px",
+              background: "rgba(239,68,68,0.08)",
+              border: "1px solid rgba(239,68,68,0.3)",
+              borderRadius: 8,
+              fontSize: 9,
+              color: "rgba(252,165,165,0.9)"
+            },
+            children: error
+          }
+        ),
+        loading2 && playerMissions.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "div",
+          {
+            "data-ocid": "missions.loading_state",
+            style: {
+              display: "flex",
+              flexDirection: "column",
+              gap: 8
+            },
+            children: [1, 2, 3].map((i2) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "div",
+              {
+                style: {
+                  height: 80,
+                  background: "rgba(0,255,204,0.03)",
+                  border: `1px solid ${BORDER$5}`,
+                  borderRadius: 10,
+                  animation: "pulse 1.5s ease-in-out infinite"
+                }
+              },
+              i2
+            ))
+          }
+        ),
+        !loading2 && isAuthenticated && playerMissions.length === 0 && !error && /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "div",
+          {
+            "data-ocid": "missions.empty_state",
+            style: {
+              textAlign: "center",
+              padding: "32px 16px",
+              color: TEXT_DIM$3,
+              fontSize: 10
+            },
+            children: "No missions available. Check back after connecting."
+          }
+        ),
+        playerMissions.map(({ mission, completed }, idx) => {
+          const rewardFrntr = Number(mission.rewardE8s) / 1e8;
+          const isClaiming = claiming === mission.id;
+          const met = isMissionMet(
+            mission.requirement,
+            plotsOwned,
+            generatorTiers,
+            frntBalance,
+            claimCount
+          );
+          const prog = getMissionProgress(
+            mission.requirement,
+            plotsOwned,
+            generatorTiers,
+            frntBalance,
+            claimCount
+          );
+          return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              "data-ocid": `missions.item.${idx + 1}`,
+              style: {
+                background: completed ? "rgba(34,197,94,0.04)" : met ? "rgba(0,255,204,0.06)" : "rgba(0,20,40,0.55)",
+                border: `1px solid ${completed ? "rgba(34,197,94,0.3)" : met ? BORDER$5 : "rgba(0,255,204,0.12)"}`,
+                borderTop: `2px solid ${completed ? "#22c55e" : met ? CYAN$5 : "rgba(0,255,204,0.2)"}`,
+                borderRadius: 10,
+                padding: "12px 14px",
+                position: "relative",
+                overflow: "hidden"
+              },
+              children: [
+                !completed && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    "aria-hidden": "true",
+                    style: {
+                      position: "absolute",
+                      inset: 0,
+                      pointerEvents: "none",
+                      background: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px)"
+                    }
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { position: "relative" }, children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "div",
+                    {
+                      style: {
+                        display: "flex",
+                        alignItems: "flex-start",
+                        justifyContent: "space-between",
+                        gap: 8,
+                        marginBottom: 4
+                      },
+                      children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "div",
+                          {
+                            style: {
+                              fontSize: 11,
+                              fontWeight: 900,
+                              color: completed ? "#22c55e" : TEXT$4,
+                              letterSpacing: 0.5
+                            },
+                            children: mission.title
+                          }
+                        ),
+                        completed ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "span",
+                          {
+                            "data-ocid": `missions.status.${idx + 1}`,
+                            style: {
+                              fontSize: 7,
+                              fontWeight: 700,
+                              letterSpacing: 1.5,
+                              color: "#22c55e",
+                              background: "rgba(34,197,94,0.12)",
+                              border: "1px solid rgba(34,197,94,0.3)",
+                              borderRadius: 4,
+                              padding: "2px 7px",
+                              flexShrink: 0
+                            },
+                            children: "✓ COMPLETE"
+                          }
+                        ) : met ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "span",
+                          {
+                            "data-ocid": `missions.status.${idx + 1}`,
+                            style: {
+                              fontSize: 7,
+                              fontWeight: 700,
+                              letterSpacing: 1.5,
+                              color: GOLD$3,
+                              background: "rgba(255,215,0,0.1)",
+                              border: "1px solid rgba(255,215,0,0.3)",
+                              borderRadius: 4,
+                              padding: "2px 7px",
+                              flexShrink: 0
+                            },
+                            children: "CLAIM READY"
+                          }
+                        ) : /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "span",
+                          {
+                            "data-ocid": `missions.status.${idx + 1}`,
+                            style: {
+                              fontSize: 7,
+                              fontWeight: 700,
+                              letterSpacing: 1.5,
+                              color: CYAN$5,
+                              background: "rgba(0,255,204,0.06)",
+                              border: `1px solid ${BORDER$5}`,
+                              borderRadius: 4,
+                              padding: "2px 7px",
+                              flexShrink: 0
+                            },
+                            children: "IN PROGRESS"
+                          }
+                        )
+                      ]
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "p",
+                    {
+                      style: {
+                        fontSize: 9,
+                        color: TEXT_DIM$3,
+                        lineHeight: 1.6,
+                        margin: "0 0 8px"
+                      },
+                      children: mission.description
+                    }
+                  ),
+                  !completed && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { marginBottom: 8 }, children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "div",
+                      {
+                        style: { fontSize: 8, color: TEXT_DIM$3, letterSpacing: 0.5 },
+                        children: prog.label
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(ProgressBar, { current: prog.current, target: prog.target })
+                  ] }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "div",
+                    {
+                      style: {
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 8,
+                        marginTop: 4
+                      },
+                      children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                          "div",
+                          {
+                            style: {
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 4
+                            },
+                            children: [
+                              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 10, color: GOLD$3 }, children: "⬡" }),
+                              /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                                "span",
+                                {
+                                  style: {
+                                    fontSize: 10,
+                                    fontWeight: 700,
+                                    color: GOLD$3,
+                                    fontFamily: "monospace"
+                                  },
+                                  children: [
+                                    "+",
+                                    rewardFrntr >= 1e3 ? rewardFrntr.toFixed(0) : rewardFrntr.toFixed(2),
+                                    " ",
+                                    "FRNTR"
+                                  ]
+                                }
+                              ),
+                              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                "span",
+                                {
+                                  style: {
+                                    fontSize: 7,
+                                    color: TEXT_DIM$3,
+                                    letterSpacing: 0.5
+                                  },
+                                  children: "REWARD"
+                                }
+                              )
+                            ]
+                          }
+                        ),
+                        !completed && met && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "button",
+                          {
+                            type: "button",
+                            "data-ocid": `missions.claim_button.${idx + 1}`,
+                            onClick: () => handleClaim(mission.id, mission.rewardE8s),
+                            disabled: isClaiming,
+                            style: {
+                              fontSize: 8,
+                              fontWeight: 700,
+                              letterSpacing: 1.5,
+                              color: isClaiming ? TEXT_DIM$3 : "#020a12",
+                              background: isClaiming ? "rgba(255,215,0,0.08)" : GOLD$3,
+                              border: `1px solid ${GOLD$3}`,
+                              borderRadius: 5,
+                              padding: "5px 12px",
+                              cursor: isClaiming ? "default" : "pointer",
+                              textTransform: "uppercase",
+                              transition: "all 0.15s"
+                            },
+                            children: isClaiming ? "CLAIMING..." : "CLAIM REWARD"
+                          }
+                        )
+                      ]
+                    }
+                  )
+                ] })
+              ]
+            },
+            mission.id
+          );
+        }),
+        playerMissions.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              style: {
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: 3,
+                color: TEXT_DIM$3,
+                textTransform: "uppercase",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                marginTop: 4
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      width: 2,
+                      height: 12,
+                      background: TEXT_DIM$3,
+                      borderRadius: 1
+                    }
+                  }
+                ),
+                "UPCOMING MISSIONS"
+              ]
+            }
+          ),
+          COMING_SOON_MISSIONS.map((cs, idx) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              "data-ocid": `missions.coming_soon.${idx + 1}`,
+              style: {
+                background: "rgba(255,255,255,0.02)",
+                border: "1px solid rgba(255,255,255,0.06)",
+                borderRadius: 10,
+                padding: "12px 14px",
+                opacity: 0.5
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "div",
+                  {
+                    style: {
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      marginBottom: 4
+                    },
+                    children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                        "div",
+                        {
+                          style: {
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                            fontSize: 11,
+                            fontWeight: 900,
+                            color: "rgba(224,244,255,0.5)"
+                          },
+                          children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: cs.icon }),
+                            cs.title
+                          ]
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "span",
+                        {
+                          style: {
+                            fontSize: 7,
+                            fontWeight: 700,
+                            letterSpacing: 1.5,
+                            color: "rgba(167,139,250,0.7)",
+                            background: "rgba(167,139,250,0.08)",
+                            border: "1px solid rgba(167,139,250,0.2)",
+                            borderRadius: 4,
+                            padding: "2px 7px"
+                          },
+                          children: "COMING SOON"
+                        }
+                      )
+                    ]
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "p",
+                  {
+                    style: {
+                      fontSize: 9,
+                      color: "rgba(224,244,255,0.3)",
+                      lineHeight: 1.6,
+                      margin: "0 0 6px"
+                    },
+                    children: cs.description
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "div",
+                  {
+                    style: {
+                      fontSize: 8,
+                      color: "rgba(255,215,0,0.3)",
+                      fontFamily: "monospace"
+                    },
+                    children: [
+                      "+",
+                      (Number(cs.rewardE8s) / 1e8).toFixed(0),
+                      " FRNTR REWARD"
+                    ]
+                  }
+                )
+              ]
+            },
+            cs.id
+          ))
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          ActionConfirmModal,
+          {
+            isOpen: missionConfirmOpen,
+            onConfirm: handleConfirmMission,
+            onCancel: handleCancelMission,
+            title: "Complete Mission",
+            actionType: "mission",
+            details: [
+              {
+                label: "Reward",
+                value: `${(Number(pendingReward) / 1e8).toFixed(2)} FRNTR`
+              }
+            ],
+            warningText: "Mission completion is permanent and cannot be undone."
+          }
+        ),
+        postMissionType !== null && /* @__PURE__ */ jsxRuntimeExports.jsx(
+          PostActionToast,
+          {
+            actionType: postMissionType,
+            message: "Mission completed! Reward sent to your wallet.",
+            onNavigate: (tab) => window.dispatchEvent(
+              new CustomEvent("navigate-tab", { detail: tab })
+            ),
+            onClose: () => setPostMissionType(null)
+          }
+        )
+      ]
+    }
+  );
 }
 const CYAN$4 = "#00ffcc";
 const CYAN_DIM$3 = "rgba(0,255,204,0.35)";
@@ -104703,7 +108091,7 @@ function PlotHoverCard({
         borderTop: `2px solid ${actionColor}`,
         borderRadius: 10,
         padding: "14px 16px",
-        zIndex: 60,
+        zIndex: 48,
         opacity: visible ? 1 : 0,
         transition: "bottom 0.35s cubic-bezier(0.34,1.56,0.64,1), opacity 0.25s ease",
         boxShadow: `0 8px 32px rgba(0,0,0,0.6), 0 0 20px ${actionColor}18`,
@@ -104888,7 +108276,7 @@ function PlotHoverCard({
                   children: "OPEN MAP"
                 }
               ),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
                 "div",
                 {
                   style: {
@@ -104900,13 +108288,7 @@ function PlotHoverCard({
                     padding: "0 4px",
                     whiteSpace: "nowrap"
                   },
-                  children: [
-                    "⚡ ",
-                    "50",
-                    " FRNTR/DAY",
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("br", {}),
-                    "GENERATING"
-                  ]
+                  children: "⚡ GENERATING"
                 }
               )
             ]
@@ -105825,13 +109207,13 @@ function UniversePanel({ onClose, inline = false }) {
   reactExports.useEffect(() => {
     if (!actor) return;
     actor.getGeneratorTierCatalog().then((catalog) => {
-      const TIER_NAMES = ["I", "II", "III", "IV", "V", "VI"];
+      const TIER_NAMES2 = ["I", "II", "III", "IV", "V", "VI"];
       const sorted = [...catalog].sort(
         (a2, b2) => Number(a2.tierIndex) - Number(b2.tierIndex)
       );
       setLiveTiers(
         sorted.map((t, i2) => ({
-          tier: TIER_NAMES[i2] ?? String(Number(t.tierIndex)),
+          tier: TIER_NAMES2[i2] ?? String(Number(t.tierIndex)),
           production: `${t.bonusPerDay.toFixed(0)} FRNTR/day`,
           cost: `${(Number(t.cost) / 1e8).toLocaleString(void 0, { maximumFractionDigits: 0 })} FRNTR`,
           color: TIER_COLORS[i2] ?? CYAN$1
@@ -105931,10 +109313,8 @@ function UniversePanel({ onClose, inline = false }) {
     5: 37,
     6: 55
   };
-  let playerDailyFrntr = 0;
   for (const pid of player.plotsOwned) {
-    const tier = generatorTiers[pid] ?? 0;
-    playerDailyFrntr += TIER_RATES[tier] ?? 7;
+    generatorTiers[pid] ?? 0;
   }
   let localDailyEmission = 0;
   for (const plot of globalOwnedPlots) {
@@ -105942,6 +109322,7 @@ function UniversePanel({ onClose, inline = false }) {
     localDailyEmission += TIER_RATES[tier] ?? 7;
   }
   const globalDailyEmission = (globalStats == null ? void 0 : globalStats.currentDailyEmissionRate) ?? localDailyEmission;
+  const globalUnclaimedTokens = useGameStore((s2) => s2.globalUnclaimedTokens);
   const networkBurned = (globalStats == null ? void 0 : globalStats.totalFRNTRBurned) ?? totalFRNTRBurned;
   const activePlayers = (globalStats == null ? void 0 : globalStats.activePlayerCount) ?? 0;
   const networkFRNTRMined = (globalStats == null ? void 0 : globalStats.totalFRNTRMined) ?? globalDailyEmission * 30;
@@ -105962,188 +109343,6 @@ function UniversePanel({ onClose, inline = false }) {
         zIndex: 2
       },
       children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(SectionTitle, { children: "Your Command Stats" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs(GlowCard, { style: { marginBottom: 16 }, children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "div",
-            {
-              style: {
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 14,
-                marginBottom: 14
-              },
-              children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "div",
-                    {
-                      style: {
-                        fontSize: 8,
-                        color: TEXT_DIM,
-                        letterSpacing: 1.5,
-                        marginBottom: 4
-                      },
-                      children: "FRNTR BALANCE"
-                    }
-                  ),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "div",
-                    {
-                      style: {
-                        fontSize: 16,
-                        fontWeight: 900,
-                        color: CYAN$1,
-                        fontFamily: "monospace",
-                        textShadow: `0 0 10px ${CYAN$1}`
-                      },
-                      children: player.frntBalance.toFixed(8)
-                    }
-                  )
-                ] }),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "div",
-                    {
-                      style: {
-                        fontSize: 8,
-                        color: TEXT_DIM,
-                        letterSpacing: 1.5,
-                        marginBottom: 4
-                      },
-                      children: "DAILY RATE"
-                    }
-                  ),
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                    "div",
-                    {
-                      style: {
-                        fontSize: 16,
-                        fontWeight: 900,
-                        color: GOLD,
-                        fontFamily: "monospace"
-                      },
-                      children: [
-                        "+",
-                        playerDailyFrntr,
-                        " / day"
-                      ]
-                    }
-                  )
-                ] })
-              ]
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "div",
-            {
-              style: {
-                display: "grid",
-                gridTemplateColumns: "repeat(4, 1fr)",
-                gap: 8
-              },
-              children: [
-                { label: "IRON" },
-                { label: "FUEL" },
-                { label: "CRYSTAL" },
-                { label: "RARE EARTH" }
-              ].map((r2) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "div",
-                  {
-                    style: {
-                      fontSize: 7,
-                      color: TEXT_DIM,
-                      letterSpacing: 1,
-                      marginBottom: 2
-                    },
-                    children: r2.label
-                  }
-                ),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "div",
-                  {
-                    style: {
-                      fontSize: 10,
-                      fontWeight: 700,
-                      color: "rgba(224,244,255,0.35)",
-                      fontFamily: "monospace",
-                      letterSpacing: 0.5
-                    },
-                    children: "SOON™"
-                  }
-                )
-              ] }, r2.label))
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "div",
-            {
-              style: {
-                marginTop: 10,
-                paddingTop: 10,
-                borderTop: `1px solid ${BORDER$1}`,
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center"
-              },
-              children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "div",
-                    {
-                      style: {
-                        fontSize: 7,
-                        color: TEXT_DIM,
-                        letterSpacing: 1,
-                        marginBottom: 2
-                      },
-                      children: "PLOTS OWNED"
-                    }
-                  ),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "div",
-                    {
-                      style: {
-                        fontSize: 13,
-                        fontWeight: 900,
-                        color: CYAN$1,
-                        fontFamily: "monospace"
-                      },
-                      children: player.plotsOwned.length
-                    }
-                  )
-                ] }),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "div",
-                    {
-                      style: {
-                        fontSize: 7,
-                        color: TEXT_DIM,
-                        letterSpacing: 1,
-                        marginBottom: 2
-                      },
-                      children: "TOTAL BURNED"
-                    }
-                  ),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "div",
-                    {
-                      style: {
-                        fontSize: 13,
-                        fontWeight: 900,
-                        color: "#ef4444",
-                        fontFamily: "monospace"
-                      },
-                      children: networkBurned.toFixed(4)
-                    }
-                  )
-                ] })
-              ]
-            }
-          )
-        ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(SectionTitle, { children: "Global Network Stats" }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs(GlowCard, { style: { marginBottom: 16 }, children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -106174,6 +109373,18 @@ function UniversePanel({ onClose, inline = false }) {
                   value: fmtBig(globalDailyEmission),
                   color: "#3b82f6",
                   sub: "FRNTR / day"
+                },
+                {
+                  label: "UNCLAIMED IN CIRCULATION",
+                  value: fmtBig(globalUnclaimedTokens),
+                  color: "#a855f7",
+                  sub: "across all plots"
+                },
+                {
+                  label: "ON-CHAIN ACTIONS",
+                  value: (globalStats == null ? void 0 : globalStats.totalActionCount) !== void 0 ? Number(globalStats.totalActionCount).toLocaleString() : "—",
+                  color: "#f97316",
+                  sub: "confirmed on-chain"
                 }
               ].map((item) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -107498,7 +110709,7 @@ function TopBar({
             ]
           }
         ),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1.5 flex-shrink-0", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1 flex-shrink-0", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs(
             "div",
             {
@@ -107520,6 +110731,29 @@ function TopBar({
                       frntrStr,
                       " FRNTR"
                     ]
+                  }
+                )
+              ]
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              "data-ocid": "topbar.icp_balance_mobile",
+              className: "flex sm:hidden items-center gap-1 px-1.5 py-1 rounded-md",
+              style: {
+                background: "rgba(0,255,204,0.08)",
+                border: `1px solid ${BORDER}`,
+                minWidth: 0
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 13, color: CYAN, lineHeight: 1 }, children: "◎" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "span",
+                  {
+                    className: "font-mono font-bold",
+                    style: { fontSize: 10, color: CYAN, letterSpacing: 0.3 },
+                    children: icpBalanceFormatted.toFixed(2)
                   }
                 )
               ]
@@ -107563,12 +110797,12 @@ function TopBar({
               }
             }
           ),
-          isAuthenticated && shortPrincipal ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1.5", children: [
+          isAuthenticated && shortPrincipal ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsxs(
               "div",
               {
                 "data-ocid": "topbar.principal_badge",
-                className: "flex items-center gap-1.5 px-2 py-1 rounded-md",
+                className: "flex items-center gap-1 px-1.5 py-1 rounded-md",
                 style: {
                   background: "rgba(0,255,204,0.07)",
                   border: `1px solid ${BORDER}`
@@ -107972,8 +111206,10 @@ function PlotActionPanel({
 }) {
   const plots = useGameStore((s2) => s2.plots);
   const player = useGameStore((s2) => s2.player);
-  useActor(createActor);
+  const { actor } = useActor(createActor);
   const { purchasePlot, isPurchasing } = usePurchasePlot();
+  const [showPurchaseConfirm, setShowPurchaseConfirm] = reactExports.useState(false);
+  const [postActionType, setPostActionType] = reactExports.useState(null);
   const plot = plots.find((p2) => p2.id === plotId);
   if (!plot) return null;
   const isOwned = plot.owner !== null;
@@ -107991,13 +111227,30 @@ function PlotActionPanel({
       highlight: true
     }
   ];
-  async function handlePurchase() {
+  async function handleConfirmPurchase() {
+    setShowPurchaseConfirm(false);
     const result = await purchasePlot(String(plotId));
     if (result.success) {
       ue.success(result.message, { duration: 4e3 });
+      setPostActionType("purchase");
     } else {
       ue.error(result.message, { duration: 5e3 });
     }
+  }
+  function handlePurchase() {
+    setShowPurchaseConfirm(true);
+  }
+  function handleCancelPurchase() {
+    try {
+      void (actor == null ? void 0 : actor.logCancelledAction(
+        "purchasePlot",
+        String(plotId),
+        null,
+        "User cancelled plot purchase from plot panel"
+      ));
+    } catch (_2) {
+    }
+    setShowPurchaseConfirm(false);
   }
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "div",
@@ -108008,7 +111261,8 @@ function PlotActionPanel({
         right: 0,
         top: 56,
         width: 280,
-        zIndex: 40,
+        zIndex: 45,
+        bottom: 64,
         background: "rgba(10,14,26,0.90)",
         backdropFilter: "blur(14px)",
         WebkitBackdropFilter: "blur(14px)",
@@ -108210,7 +111464,225 @@ function PlotActionPanel({
               children: "DETAILS"
             }
           )
-        ] }) })
+        ] }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          _ActionConfirmModal,
+          {
+            isOpen: showPurchaseConfirm,
+            onConfirm: handleConfirmPurchase,
+            onCancel: handleCancelPurchase,
+            title: "Confirm Land Purchase",
+            actionType: "purchase",
+            details: [
+              { label: "PLOT ID", value: String(plotId) },
+              { label: "BIOME", value: plot.biome },
+              { label: "PRICE", value: `${icpPrice} ICP` }
+            ],
+            costLabel: `${icpPrice} ICP`,
+            warningText: "This action is permanent and cannot be undone. The ICP will be deducted immediately.",
+            isLoading: isPurchasing
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          _PostActionToast,
+          {
+            actionType: postActionType,
+            onNavigate: (tab) => onOpenTab(tab),
+            onDismiss: () => setPostActionType(null)
+          }
+        )
+      ]
+    }
+  );
+}
+const QUICK_NAV_LINKS = [
+  { label: "INVENTORY", icon: "📦", tab: "inventory", desc: "View your plots" },
+  { label: "CMD CENTER", icon: "⬡", tab: "command", desc: "Token dashboard" },
+  { label: "UNIVERSE", icon: "◎", tab: "universe", desc: "Global stats" },
+  { label: "LEADERBOARD", icon: "🏆", tab: "leaderboard", desc: "Rankings" }
+];
+function QuickNavPopup({
+  onNavigate,
+  onDismiss
+}) {
+  const timerRef = reactExports.useRef(null);
+  reactExports.useEffect(() => {
+    timerRef.current = setTimeout(onDismiss, 8e3);
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [onDismiss]);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "div",
+    {
+      "data-ocid": "quick_nav.panel",
+      style: {
+        position: "fixed",
+        bottom: 84,
+        left: "50%",
+        transform: "translateX(-50%)",
+        zIndex: 200,
+        width: "min(96vw, 420px)",
+        background: "rgba(4,12,28,0.97)",
+        backdropFilter: "blur(20px)",
+        WebkitBackdropFilter: "blur(20px)",
+        border: `1px solid ${CYAN}44`,
+        borderTop: `2px solid ${CYAN}`,
+        borderRadius: 12,
+        boxShadow: `0 0 40px ${CYAN}22, 0 8px 32px rgba(0,0,0,0.6)`,
+        padding: "14px 16px 16px",
+        animation: "slideUpFadeIn 0.3s ease"
+      },
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            style: {
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 12
+            },
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      fontSize: 9,
+                      color: CYAN,
+                      letterSpacing: 2.5,
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      textShadow: `0 0 8px ${CYAN}`
+                    },
+                    children: "▶ PLOT ACQUIRED — QUICK ACCESS"
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      fontSize: 8,
+                      color: "rgba(224,244,255,0.4)",
+                      letterSpacing: 0.5,
+                      marginTop: 2
+                    },
+                    children: "Where would you like to go next?"
+                  }
+                )
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "button",
+                {
+                  type: "button",
+                  "data-ocid": "quick_nav.close_button",
+                  onClick: onDismiss,
+                  "aria-label": "Dismiss",
+                  style: {
+                    width: 22,
+                    height: 22,
+                    borderRadius: 6,
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    background: "rgba(255,255,255,0.04)",
+                    color: "rgba(224,244,255,0.5)",
+                    fontSize: 10,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0
+                  },
+                  children: "✕"
+                }
+              )
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "div",
+          {
+            style: {
+              display: "grid",
+              gridTemplateColumns: "repeat(4, 1fr)",
+              gap: 8
+            },
+            children: QUICK_NAV_LINKS.map(({ label, icon, tab, desc }) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "button",
+              {
+                type: "button",
+                "data-ocid": `quick_nav.${tab}.button`,
+                onClick: () => onNavigate(tab),
+                style: {
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 4,
+                  padding: "10px 6px",
+                  borderRadius: 8,
+                  border: `1px solid ${CYAN}28`,
+                  background: "rgba(0,255,204,0.05)",
+                  cursor: "pointer",
+                  transition: "all 0.15s"
+                },
+                onMouseEnter: (e) => {
+                  e.currentTarget.style.background = "rgba(0,255,204,0.12)";
+                  e.currentTarget.style.borderColor = `${CYAN}66`;
+                  e.currentTarget.style.boxShadow = `0 0 12px ${CYAN}22`;
+                },
+                onMouseLeave: (e) => {
+                  e.currentTarget.style.background = "rgba(0,255,204,0.05)";
+                  e.currentTarget.style.borderColor = `${CYAN}28`;
+                  e.currentTarget.style.boxShadow = "none";
+                },
+                children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 18, lineHeight: 1 }, children: icon }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "span",
+                    {
+                      style: {
+                        fontSize: 7.5,
+                        fontWeight: 700,
+                        letterSpacing: 0.8,
+                        color: CYAN,
+                        textTransform: "uppercase",
+                        textAlign: "center",
+                        lineHeight: 1.2
+                      },
+                      children: label
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "span",
+                    {
+                      style: {
+                        fontSize: 7,
+                        color: "rgba(224,244,255,0.35)",
+                        textAlign: "center",
+                        lineHeight: 1.2
+                      },
+                      children: desc
+                    }
+                  )
+                ]
+              },
+              tab
+            ))
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "div",
+          {
+            style: {
+              marginTop: 10,
+              textAlign: "center",
+              fontSize: 7.5,
+              color: "rgba(224,244,255,0.22)",
+              letterSpacing: 0.5
+            },
+            children: "Auto-dismisses in 8s · This appears only once"
+          }
+        )
       ]
     }
   );
@@ -108226,6 +111698,8 @@ function Play() {
   const [showAuthOverlay, setShowAuthOverlay] = reactExports.useState(true);
   const selectedPlotId = useGameStore((s2) => s2.selectedPlotId);
   const [purchaseToast, setPurchaseToast] = reactExports.useState(null);
+  const [showQuickNav, setShowQuickNav] = reactExports.useState(false);
+  const quickNavShownRef = reactExports.useRef(false);
   const [windowWidth, setWindowWidth] = reactExports.useState(
     typeof window !== "undefined" ? window.innerWidth : 0
   );
@@ -108281,6 +111755,11 @@ function Play() {
         () => setPurchaseToast(null),
         3e3
       );
+      if (!quickNavShownRef.current && !sessionStorage.getItem("frontier_quicknav_shown")) {
+        quickNavShownRef.current = true;
+        sessionStorage.setItem("frontier_quicknav_shown", "1");
+        setTimeout(() => setShowQuickNav(true), 3200);
+      }
     }
     prevPlotsOwnedLen.current = currentLen;
   }, [player.plotsOwned]);
@@ -108354,6 +111833,7 @@ function Play() {
               activeTab === "leaderboard" && /* @__PURE__ */ jsxRuntimeExports.jsx(LeaderboardPanel, {}),
               activeTab === "universe" && /* @__PURE__ */ jsxRuntimeExports.jsx(UniversePanel, { inline: true }),
               activeTab === "intel" && /* @__PURE__ */ jsxRuntimeExports.jsx(IntelTab, {}),
+              activeTab === "missions" && /* @__PURE__ */ jsxRuntimeExports.jsx(MissionsTab, {}),
               activeTab === "admin" && /* @__PURE__ */ jsxRuntimeExports.jsx(AdminPanel, {}),
               activeTab === "roadmap" && /* @__PURE__ */ jsxRuntimeExports.jsx(RoadmapTab, {})
             ]
@@ -108394,7 +111874,7 @@ function Play() {
             style: {
               position: "fixed",
               inset: 0,
-              zIndex: 960,
+              zIndex: 9999,
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
@@ -108563,11 +112043,21 @@ function Play() {
             )
           }
         ),
+        showQuickNav && /* @__PURE__ */ jsxRuntimeExports.jsx(
+          QuickNavPopup,
+          {
+            onNavigate: (tab) => {
+              setActiveTab(tab);
+              setShowQuickNav(false);
+            },
+            onDismiss: () => setShowQuickNav(false)
+          }
+        ),
         purchaseToast && /* @__PURE__ */ jsxRuntimeExports.jsxs(
           "div",
           {
             "data-ocid": "map.success_state",
-            className: "fixed left-1/2 -translate-x-1/2 z-70 flex items-center gap-2.5 px-5 py-2.5 rounded-lg whitespace-nowrap",
+            className: "fixed left-1/2 -translate-x-1/2 z-[75] flex items-center gap-2.5 px-5 py-2.5 rounded-lg whitespace-nowrap",
             style: {
               bottom: 80,
               background: "rgba(4,12,24,0.95)",
@@ -108682,17 +112172,6 @@ const routeTree = rootRoute.addChildren([
 ]);
 const hashHistory = createHashHistory();
 const router = createRouter({ routeTree, history: hashHistory });
-function GameTicker() {
-  reactExports.useEffect(() => {
-    const id2 = setInterval(() => {
-      const store = useGameStore.getState();
-      store.tickPassiveIncome();
-      store.tickMineralDrip();
-    }, 1e3);
-    return () => clearInterval(id2);
-  }, []);
-  return null;
-}
 function App() {
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx(GameTicker, {}),

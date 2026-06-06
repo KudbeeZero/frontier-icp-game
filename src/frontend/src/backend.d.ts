@@ -11,19 +11,7 @@ export interface FaucetGrant {
     icpGranted: bigint;
     frntGranted: bigint;
 }
-export interface SurveyResult {
-    resourcePercentage: bigint;
-    bonusInfo?: string;
-    biome: Biome;
-}
 export type Timestamp = bigint;
-export interface StressActionResult {
-    ok: boolean;
-    action: string;
-    index: bigint;
-    errorMsg?: string;
-    durationMs: bigint;
-}
 export type ResetResult = {
     __kind__: "ok";
     ok: string;
@@ -31,12 +19,6 @@ export type ResetResult = {
     __kind__: "err";
     err: string;
 };
-export interface MineResult {
-    efficiency: number;
-    plotId: PlotId;
-    resourceYields: Array<[ResourceType, number]>;
-    frntRate: number;
-}
 export interface PlotUpgradesView {
     tierName: string;
     plotId: PlotId;
@@ -44,6 +26,110 @@ export interface PlotUpgradesView {
     bonusPerDay: number;
     nextTierCost?: bigint;
     generatorTier: GeneratorTier;
+}
+export type PlotId = string;
+export interface GeneratorTierInfo {
+    name: string;
+    tierIndex: bigint;
+    bonusPerDay: number;
+    costFRNTR: bigint;
+}
+export type MissionRequirementKind = {
+    __kind__: "purchasePlots";
+    purchasePlots: bigint;
+} | {
+    __kind__: "upgradeToTier";
+    upgradeToTier: bigint;
+} | {
+    __kind__: "holdFRNTR";
+    holdFRNTR: bigint;
+} | {
+    __kind__: "reachLeaderboardTop";
+    reachLeaderboardTop: bigint;
+} | {
+    __kind__: "surveyPlot";
+    surveyPlot: null;
+} | {
+    __kind__: "claimTokens";
+    claimTokens: bigint;
+};
+export interface ActionAuditEntry {
+    action: string;
+    decision: string;
+    plotId?: string;
+    tier?: string;
+    timestamp: bigint;
+    details: string;
+    caller: Principal;
+    amount?: bigint;
+}
+export type FaucetResult = {
+    __kind__: "ok";
+    ok: FaucetGrant;
+} | {
+    __kind__: "err";
+    err: string;
+};
+export interface CombatEvent {
+    attacker: Principal;
+    intercepted: boolean;
+    interceptorType?: string;
+    toPlot: string;
+    atkPower: bigint;
+    timestamp: bigint;
+    fromPlot: string;
+    success: boolean;
+    missileType?: string;
+    defPower: bigint;
+}
+export interface PlotProductionRate {
+    totalPerDay: number;
+    plotId: string;
+    tierBonus: number;
+    baseFRNTRPerDay: number;
+    generatorTier: bigint;
+    nexusBonus: number;
+}
+export interface Tokenomics {
+    burnRate: bigint;
+    emissionRate: bigint;
+    circulatingSupply: bigint;
+    daysUntilMilestone: bigint;
+    totalBurned: bigint;
+    maxSupply: bigint;
+    remainingMineable: bigint;
+}
+export interface Mission {
+    id: string;
+    title: string;
+    description: string;
+    rewardE8s: bigint;
+    requirement: MissionRequirementKind;
+}
+export interface GlobalStats {
+    circulatingSupply: bigint;
+    activePlayers: bigint;
+    totalPlotsOwned: bigint;
+    dailyEmission: bigint;
+    totalBurned: bigint;
+}
+export interface SurveyResult {
+    resourcePercentage: bigint;
+    bonusInfo?: string;
+    biome: Biome;
+}
+export interface StressActionResult {
+    ok: boolean;
+    action: string;
+    index: bigint;
+    errorMsg?: string;
+    durationMs: bigint;
+}
+export interface MineResult {
+    efficiency: number;
+    plotId: PlotId;
+    resourceYields: Array<[ResourceType, number]>;
+    frntRate: number;
 }
 export interface SubParcel {
     subParcelId: string;
@@ -65,13 +151,6 @@ export interface PrincipalDisplay {
     short: string;
     isAuthed: boolean;
 }
-export type PlotId = string;
-export interface GeneratorTierInfo {
-    name: string;
-    tierIndex: bigint;
-    bonusPerDay: number;
-    costFRNTR: bigint;
-}
 export interface SurveyView {
     startTime: bigint;
     status: SurveyStatus;
@@ -85,55 +164,19 @@ export interface FaucetClaimSummary {
     lastClaim?: bigint;
     totalClaims: bigint;
 }
+export type Result = {
+    __kind__: "ok";
+    ok: bigint;
+} | {
+    __kind__: "err";
+    err: string;
+};
 export interface SubParcelInfo {
     resourceRate: number;
     slotIndex: bigint;
     isLocked: boolean;
     buildingType: string;
     cooldownSecondsRemaining: bigint;
-}
-export interface PlotProductionRate {
-    totalPerDay: number;
-    plotId: string;
-    tierBonus: number;
-    baseFRNTRPerDay: number;
-    generatorTier: bigint;
-    nexusBonus: number;
-}
-export type FaucetResult = {
-    __kind__: "ok";
-    ok: FaucetGrant;
-} | {
-    __kind__: "err";
-    err: string;
-};
-export interface CombatEvent {
-    attacker: Principal;
-    intercepted: boolean;
-    interceptorType?: string;
-    toPlot: string;
-    atkPower: bigint;
-    timestamp: bigint;
-    fromPlot: string;
-    success: boolean;
-    missileType?: string;
-    defPower: bigint;
-}
-export interface Tokenomics {
-    burnRate: bigint;
-    emissionRate: bigint;
-    circulatingSupply: bigint;
-    daysUntilMilestone: bigint;
-    totalBurned: bigint;
-    maxSupply: bigint;
-    remainingMineable: bigint;
-}
-export interface GlobalStats {
-    circulatingSupply: bigint;
-    activePlayers: bigint;
-    totalPlotsOwned: bigint;
-    dailyEmission: bigint;
-    totalBurned: bigint;
 }
 export enum Biome {
     Tropical = "Tropical",
@@ -179,14 +222,64 @@ export interface backendInterface {
      * / Compute how much FRNTR has accrued for the caller since their lastClaimTime,
      * / transfer it from the game canister to the caller's principal via ICRC-1,
      * / update lastClaimTime to now, and return the claimed amount (in e8s) or an error.
+     * / Claim accumulated FRNTR tokens for a specific plot.
+     * / Accrual = (now - lastClaimTime) / 86400s * dailyRate.
+     * / Mints fresh tokens via icrc1_transfer from game canister (minting account).
      */
-    claimAccumulatedTokens(): Promise<{
+    claimAccumulatedTokens(plotId: string): Promise<{
         __kind__: "ok";
         ok: bigint;
     } | {
         __kind__: "err";
         err: string;
     }>;
+    /**
+     * / Claim accumulated FRNTR tokens for ALL plots owned by the caller.
+     * / Mints fresh tokens via icrc1_transfer from game canister (minting account).
+     */
+    claimAllPlots(): Promise<{
+        __kind__: "ok";
+        ok: {
+            amount: bigint;
+            plotsClaimed: bigint;
+        };
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    /**
+     * / Thin wrapper around completeSurvey — returns the SurveyResult report alongside the
+     * / token award so the frontend can display both in a single call.
+     * / Returns #err if the survey timer is not yet complete or no survey exists.
+     * / Thin wrapper around completeSurvey — returns the SurveyResult report alongside the
+     * / token award so the frontend can display both in a single call.
+     * / Returns #err if the survey timer is not yet complete or no survey exists.
+     */
+    claimSurveyReward(plotId: string): Promise<{
+        __kind__: "ok";
+        ok: {
+            report: SurveyResult;
+            rewardE8s: bigint;
+        };
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    /**
+     * / Complete a mission. Verifies requirement, mints reward, marks done.
+     */
+    completeMission(missionId: string): Promise<{
+        __kind__: "ok";
+        ok: bigint;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    /**
+     * / Complete a survey that has finished its timer and mint the token award to the caller.
+     * / Returns #ok(awardE8s) on success or #err(message) on failure.
+     */
+    completeSurvey(plotId: string): Promise<Result>;
     getAdjacentPlots(plotId: string): Promise<Array<string>>;
     getAdminPrincipal(): Promise<string>;
     /**
@@ -199,6 +292,21 @@ export interface backendInterface {
      */
     getApprovedLiquidityCanister(): Promise<string | null>;
     getAssignedInterceptor(plotId: string): Promise<string | null>;
+    /**
+     * / Returns the total number of entries in the audit log. Public — no auth required.
+     */
+    getAuditLogCount(): Promise<bigint>;
+    /**
+     * / Returns all audit log entries for a given principal.
+     * / Only the principal themselves or the admin may query this.
+     */
+    getAuditLogForPrincipal(principal: Principal): Promise<{
+        __kind__: "ok";
+        ok: Array<[bigint, ActionAuditEntry]>;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
     getCombatLog(limit: bigint): Promise<Array<CombatEvent>>;
     getCoreGeneratorTiers(): Promise<Array<GeneratorTierInfo>>;
     /**
@@ -211,6 +319,16 @@ export interface backendInterface {
      */
     getFirstAvailablePlot(): Promise<string | null>;
     getFrntrLedger(): Promise<string>;
+    /**
+     * / Returns the full audit log. Admin only.
+     */
+    getFullAuditLog(): Promise<{
+        __kind__: "ok";
+        ok: Array<[bigint, ActionAuditEntry]>;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
     getGameCanisterPrincipal(): Promise<string>;
     /**
      * / Live global game stats for the UNIVERSE panel (v2 — detailed fields).
@@ -219,11 +337,14 @@ export interface backendInterface {
     getGameStats(): Promise<{
         totalPlayers: bigint;
         totalFrntrBurned: bigint;
+        totalActionCount: bigint;
         totalSupply: bigint;
         totalBurned: bigint;
         totalPlots: bigint;
         emissionRatePerDay: bigint;
+        totalDailyOutput: bigint;
         remainingMineable: bigint;
+        globalUnclaimedTokens: bigint;
     }>;
     /**
      * / Returns the canonical generator tier catalog for all tiers.
@@ -236,9 +357,9 @@ export interface backendInterface {
     }>>;
     getGlobalStats(): Promise<GlobalStats>;
     /**
-     * / Returns the caller's real ICP balance from the on-chain ICP ledger (ryjl3-tyaaa-aaaaa-aaaba-cai).
-     * / Result is in raw e8s (divide by 100_000_000 for ICP display).
+     * / Total global unclaimed tokens in e8s sitting on all owned plots.
      */
+    getGlobalUnclaimedTokens(): Promise<bigint>;
     getIcpBalance(principal: Principal): Promise<bigint>;
     /**
      * / ICP/USD price oracle — performs HTTP outcall to CoinGecko API with 60s cache.
@@ -281,7 +402,23 @@ export interface backendInterface {
      * / Alias used by frontend for globe ownership sync.
      */
     getLivePlotOwners(): Promise<Array<[string, string]>>;
+    /**
+     * / Returns the full mission list.
+     */
+    getMissions(): Promise<Array<Mission>>;
+    /**
+     * / Returns the calling player's own audit log (most-recent-first, capped at 500 entries).
+     * / No arguments required — identity is taken from the caller's principal.
+     */
+    getMyAuditLog(): Promise<Array<[bigint, ActionAuditEntry]>>;
     getPassiveIncome(plotId: string): Promise<number>;
+    /**
+     * / Returns each mission with the caller's completion status.
+     */
+    getPlayerMissions(): Promise<Array<{
+        mission: Mission;
+        completed: boolean;
+    }>>;
     getPlayerState(): Promise<{
         resourceBalances: Array<[ResourceType, number]>;
         username?: string;
@@ -382,6 +519,14 @@ export interface backendInterface {
         err: string;
     }>;
     getTokenomics(): Promise<Tokenomics>;
+    /**
+     * / Returns the total amount of FRNTR burned across all game actions.
+     */
+    getTotalBurned(): Promise<bigint>;
+    /**
+     * / Total global daily output in e8s across all owned plots.
+     */
+    getTotalGlobalDailyOutput(): Promise<bigint>;
     getTreasuryBalances(): Promise<{
         leaderboardPot: bigint;
         devPot: bigint;
@@ -415,6 +560,14 @@ export interface backendInterface {
         __kind__: "err";
         err: string;
     }>;
+    /**
+     * / Returns the caller's real ICP balance from the on-chain ICP ledger (ryjl3-tyaaa-aaaaa-aaaba-cai).
+     * / Result is in raw e8s (divide by 100_000_000 for ICP display).
+     * / Log a cancellation decision. Called by the frontend when the player clicks
+     * / "Cancel" on a confirmation modal — BEFORE any canister call is made.
+     * / Records the caller's wallet address, action type, and timestamp on-chain.
+     */
+    logCancelledAction(action: string, plotId: string | null, amount: bigint | null, details: string): Promise<void>;
     /**
      * / Mine resources from an owned plot.
      * / DISABLED: returns an informative error until the mining system launches.
