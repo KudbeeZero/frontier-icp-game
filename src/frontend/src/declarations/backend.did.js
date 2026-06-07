@@ -71,11 +71,21 @@ export const FaucetClaimSummary = IDL.Record({
   'totalClaims' : IDL.Nat,
 });
 export const GlobalStats = IDL.Record({
+  'totalPlayers' : IDL.Nat,
   'circulatingSupply' : IDL.Nat,
   'activePlayers' : IDL.Nat,
   'totalPlotsOwned' : IDL.Nat,
   'dailyEmission' : IDL.Nat,
+  'totalUnclaimedTokens' : IDL.Nat,
   'totalBurned' : IDL.Nat,
+});
+export const MissionDefinition = IDL.Record({
+  'id' : IDL.Text,
+  'reward' : IDL.Nat,
+  'title' : IDL.Text,
+  'description' : IDL.Text,
+  'requirementType' : IDL.Text,
+  'requirementValue' : IDL.Nat,
 });
 export const MissionRequirementKind = IDL.Variant({
   'purchasePlots' : IDL.Nat,
@@ -83,6 +93,7 @@ export const MissionRequirementKind = IDL.Variant({
   'holdFRNTR' : IDL.Nat,
   'reachLeaderboardTop' : IDL.Nat,
   'surveyPlot' : IDL.Null,
+  'surveyCount' : IDL.Nat,
   'claimTokens' : IDL.Nat,
 });
 export const Mission = IDL.Record({
@@ -260,6 +271,23 @@ export const idlService = IDL.Service({
       [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Text))],
       ['query'],
     ),
+  'getAnomalies' : IDL.Func(
+      [],
+      [
+        IDL.Record({
+          'anomalies' : IDL.Vec(
+            IDL.Record({
+              'principal' : IDL.Principal,
+              'anomalyType' : IDL.Text,
+              'timestamp' : IDL.Int,
+              'details' : IDL.Text,
+            })
+          ),
+          'totalCount' : IDL.Nat,
+        }),
+      ],
+      ['query'],
+    ),
   'getApprovedLiquidityCanister' : IDL.Func([], [IDL.Opt(IDL.Text)], ['query']),
   'getAssignedInterceptor' : IDL.Func(
       [IDL.Text],
@@ -284,7 +312,39 @@ export const idlService = IDL.Service({
       [IDL.Vec(GeneratorTierInfo)],
       ['query'],
     ),
+  'getEconomyHealth' : IDL.Func(
+      [],
+      [
+        IDL.Record({
+          'treasuryRunwayLiquidityMonths' : IDL.Float64,
+          'inflationRate' : IDL.Float64,
+          'emissionPaceStatus' : IDL.Text,
+          'healthStatus' : IDL.Text,
+          'projectedDaysRemaining' : IDL.Nat,
+          'treasuryRunwayLeaderboardMonths' : IDL.Float64,
+          'circulationRatio' : IDL.Float64,
+          'treasuryRunwayDevMonths' : IDL.Float64,
+          'healthScore' : IDL.Nat,
+          'emissionPacePercent' : IDL.Float64,
+        }),
+      ],
+      ['query'],
+    ),
   'getEconomySnapshots' : IDL.Func([], [IDL.Vec(EconomySnapshot)], ['query']),
+  'getEmissionSchedule' : IDL.Func(
+      [],
+      [
+        IDL.Record({
+          'totalMineableSupply' : IDL.Nat,
+          'percentMined' : IDL.Nat,
+          'totalFRNTRMined' : IDL.Nat,
+          'projectedDaysRemaining' : IDL.Nat,
+          'remainingMineable' : IDL.Nat,
+          'currentDailyEmissionRate' : IDL.Nat,
+        }),
+      ],
+      ['query'],
+    ),
   'getFaucetClaims' : IDL.Func(
       [IDL.Principal],
       [FaucetClaimSummary],
@@ -342,6 +402,7 @@ export const idlService = IDL.Service({
   'getIcpBalance' : IDL.Func([IDL.Principal], [IDL.Nat], []),
   'getIcpUsdPrice' : IDL.Func([], [IDL.Float64], []),
   'getIcpUsdPriceCached' : IDL.Func([], [IDL.Float64], ['query']),
+  'getIcpUsdPriceNat' : IDL.Func([], [IDL.Nat], ['query']),
   'getIsAdmin' : IDL.Func([], [IDL.Bool], ['query']),
   'getLastSnapshotTime' : IDL.Func([], [IDL.Int], ['query']),
   'getLatestEconomySnapshot' : IDL.Func(
@@ -383,6 +444,11 @@ export const idlService = IDL.Service({
       [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Text))],
       ['query'],
     ),
+  'getMissionDefinitions' : IDL.Func(
+      [],
+      [IDL.Vec(MissionDefinition)],
+      ['query'],
+    ),
   'getMissions' : IDL.Func([], [IDL.Vec(Mission)], ['query']),
   'getMyAuditLog' : IDL.Func(
       [],
@@ -390,6 +456,26 @@ export const idlService = IDL.Service({
       ['query'],
     ),
   'getPassiveIncome' : IDL.Func([IDL.Text], [IDL.Float64], ['query']),
+  'getPlayerAnalytics' : IDL.Func(
+      [],
+      [
+        IDL.Record({
+          'averageTokensPerPlayer' : IDL.Float64,
+          'boughtPlot' : IDL.Nat,
+          'activeLast24h' : IDL.Nat,
+          'activeLast30d' : IDL.Nat,
+          'activeLast7d' : IDL.Nat,
+          'averagePlotsPerPlayer' : IDL.Float64,
+          'topBiomes' : IDL.Vec(IDL.Tuple(IDL.Text, IDL.Nat)),
+          'claimedTokens' : IDL.Nat,
+          'upgradedPlot' : IDL.Nat,
+          'loggedIn' : IDL.Nat,
+          'totalPlayersEver' : IDL.Nat,
+        }),
+      ],
+      ['query'],
+    ),
+  'getPlayerCompletedMissions' : IDL.Func([], [IDL.Vec(IDL.Text)], ['query']),
   'getPlayerMissions' : IDL.Func(
       [],
       [IDL.Vec(IDL.Record({ 'mission' : Mission, 'completed' : IDL.Bool }))],
@@ -400,7 +486,10 @@ export const idlService = IDL.Service({
       [
         IDL.Record({
           'resourceBalances' : IDL.Vec(IDL.Tuple(ResourceType, IDL.Float64)),
+          'totalDailyRate' : IDL.Nat,
           'username' : IDL.Opt(IDL.Text),
+          'totalUnclaimed' : IDL.Nat,
+          'burnContributed' : IDL.Nat,
           'fuel' : IDL.Nat,
           'iron' : IDL.Nat,
           'icpBalance' : IDL.Nat,
@@ -411,6 +500,7 @@ export const idlService = IDL.Service({
           'lastFaucetTime' : IDL.Opt(IDL.Int),
           'crystal' : IDL.Nat,
           'ownedPlots' : IDL.Vec(IDL.Text),
+          'confirmedBalance' : IDL.Nat,
           'combatVictories' : IDL.Nat,
           'generatorTiersMap' : IDL.Vec(IDL.Tuple(IDL.Text, IDL.Nat)),
           'passiveIncomePerDay' : IDL.Float64,
@@ -451,6 +541,26 @@ export const idlService = IDL.Service({
     ),
   'getPlotsByOwner' : IDL.Func([IDL.Principal], [IDL.Vec(IDL.Text)], ['query']),
   'getPrincipal' : IDL.Func([], [PrincipalDisplay], ['query']),
+  'getRevenueByPeriod' : IDL.Func(
+      [
+        IDL.Variant({
+          'day' : IDL.Null,
+          'month' : IDL.Null,
+          'week' : IDL.Null,
+        }),
+      ],
+      [
+        IDL.Record({
+          'leaderboardSplitE8s' : IDL.Nat,
+          'totalIcpE8s' : IDL.Nat,
+          'devSplitE8s' : IDL.Nat,
+          'usdEquivalent' : IDL.Float64,
+          'liquiditySplitE8s' : IDL.Nat,
+          'transactionCount' : IDL.Nat,
+        }),
+      ],
+      ['query'],
+    ),
   'getSubParcelStatus' : IDL.Func(
       [IDL.Text],
       [IDL.Vec(SubParcelInfo)],
@@ -468,6 +578,17 @@ export const idlService = IDL.Service({
       [IDL.Variant({ 'ok' : SurveyView, 'err' : IDL.Text })],
       [],
     ),
+  'getSurveyTimerStatus' : IDL.Func(
+      [IDL.Text, IDL.Principal],
+      [
+        IDL.Record({
+          'status' : IDL.Text,
+          'plotId' : IDL.Text,
+          'timeRemainingSeconds' : IDL.Nat,
+        }),
+      ],
+      ['query'],
+    ),
   'getTokenomics' : IDL.Func([], [Tokenomics], ['query']),
   'getTotalBurned' : IDL.Func([], [IDL.Nat], ['query']),
   'getTotalGlobalDailyOutput' : IDL.Func([], [IDL.Nat], ['query']),
@@ -476,6 +597,18 @@ export const idlService = IDL.Service({
       [
         IDL.Record({
           'leaderboardPot' : IDL.Nat,
+          'devPot' : IDL.Nat,
+          'liquidityPot' : IDL.Nat,
+        }),
+      ],
+      [],
+    ),
+  'getTreasuryBalancesWithTimestamp' : IDL.Func(
+      [],
+      [
+        IDL.Record({
+          'leaderboardPot' : IDL.Nat,
+          'lastUpdated' : IDL.Int,
           'devPot' : IDL.Nat,
           'liquidityPot' : IDL.Nat,
         }),
@@ -635,11 +768,21 @@ export const idlFactory = ({ IDL }) => {
     'totalClaims' : IDL.Nat,
   });
   const GlobalStats = IDL.Record({
+    'totalPlayers' : IDL.Nat,
     'circulatingSupply' : IDL.Nat,
     'activePlayers' : IDL.Nat,
     'totalPlotsOwned' : IDL.Nat,
     'dailyEmission' : IDL.Nat,
+    'totalUnclaimedTokens' : IDL.Nat,
     'totalBurned' : IDL.Nat,
+  });
+  const MissionDefinition = IDL.Record({
+    'id' : IDL.Text,
+    'reward' : IDL.Nat,
+    'title' : IDL.Text,
+    'description' : IDL.Text,
+    'requirementType' : IDL.Text,
+    'requirementValue' : IDL.Nat,
   });
   const MissionRequirementKind = IDL.Variant({
     'purchasePlots' : IDL.Nat,
@@ -647,6 +790,7 @@ export const idlFactory = ({ IDL }) => {
     'holdFRNTR' : IDL.Nat,
     'reachLeaderboardTop' : IDL.Nat,
     'surveyPlot' : IDL.Null,
+    'surveyCount' : IDL.Nat,
     'claimTokens' : IDL.Nat,
   });
   const Mission = IDL.Record({
@@ -824,6 +968,23 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Text))],
         ['query'],
       ),
+    'getAnomalies' : IDL.Func(
+        [],
+        [
+          IDL.Record({
+            'anomalies' : IDL.Vec(
+              IDL.Record({
+                'principal' : IDL.Principal,
+                'anomalyType' : IDL.Text,
+                'timestamp' : IDL.Int,
+                'details' : IDL.Text,
+              })
+            ),
+            'totalCount' : IDL.Nat,
+          }),
+        ],
+        ['query'],
+      ),
     'getApprovedLiquidityCanister' : IDL.Func(
         [],
         [IDL.Opt(IDL.Text)],
@@ -852,7 +1013,39 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Vec(GeneratorTierInfo)],
         ['query'],
       ),
+    'getEconomyHealth' : IDL.Func(
+        [],
+        [
+          IDL.Record({
+            'treasuryRunwayLiquidityMonths' : IDL.Float64,
+            'inflationRate' : IDL.Float64,
+            'emissionPaceStatus' : IDL.Text,
+            'healthStatus' : IDL.Text,
+            'projectedDaysRemaining' : IDL.Nat,
+            'treasuryRunwayLeaderboardMonths' : IDL.Float64,
+            'circulationRatio' : IDL.Float64,
+            'treasuryRunwayDevMonths' : IDL.Float64,
+            'healthScore' : IDL.Nat,
+            'emissionPacePercent' : IDL.Float64,
+          }),
+        ],
+        ['query'],
+      ),
     'getEconomySnapshots' : IDL.Func([], [IDL.Vec(EconomySnapshot)], ['query']),
+    'getEmissionSchedule' : IDL.Func(
+        [],
+        [
+          IDL.Record({
+            'totalMineableSupply' : IDL.Nat,
+            'percentMined' : IDL.Nat,
+            'totalFRNTRMined' : IDL.Nat,
+            'projectedDaysRemaining' : IDL.Nat,
+            'remainingMineable' : IDL.Nat,
+            'currentDailyEmissionRate' : IDL.Nat,
+          }),
+        ],
+        ['query'],
+      ),
     'getFaucetClaims' : IDL.Func(
         [IDL.Principal],
         [FaucetClaimSummary],
@@ -910,6 +1103,7 @@ export const idlFactory = ({ IDL }) => {
     'getIcpBalance' : IDL.Func([IDL.Principal], [IDL.Nat], []),
     'getIcpUsdPrice' : IDL.Func([], [IDL.Float64], []),
     'getIcpUsdPriceCached' : IDL.Func([], [IDL.Float64], ['query']),
+    'getIcpUsdPriceNat' : IDL.Func([], [IDL.Nat], ['query']),
     'getIsAdmin' : IDL.Func([], [IDL.Bool], ['query']),
     'getLastSnapshotTime' : IDL.Func([], [IDL.Int], ['query']),
     'getLatestEconomySnapshot' : IDL.Func(
@@ -951,6 +1145,11 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Text))],
         ['query'],
       ),
+    'getMissionDefinitions' : IDL.Func(
+        [],
+        [IDL.Vec(MissionDefinition)],
+        ['query'],
+      ),
     'getMissions' : IDL.Func([], [IDL.Vec(Mission)], ['query']),
     'getMyAuditLog' : IDL.Func(
         [],
@@ -958,6 +1157,26 @@ export const idlFactory = ({ IDL }) => {
         ['query'],
       ),
     'getPassiveIncome' : IDL.Func([IDL.Text], [IDL.Float64], ['query']),
+    'getPlayerAnalytics' : IDL.Func(
+        [],
+        [
+          IDL.Record({
+            'averageTokensPerPlayer' : IDL.Float64,
+            'boughtPlot' : IDL.Nat,
+            'activeLast24h' : IDL.Nat,
+            'activeLast30d' : IDL.Nat,
+            'activeLast7d' : IDL.Nat,
+            'averagePlotsPerPlayer' : IDL.Float64,
+            'topBiomes' : IDL.Vec(IDL.Tuple(IDL.Text, IDL.Nat)),
+            'claimedTokens' : IDL.Nat,
+            'upgradedPlot' : IDL.Nat,
+            'loggedIn' : IDL.Nat,
+            'totalPlayersEver' : IDL.Nat,
+          }),
+        ],
+        ['query'],
+      ),
+    'getPlayerCompletedMissions' : IDL.Func([], [IDL.Vec(IDL.Text)], ['query']),
     'getPlayerMissions' : IDL.Func(
         [],
         [IDL.Vec(IDL.Record({ 'mission' : Mission, 'completed' : IDL.Bool }))],
@@ -968,7 +1187,10 @@ export const idlFactory = ({ IDL }) => {
         [
           IDL.Record({
             'resourceBalances' : IDL.Vec(IDL.Tuple(ResourceType, IDL.Float64)),
+            'totalDailyRate' : IDL.Nat,
             'username' : IDL.Opt(IDL.Text),
+            'totalUnclaimed' : IDL.Nat,
+            'burnContributed' : IDL.Nat,
             'fuel' : IDL.Nat,
             'iron' : IDL.Nat,
             'icpBalance' : IDL.Nat,
@@ -979,6 +1201,7 @@ export const idlFactory = ({ IDL }) => {
             'lastFaucetTime' : IDL.Opt(IDL.Int),
             'crystal' : IDL.Nat,
             'ownedPlots' : IDL.Vec(IDL.Text),
+            'confirmedBalance' : IDL.Nat,
             'combatVictories' : IDL.Nat,
             'generatorTiersMap' : IDL.Vec(IDL.Tuple(IDL.Text, IDL.Nat)),
             'passiveIncomePerDay' : IDL.Float64,
@@ -1023,6 +1246,26 @@ export const idlFactory = ({ IDL }) => {
         ['query'],
       ),
     'getPrincipal' : IDL.Func([], [PrincipalDisplay], ['query']),
+    'getRevenueByPeriod' : IDL.Func(
+        [
+          IDL.Variant({
+            'day' : IDL.Null,
+            'month' : IDL.Null,
+            'week' : IDL.Null,
+          }),
+        ],
+        [
+          IDL.Record({
+            'leaderboardSplitE8s' : IDL.Nat,
+            'totalIcpE8s' : IDL.Nat,
+            'devSplitE8s' : IDL.Nat,
+            'usdEquivalent' : IDL.Float64,
+            'liquiditySplitE8s' : IDL.Nat,
+            'transactionCount' : IDL.Nat,
+          }),
+        ],
+        ['query'],
+      ),
     'getSubParcelStatus' : IDL.Func(
         [IDL.Text],
         [IDL.Vec(SubParcelInfo)],
@@ -1040,6 +1283,17 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Variant({ 'ok' : SurveyView, 'err' : IDL.Text })],
         [],
       ),
+    'getSurveyTimerStatus' : IDL.Func(
+        [IDL.Text, IDL.Principal],
+        [
+          IDL.Record({
+            'status' : IDL.Text,
+            'plotId' : IDL.Text,
+            'timeRemainingSeconds' : IDL.Nat,
+          }),
+        ],
+        ['query'],
+      ),
     'getTokenomics' : IDL.Func([], [Tokenomics], ['query']),
     'getTotalBurned' : IDL.Func([], [IDL.Nat], ['query']),
     'getTotalGlobalDailyOutput' : IDL.Func([], [IDL.Nat], ['query']),
@@ -1048,6 +1302,18 @@ export const idlFactory = ({ IDL }) => {
         [
           IDL.Record({
             'leaderboardPot' : IDL.Nat,
+            'devPot' : IDL.Nat,
+            'liquidityPot' : IDL.Nat,
+          }),
+        ],
+        [],
+      ),
+    'getTreasuryBalancesWithTimestamp' : IDL.Func(
+        [],
+        [
+          IDL.Record({
+            'leaderboardPot' : IDL.Nat,
+            'lastUpdated' : IDL.Int,
             'devPot' : IDL.Nat,
             'liquidityPot' : IDL.Nat,
           }),

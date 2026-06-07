@@ -6,7 +6,9 @@ import { createActor } from "../backend";
 import ActionConfirmModal from "../components/ActionConfirmModal";
 import type { ConfirmDetail } from "../components/ActionConfirmModal";
 import LiquiditySeedingPanel from "../components/LiquiditySeedingPanel";
-import PostActionToast from "../components/PostActionToast";
+import PlotInfoPanel from "../components/PlotInfoPanel";
+import PlotTileCard from "../components/PlotTileCard";
+import { PostActionToast } from "../components/PostActionToast";
 import type { PostActionType } from "../components/PostActionToast";
 import {
   BIOME_DOT,
@@ -221,6 +223,7 @@ function PlotTile({ plotId, index }: { plotId: string; index: number }) {
   const spendFrntr = useGameStore((s) => s.spendFrntr);
   const setFrntrBalance = useGameStore((s) => s.setFrntrBalance);
   const incrementClaimCount = useGameStore((s) => s.incrementClaimCount);
+  const selectPlot = useGameStore((s) => s.selectPlot);
   const { actor } = useActor(createActor);
 
   const [claiming, setClaiming] = useState(false);
@@ -395,8 +398,13 @@ function PlotTile({ plotId, index }: { plotId: string; index: number }) {
             ? `0 0 28px ${shadowColor}, 0 4px 20px rgba(0,0,0,0.4), inset 0 1px 0 rgba(0,255,204,0.12)`
             : `0 0 12px ${shadowColor}, inset 0 1px 0 rgba(0,255,204,0.06)`,
           transition: "border-color 0.25s, box-shadow 0.25s",
-          cursor: "default",
+          cursor: "pointer",
           minWidth: 0,
+        }}
+        onClick={(e) => {
+          const target = e.target as HTMLElement;
+          if (target.closest("button")) return;
+          selectPlot(Number(plotId));
         }}
       >
         <ScanLines />
@@ -915,8 +923,9 @@ function PlotTile({ plotId, index }: { plotId: string; index: number }) {
       {postActionType && (
         <PostActionToast
           actionType={postActionType}
+          message=""
           onNavigate={() => {}}
-          onDismiss={() => setPostActionType(null)}
+          onClose={() => setPostActionType(null)}
         />
       )}
     </>
@@ -1372,91 +1381,98 @@ export default function Inventory() {
   const plotsOwned = useGameStore((s) => s.player.plotsOwned);
   const allPlots = useGameStore((s) => s.plots);
   const player = useGameStore((s) => s.player);
+  const selectedPlotId = useGameStore((s) => s.selectedPlotId);
+  const selectPlot = useGameStore((s) => s.selectPlot);
 
   const ownedPlotData = plotsOwned
     .map((id) => allPlots.find((p) => String(p.id) === id))
     .filter((p): p is PlotData => !!p);
 
   return (
-    <div
-      data-ocid="inventory.page"
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
-        overflowY: "auto",
-        padding: "12px 12px 16px",
-        scrollbarWidth: "thin",
-        scrollbarColor: "rgba(0,255,204,0.2) transparent",
-      }}
-    >
-      <InventoryHeader />
-      <InventorySummary plots={ownedPlotData} />
+    <>
+      {selectedPlotId !== null && (
+        <PlotInfoPanel onClose={() => selectPlot(null)} />
+      )}
+      <div
+        data-ocid="inventory.page"
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          height: "100%",
+          overflowY: "auto",
+          padding: "12px 12px 16px",
+          scrollbarWidth: "thin",
+          scrollbarColor: "rgba(0,255,204,0.2) transparent",
+        }}
+      >
+        <InventoryHeader />
+        <InventorySummary plots={ownedPlotData} />
 
-      {player.isAdmin && <LiquiditySeedingPanel />}
+        {player.isAdmin && <LiquiditySeedingPanel />}
 
-      {plotsOwned.length > 0 && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            marginBottom: 8,
-          }}
-        >
+        {plotsOwned.length > 0 && (
           <div
             style={{
-              width: 3,
-              height: 12,
-              borderRadius: 2,
-              background: "linear-gradient(180deg,#00ffcc,#0088aa)",
-            }}
-          />
-          <span
-            style={{
-              fontSize: 8.5,
-              fontWeight: 700,
-              color: "#00ffcc",
-              letterSpacing: "0.22em",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              marginBottom: 8,
             }}
           >
-            OWNED TERRITORIES
-          </span>
-          <span
-            style={{
-              fontSize: 9,
-              fontFamily: "monospace",
-              fontWeight: 700,
-              padding: "1px 7px",
-              borderRadius: 4,
-              background: "rgba(0,255,204,0.08)",
-              border: "1px solid rgba(0,255,204,0.18)",
-              color: "#e0f4ff",
-              marginLeft: "auto",
-            }}
-          >
-            {plotsOwned.length}
-          </span>
-        </div>
-      )}
+            <div
+              style={{
+                width: 3,
+                height: 12,
+                borderRadius: 2,
+                background: "linear-gradient(180deg,#00ffcc,#0088aa)",
+              }}
+            />
+            <span
+              style={{
+                fontSize: 8.5,
+                fontWeight: 700,
+                color: "#00ffcc",
+                letterSpacing: "0.22em",
+              }}
+            >
+              OWNED TERRITORIES
+            </span>
+            <span
+              style={{
+                fontSize: 9,
+                fontFamily: "monospace",
+                fontWeight: 700,
+                padding: "1px 7px",
+                borderRadius: 4,
+                background: "rgba(0,255,204,0.08)",
+                border: "1px solid rgba(0,255,204,0.18)",
+                color: "#e0f4ff",
+                marginLeft: "auto",
+              }}
+            >
+              {plotsOwned.length}
+            </span>
+          </div>
+        )}
 
-      {plotsOwned.length === 0 ? (
-        <EmptyState />
-      ) : (
-        <div
-          data-ocid="inventory.list"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-            gap: 10,
-            paddingBottom: 16,
-          }}
-        >
-          {plotsOwned.map((plotId, idx) => (
-            <PlotTile key={plotId} plotId={plotId} index={idx + 1} />
-          ))}
-        </div>
-      )}
-    </div>
+        {plotsOwned.length === 0 ? (
+          <EmptyState />
+        ) : (
+          <div
+            data-ocid="inventory.list"
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+              gap: 10,
+              paddingBottom: 16,
+            }}
+          >
+            {plotsOwned.map((plotId, idx) => (
+              <PlotTile key={plotId} plotId={plotId} index={idx + 1} />
+            ))}
+          </div>
+        )}
+      </div>
+    </>
   );
 }

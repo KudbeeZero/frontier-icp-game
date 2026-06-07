@@ -75,10 +75,12 @@ export interface GeneratorTierInfo {
   'costFRNTR' : bigint,
 }
 export interface GlobalStats {
+  'totalPlayers' : bigint,
   'circulatingSupply' : bigint,
   'activePlayers' : bigint,
   'totalPlotsOwned' : bigint,
   'dailyEmission' : bigint,
+  'totalUnclaimedTokens' : bigint,
   'totalBurned' : bigint,
 }
 export interface MineResult {
@@ -94,11 +96,20 @@ export interface Mission {
   'rewardE8s' : bigint,
   'requirement' : MissionRequirementKind,
 }
+export interface MissionDefinition {
+  'id' : string,
+  'reward' : bigint,
+  'title' : string,
+  'description' : string,
+  'requirementType' : string,
+  'requirementValue' : bigint,
+}
 export type MissionRequirementKind = { 'purchasePlots' : bigint } |
   { 'upgradeToTier' : bigint } |
   { 'holdFRNTR' : bigint } |
   { 'reachLeaderboardTop' : bigint } |
   { 'surveyPlot' : null } |
+  { 'surveyCount' : bigint } |
   { 'claimTokens' : bigint };
 export type PlotId = string;
 export interface PlotProductionRate {
@@ -216,11 +227,9 @@ export interface _SERVICE {
       { 'err' : string }
   >,
   /**
-   * / Thin wrapper around completeSurvey — returns the SurveyResult report alongside the
-   * / token award so the frontend can display both in a single call.
-   * / Returns #err if the survey timer is not yet complete or no survey exists.
-   * / Thin wrapper around completeSurvey — returns the SurveyResult report alongside the
-   * / token award so the frontend can display both in a single call.
+   * / Collect survey reward in one call: returns the report + token award.
+   * / Server-side enforced: REJECTS if the 30-minute timer has not expired (based on
+   * / canister Time.now(), not client time). Also rejects double-claims.
    * / Returns #err if the survey timer is not yet complete or no survey exists.
    */
   'claimSurveyReward' : ActorMethod<
@@ -265,6 +274,20 @@ export interface _SERVICE {
    * / Returns all plots that have an owner as (plotId, ownerPrincipalText) pairs.
    */
   'getAllPlotOwners' : ActorMethod<[], Array<[string, string]>>,
+  'getAnomalies' : ActorMethod<
+    [],
+    {
+      'anomalies' : Array<
+        {
+          'principal' : Principal,
+          'anomalyType' : string,
+          'timestamp' : bigint,
+          'details' : string,
+        }
+      >,
+      'totalCount' : bigint,
+    }
+  >,
   /**
    * / Returns the currently approved DEX canister principal for liquidity withdrawals.
    * / Set via setApprovedLiquidityCanister (admin only).
@@ -291,10 +314,42 @@ export interface _SERVICE {
   'getCanisterCycles' : ActorMethod<[], bigint>,
   'getCombatLog' : ActorMethod<[bigint], Array<CombatEvent>>,
   'getCoreGeneratorTiers' : ActorMethod<[], Array<GeneratorTierInfo>>,
+  'getEconomyHealth' : ActorMethod<
+    [],
+    {
+      'treasuryRunwayLiquidityMonths' : number,
+      'inflationRate' : number,
+      'emissionPaceStatus' : string,
+      'healthStatus' : string,
+      'projectedDaysRemaining' : bigint,
+      'treasuryRunwayLeaderboardMonths' : number,
+      'circulationRatio' : number,
+      'treasuryRunwayDevMonths' : number,
+      'healthScore' : bigint,
+      'emissionPacePercent' : number,
+    }
+  >,
   /**
    * / Return all stored economy snapshots (most recent last).
    */
   'getEconomySnapshots' : ActorMethod<[], Array<EconomySnapshot>>,
+  /**
+   * / Returns the FRNTR emission schedule: how much has been mined, how much
+   * / remains, the current daily rate, and a projection of days until exhaustion.
+   * / Uses calcTotalGlobalDailyOutput() (sync, iterates stable state) so this
+   * / can be a query function.
+   */
+  'getEmissionSchedule' : ActorMethod<
+    [],
+    {
+      'totalMineableSupply' : bigint,
+      'percentMined' : bigint,
+      'totalFRNTRMined' : bigint,
+      'projectedDaysRemaining' : bigint,
+      'remainingMineable' : bigint,
+      'currentDailyEmissionRate' : bigint,
+    }
+  >,
   /**
    * / Returns total faucet claims for a principal (debug/analytics).
    */
@@ -373,6 +428,12 @@ export interface _SERVICE {
    */
   'getIcpUsdPriceCached' : ActorMethod<[], number>,
   /**
+   * / Returns the cached ICP/USD price as a Nat in whole cents (e.g. 1045 = $10.45).
+   * / Safe for frontend consumption without floating-point issues.
+   * / Returns 0 if the price has never been fetched.
+   */
+  'getIcpUsdPriceNat' : ActorMethod<[], bigint>,
+  /**
    * / Returns true if the caller is the current admin principal.
    */
   'getIsAdmin' : ActorMethod<[], boolean>,
@@ -419,6 +480,10 @@ export interface _SERVICE {
    */
   'getLivePlotOwners' : ActorMethod<[], Array<[string, string]>>,
   /**
+   * / Returns flat MissionDefinition records for easy frontend use.
+   */
+  'getMissionDefinitions' : ActorMethod<[], Array<MissionDefinition>>,
+  /**
    * / Returns the full mission list.
    */
   'getMissions' : ActorMethod<[], Array<Mission>>,
@@ -428,6 +493,26 @@ export interface _SERVICE {
    */
   'getMyAuditLog' : ActorMethod<[], Array<[bigint, ActionAuditEntry]>>,
   'getPassiveIncome' : ActorMethod<[string], number>,
+  'getPlayerAnalytics' : ActorMethod<
+    [],
+    {
+      'averageTokensPerPlayer' : number,
+      'boughtPlot' : bigint,
+      'activeLast24h' : bigint,
+      'activeLast30d' : bigint,
+      'activeLast7d' : bigint,
+      'averagePlotsPerPlayer' : number,
+      'topBiomes' : Array<[string, bigint]>,
+      'claimedTokens' : bigint,
+      'upgradedPlot' : bigint,
+      'loggedIn' : bigint,
+      'totalPlayersEver' : bigint,
+    }
+  >,
+  /**
+   * / Returns [Text] of completed mission IDs for the caller.
+   */
+  'getPlayerCompletedMissions' : ActorMethod<[], Array<string>>,
   /**
    * / Returns each mission with the caller's completion status.
    */
@@ -439,7 +524,10 @@ export interface _SERVICE {
     [],
     {
       'resourceBalances' : Array<[ResourceType, number]>,
+      'totalDailyRate' : bigint,
       'username' : [] | [string],
+      'totalUnclaimed' : bigint,
+      'burnContributed' : bigint,
       'fuel' : bigint,
       'iron' : bigint,
       'icpBalance' : bigint,
@@ -450,6 +538,7 @@ export interface _SERVICE {
       'lastFaucetTime' : [] | [bigint],
       'crystal' : bigint,
       'ownedPlots' : Array<string>,
+      'confirmedBalance' : bigint,
       'combatVictories' : bigint,
       'generatorTiersMap' : Array<[string, bigint]>,
       'passiveIncomePerDay' : number,
@@ -502,6 +591,17 @@ export interface _SERVICE {
    * / Returns the caller's principal display info for wallet/identity UI.
    */
   'getPrincipal' : ActorMethod<[], PrincipalDisplay>,
+  'getRevenueByPeriod' : ActorMethod<
+    [{ 'day' : null } | { 'month' : null } | { 'week' : null }],
+    {
+      'leaderboardSplitE8s' : bigint,
+      'totalIcpE8s' : bigint,
+      'devSplitE8s' : bigint,
+      'usdEquivalent' : number,
+      'liquiditySplitE8s' : bigint,
+      'transactionCount' : bigint,
+    }
+  >,
   /**
    * / Returns 7 SubParcelInfo entries (slots 0-6) for a plot.
    * / isLocked = true during the 4-hour post-purchase cooldown.
@@ -541,6 +641,15 @@ export interface _SERVICE {
     { 'ok' : SurveyView } |
       { 'err' : string }
   >,
+  /**
+   * / Lightweight query: returns a compact timer status for the frontend countdown.
+   * / status = "locked" | "pending" | "ready" | "claimed"
+   * / timeRemainingSeconds = 0 when locked, ready, or claimed; countdown seconds when pending.
+   */
+  'getSurveyTimerStatus' : ActorMethod<
+    [string, Principal],
+    { 'status' : string, 'plotId' : string, 'timeRemainingSeconds' : bigint }
+  >,
   'getTokenomics' : ActorMethod<[], Tokenomics>,
   /**
    * / Returns the total amount of FRNTR burned across all game actions.
@@ -553,6 +662,19 @@ export interface _SERVICE {
   'getTreasuryBalances' : ActorMethod<
     [],
     { 'leaderboardPot' : bigint, 'devPot' : bigint, 'liquidityPot' : bigint }
+  >,
+  /**
+   * / Same as getTreasuryBalances() but also returns the timestamp of the
+   * / query so the frontend can display "last updated X seconds ago".
+   */
+  'getTreasuryBalancesWithTimestamp' : ActorMethod<
+    [],
+    {
+      'leaderboardPot' : bigint,
+      'lastUpdated' : bigint,
+      'devPot' : bigint,
+      'liquidityPot' : bigint,
+    }
   >,
   /**
    * / Query the current treasury canister principal.

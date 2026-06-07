@@ -122,8 +122,18 @@ type MissionRequirementKind =
    holdFRNTR: nat;
    purchasePlots: nat;
    reachLeaderboardTop: nat;
+   surveyCount: nat;
    surveyPlot;
    upgradeToTier: nat;
+ };
+type MissionDefinition = 
+ record {
+   description: text;
+   id: text;
+   requirementType: text;
+   requirementValue: nat;
+   reward: nat;
+   title: text;
  };
 type Mission = 
  record {
@@ -149,7 +159,9 @@ type GlobalStats =
    circulatingSupply: nat;
    dailyEmission: nat;
    totalBurned: nat;
+   totalPlayers: nat;
    totalPlotsOwned: nat;
+   totalUnclaimedTokens: nat;
  };
 type GeneratorTierInfo = 
  record {
@@ -255,11 +267,9 @@ service : {
             plotsClaimed: nat;
           };
     });
-  /// Thin wrapper around completeSurvey — returns the SurveyResult report alongside the
-  /// token award so the frontend can display both in a single call.
-  /// Returns #err if the survey timer is not yet complete or no survey exists.
-  /// Thin wrapper around completeSurvey — returns the SurveyResult report alongside the
-  /// token award so the frontend can display both in a single call.
+  /// Collect survey reward in one call: returns the report + token award.
+  /// Server-side enforced: REJECTS if the 30-minute timer has not expired (based on
+  /// canister Time.now(), not client time). Also rejects double-claims.
   /// Returns #err if the survey timer is not yet complete or no survey exists.
   claimSurveyReward: (plotId: text) ->
    (variant {
@@ -296,6 +306,18 @@ service : {
                                  text;
                                  text;
                                }) query;
+  getAnomalies: () ->
+   (record {
+      anomalies:
+       vec
+        record {
+          anomalyType: text;
+          details: text;
+          "principal": principal;
+          timestamp: int;
+        };
+      totalCount: nat;
+    }) query;
   /// Returns the currently approved DEX canister principal for liquidity withdrawals.
   /// Set via setApprovedLiquidityCanister (admin only).
   getApprovedLiquidityCanister: () -> (opt text) query;
@@ -317,8 +339,34 @@ service : {
   getCanisterCycles: () -> (nat) query;
   getCombatLog: (limit: nat) -> (vec CombatEvent) query;
   getCoreGeneratorTiers: () -> (vec GeneratorTierInfo) query;
+  getEconomyHealth: () ->
+   (record {
+      circulationRatio: float64;
+      emissionPacePercent: float64;
+      emissionPaceStatus: text;
+      healthScore: nat;
+      healthStatus: text;
+      inflationRate: float64;
+      projectedDaysRemaining: nat;
+      treasuryRunwayDevMonths: float64;
+      treasuryRunwayLeaderboardMonths: float64;
+      treasuryRunwayLiquidityMonths: float64;
+    }) query;
   /// Return all stored economy snapshots (most recent last).
   getEconomySnapshots: () -> (vec EconomySnapshot) query;
+  /// Returns the FRNTR emission schedule: how much has been mined, how much
+  /// remains, the current daily rate, and a projection of days until exhaustion.
+  /// Uses calcTotalGlobalDailyOutput() (sync, iterates stable state) so this
+  /// can be a query function.
+  getEmissionSchedule: () ->
+   (record {
+      currentDailyEmissionRate: nat;
+      percentMined: nat;
+      projectedDaysRemaining: nat;
+      remainingMineable: nat;
+      totalFRNTRMined: nat;
+      totalMineableSupply: nat;
+    }) query;
   /// Returns total faucet claims for a principal (debug/analytics).
   getFaucetClaims: ("principal": principal) -> (FaucetClaimSummary) query;
   /// Returns the first plot ID with no owner, or null if all plots are owned.
@@ -377,6 +425,10 @@ service : {
   /// Returns the cached ICP/USD price without an HTTP outcall.
   /// Returns 0.0 if the price has never been fetched.
   getIcpUsdPriceCached: () -> (float64) query;
+  /// Returns the cached ICP/USD price as a Nat in whole cents (e.g. 1045 = $10.45).
+  /// Safe for frontend consumption without floating-point issues.
+  /// Returns 0 if the price has never been fetched.
+  getIcpUsdPriceNat: () -> (nat) query;
   /// Returns true if the caller is the current admin principal.
   getIsAdmin: () -> (bool) query;
   /// Return the timestamp (nanoseconds) of the last snapshot.
@@ -409,6 +461,8 @@ service : {
                                   text;
                                   text;
                                 }) query;
+  /// Returns flat MissionDefinition records for easy frontend use.
+  getMissionDefinitions: () -> (vec MissionDefinition) query;
   /// Returns the full mission list.
   getMissions: () -> (vec Mission) query;
   /// Returns the calling player's own audit log (most-recent-first, capped at 500 entries).
@@ -418,6 +472,25 @@ service : {
                               ActionAuditEntry;
                             }) query;
   getPassiveIncome: (plotId: text) -> (float64) query;
+  getPlayerAnalytics: () ->
+   (record {
+      activeLast24h: nat;
+      activeLast30d: nat;
+      activeLast7d: nat;
+      averagePlotsPerPlayer: float64;
+      averageTokensPerPlayer: float64;
+      boughtPlot: nat;
+      claimedTokens: nat;
+      loggedIn: nat;
+      topBiomes: vec record {
+                       text;
+                       nat;
+                     };
+      totalPlayersEver: nat;
+      upgradedPlot: nat;
+    }) query;
+  /// Returns [Text] of completed mission IDs for the caller.
+  getPlayerCompletedMissions: () -> (vec text) query;
   /// Returns each mission with the caller's completion status.
   getPlayerMissions: () ->
    (vec record {
@@ -426,7 +499,9 @@ service : {
         }) query;
   getPlayerState: () ->
    (record {
+      burnContributed: nat;
       combatVictories: nat;
+      confirmedBalance: nat;
       crystal: nat;
       frntBalance: nat;
       fuel: nat;
@@ -445,7 +520,9 @@ service : {
                               ResourceType;
                               float64;
                             };
+      totalDailyRate: nat;
       totalFRNTRBurned: float64;
+      totalUnclaimed: nat;
       username: opt text;
     });
   /// Query the full player state for a given principal.
@@ -487,6 +564,19 @@ service : {
   getPlotsByOwner: (owner: principal) -> (vec text) query;
   /// Returns the caller's principal display info for wallet/identity UI.
   getPrincipal: () -> (PrincipalDisplay) query;
+  getRevenueByPeriod: (period: variant {
+                                 day;
+                                 month;
+                                 week;
+                               }) ->
+   (record {
+      devSplitE8s: nat;
+      leaderboardSplitE8s: nat;
+      liquiditySplitE8s: nat;
+      totalIcpE8s: nat;
+      transactionCount: nat;
+      usdEquivalent: float64;
+    }) query;
   /// Returns 7 SubParcelInfo entries (slots 0-6) for a plot.
   /// isLocked = true during the 4-hour post-purchase cooldown.
   /// cooldownSecondsRemaining = 0 when not locked.
@@ -514,6 +604,15 @@ service : {
                                         err: text;
                                         ok: SurveyView;
                                       });
+  /// Lightweight query: returns a compact timer status for the frontend countdown.
+  /// status = "locked" | "pending" | "ready" | "claimed"
+  /// timeRemainingSeconds = 0 when locked, ready, or claimed; countdown seconds when pending.
+  getSurveyTimerStatus: (plotId: text, surveyor: principal) ->
+   (record {
+      plotId: text;
+      status: text;
+      timeRemainingSeconds: nat;
+    }) query;
   getTokenomics: () -> (Tokenomics) query;
   /// Returns the total amount of FRNTR burned across all game actions.
   getTotalBurned: () -> (nat) query;
@@ -522,6 +621,15 @@ service : {
   getTreasuryBalances: () ->
    (record {
       devPot: nat;
+      leaderboardPot: nat;
+      liquidityPot: nat;
+    });
+  /// Same as getTreasuryBalances() but also returns the timestamp of the
+  /// query so the frontend can display "last updated X seconds ago".
+  getTreasuryBalancesWithTimestamp: () ->
+   (record {
+      devPot: nat;
+      lastUpdated: int;
       leaderboardPot: nat;
       liquidityPot: nat;
     });

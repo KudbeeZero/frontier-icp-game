@@ -21,12 +21,51 @@ mixin (
   /// Returns live global economy stats for the UNIVERSE panel.
   /// Field names match what the frontend expects: circulatingSupply, totalBurned,
   /// totalPlotsOwned, activePlayers, dailyEmission.
+  /// Returns live global economy stats for the UNIVERSE panel.
+  /// dailyEmission is computed accurately by summing each owned plot's tier rate.
+  /// totalUnclaimedTokens defaults to 0 here — use getGameStats() for the full value
+  /// (requires plotClaimTimes access not available in this mixin).
+  /// totalPlayers mirrors activePlayers from statsState.
   public query func getGlobalStats() : async CoreTypes.GlobalStats {
+    // Compute real daily emission: iterate all owned plots, look up each plot's generator tier.
+    var realDailyEmission : Nat = 0;
+    for ((pid, plot) in plots.entries()) {
+      switch (plot.owner) {
+        case (null) {};
+        case (?_) {
+          let tierIndex : Nat = switch (generatorTiers.get(pid)) {
+            case (null)      { 0 };
+            case (?#None)    { 0 };
+            case (?#TierI)   { 1 };
+            case (?#TierII)  { 2 };
+            case (?#TierIII) { 3 };
+            case (?#TierIV)  { 4 };
+            case (?#TierV)   { 5 };
+            case (?#TierVI)  { 6 };
+          };
+          // dailyRateFromTierIndex returns Float; convert to Nat (truncate)
+          let rate : Nat = switch (tierIndex) {
+            case (0) { 7  };
+            case (1) { 9  };
+            case (2) { 12 };
+            case (3) { 17 };
+            case (4) { 25 };
+            case (5) { 37 };
+            case (6) { 55 };
+            case (_) { 7  };
+          };
+          realDailyEmission += rate;
+        };
+      };
+    };
     CoreLib.buildGlobalStats(
       plotSoldState.count,
       statsState.totalFRNTRBurned,
       statsState.totalFRNTRMined,
       statsState.activePlayers,
+      realDailyEmission,
+      0,  // totalUnclaimedTokens: use getGameStats() for the accurate value
+      statsState.activePlayers,  // totalPlayers: proxy from activePlayers
     );
   };
 

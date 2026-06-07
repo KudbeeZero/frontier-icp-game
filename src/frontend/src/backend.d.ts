@@ -50,6 +50,9 @@ export type MissionRequirementKind = {
     __kind__: "surveyPlot";
     surveyPlot: null;
 } | {
+    __kind__: "surveyCount";
+    surveyCount: bigint;
+} | {
     __kind__: "claimTokens";
     claimTokens: bigint;
 };
@@ -120,10 +123,12 @@ export interface Mission {
     requirement: MissionRequirementKind;
 }
 export interface GlobalStats {
+    totalPlayers: bigint;
     circulatingSupply: bigint;
     activePlayers: bigint;
     totalPlotsOwned: bigint;
     dailyEmission: bigint;
+    totalUnclaimedTokens: bigint;
     totalBurned: bigint;
 }
 export interface SurveyResult {
@@ -163,6 +168,14 @@ export interface PrincipalDisplay {
     full: string;
     short: string;
     isAuthed: boolean;
+}
+export interface MissionDefinition {
+    id: string;
+    reward: bigint;
+    title: string;
+    description: string;
+    requirementType: string;
+    requirementValue: bigint;
 }
 export interface SurveyView {
     startTime: bigint;
@@ -234,6 +247,11 @@ export enum UpgradeError {
     AlreadyMaxTier = "AlreadyMaxTier",
     InsufficientFRNTR = "InsufficientFRNTR"
 }
+export enum Variant_day_month_week {
+    day = "day",
+    month = "month",
+    week = "week"
+}
 export interface backendInterface {
     assignInterceptor(plotId: string, interceptorType: string): Promise<void>;
     /**
@@ -266,11 +284,9 @@ export interface backendInterface {
         err: string;
     }>;
     /**
-     * / Thin wrapper around completeSurvey — returns the SurveyResult report alongside the
-     * / token award so the frontend can display both in a single call.
-     * / Returns #err if the survey timer is not yet complete or no survey exists.
-     * / Thin wrapper around completeSurvey — returns the SurveyResult report alongside the
-     * / token award so the frontend can display both in a single call.
+     * / Collect survey reward in one call: returns the report + token award.
+     * / Server-side enforced: REJECTS if the 30-minute timer has not expired (based on
+     * / canister Time.now(), not client time). Also rejects double-claims.
      * / Returns #err if the survey timer is not yet complete or no survey exists.
      */
     claimSurveyReward(plotId: string): Promise<{
@@ -319,6 +335,15 @@ export interface backendInterface {
      * / Returns all plots that have an owner as (plotId, ownerPrincipalText) pairs.
      */
     getAllPlotOwners(): Promise<Array<[string, string]>>;
+    getAnomalies(): Promise<{
+        anomalies: Array<{
+            principal: Principal;
+            anomalyType: string;
+            timestamp: bigint;
+            details: string;
+        }>;
+        totalCount: bigint;
+    }>;
     /**
      * / Returns the currently approved DEX canister principal for liquidity withdrawals.
      * / Set via setApprovedLiquidityCanister (admin only).
@@ -347,10 +372,36 @@ export interface backendInterface {
     getCanisterCycles(): Promise<bigint>;
     getCombatLog(limit: bigint): Promise<Array<CombatEvent>>;
     getCoreGeneratorTiers(): Promise<Array<GeneratorTierInfo>>;
+    getEconomyHealth(): Promise<{
+        treasuryRunwayLiquidityMonths: number;
+        inflationRate: number;
+        emissionPaceStatus: string;
+        healthStatus: string;
+        projectedDaysRemaining: bigint;
+        treasuryRunwayLeaderboardMonths: number;
+        circulationRatio: number;
+        treasuryRunwayDevMonths: number;
+        healthScore: bigint;
+        emissionPacePercent: number;
+    }>;
     /**
      * / Return all stored economy snapshots (most recent last).
      */
     getEconomySnapshots(): Promise<Array<EconomySnapshot>>;
+    /**
+     * / Returns the FRNTR emission schedule: how much has been mined, how much
+     * / remains, the current daily rate, and a projection of days until exhaustion.
+     * / Uses calcTotalGlobalDailyOutput() (sync, iterates stable state) so this
+     * / can be a query function.
+     */
+    getEmissionSchedule(): Promise<{
+        totalMineableSupply: bigint;
+        percentMined: bigint;
+        totalFRNTRMined: bigint;
+        projectedDaysRemaining: bigint;
+        remainingMineable: bigint;
+        currentDailyEmissionRate: bigint;
+    }>;
     /**
      * / Returns total faucet claims for a principal (debug/analytics).
      */
@@ -429,6 +480,12 @@ export interface backendInterface {
      */
     getIcpUsdPriceCached(): Promise<number>;
     /**
+     * / Returns the cached ICP/USD price as a Nat in whole cents (e.g. 1045 = $10.45).
+     * / Safe for frontend consumption without floating-point issues.
+     * / Returns 0 if the price has never been fetched.
+     */
+    getIcpUsdPriceNat(): Promise<bigint>;
+    /**
      * / Returns true if the caller is the current admin principal.
      */
     getIsAdmin(): Promise<boolean>;
@@ -467,6 +524,10 @@ export interface backendInterface {
      */
     getLivePlotOwners(): Promise<Array<[string, string]>>;
     /**
+     * / Returns flat MissionDefinition records for easy frontend use.
+     */
+    getMissionDefinitions(): Promise<Array<MissionDefinition>>;
+    /**
      * / Returns the full mission list.
      */
     getMissions(): Promise<Array<Mission>>;
@@ -476,6 +537,23 @@ export interface backendInterface {
      */
     getMyAuditLog(): Promise<Array<[bigint, ActionAuditEntry]>>;
     getPassiveIncome(plotId: string): Promise<number>;
+    getPlayerAnalytics(): Promise<{
+        averageTokensPerPlayer: number;
+        boughtPlot: bigint;
+        activeLast24h: bigint;
+        activeLast30d: bigint;
+        activeLast7d: bigint;
+        averagePlotsPerPlayer: number;
+        topBiomes: Array<[string, bigint]>;
+        claimedTokens: bigint;
+        upgradedPlot: bigint;
+        loggedIn: bigint;
+        totalPlayersEver: bigint;
+    }>;
+    /**
+     * / Returns [Text] of completed mission IDs for the caller.
+     */
+    getPlayerCompletedMissions(): Promise<Array<string>>;
     /**
      * / Returns each mission with the caller's completion status.
      */
@@ -485,7 +563,10 @@ export interface backendInterface {
     }>>;
     getPlayerState(): Promise<{
         resourceBalances: Array<[ResourceType, number]>;
+        totalDailyRate: bigint;
         username?: string;
+        totalUnclaimed: bigint;
+        burnContributed: bigint;
         fuel: bigint;
         iron: bigint;
         icpBalance: bigint;
@@ -496,6 +577,7 @@ export interface backendInterface {
         lastFaucetTime?: bigint;
         crystal: bigint;
         ownedPlots: Array<string>;
+        confirmedBalance: bigint;
         combatVictories: bigint;
         generatorTiersMap: Array<[string, bigint]>;
         passiveIncomePerDay: number;
@@ -544,6 +626,14 @@ export interface backendInterface {
      * / Returns the caller's principal display info for wallet/identity UI.
      */
     getPrincipal(): Promise<PrincipalDisplay>;
+    getRevenueByPeriod(period: Variant_day_month_week): Promise<{
+        leaderboardSplitE8s: bigint;
+        totalIcpE8s: bigint;
+        devSplitE8s: bigint;
+        usdEquivalent: number;
+        liquiditySplitE8s: bigint;
+        transactionCount: bigint;
+    }>;
     /**
      * / Returns 7 SubParcelInfo entries (slots 0-6) for a plot.
      * / isLocked = true during the 4-hour post-purchase cooldown.
@@ -587,6 +677,16 @@ export interface backendInterface {
         __kind__: "err";
         err: string;
     }>;
+    /**
+     * / Lightweight query: returns a compact timer status for the frontend countdown.
+     * / status = "locked" | "pending" | "ready" | "claimed"
+     * / timeRemainingSeconds = 0 when locked, ready, or claimed; countdown seconds when pending.
+     */
+    getSurveyTimerStatus(plotId: string, surveyor: Principal): Promise<{
+        status: string;
+        plotId: string;
+        timeRemainingSeconds: bigint;
+    }>;
     getTokenomics(): Promise<Tokenomics>;
     /**
      * / Returns the total amount of FRNTR burned across all game actions.
@@ -598,6 +698,16 @@ export interface backendInterface {
     getTotalGlobalDailyOutput(): Promise<bigint>;
     getTreasuryBalances(): Promise<{
         leaderboardPot: bigint;
+        devPot: bigint;
+        liquidityPot: bigint;
+    }>;
+    /**
+     * / Same as getTreasuryBalances() but also returns the timestamp of the
+     * / query so the frontend can display "last updated X seconds ago".
+     */
+    getTreasuryBalancesWithTimestamp(): Promise<{
+        leaderboardPot: bigint;
+        lastUpdated: bigint;
         devPot: bigint;
         liquidityPot: bigint;
     }>;

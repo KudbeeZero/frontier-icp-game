@@ -98,6 +98,7 @@ type MissionRequirementKind__616308829 =
     #holdFRNTR : Nat;
     #purchasePlots : Nat;
     #reachLeaderboardTop : Nat;
+    #surveyCount : Nat;
     #surveyPlot;
     #upgradeToTier : Nat
   };
@@ -217,6 +218,7 @@ actor {
       var size : Nat__1040412405
     };
   stable adminState : {var adminPrincipal : Text};
+  stable var anomalyLog : [(Principal, Text, Int, Text)];
   stable var approvedDexPrincipalText : ?Text;
   stable auditState : {var nextIndex : Int};
   stable var cachedICPPrice : Nat64;
@@ -233,6 +235,13 @@ actor {
     {var root : Node__1000929467<Principal, Nat>; var size : Nat__1040412405};
   stable frntrLedgerState :
     {var adminPrincipal : Text; var frntrLedger : Text};
+  stable funnelCounters :
+    {
+      var boughtPlot : Nat;
+      var claimedTokens : Nat;
+      var loggedIn : Nat;
+      var upgradedPlot : Nat
+    };
   stable generatorTiers :
     {
       var root : Node__1000929467<Text, GeneratorTier__319383119>;
@@ -250,7 +259,13 @@ actor {
         Node__1000929467<Principal, Map__222667396<Text, (Bool, ?Int)>>;
       var size : Nat__1040412405
     };
+  stable playerActivity :
+    {var root : Node__1000929467<Principal, Int>; var size : Nat__1040412405};
+  stable playerBurnContributions :
+    {var root : Node__1000929467<Principal, Nat>; var size : Nat__1040412405};
   stable playerClaimCounts :
+    {var root : Node__1000929467<Principal, Nat>; var size : Nat__1040412405};
+  stable playerSurveyCounts :
     {var root : Node__1000929467<Principal, Nat>; var size : Nat__1040412405};
   stable players :
     {
@@ -266,24 +281,31 @@ actor {
       var size : Nat__1040412405
     };
   stable pricingState : {var pricing : PlotPricing__177782395};
+  stable var revenueHistory : [(Int, Nat)];
   stable var selfPrincipalText : Text;
   stable var stableActionAuditLog : [(Int, ActionAuditEntry__116674707)];
+  stable var stableAnomalyLog : [(Principal, Text, Int, Text)];
   stable var stableClaimTimes : [(Principal, Int)];
   stable var stableCombatLog : [(Int, CombatEvent__911207586)];
   stable var stableEconomySnapshots : [EconomySnapshot__119819669];
   stable var stableFaucetClaims : [(Principal, Nat)];
+  stable var stableFunnelCounters : (Nat, Nat, Nat, Nat);
   stable var stableGeneratorTiers : [(Text, GeneratorTier__319383119)];
   stable var stableInterceptors : [(Text, Text)];
   stable var stableLastSnapshotTime : Int;
   stable var stableLeaderboard : [(Principal, LeaderEntry__1009553798)];
   stable var stableMissionStatus : [(Principal, [(Text, Bool, ?Int)])];
+  stable var stablePlayerActivity : [(Principal, Int)];
+  stable var stablePlayerBurnContributions : [(Principal, Nat)];
   stable var stablePlayerClaimCounts : [(Principal, Nat)];
+  stable var stablePlayerSurveyCounts : [(Principal, Nat)];
   stable var stablePlayers : [(Principal, PlayerState__809798667)];
   stable var stablePlotClaimTimes : [(Text, Int)];
   stable var stablePlotRarities : [(Text, PlotRarity__638978278)];
   stable var stablePlotSoldCount : Nat;
   stable var stablePlotSoldState : Nat;
   stable var stablePlots : [(Text, PlotState__764233857)];
+  stable var stableRevenueHistory : [(Int, Nat)];
   stable var stableStatsState : (Nat, Nat, Nat);
   stable var stableSubParcels : [(Text, SubParcel__236257253)];
   stable var stableSurveys : [(Text, Survey__1035355375)];

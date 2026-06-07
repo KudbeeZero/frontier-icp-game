@@ -65,7 +65,7 @@ export interface PostActionToastExtProps {
 // Named export for callers using the extended props interface
 export function PostActionToast({
   actionType,
-  message: _msg,
+  message,
   onNavigate,
   onClose,
 }: PostActionToastExtProps) {
@@ -76,6 +76,7 @@ export function PostActionToast({
   return (
     <_PostActionToast
       actionType={safeType}
+      customMessage={message}
       onNavigate={(tab) => onNavigate(tab)}
       onDismiss={onClose}
     />
@@ -84,9 +85,10 @@ export function PostActionToast({
 
 export default function _PostActionToast({
   actionType,
+  customMessage,
   onNavigate,
   onDismiss,
-}: PostActionToastProps) {
+}: PostActionToastProps & { customMessage?: string }) {
   const [visible, setVisible] = useState(false);
   const [sliding, setSliding] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -147,7 +149,7 @@ export default function _PostActionToast({
 
   if (!visible && !sliding) return null;
 
-  const msg = actionType ? MESSAGES[actionType] : "";
+  const msg = customMessage ?? (actionType ? MESSAGES[actionType] : "");
   const icon = actionType ? ICONS[actionType] : "✓";
 
   return (

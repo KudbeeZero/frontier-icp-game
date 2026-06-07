@@ -240,6 +240,8 @@ export default function MapBottomSheet({
     "idle" | "claiming" | "success" | "error"
   >("idle");
   const [postActionType, setPostActionType] = useState<string | null>(null);
+  const [postActionMessage, setPostActionMessage] =
+    useState<string>("Plot purchased!");
 
   const { actor } = useActor(createActor);
 
@@ -365,11 +367,17 @@ export default function MapBottomSheet({
   const isEnemyPlot = isOwned && !isOwnPlot;
 
   // Use canister price if fetched, else local fallback (Fix 1)
+  // True loading: canister price still in-flight AND no local fallback at all
+  const isPriceFetching = fetchedPriceE8s === null && localPriceE8s === null;
   const activePriceE8s = fetchedPriceE8s ?? localPriceE8s ?? 200_000_000n;
   const icpFloat = Number(activePriceE8s) / 1e8;
-  const icpPriceDisplay = icpUsdPrice
-    ? `${icpFloat.toFixed(4)} ICP (~${(icpFloat * icpUsdPrice).toFixed(2)})`
-    : `${icpFloat.toFixed(4)} ICP ($ unavailable)`;
+  const usdEquiv =
+    icpUsdPrice && icpUsdPrice > 0
+      ? `~${(icpFloat * icpUsdPrice).toFixed(2)}`
+      : null;
+  const icpPriceDisplay = usdEquiv
+    ? `${icpFloat.toFixed(2)} ICP (${usdEquiv})`
+    : `${icpFloat.toFixed(2)} ICP (price feed updating...)`;
 
   async function handlePurchase() {
     if (!plot || isPurchasing) return;
@@ -382,7 +390,9 @@ export default function MapBottomSheet({
     if (!plot || isPurchasing) return;
     setShowPurchaseConfirm(false);
     setPurchaseError(null);
-    const shortId = String(plot.id).slice(0, 8);
+    const _shortId = String(plot.id).slice(0, 8);
+    const paidIcpStr = icpFloat.toFixed(2);
+    const paidUsdStr = usdEquiv ? ` (${usdEquiv})` : "";
     const result = await purchasePlot(String(plot.id));
     if (result.success) {
       onClose();
@@ -390,10 +400,13 @@ export default function MapBottomSheet({
       setPlotHoverCard({
         plotId: plot.id,
         owner: player.principal ?? "You",
-        action: `Plot acquired! ${plot.biome} plot ${shortId}`,
+        action: `Plot acquired! Paid ${paidIcpStr} ICP${paidUsdStr}`,
         nextStep: "Open Command Center to track FRNTR generation.",
       });
       setPostActionType("purchase");
+      setPostActionMessage(
+        `Plot purchased! ${icpFloat.toFixed(2)} ICP${usdEquiv ? ` (${usdEquiv})` : ""}`,
+      );
     } else {
       setPurchaseError(result.message);
     }
@@ -621,21 +634,26 @@ export default function MapBottomSheet({
                   type="button"
                   data-ocid="map.primary_button"
                   onClick={handlePurchase}
-                  disabled={isPurchasing}
+                  disabled={isPurchasing || isPriceFetching}
                   style={{
                     ...actionBtnStyle(
                       "#00ffcc",
-                      isPurchasing
+                      isPurchasing || isPriceFetching
                         ? "rgba(0,255,204,0.06)"
                         : "rgba(0,255,204,0.12)",
                     ),
-                    opacity: isPurchasing ? 0.6 : 1,
-                    cursor: isPurchasing ? "not-allowed" : "pointer",
+                    opacity: isPurchasing || isPriceFetching ? 0.6 : 1,
+                    cursor:
+                      isPurchasing || isPriceFetching
+                        ? "not-allowed"
+                        : "pointer",
                   }}
                 >
-                  {isPurchasing
-                    ? "PROCESSING…"
-                    : `PURCHASE — ${icpPriceDisplay}`}
+                  {isPriceFetching
+                    ? "⟳ Price loading…"
+                    : isPurchasing
+                      ? "PROCESSING…"
+                      : `PURCHASE — ${icpPriceDisplay}`}
                 </button>
                 {purchaseError && (
                   <div
@@ -826,7 +844,7 @@ export default function MapBottomSheet({
       {postActionType && (
         <PostActionToast
           actionType={postActionType}
-          message="Plot purchased!"
+          message={postActionMessage}
           onNavigate={(tab) =>
             window.dispatchEvent(
               new CustomEvent("navigate-tab", { detail: tab }),

@@ -161,21 +161,26 @@ export function usePlayerSync(): void {
 
     const syncGlobalStats = async () => {
       try {
-        const [g, t, treasury, gameStats] = await Promise.all([
-          actor.getGlobalStats(),
-          actor.getTokenomics(),
-          actor.getTreasuryBalances().catch(() => ({
-            devPot: 0n,
-            leaderboardPot: 0n,
-            liquidityPot: 0n,
-          })),
-          actor.getGameStats().catch(() => null),
-        ]);
+        const [g, t, treasury, gameStats, leaderboardStats] = await Promise.all(
+          [
+            actor.getGlobalStats(),
+            actor.getTokenomics(),
+            actor.getTreasuryBalances().catch(() => ({
+              devPot: 0n,
+              leaderboardPot: 0n,
+              liquidityPot: 0n,
+            })),
+            actor.getGameStats().catch(() => null),
+            actor.getLeaderboardStats().catch(() => null),
+          ],
+        );
         const stats: GlobalStats = {
           totalPlotsOwned: Number(g.totalPlotsOwned),
           totalFRNTRInCirculation: Number(g.circulatingSupply),
           totalFRNTRBurned: Number(g.totalBurned),
-          totalFRNTRMined: 0,
+          totalFRNTRMined: leaderboardStats
+            ? Number(leaderboardStats.totalFRNTRMined) / 1e8
+            : 0,
           activePlayerCount: Number(g.activePlayers),
           currentDailyEmissionRate: Number(t.emissionRate),
           leaderboardPrizePool: 0,

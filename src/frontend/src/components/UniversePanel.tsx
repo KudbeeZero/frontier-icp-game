@@ -1,6 +1,6 @@
 import { useActor } from "@caffeineai/core-infrastructure";
 import { X } from "lucide-react";
-import type React from "react";
+import React from "react";
 import { useEffect, useRef, useState } from "react";
 import { createActor } from "../backend";
 import { TIER_DAILY_RATES } from "../constants/tiers";
@@ -124,6 +124,32 @@ export default function UniversePanel({ onClose, inline = false }: Props) {
   const [frntrIcpPrice, _setFrntrIcpPrice] = useState<number | null>(null);
   const [snapshotExpanded, setSnapshotExpanded] = useState(false);
 
+  const [emissionSchedule, setEmissionSchedule] = useState<{
+    totalMineableSupply: bigint;
+    percentMined: bigint;
+    totalFRNTRMined: bigint;
+    projectedDaysRemaining: bigint;
+    remainingMineable: bigint;
+    currentDailyEmissionRate: bigint;
+  } | null>(null);
+  const [treasuryLastUpdated, setTreasuryLastUpdated] = useState<bigint | null>(
+    null,
+  );
+
+  const [economyHealth, setEconomyHealth] = React.useState<{
+    healthScore: bigint;
+    healthStatus: string;
+    inflationRate: number;
+    circulationRatio: number;
+    emissionPacePercent: number;
+    emissionPaceStatus: string;
+    projectedDaysRemaining: bigint;
+    treasuryRunwayDevMonths: number;
+    treasuryRunwayLeaderboardMonths: number;
+    treasuryRunwayLiquidityMonths: number;
+  } | null>(null);
+  const [healthExpanded, setHealthExpanded] = React.useState(true);
+
   // ── ICP/USD price fetched directly from canister ──
   const [icpPrice, setIcpPrice] = useState<number>(10.0);
   const [icpPriceLastUpdated, setIcpPriceLastUpdated] = useState<number>(
@@ -226,7 +252,38 @@ export default function UniversePanel({ onClose, inline = false }: Props) {
       });
   }, [actor]);
 
-  // ── Pot balances fetched directly every 10 seconds ──
+  // ── Fetch emission schedule on mount + every 60s ──
+  useEffect(() => {
+    if (!actor) return;
+    const fetchEmissionSchedule = async () => {
+      try {
+        const result = await actor.getEmissionSchedule();
+        setEmissionSchedule(result);
+      } catch (e) {
+        console.error("[UniversePanel] getEmissionSchedule error", e);
+      }
+    };
+    fetchEmissionSchedule();
+    const id = setInterval(fetchEmissionSchedule, 60_000);
+    return () => clearInterval(id);
+  }, [actor]);
+
+  React.useEffect(() => {
+    if (!actor) return;
+    const fetchHealth = async () => {
+      try {
+        const data = await actor.getEconomyHealth();
+        setEconomyHealth(data);
+      } catch (e) {
+        console.warn("getEconomyHealth failed", e);
+      }
+    };
+    fetchHealth();
+    const interval = setInterval(fetchHealth, 60_000);
+    return () => clearInterval(interval);
+  }, [actor]);
+
+  // ── Pot balances fetched directly every 30 seconds (with timestamp) ──
   const [potBalances, setPotBalances] = useState<{
     dev: number;
     leaderboard: number;
@@ -235,40 +292,29 @@ export default function UniversePanel({ onClose, inline = false }: Props) {
 
   useEffect(() => {
     if (!actor) return;
-    const fetchPots = () => {
-      actor
-        .getTreasuryBalances()
-        .then((res) => {
-          setPotBalances({
-            dev: Number(res.devPot) / 1e8,
-            leaderboard: Number(res.leaderboardPot) / 1e8,
-            liquidity: Number(res.liquidityPot) / 1e8,
-          });
-        })
-        .catch(() => {});
+    const fetchTreasuryWithTimestamp = async () => {
+      try {
+        const result = await actor.getTreasuryBalancesWithTimestamp();
+        setPotBalances({
+          dev: Number(result.devPot) / 1e8,
+          leaderboard: Number(result.leaderboardPot) / 1e8,
+          liquidity: Number(result.liquidityPot) / 1e8,
+        });
+        setTreasuryLastUpdated(result.lastUpdated);
+        setTreasuryState({
+          developer: result.devPot,
+          leaderboard: result.leaderboardPot,
+          liquidity: result.liquidityPot,
+        });
+      } catch (e) {
+        console.error(
+          "[UniversePanel] getTreasuryBalancesWithTimestamp error",
+          e,
+        );
+      }
     };
-    fetchPots();
-    const id = setInterval(fetchPots, 10_000);
-    return () => clearInterval(id);
-  }, [actor]);
-
-  // ── Treasury auto-refresh every 10 seconds (store sync) ──
-  useEffect(() => {
-    if (!actor) return;
-    const fetchTreasury = () => {
-      actor
-        .getTreasuryState()
-        .then((res) =>
-          setTreasuryState({
-            developer: res.developer,
-            leaderboard: res.leaderboard,
-            liquidity: res.liquidity,
-          }),
-        )
-        .catch(() => {});
-    };
-    fetchTreasury();
-    const id = setInterval(fetchTreasury, 10_000);
+    fetchTreasuryWithTimestamp();
+    const id = setInterval(fetchTreasuryWithTimestamp, 30_000);
     return () => clearInterval(id);
   }, [actor, setTreasuryState]);
 
@@ -751,10 +797,154 @@ export default function UniversePanel({ onClose, inline = false }: Props) {
             ))
           )}
         </div>
+        {emissionSchedule && (
+          <div
+            className="mt-4 space-y-1 border-t border-white/10 pt-3"
+            style={{
+              marginTop: 12,
+              paddingTop: 12,
+              borderTop: "1px solid rgba(255,255,255,0.1)",
+            }}
+          >
+            <div
+              className="flex justify-between text-sm"
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                fontSize: 12,
+                marginBottom: 4,
+              }}
+            >
+              <span style={{ color: "#9ca3af" }}>Total Mined</span>
+              <span style={{ color: "#4ade80" }}>
+                {(
+                  Number(emissionSchedule.totalFRNTRMined) / 1e8
+                ).toLocaleString(undefined, { maximumFractionDigits: 0 })}{" "}
+                FRNTR
+              </span>
+            </div>
+            <div
+              className="flex justify-between text-sm"
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                fontSize: 12,
+                marginBottom: 4,
+              }}
+            >
+              <span style={{ color: "#9ca3af" }}>Remaining</span>
+              <span style={{ color: "#22d3ee" }}>
+                {(
+                  Number(emissionSchedule.remainingMineable) / 1e8
+                ).toLocaleString(undefined, { maximumFractionDigits: 0 })}{" "}
+                FRNTR
+              </span>
+            </div>
+            <div
+              className="flex justify-between text-sm"
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                fontSize: 12,
+                marginBottom: 4,
+              }}
+            >
+              <span style={{ color: "#9ca3af" }}>Supply Mined</span>
+              <span style={{ color: "#facc15" }}>
+                {Number(emissionSchedule.percentMined).toFixed(1)}%
+              </span>
+            </div>
+            <div
+              className="flex justify-between text-sm"
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                fontSize: 12,
+                marginBottom: 4,
+              }}
+            >
+              <span style={{ color: "#9ca3af" }}>Daily Emission</span>
+              <span style={{ color: "#f9fafb" }}>
+                {(
+                  Number(emissionSchedule.currentDailyEmissionRate) / 1e8
+                ).toLocaleString(undefined, { maximumFractionDigits: 0 })}{" "}
+                FRNTR/day
+              </span>
+            </div>
+            <div
+              className="flex justify-between text-sm"
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                fontSize: 12,
+              }}
+            >
+              <span style={{ color: "#9ca3af" }}>Est. Days Left</span>
+              <span style={{ color: "#f9fafb" }}>
+                {Number(emissionSchedule.projectedDaysRemaining) > 0
+                  ? Number(
+                      emissionSchedule.projectedDaysRemaining,
+                    ).toLocaleString()
+                  : "∞"}
+              </span>
+            </div>
+          </div>
+        )}
       </GlowCard>
 
       {/* TREASURY STATUS */}
-      <SectionTitle>Treasury Status</SectionTitle>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          marginBottom: 8,
+        }}
+      >
+        <SectionTitle>Treasury Status</SectionTitle>
+        <button
+          type="button"
+          onClick={async () => {
+            if (!actor) return;
+            try {
+              const result = await actor.getTreasuryBalancesWithTimestamp();
+              setPotBalances({
+                dev: Number(result.devPot) / 1e8,
+                leaderboard: Number(result.leaderboardPot) / 1e8,
+                liquidity: Number(result.liquidityPot) / 1e8,
+              });
+              setTreasuryLastUpdated(result.lastUpdated);
+              setTreasuryState({
+                developer: result.devPot,
+                leaderboard: result.leaderboardPot,
+                liquidity: result.liquidityPot,
+              });
+            } catch (e) {
+              console.error(e);
+            }
+          }}
+          style={{
+            fontSize: 11,
+            color: "#22d3ee",
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            textDecoration: "underline",
+            padding: 0,
+          }}
+        >
+          Refresh
+        </button>
+        {treasuryLastUpdated && (
+          <span style={{ fontSize: 11, color: "#6b7280" }}>
+            Updated{" "}
+            {Math.floor(
+              (Date.now() - Number(treasuryLastUpdated) / 1_000_000) / 1000,
+            )}
+            s ago
+          </span>
+        )}
+      </div>
       {/* FRNTR/ICP rate badge */}
       <div style={{ marginBottom: 10 }}>
         {frntrIcpPrice !== null && frntrIcpPrice > 0 ? (
@@ -1495,6 +1685,263 @@ export default function UniversePanel({ onClose, inline = false }: Props) {
                 </table>
               </div>
             )}
+          </div>
+        )}
+      </div>
+
+      {/* ECONOMY HEALTH */}
+      <div
+        style={{
+          borderTop: `1px solid ${BORDER}`,
+          paddingTop: 16,
+          marginTop: 8,
+        }}
+      >
+        <button
+          type="button"
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            cursor: "pointer",
+            marginBottom: healthExpanded ? 12 : 0,
+            background: "none",
+            border: "none",
+            padding: 0,
+            width: "100%",
+            textAlign: "left",
+          }}
+          onClick={() => setHealthExpanded((h) => !h)}
+          aria-expanded={healthExpanded}
+        >
+          <SectionTitle>ECONOMY HEALTH</SectionTitle>
+          <span style={{ color: CYAN_DIM, fontSize: 12 }}>
+            {healthExpanded ? "▲" : "▼"}
+          </span>
+        </button>
+        {healthExpanded &&
+          economyHealth &&
+          (() => {
+            const score = Number(economyHealth.healthScore);
+            const scoreColor =
+              score >= 70 ? "#22c55e" : score >= 40 ? "#eab308" : "#ef4444";
+            const statusBg =
+              score >= 70
+                ? "rgba(34,197,94,0.15)"
+                : score >= 40
+                  ? "rgba(234,179,8,0.15)"
+                  : "rgba(239,68,68,0.15)";
+            return (
+              <div>
+                {/* Score gauge */}
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    marginBottom: 12,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 80,
+                      height: 80,
+                      borderRadius: "50%",
+                      background: `conic-gradient(${scoreColor} ${score * 3.6}deg, rgba(255,255,255,0.05) 0deg)`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      position: "relative",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 60,
+                        height: 60,
+                        borderRadius: "50%",
+                        background: "rgba(0,0,0,0.8)",
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <span
+                        style={{
+                          color: scoreColor,
+                          fontSize: 18,
+                          fontWeight: 700,
+                          lineHeight: 1,
+                        }}
+                      >
+                        {score}
+                      </span>
+                    </div>
+                  </div>
+                  <div
+                    style={{
+                      marginTop: 6,
+                      padding: "2px 10px",
+                      borderRadius: 4,
+                      background: statusBg,
+                      color: scoreColor,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      letterSpacing: 1,
+                    }}
+                  >
+                    {economyHealth.healthStatus}
+                  </div>
+                </div>
+                {/* 2x2 stat cards */}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 6,
+                    marginBottom: 10,
+                  }}
+                >
+                  {[
+                    {
+                      label: "Inflation Rate",
+                      value: economyHealth.inflationRate.toFixed(2),
+                      note: "< 2 healthy",
+                    },
+                    {
+                      label: "Circulation Ratio",
+                      value: economyHealth.circulationRatio.toFixed(2),
+                      note: "",
+                    },
+                    {
+                      label: "Emission Pace",
+                      value: `${economyHealth.emissionPacePercent.toFixed(1)}%`,
+                      note: economyHealth.emissionPaceStatus.replace("_", " "),
+                    },
+                    {
+                      label: "Days Remaining",
+                      value: Number(
+                        economyHealth.projectedDaysRemaining,
+                      ).toLocaleString(),
+                      note: "",
+                    },
+                  ].map(({ label, value, note }) => (
+                    <div
+                      key={label}
+                      style={{
+                        background: "rgba(255,255,255,0.04)",
+                        border: `1px solid ${BORDER}`,
+                        borderRadius: 6,
+                        padding: "6px 8px",
+                      }}
+                    >
+                      <div
+                        style={{
+                          color: TEXT_DIM,
+                          fontSize: 9,
+                          letterSpacing: 1,
+                          marginBottom: 2,
+                        }}
+                      >
+                        {label}
+                      </div>
+                      <div
+                        style={{ color: CYAN, fontSize: 14, fontWeight: 600 }}
+                      >
+                        {value}
+                      </div>
+                      {note && (
+                        <div style={{ color: TEXT_DIM, fontSize: 9 }}>
+                          {note}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {/* Treasury runway bars */}
+                <div style={{ marginBottom: 4 }}>
+                  <div
+                    style={{
+                      color: TEXT_DIM,
+                      fontSize: 9,
+                      letterSpacing: 1,
+                      marginBottom: 6,
+                    }}
+                  >
+                    TREASURY RUNWAY
+                  </div>
+                  {[
+                    {
+                      label: "Dev",
+                      months: economyHealth.treasuryRunwayDevMonths,
+                    },
+                    {
+                      label: "Leaderboard",
+                      months: economyHealth.treasuryRunwayLeaderboardMonths,
+                    },
+                    {
+                      label: "Liquidity",
+                      months: economyHealth.treasuryRunwayLiquidityMonths,
+                    },
+                  ].map(({ label, months }) => {
+                    const capped = Math.min(months, 24);
+                    const pct = (capped / 24) * 100;
+                    const barColor =
+                      months >= 12
+                        ? "#22c55e"
+                        : months >= 3
+                          ? "#eab308"
+                          : "#ef4444";
+                    return (
+                      <div key={label} style={{ marginBottom: 5 }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            marginBottom: 2,
+                          }}
+                        >
+                          <span style={{ color: TEXT_DIM, fontSize: 10 }}>
+                            {label}
+                          </span>
+                          <span style={{ color: barColor, fontSize: 10 }}>
+                            {months >= 999 ? "∞" : `${months.toFixed(1)}mo`}
+                          </span>
+                        </div>
+                        <div
+                          style={{
+                            background: "rgba(255,255,255,0.06)",
+                            borderRadius: 2,
+                            height: 4,
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: `${pct}%`,
+                              height: "100%",
+                              background: barColor,
+                              borderRadius: 2,
+                              transition: "width 0.5s ease",
+                            }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
+        {healthExpanded && !economyHealth && (
+          <div
+            style={{
+              color: TEXT_DIM,
+              fontSize: 11,
+              textAlign: "center",
+              padding: "12px 0",
+            }}
+          >
+            Loading health data...
           </div>
         )}
       </div>

@@ -83195,11 +83195,21 @@ const FaucetClaimSummary = Record({
   "totalClaims": Nat
 });
 const GlobalStats = Record({
+  "totalPlayers": Nat,
   "circulatingSupply": Nat,
   "activePlayers": Nat,
   "totalPlotsOwned": Nat,
   "dailyEmission": Nat,
+  "totalUnclaimedTokens": Nat,
   "totalBurned": Nat
+});
+const MissionDefinition = Record({
+  "id": Text,
+  "reward": Nat,
+  "title": Text,
+  "description": Text,
+  "requirementType": Text,
+  "requirementValue": Nat
 });
 const MissionRequirementKind = Variant({
   "purchasePlots": Nat,
@@ -83207,6 +83217,7 @@ const MissionRequirementKind = Variant({
   "holdFRNTR": Nat,
   "reachLeaderboardTop": Nat,
   "surveyPlot": Null,
+  "surveyCount": Nat,
   "claimTokens": Nat
 });
 const Mission = Record({
@@ -83250,7 +83261,7 @@ const SubParcel = Record({
   "slotIndex": Nat,
   "specialization": Text
 });
-const SurveyStatus = Variant({
+const SurveyStatus$1 = Variant({
   "Locked": Null,
   "InProgress": Null,
   "Completed": Null
@@ -83258,7 +83269,7 @@ const SurveyStatus = Variant({
 const PlotId = Text;
 const SurveyView = Record({
   "startTime": Int,
-  "status": SurveyStatus,
+  "status": SurveyStatus$1,
   "result": Opt(SurveyResult),
   "unlockCost": Nat,
   "secondsRemaining": Nat,
@@ -83383,6 +83394,23 @@ Service({
     [Vec(Tuple(Text, Text))],
     ["query"]
   ),
+  "getAnomalies": Func(
+    [],
+    [
+      Record({
+        "anomalies": Vec(
+          Record({
+            "principal": Principal2,
+            "anomalyType": Text,
+            "timestamp": Int,
+            "details": Text
+          })
+        ),
+        "totalCount": Nat
+      })
+    ],
+    ["query"]
+  ),
   "getApprovedLiquidityCanister": Func([], [Opt(Text)], ["query"]),
   "getAssignedInterceptor": Func(
     [Text],
@@ -83407,7 +83435,39 @@ Service({
     [Vec(GeneratorTierInfo)],
     ["query"]
   ),
+  "getEconomyHealth": Func(
+    [],
+    [
+      Record({
+        "treasuryRunwayLiquidityMonths": Float64,
+        "inflationRate": Float64,
+        "emissionPaceStatus": Text,
+        "healthStatus": Text,
+        "projectedDaysRemaining": Nat,
+        "treasuryRunwayLeaderboardMonths": Float64,
+        "circulationRatio": Float64,
+        "treasuryRunwayDevMonths": Float64,
+        "healthScore": Nat,
+        "emissionPacePercent": Float64
+      })
+    ],
+    ["query"]
+  ),
   "getEconomySnapshots": Func([], [Vec(EconomySnapshot)], ["query"]),
+  "getEmissionSchedule": Func(
+    [],
+    [
+      Record({
+        "totalMineableSupply": Nat,
+        "percentMined": Nat,
+        "totalFRNTRMined": Nat,
+        "projectedDaysRemaining": Nat,
+        "remainingMineable": Nat,
+        "currentDailyEmissionRate": Nat
+      })
+    ],
+    ["query"]
+  ),
   "getFaucetClaims": Func(
     [Principal2],
     [FaucetClaimSummary],
@@ -83465,6 +83525,7 @@ Service({
   "getIcpBalance": Func([Principal2], [Nat], []),
   "getIcpUsdPrice": Func([], [Float64], []),
   "getIcpUsdPriceCached": Func([], [Float64], ["query"]),
+  "getIcpUsdPriceNat": Func([], [Nat], ["query"]),
   "getIsAdmin": Func([], [Bool], ["query"]),
   "getLastSnapshotTime": Func([], [Int], ["query"]),
   "getLatestEconomySnapshot": Func(
@@ -83506,6 +83567,11 @@ Service({
     [Vec(Tuple(Text, Text))],
     ["query"]
   ),
+  "getMissionDefinitions": Func(
+    [],
+    [Vec(MissionDefinition)],
+    ["query"]
+  ),
   "getMissions": Func([], [Vec(Mission)], ["query"]),
   "getMyAuditLog": Func(
     [],
@@ -83513,6 +83579,26 @@ Service({
     ["query"]
   ),
   "getPassiveIncome": Func([Text], [Float64], ["query"]),
+  "getPlayerAnalytics": Func(
+    [],
+    [
+      Record({
+        "averageTokensPerPlayer": Float64,
+        "boughtPlot": Nat,
+        "activeLast24h": Nat,
+        "activeLast30d": Nat,
+        "activeLast7d": Nat,
+        "averagePlotsPerPlayer": Float64,
+        "topBiomes": Vec(Tuple(Text, Nat)),
+        "claimedTokens": Nat,
+        "upgradedPlot": Nat,
+        "loggedIn": Nat,
+        "totalPlayersEver": Nat
+      })
+    ],
+    ["query"]
+  ),
+  "getPlayerCompletedMissions": Func([], [Vec(Text)], ["query"]),
   "getPlayerMissions": Func(
     [],
     [Vec(Record({ "mission": Mission, "completed": Bool }))],
@@ -83523,7 +83609,10 @@ Service({
     [
       Record({
         "resourceBalances": Vec(Tuple(ResourceType, Float64)),
+        "totalDailyRate": Nat,
         "username": Opt(Text),
+        "totalUnclaimed": Nat,
+        "burnContributed": Nat,
         "fuel": Nat,
         "iron": Nat,
         "icpBalance": Nat,
@@ -83534,6 +83623,7 @@ Service({
         "lastFaucetTime": Opt(Int),
         "crystal": Nat,
         "ownedPlots": Vec(Text),
+        "confirmedBalance": Nat,
         "combatVictories": Nat,
         "generatorTiersMap": Vec(Tuple(Text, Nat)),
         "passiveIncomePerDay": Float64
@@ -83574,6 +83664,26 @@ Service({
   ),
   "getPlotsByOwner": Func([Principal2], [Vec(Text)], ["query"]),
   "getPrincipal": Func([], [PrincipalDisplay], ["query"]),
+  "getRevenueByPeriod": Func(
+    [
+      Variant({
+        "day": Null,
+        "month": Null,
+        "week": Null
+      })
+    ],
+    [
+      Record({
+        "leaderboardSplitE8s": Nat,
+        "totalIcpE8s": Nat,
+        "devSplitE8s": Nat,
+        "usdEquivalent": Float64,
+        "liquiditySplitE8s": Nat,
+        "transactionCount": Nat
+      })
+    ],
+    ["query"]
+  ),
   "getSubParcelStatus": Func(
     [Text],
     [Vec(SubParcelInfo)],
@@ -83591,6 +83701,17 @@ Service({
     [Variant({ "ok": SurveyView, "err": Text })],
     []
   ),
+  "getSurveyTimerStatus": Func(
+    [Text, Principal2],
+    [
+      Record({
+        "status": Text,
+        "plotId": Text,
+        "timeRemainingSeconds": Nat
+      })
+    ],
+    ["query"]
+  ),
   "getTokenomics": Func([], [Tokenomics], ["query"]),
   "getTotalBurned": Func([], [Nat], ["query"]),
   "getTotalGlobalDailyOutput": Func([], [Nat], ["query"]),
@@ -83599,6 +83720,18 @@ Service({
     [
       Record({
         "leaderboardPot": Nat,
+        "devPot": Nat,
+        "liquidityPot": Nat
+      })
+    ],
+    []
+  ),
+  "getTreasuryBalancesWithTimestamp": Func(
+    [],
+    [
+      Record({
+        "leaderboardPot": Nat,
+        "lastUpdated": Int,
         "devPot": Nat,
         "liquidityPot": Nat
       })
@@ -83755,11 +83888,21 @@ const idlFactory = ({ IDL: IDL2 }) => {
     "totalClaims": IDL2.Nat
   });
   const GlobalStats2 = IDL2.Record({
+    "totalPlayers": IDL2.Nat,
     "circulatingSupply": IDL2.Nat,
     "activePlayers": IDL2.Nat,
     "totalPlotsOwned": IDL2.Nat,
     "dailyEmission": IDL2.Nat,
+    "totalUnclaimedTokens": IDL2.Nat,
     "totalBurned": IDL2.Nat
+  });
+  const MissionDefinition2 = IDL2.Record({
+    "id": IDL2.Text,
+    "reward": IDL2.Nat,
+    "title": IDL2.Text,
+    "description": IDL2.Text,
+    "requirementType": IDL2.Text,
+    "requirementValue": IDL2.Nat
   });
   const MissionRequirementKind2 = IDL2.Variant({
     "purchasePlots": IDL2.Nat,
@@ -83767,6 +83910,7 @@ const idlFactory = ({ IDL: IDL2 }) => {
     "holdFRNTR": IDL2.Nat,
     "reachLeaderboardTop": IDL2.Nat,
     "surveyPlot": IDL2.Null,
+    "surveyCount": IDL2.Nat,
     "claimTokens": IDL2.Nat
   });
   const Mission2 = IDL2.Record({
@@ -83943,6 +84087,23 @@ const idlFactory = ({ IDL: IDL2 }) => {
       [IDL2.Vec(IDL2.Tuple(IDL2.Text, IDL2.Text))],
       ["query"]
     ),
+    "getAnomalies": IDL2.Func(
+      [],
+      [
+        IDL2.Record({
+          "anomalies": IDL2.Vec(
+            IDL2.Record({
+              "principal": IDL2.Principal,
+              "anomalyType": IDL2.Text,
+              "timestamp": IDL2.Int,
+              "details": IDL2.Text
+            })
+          ),
+          "totalCount": IDL2.Nat
+        })
+      ],
+      ["query"]
+    ),
     "getApprovedLiquidityCanister": IDL2.Func(
       [],
       [IDL2.Opt(IDL2.Text)],
@@ -83971,7 +84132,39 @@ const idlFactory = ({ IDL: IDL2 }) => {
       [IDL2.Vec(GeneratorTierInfo2)],
       ["query"]
     ),
+    "getEconomyHealth": IDL2.Func(
+      [],
+      [
+        IDL2.Record({
+          "treasuryRunwayLiquidityMonths": IDL2.Float64,
+          "inflationRate": IDL2.Float64,
+          "emissionPaceStatus": IDL2.Text,
+          "healthStatus": IDL2.Text,
+          "projectedDaysRemaining": IDL2.Nat,
+          "treasuryRunwayLeaderboardMonths": IDL2.Float64,
+          "circulationRatio": IDL2.Float64,
+          "treasuryRunwayDevMonths": IDL2.Float64,
+          "healthScore": IDL2.Nat,
+          "emissionPacePercent": IDL2.Float64
+        })
+      ],
+      ["query"]
+    ),
     "getEconomySnapshots": IDL2.Func([], [IDL2.Vec(EconomySnapshot2)], ["query"]),
+    "getEmissionSchedule": IDL2.Func(
+      [],
+      [
+        IDL2.Record({
+          "totalMineableSupply": IDL2.Nat,
+          "percentMined": IDL2.Nat,
+          "totalFRNTRMined": IDL2.Nat,
+          "projectedDaysRemaining": IDL2.Nat,
+          "remainingMineable": IDL2.Nat,
+          "currentDailyEmissionRate": IDL2.Nat
+        })
+      ],
+      ["query"]
+    ),
     "getFaucetClaims": IDL2.Func(
       [IDL2.Principal],
       [FaucetClaimSummary2],
@@ -84029,6 +84222,7 @@ const idlFactory = ({ IDL: IDL2 }) => {
     "getIcpBalance": IDL2.Func([IDL2.Principal], [IDL2.Nat], []),
     "getIcpUsdPrice": IDL2.Func([], [IDL2.Float64], []),
     "getIcpUsdPriceCached": IDL2.Func([], [IDL2.Float64], ["query"]),
+    "getIcpUsdPriceNat": IDL2.Func([], [IDL2.Nat], ["query"]),
     "getIsAdmin": IDL2.Func([], [IDL2.Bool], ["query"]),
     "getLastSnapshotTime": IDL2.Func([], [IDL2.Int], ["query"]),
     "getLatestEconomySnapshot": IDL2.Func(
@@ -84070,6 +84264,11 @@ const idlFactory = ({ IDL: IDL2 }) => {
       [IDL2.Vec(IDL2.Tuple(IDL2.Text, IDL2.Text))],
       ["query"]
     ),
+    "getMissionDefinitions": IDL2.Func(
+      [],
+      [IDL2.Vec(MissionDefinition2)],
+      ["query"]
+    ),
     "getMissions": IDL2.Func([], [IDL2.Vec(Mission2)], ["query"]),
     "getMyAuditLog": IDL2.Func(
       [],
@@ -84077,6 +84276,26 @@ const idlFactory = ({ IDL: IDL2 }) => {
       ["query"]
     ),
     "getPassiveIncome": IDL2.Func([IDL2.Text], [IDL2.Float64], ["query"]),
+    "getPlayerAnalytics": IDL2.Func(
+      [],
+      [
+        IDL2.Record({
+          "averageTokensPerPlayer": IDL2.Float64,
+          "boughtPlot": IDL2.Nat,
+          "activeLast24h": IDL2.Nat,
+          "activeLast30d": IDL2.Nat,
+          "activeLast7d": IDL2.Nat,
+          "averagePlotsPerPlayer": IDL2.Float64,
+          "topBiomes": IDL2.Vec(IDL2.Tuple(IDL2.Text, IDL2.Nat)),
+          "claimedTokens": IDL2.Nat,
+          "upgradedPlot": IDL2.Nat,
+          "loggedIn": IDL2.Nat,
+          "totalPlayersEver": IDL2.Nat
+        })
+      ],
+      ["query"]
+    ),
+    "getPlayerCompletedMissions": IDL2.Func([], [IDL2.Vec(IDL2.Text)], ["query"]),
     "getPlayerMissions": IDL2.Func(
       [],
       [IDL2.Vec(IDL2.Record({ "mission": Mission2, "completed": IDL2.Bool }))],
@@ -84087,7 +84306,10 @@ const idlFactory = ({ IDL: IDL2 }) => {
       [
         IDL2.Record({
           "resourceBalances": IDL2.Vec(IDL2.Tuple(ResourceType2, IDL2.Float64)),
+          "totalDailyRate": IDL2.Nat,
           "username": IDL2.Opt(IDL2.Text),
+          "totalUnclaimed": IDL2.Nat,
+          "burnContributed": IDL2.Nat,
           "fuel": IDL2.Nat,
           "iron": IDL2.Nat,
           "icpBalance": IDL2.Nat,
@@ -84098,6 +84320,7 @@ const idlFactory = ({ IDL: IDL2 }) => {
           "lastFaucetTime": IDL2.Opt(IDL2.Int),
           "crystal": IDL2.Nat,
           "ownedPlots": IDL2.Vec(IDL2.Text),
+          "confirmedBalance": IDL2.Nat,
           "combatVictories": IDL2.Nat,
           "generatorTiersMap": IDL2.Vec(IDL2.Tuple(IDL2.Text, IDL2.Nat)),
           "passiveIncomePerDay": IDL2.Float64
@@ -84142,6 +84365,26 @@ const idlFactory = ({ IDL: IDL2 }) => {
       ["query"]
     ),
     "getPrincipal": IDL2.Func([], [PrincipalDisplay2], ["query"]),
+    "getRevenueByPeriod": IDL2.Func(
+      [
+        IDL2.Variant({
+          "day": IDL2.Null,
+          "month": IDL2.Null,
+          "week": IDL2.Null
+        })
+      ],
+      [
+        IDL2.Record({
+          "leaderboardSplitE8s": IDL2.Nat,
+          "totalIcpE8s": IDL2.Nat,
+          "devSplitE8s": IDL2.Nat,
+          "usdEquivalent": IDL2.Float64,
+          "liquiditySplitE8s": IDL2.Nat,
+          "transactionCount": IDL2.Nat
+        })
+      ],
+      ["query"]
+    ),
     "getSubParcelStatus": IDL2.Func(
       [IDL2.Text],
       [IDL2.Vec(SubParcelInfo2)],
@@ -84159,6 +84402,17 @@ const idlFactory = ({ IDL: IDL2 }) => {
       [IDL2.Variant({ "ok": SurveyView2, "err": IDL2.Text })],
       []
     ),
+    "getSurveyTimerStatus": IDL2.Func(
+      [IDL2.Text, IDL2.Principal],
+      [
+        IDL2.Record({
+          "status": IDL2.Text,
+          "plotId": IDL2.Text,
+          "timeRemainingSeconds": IDL2.Nat
+        })
+      ],
+      ["query"]
+    ),
     "getTokenomics": IDL2.Func([], [Tokenomics2], ["query"]),
     "getTotalBurned": IDL2.Func([], [IDL2.Nat], ["query"]),
     "getTotalGlobalDailyOutput": IDL2.Func([], [IDL2.Nat], ["query"]),
@@ -84167,6 +84421,18 @@ const idlFactory = ({ IDL: IDL2 }) => {
       [
         IDL2.Record({
           "leaderboardPot": IDL2.Nat,
+          "devPot": IDL2.Nat,
+          "liquidityPot": IDL2.Nat
+        })
+      ],
+      []
+    ),
+    "getTreasuryBalancesWithTimestamp": IDL2.Func(
+      [],
+      [
+        IDL2.Record({
+          "leaderboardPot": IDL2.Nat,
+          "lastUpdated": IDL2.Int,
           "devPot": IDL2.Nat,
           "liquidityPot": IDL2.Nat
         })
@@ -84271,6 +84537,12 @@ function candid_none() {
 function record_opt_to_undefined(arg) {
   return arg == null ? void 0 : arg;
 }
+var SurveyStatus = /* @__PURE__ */ ((SurveyStatus2) => {
+  SurveyStatus2["Locked"] = "Locked";
+  SurveyStatus2["InProgress"] = "InProgress";
+  SurveyStatus2["Completed"] = "Completed";
+  return SurveyStatus2;
+})(SurveyStatus || {});
 class Backend {
   constructor(actor, _uploadFile, _downloadFile, processError2) {
     this.actor = actor;
@@ -84432,6 +84704,20 @@ class Backend {
       return result;
     }
   }
+  async getAnomalies() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getAnomalies();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getAnomalies();
+      return result;
+    }
+  }
   async getApprovedLiquidityCanister() {
     if (this.processError) {
       try {
@@ -84530,6 +84816,20 @@ class Backend {
       return result;
     }
   }
+  async getEconomyHealth() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getEconomyHealth();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getEconomyHealth();
+      return result;
+    }
+  }
   async getEconomySnapshots() {
     if (this.processError) {
       try {
@@ -84541,6 +84841,20 @@ class Backend {
       }
     } else {
       const result = await this.actor.getEconomySnapshots();
+      return result;
+    }
+  }
+  async getEmissionSchedule() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getEmissionSchedule();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getEmissionSchedule();
       return result;
     }
   }
@@ -84754,6 +85068,20 @@ class Backend {
       return result;
     }
   }
+  async getIcpUsdPriceNat() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getIcpUsdPriceNat();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getIcpUsdPriceNat();
+      return result;
+    }
+  }
   async getIsAdmin() {
     if (this.processError) {
       try {
@@ -84838,6 +85166,20 @@ class Backend {
       return result;
     }
   }
+  async getMissionDefinitions() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getMissionDefinitions();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getMissionDefinitions();
+      return result;
+    }
+  }
   async getMissions() {
     if (this.processError) {
       try {
@@ -84880,6 +85222,34 @@ class Backend {
       return result;
     }
   }
+  async getPlayerAnalytics() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getPlayerAnalytics();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getPlayerAnalytics();
+      return result;
+    }
+  }
+  async getPlayerCompletedMissions() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getPlayerCompletedMissions();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getPlayerCompletedMissions();
+      return result;
+    }
+  }
   async getPlayerMissions() {
     if (this.processError) {
       try {
@@ -84912,14 +85282,14 @@ class Backend {
     if (this.processError) {
       try {
         const result = await this.actor.getPlayerStateByPrincipal(arg0);
-        return from_candid_record_n33(this._uploadFile, this._downloadFile, result);
+        return from_candid_record_n38(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.getPlayerStateByPrincipal(arg0);
-      return from_candid_record_n33(this._uploadFile, this._downloadFile, result);
+      return from_candid_record_n38(this._uploadFile, this._downloadFile, result);
     }
   }
   async getPlotCount() {
@@ -85006,6 +85376,20 @@ class Backend {
       return result;
     }
   }
+  async getRevenueByPeriod(arg0) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getRevenueByPeriod(to_candid_variant_n39(this._uploadFile, this._downloadFile, arg0));
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getRevenueByPeriod(to_candid_variant_n39(this._uploadFile, this._downloadFile, arg0));
+      return result;
+    }
+  }
   async getSubParcelStatus(arg0) {
     if (this.processError) {
       try {
@@ -85024,14 +85408,14 @@ class Backend {
     if (this.processError) {
       try {
         const result = await this.actor.getSubParcels(arg0);
-        return from_candid_vec_n38(this._uploadFile, this._downloadFile, result);
+        return from_candid_vec_n40(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.getSubParcels(arg0);
-      return from_candid_vec_n38(this._uploadFile, this._downloadFile, result);
+      return from_candid_vec_n40(this._uploadFile, this._downloadFile, result);
     }
   }
   async getSurveyCost(arg0) {
@@ -85052,28 +85436,42 @@ class Backend {
     if (this.processError) {
       try {
         const result = await this.actor.getSurveyResult(arg0);
-        return from_candid_variant_n41(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n43(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.getSurveyResult(arg0);
-      return from_candid_variant_n41(this._uploadFile, this._downloadFile, result);
+      return from_candid_variant_n43(this._uploadFile, this._downloadFile, result);
     }
   }
   async getSurveyStatus(arg0) {
     if (this.processError) {
       try {
         const result = await this.actor.getSurveyStatus(arg0);
-        return from_candid_variant_n42(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n44(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.getSurveyStatus(arg0);
-      return from_candid_variant_n42(this._uploadFile, this._downloadFile, result);
+      return from_candid_variant_n44(this._uploadFile, this._downloadFile, result);
+    }
+  }
+  async getSurveyTimerStatus(arg0, arg1) {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getSurveyTimerStatus(arg0, arg1);
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getSurveyTimerStatus(arg0, arg1);
+      return result;
     }
   }
   async getTokenomics() {
@@ -85129,6 +85527,20 @@ class Backend {
       }
     } else {
       const result = await this.actor.getTreasuryBalances();
+      return result;
+    }
+  }
+  async getTreasuryBalancesWithTimestamp() {
+    if (this.processError) {
+      try {
+        const result = await this.actor.getTreasuryBalancesWithTimestamp();
+        return result;
+      } catch (e) {
+        this.processError(e);
+        throw new Error("unreachable");
+      }
+    } else {
+      const result = await this.actor.getTreasuryBalancesWithTimestamp();
       return result;
     }
   }
@@ -85192,27 +85604,27 @@ class Backend {
     if (this.processError) {
       try {
         const result = await this.actor.launchMissile(arg0, arg1, arg2);
-        return from_candid_variant_n48(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n50(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.launchMissile(arg0, arg1, arg2);
-      return from_candid_variant_n48(this._uploadFile, this._downloadFile, result);
+      return from_candid_variant_n50(this._uploadFile, this._downloadFile, result);
     }
   }
   async logCancelledAction(arg0, arg1, arg2, arg3) {
     if (this.processError) {
       try {
-        const result = await this.actor.logCancelledAction(arg0, to_candid_opt_n49(this._uploadFile, this._downloadFile, arg1), to_candid_opt_n50(this._uploadFile, this._downloadFile, arg2), arg3);
+        const result = await this.actor.logCancelledAction(arg0, to_candid_opt_n51(this._uploadFile, this._downloadFile, arg1), to_candid_opt_n52(this._uploadFile, this._downloadFile, arg2), arg3);
         return result;
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
-      const result = await this.actor.logCancelledAction(arg0, to_candid_opt_n49(this._uploadFile, this._downloadFile, arg1), to_candid_opt_n50(this._uploadFile, this._downloadFile, arg2), arg3);
+      const result = await this.actor.logCancelledAction(arg0, to_candid_opt_n51(this._uploadFile, this._downloadFile, arg1), to_candid_opt_n52(this._uploadFile, this._downloadFile, arg2), arg3);
       return result;
     }
   }
@@ -85220,28 +85632,28 @@ class Backend {
     if (this.processError) {
       try {
         const result = await this.actor.mineResources(arg0);
-        return from_candid_variant_n51(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n53(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.mineResources(arg0);
-      return from_candid_variant_n51(this._uploadFile, this._downloadFile, result);
+      return from_candid_variant_n53(this._uploadFile, this._downloadFile, result);
     }
   }
   async purchasePlot(arg0) {
     if (this.processError) {
       try {
         const result = await this.actor.purchasePlot(arg0);
-        return from_candid_variant_n48(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n50(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.purchasePlot(arg0);
-      return from_candid_variant_n48(this._uploadFile, this._downloadFile, result);
+      return from_candid_variant_n50(this._uploadFile, this._downloadFile, result);
     }
   }
   async purgeTestPlayers() {
@@ -85276,14 +85688,14 @@ class Backend {
     if (this.processError) {
       try {
         const result = await this.actor.resetTestState();
-        return from_candid_ResetResult_n54(this._uploadFile, this._downloadFile, result);
+        return from_candid_ResetResult_n56(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.resetTestState();
-      return from_candid_ResetResult_n54(this._uploadFile, this._downloadFile, result);
+      return from_candid_ResetResult_n56(this._uploadFile, this._downloadFile, result);
     }
   }
   async setAdminPrincipal(arg0) {
@@ -85304,14 +85716,14 @@ class Backend {
     if (this.processError) {
       try {
         const result = await this.actor.setApprovedLiquidityCanister(arg0);
-        return from_candid_variant_n55(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n57(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.setApprovedLiquidityCanister(arg0);
-      return from_candid_variant_n55(this._uploadFile, this._downloadFile, result);
+      return from_candid_variant_n57(this._uploadFile, this._downloadFile, result);
     }
   }
   async setFrntrLedger(arg0) {
@@ -85374,98 +85786,98 @@ class Backend {
     if (this.processError) {
       try {
         const result = await this.actor.setUsername(arg0);
-        return from_candid_variant_n55(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n57(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.setUsername(arg0);
-      return from_candid_variant_n55(this._uploadFile, this._downloadFile, result);
+      return from_candid_variant_n57(this._uploadFile, this._downloadFile, result);
     }
   }
   async startSurvey(arg0) {
     if (this.processError) {
       try {
         const result = await this.actor.startSurvey(arg0);
-        return from_candid_variant_n42(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n44(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.startSurvey(arg0);
-      return from_candid_variant_n42(this._uploadFile, this._downloadFile, result);
+      return from_candid_variant_n44(this._uploadFile, this._downloadFile, result);
     }
   }
   async stressBuyPlots(arg0) {
     if (this.processError) {
       try {
         const result = await this.actor.stressBuyPlots(arg0);
-        return from_candid_StressTestResult_n56(this._uploadFile, this._downloadFile, result);
+        return from_candid_StressTestResult_n58(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.stressBuyPlots(arg0);
-      return from_candid_StressTestResult_n56(this._uploadFile, this._downloadFile, result);
+      return from_candid_StressTestResult_n58(this._uploadFile, this._downloadFile, result);
     }
   }
   async stressMintPlots(arg0) {
     if (this.processError) {
       try {
         const result = await this.actor.stressMintPlots(arg0);
-        return from_candid_StressTestResult_n56(this._uploadFile, this._downloadFile, result);
+        return from_candid_StressTestResult_n58(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.stressMintPlots(arg0);
-      return from_candid_StressTestResult_n56(this._uploadFile, this._downloadFile, result);
+      return from_candid_StressTestResult_n58(this._uploadFile, this._downloadFile, result);
     }
   }
   async stressUpgradePlots(arg0) {
     if (this.processError) {
       try {
         const result = await this.actor.stressUpgradePlots(arg0);
-        return from_candid_StressTestResult_n56(this._uploadFile, this._downloadFile, result);
+        return from_candid_StressTestResult_n58(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.stressUpgradePlots(arg0);
-      return from_candid_StressTestResult_n56(this._uploadFile, this._downloadFile, result);
+      return from_candid_StressTestResult_n58(this._uploadFile, this._downloadFile, result);
     }
   }
   async testFaucet() {
     if (this.processError) {
       try {
         const result = await this.actor.testFaucet();
-        return from_candid_variant_n48(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n50(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.testFaucet();
-      return from_candid_variant_n48(this._uploadFile, this._downloadFile, result);
+      return from_candid_variant_n50(this._uploadFile, this._downloadFile, result);
     }
   }
   async testFaucetV2() {
     if (this.processError) {
       try {
         const result = await this.actor.testFaucetV2();
-        return from_candid_FaucetResult_n61(this._uploadFile, this._downloadFile, result);
+        return from_candid_FaucetResult_n63(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.testFaucetV2();
-      return from_candid_FaucetResult_n61(this._uploadFile, this._downloadFile, result);
+      return from_candid_FaucetResult_n63(this._uploadFile, this._downloadFile, result);
     }
   }
   async updateAdminPrincipalAuth(arg0) {
@@ -85486,28 +85898,28 @@ class Backend {
     if (this.processError) {
       try {
         const result = await this.actor.upgradeGenerator(arg0);
-        return from_candid_variant_n63(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n65(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.upgradeGenerator(arg0);
-      return from_candid_variant_n63(this._uploadFile, this._downloadFile, result);
+      return from_candid_variant_n65(this._uploadFile, this._downloadFile, result);
     }
   }
   async withdrawLiquidityPot(arg0, arg1) {
     if (this.processError) {
       try {
         const result = await this.actor.withdrawLiquidityPot(arg0, arg1);
-        return from_candid_variant_n55(this._uploadFile, this._downloadFile, result);
+        return from_candid_variant_n57(this._uploadFile, this._downloadFile, result);
       } catch (e) {
         this.processError(e);
         throw new Error("unreachable");
       }
     } else {
       const result = await this.actor.withdrawLiquidityPot(arg0, arg1);
-      return from_candid_variant_n55(this._uploadFile, this._downloadFile, result);
+      return from_candid_variant_n57(this._uploadFile, this._downloadFile, result);
     }
   }
 }
@@ -85523,14 +85935,14 @@ function from_candid_CombatEvent_n18(_uploadFile, _downloadFile, value) {
 function from_candid_FaucetClaimSummary_n20(_uploadFile, _downloadFile, value) {
   return from_candid_record_n21(_uploadFile, _downloadFile, value);
 }
-function from_candid_FaucetResult_n61(_uploadFile, _downloadFile, value) {
-  return from_candid_variant_n62(_uploadFile, _downloadFile, value);
+function from_candid_FaucetResult_n63(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n64(_uploadFile, _downloadFile, value);
 }
-function from_candid_GeneratorTier_n67(_uploadFile, _downloadFile, value) {
-  return from_candid_variant_n68(_uploadFile, _downloadFile, value);
+function from_candid_GeneratorTier_n69(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n70(_uploadFile, _downloadFile, value);
 }
-function from_candid_MineResult_n52(_uploadFile, _downloadFile, value) {
-  return from_candid_record_n53(_uploadFile, _downloadFile, value);
+function from_candid_MineResult_n54(_uploadFile, _downloadFile, value) {
+  return from_candid_record_n55(_uploadFile, _downloadFile, value);
 }
 function from_candid_MissionRequirementKind_n29(_uploadFile, _downloadFile, value) {
   return from_candid_variant_n30(_uploadFile, _downloadFile, value);
@@ -85538,11 +85950,11 @@ function from_candid_MissionRequirementKind_n29(_uploadFile, _downloadFile, valu
 function from_candid_Mission_n27(_uploadFile, _downloadFile, value) {
   return from_candid_record_n28(_uploadFile, _downloadFile, value);
 }
-function from_candid_PlotUpgradesView_n64(_uploadFile, _downloadFile, value) {
-  return from_candid_record_n65(_uploadFile, _downloadFile, value);
+function from_candid_PlotUpgradesView_n66(_uploadFile, _downloadFile, value) {
+  return from_candid_record_n67(_uploadFile, _downloadFile, value);
 }
-function from_candid_ResetResult_n54(_uploadFile, _downloadFile, value) {
-  return from_candid_variant_n48(_uploadFile, _downloadFile, value);
+function from_candid_ResetResult_n56(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n50(_uploadFile, _downloadFile, value);
 }
 function from_candid_ResourceType_n36(_uploadFile, _downloadFile, value) {
   return from_candid_variant_n37(_uploadFile, _downloadFile, value);
@@ -85550,26 +85962,26 @@ function from_candid_ResourceType_n36(_uploadFile, _downloadFile, value) {
 function from_candid_Result_n10(_uploadFile, _downloadFile, value) {
   return from_candid_variant_n1(_uploadFile, _downloadFile, value);
 }
-function from_candid_StressActionResult_n59(_uploadFile, _downloadFile, value) {
-  return from_candid_record_n60(_uploadFile, _downloadFile, value);
+function from_candid_StressActionResult_n61(_uploadFile, _downloadFile, value) {
+  return from_candid_record_n62(_uploadFile, _downloadFile, value);
 }
-function from_candid_StressTestResult_n56(_uploadFile, _downloadFile, value) {
-  return from_candid_variant_n57(_uploadFile, _downloadFile, value);
+function from_candid_StressTestResult_n58(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n59(_uploadFile, _downloadFile, value);
 }
-function from_candid_SubParcel_n39(_uploadFile, _downloadFile, value) {
-  return from_candid_record_n40(_uploadFile, _downloadFile, value);
+function from_candid_SubParcel_n41(_uploadFile, _downloadFile, value) {
+  return from_candid_record_n42(_uploadFile, _downloadFile, value);
 }
 function from_candid_SurveyResult_n5(_uploadFile, _downloadFile, value) {
   return from_candid_record_n6(_uploadFile, _downloadFile, value);
 }
-function from_candid_SurveyStatus_n45(_uploadFile, _downloadFile, value) {
-  return from_candid_variant_n46(_uploadFile, _downloadFile, value);
+function from_candid_SurveyStatus_n47(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n48(_uploadFile, _downloadFile, value);
 }
-function from_candid_SurveyView_n43(_uploadFile, _downloadFile, value) {
-  return from_candid_record_n44(_uploadFile, _downloadFile, value);
+function from_candid_SurveyView_n45(_uploadFile, _downloadFile, value) {
+  return from_candid_record_n46(_uploadFile, _downloadFile, value);
 }
-function from_candid_UpgradeError_n69(_uploadFile, _downloadFile, value) {
-  return from_candid_variant_n70(_uploadFile, _downloadFile, value);
+function from_candid_UpgradeError_n71(_uploadFile, _downloadFile, value) {
+  return from_candid_variant_n72(_uploadFile, _downloadFile, value);
 }
 function from_candid_opt_n16(_uploadFile, _downloadFile, value) {
   return value.length === 0 ? null : value[0];
@@ -85580,10 +85992,10 @@ function from_candid_opt_n22(_uploadFile, _downloadFile, value) {
 function from_candid_opt_n23(_uploadFile, _downloadFile, value) {
   return value.length === 0 ? null : value[0];
 }
-function from_candid_opt_n47(_uploadFile, _downloadFile, value) {
+function from_candid_opt_n49(_uploadFile, _downloadFile, value) {
   return value.length === 0 ? null : from_candid_SurveyResult_n5(_uploadFile, _downloadFile, value[0]);
 }
-function from_candid_opt_n66(_uploadFile, _downloadFile, value) {
+function from_candid_opt_n68(_uploadFile, _downloadFile, value) {
   return value.length === 0 ? null : value[0];
 }
 function from_candid_opt_n7(_uploadFile, _downloadFile, value) {
@@ -85649,6 +86061,29 @@ function from_candid_record_n32(_uploadFile, _downloadFile, value) {
 function from_candid_record_n33(_uploadFile, _downloadFile, value) {
   return {
     resourceBalances: from_candid_vec_n34(_uploadFile, _downloadFile, value.resourceBalances),
+    totalDailyRate: value.totalDailyRate,
+    username: record_opt_to_undefined(from_candid_opt_n7(_uploadFile, _downloadFile, value.username)),
+    totalUnclaimed: value.totalUnclaimed,
+    burnContributed: value.burnContributed,
+    fuel: value.fuel,
+    iron: value.iron,
+    icpBalance: value.icpBalance,
+    frntBalance: value.frntBalance,
+    totalFRNTRBurned: value.totalFRNTRBurned,
+    plotsOwned: value.plotsOwned,
+    plotIds: value.plotIds,
+    lastFaucetTime: record_opt_to_undefined(from_candid_opt_n22(_uploadFile, _downloadFile, value.lastFaucetTime)),
+    crystal: value.crystal,
+    ownedPlots: value.ownedPlots,
+    confirmedBalance: value.confirmedBalance,
+    combatVictories: value.combatVictories,
+    generatorTiersMap: value.generatorTiersMap,
+    passiveIncomePerDay: value.passiveIncomePerDay
+  };
+}
+function from_candid_record_n38(_uploadFile, _downloadFile, value) {
+  return {
+    resourceBalances: from_candid_vec_n34(_uploadFile, _downloadFile, value.resourceBalances),
     username: record_opt_to_undefined(from_candid_opt_n7(_uploadFile, _downloadFile, value.username)),
     fuel: value.fuel,
     iron: value.iron,
@@ -85671,7 +86106,7 @@ function from_candid_record_n4(_uploadFile, _downloadFile, value) {
     rewardE8s: value.rewardE8s
   };
 }
-function from_candid_record_n40(_uploadFile, _downloadFile, value) {
+function from_candid_record_n42(_uploadFile, _downloadFile, value) {
   return {
     subParcelId: value.subParcelId,
     cooldownEnds: value.cooldownEnds,
@@ -85681,11 +86116,11 @@ function from_candid_record_n40(_uploadFile, _downloadFile, value) {
     specialization: value.specialization
   };
 }
-function from_candid_record_n44(_uploadFile, _downloadFile, value) {
+function from_candid_record_n46(_uploadFile, _downloadFile, value) {
   return {
     startTime: value.startTime,
-    status: from_candid_SurveyStatus_n45(_uploadFile, _downloadFile, value.status),
-    result: record_opt_to_undefined(from_candid_opt_n47(_uploadFile, _downloadFile, value.result)),
+    status: from_candid_SurveyStatus_n47(_uploadFile, _downloadFile, value.status),
+    result: record_opt_to_undefined(from_candid_opt_n49(_uploadFile, _downloadFile, value.result)),
     unlockCost: value.unlockCost,
     secondsRemaining: value.secondsRemaining,
     estimatedReward: value.estimatedReward,
@@ -85696,7 +86131,7 @@ function from_candid_record_n44(_uploadFile, _downloadFile, value) {
     remainingSeconds: value.remainingSeconds
   };
 }
-function from_candid_record_n53(_uploadFile, _downloadFile, value) {
+function from_candid_record_n55(_uploadFile, _downloadFile, value) {
   return {
     efficiency: value.efficiency,
     plotId: value.plotId,
@@ -85711,7 +86146,7 @@ function from_candid_record_n6(_uploadFile, _downloadFile, value) {
     biome: from_candid_Biome_n8(_uploadFile, _downloadFile, value.biome)
   };
 }
-function from_candid_record_n60(_uploadFile, _downloadFile, value) {
+function from_candid_record_n62(_uploadFile, _downloadFile, value) {
   return {
     ok: value.ok,
     action: value.action,
@@ -85720,14 +86155,14 @@ function from_candid_record_n60(_uploadFile, _downloadFile, value) {
     durationMs: value.durationMs
   };
 }
-function from_candid_record_n65(_uploadFile, _downloadFile, value) {
+function from_candid_record_n67(_uploadFile, _downloadFile, value) {
   return {
     tierName: value.tierName,
     plotId: value.plotId,
-    installedAt: record_opt_to_undefined(from_candid_opt_n66(_uploadFile, _downloadFile, value.installedAt)),
+    installedAt: record_opt_to_undefined(from_candid_opt_n68(_uploadFile, _downloadFile, value.installedAt)),
     bonusPerDay: value.bonusPerDay,
     nextTierCost: record_opt_to_undefined(from_candid_opt_n16(_uploadFile, _downloadFile, value.nextTierCost)),
-    generatorTier: from_candid_GeneratorTier_n67(_uploadFile, _downloadFile, value.generatorTier)
+    generatorTier: from_candid_GeneratorTier_n69(_uploadFile, _downloadFile, value.generatorTier)
   };
 }
 function from_candid_tuple_n13(_uploadFile, _downloadFile, value) {
@@ -85794,6 +86229,9 @@ function from_candid_variant_n30(_uploadFile, _downloadFile, value) {
   } : "surveyPlot" in value ? {
     __kind__: "surveyPlot",
     surveyPlot: value.surveyPlot
+  } : "surveyCount" in value ? {
+    __kind__: "surveyCount",
+    surveyCount: value.surveyCount
   } : "claimTokens" in value ? {
     __kind__: "claimTokens",
     claimTokens: value.claimTokens
@@ -85802,7 +86240,7 @@ function from_candid_variant_n30(_uploadFile, _downloadFile, value) {
 function from_candid_variant_n37(_uploadFile, _downloadFile, value) {
   return "RareEarth" in value ? "RareEarth" : "Fuel" in value ? "Fuel" : "Iron" in value ? "Iron" : "Crystal" in value ? "Crystal" : value;
 }
-function from_candid_variant_n41(_uploadFile, _downloadFile, value) {
+function from_candid_variant_n43(_uploadFile, _downloadFile, value) {
   return "ok" in value ? {
     __kind__: "ok",
     ok: from_candid_SurveyResult_n5(_uploadFile, _downloadFile, value.ok)
@@ -85811,19 +86249,19 @@ function from_candid_variant_n41(_uploadFile, _downloadFile, value) {
     err: value.err
   } : value;
 }
-function from_candid_variant_n42(_uploadFile, _downloadFile, value) {
+function from_candid_variant_n44(_uploadFile, _downloadFile, value) {
   return "ok" in value ? {
     __kind__: "ok",
-    ok: from_candid_SurveyView_n43(_uploadFile, _downloadFile, value.ok)
+    ok: from_candid_SurveyView_n45(_uploadFile, _downloadFile, value.ok)
   } : "err" in value ? {
     __kind__: "err",
     err: value.err
   } : value;
-}
-function from_candid_variant_n46(_uploadFile, _downloadFile, value) {
-  return "Locked" in value ? "Locked" : "InProgress" in value ? "InProgress" : "Completed" in value ? "Completed" : value;
 }
 function from_candid_variant_n48(_uploadFile, _downloadFile, value) {
+  return "Locked" in value ? "Locked" : "InProgress" in value ? "InProgress" : "Completed" in value ? "Completed" : value;
+}
+function from_candid_variant_n50(_uploadFile, _downloadFile, value) {
   return "ok" in value ? {
     __kind__: "ok",
     ok: value.ok
@@ -85832,19 +86270,10 @@ function from_candid_variant_n48(_uploadFile, _downloadFile, value) {
     err: value.err
   } : value;
 }
-function from_candid_variant_n51(_uploadFile, _downloadFile, value) {
+function from_candid_variant_n53(_uploadFile, _downloadFile, value) {
   return "ok" in value ? {
     __kind__: "ok",
-    ok: from_candid_MineResult_n52(_uploadFile, _downloadFile, value.ok)
-  } : "err" in value ? {
-    __kind__: "err",
-    err: value.err
-  } : value;
-}
-function from_candid_variant_n55(_uploadFile, _downloadFile, value) {
-  return "ok" in value ? {
-    __kind__: "ok",
-    ok: value.ok
+    ok: from_candid_MineResult_n54(_uploadFile, _downloadFile, value.ok)
   } : "err" in value ? {
     __kind__: "err",
     err: value.err
@@ -85853,13 +86282,22 @@ function from_candid_variant_n55(_uploadFile, _downloadFile, value) {
 function from_candid_variant_n57(_uploadFile, _downloadFile, value) {
   return "ok" in value ? {
     __kind__: "ok",
-    ok: from_candid_vec_n58(_uploadFile, _downloadFile, value.ok)
+    ok: value.ok
   } : "err" in value ? {
     __kind__: "err",
     err: value.err
   } : value;
 }
-function from_candid_variant_n62(_uploadFile, _downloadFile, value) {
+function from_candid_variant_n59(_uploadFile, _downloadFile, value) {
+  return "ok" in value ? {
+    __kind__: "ok",
+    ok: from_candid_vec_n60(_uploadFile, _downloadFile, value.ok)
+  } : "err" in value ? {
+    __kind__: "err",
+    err: value.err
+  } : value;
+}
+function from_candid_variant_n64(_uploadFile, _downloadFile, value) {
   return "ok" in value ? {
     __kind__: "ok",
     ok: value.ok
@@ -85868,19 +86306,19 @@ function from_candid_variant_n62(_uploadFile, _downloadFile, value) {
     err: value.err
   } : value;
 }
-function from_candid_variant_n63(_uploadFile, _downloadFile, value) {
+function from_candid_variant_n65(_uploadFile, _downloadFile, value) {
   return "ok" in value ? {
     __kind__: "ok",
-    ok: from_candid_PlotUpgradesView_n64(_uploadFile, _downloadFile, value.ok)
+    ok: from_candid_PlotUpgradesView_n66(_uploadFile, _downloadFile, value.ok)
   } : "err" in value ? {
     __kind__: "err",
-    err: from_candid_UpgradeError_n69(_uploadFile, _downloadFile, value.err)
+    err: from_candid_UpgradeError_n71(_uploadFile, _downloadFile, value.err)
   } : value;
 }
-function from_candid_variant_n68(_uploadFile, _downloadFile, value) {
+function from_candid_variant_n70(_uploadFile, _downloadFile, value) {
   return "TierIII" in value ? "TierIII" : "None" in value ? "None" : "TierII" in value ? "TierII" : "TierIV" in value ? "TierIV" : "TierVI" in value ? "TierVI" : "TierI" in value ? "TierI" : "TierV" in value ? "TierV" : value;
 }
-function from_candid_variant_n70(_uploadFile, _downloadFile, value) {
+function from_candid_variant_n72(_uploadFile, _downloadFile, value) {
   return "SubParcelLocked" in value ? "SubParcelLocked" : "PlotNotFound" in value ? "PlotNotFound" : "InvalidTier" in value ? "InvalidTier" : "NotOwner" in value ? "NotOwner" : "AlreadyMaxTier" in value ? "AlreadyMaxTier" : "InsufficientFRNTR" in value ? "InsufficientFRNTR" : value;
 }
 function from_candid_variant_n9(_uploadFile, _downloadFile, value) {
@@ -85904,17 +86342,26 @@ function from_candid_vec_n31(_uploadFile, _downloadFile, value) {
 function from_candid_vec_n34(_uploadFile, _downloadFile, value) {
   return value.map((x3) => from_candid_tuple_n35(_uploadFile, _downloadFile, x3));
 }
-function from_candid_vec_n38(_uploadFile, _downloadFile, value) {
-  return value.map((x3) => from_candid_SubParcel_n39(_uploadFile, _downloadFile, x3));
+function from_candid_vec_n40(_uploadFile, _downloadFile, value) {
+  return value.map((x3) => from_candid_SubParcel_n41(_uploadFile, _downloadFile, x3));
 }
-function from_candid_vec_n58(_uploadFile, _downloadFile, value) {
-  return value.map((x3) => from_candid_StressActionResult_n59(_uploadFile, _downloadFile, x3));
+function from_candid_vec_n60(_uploadFile, _downloadFile, value) {
+  return value.map((x3) => from_candid_StressActionResult_n61(_uploadFile, _downloadFile, x3));
 }
-function to_candid_opt_n49(_uploadFile, _downloadFile, value) {
+function to_candid_opt_n51(_uploadFile, _downloadFile, value) {
   return value === null ? candid_none() : candid_some(value);
 }
-function to_candid_opt_n50(_uploadFile, _downloadFile, value) {
+function to_candid_opt_n52(_uploadFile, _downloadFile, value) {
   return value === null ? candid_none() : candid_some(value);
+}
+function to_candid_variant_n39(_uploadFile, _downloadFile, value) {
+  return value == "day" ? {
+    day: null
+  } : value == "month" ? {
+    month: null
+  } : value == "week" ? {
+    week: null
+  } : value;
 }
 function createActor(canisterId, _uploadFile, _downloadFile, options = {}) {
   const agent = options.agent || HttpAgent.createSync({
@@ -85930,14 +86377,14 @@ function createActor(canisterId, _uploadFile, _downloadFile, options = {}) {
   });
   return new Backend(actor, _uploadFile, _downloadFile, options.processError);
 }
-const CYAN$h = "#00ffcc";
+const CYAN$i = "#00ffcc";
 const GOLD$7 = "#ffd700";
-const BG = "rgba(0,10,20,0.92)";
-const BORDER$f = "rgba(0,255,204,0.28)";
-const TEXT$9 = "#e0f4ff";
-const TEXT_DIM$a = "rgba(224,244,255,0.55)";
+const BG$1 = "rgba(0,10,20,0.92)";
+const BORDER$g = "rgba(0,255,204,0.28)";
+const TEXT$a = "#e0f4ff";
+const TEXT_DIM$b = "rgba(224,244,255,0.55)";
 const ACTION_COLORS = {
-  purchase: CYAN$h,
+  purchase: CYAN$i,
   upgrade: GOLD$7,
   claim: "#22c55e",
   survey: "#a78bfa",
@@ -85982,7 +86429,7 @@ function _ActionConfirmModal({
     return () => document.removeEventListener("keydown", handler);
   }, [isOpen, onCancel]);
   if (!isOpen) return null;
-  const accentColor = ACTION_COLORS[actionType] ?? CYAN$h;
+  const accentColor = ACTION_COLORS[actionType] ?? CYAN$i;
   const headerLabel = ACTION_LABELS[actionType] ?? "CONFIRM ACTION";
   const modal = /* @__PURE__ */ jsxRuntimeExports.jsx(
     "dialog",
@@ -86020,10 +86467,10 @@ function _ActionConfirmModal({
         "div",
         {
           style: {
-            background: BG,
+            background: BG$1,
             backdropFilter: "blur(24px)",
             WebkitBackdropFilter: "blur(24px)",
-            border: `1px solid ${BORDER$f}`,
+            border: `1px solid ${BORDER$g}`,
             boxShadow: `0 0 40px ${accentColor}22, 0 0 80px rgba(0,0,0,0.6), inset 0 0 30px rgba(0,255,204,0.03)`,
             borderRadius: 14,
             width: "100%",
@@ -86081,7 +86528,7 @@ function _ActionConfirmModal({
                     style: {
                       fontSize: 15,
                       fontWeight: 800,
-                      color: TEXT$9,
+                      color: TEXT$a,
                       letterSpacing: 0.5,
                       lineHeight: 1.2
                     },
@@ -86098,7 +86545,7 @@ function _ActionConfirmModal({
                     gap: "6px 12px",
                     padding: "10px 12px",
                     background: "rgba(0,255,204,0.03)",
-                    border: `1px solid ${BORDER$f}`,
+                    border: `1px solid ${BORDER$g}`,
                     borderRadius: 8,
                     marginBottom: 12
                   },
@@ -86108,7 +86555,7 @@ function _ActionConfirmModal({
                       {
                         style: {
                           fontSize: 7,
-                          color: TEXT_DIM$a,
+                          color: TEXT_DIM$b,
                           letterSpacing: 1,
                           textTransform: "uppercase",
                           fontFamily: "monospace",
@@ -86123,7 +86570,7 @@ function _ActionConfirmModal({
                         style: {
                           fontSize: 10,
                           fontWeight: 700,
-                          color: TEXT$9,
+                          color: TEXT$a,
                           fontFamily: "monospace",
                           wordBreak: "break-all"
                         },
@@ -86152,7 +86599,7 @@ function _ActionConfirmModal({
                       {
                         style: {
                           fontSize: 8,
-                          color: TEXT_DIM$a,
+                          color: TEXT_DIM$b,
                           letterSpacing: 1,
                           textTransform: "uppercase",
                           fontFamily: "monospace"
@@ -86224,7 +86671,7 @@ function _ActionConfirmModal({
                       background: "rgba(255,255,255,0.04)",
                       border: "1px solid rgba(255,255,255,0.12)",
                       borderRadius: 8,
-                      color: isLoading ? "rgba(255,255,255,0.3)" : TEXT_DIM$a,
+                      color: isLoading ? "rgba(255,255,255,0.3)" : TEXT_DIM$b,
                       fontSize: 9,
                       fontWeight: 700,
                       letterSpacing: 1.5,
@@ -86612,8 +87059,8 @@ function LiquiditySeedingPanel() {
     )
   ] });
 }
-const CYAN$g = "#00ffcc";
-const TEXT_DIM$9 = "rgba(224,244,255,0.55)";
+const CYAN$h = "#00ffcc";
+const TEXT_DIM$a = "rgba(224,244,255,0.55)";
 const SHOWN_KEY = "shown_toasts";
 const MESSAGES = {
   purchase: "Plot acquired! View your new land.",
@@ -86648,7 +87095,7 @@ function markToastShown(type) {
 }
 function PostActionToast({
   actionType,
-  message: _msg,
+  message,
   onNavigate,
   onClose
 }) {
@@ -86657,6 +87104,7 @@ function PostActionToast({
     _PostActionToast,
     {
       actionType: safeType,
+      customMessage: message,
       onNavigate: (tab) => onNavigate(tab),
       onDismiss: onClose
     }
@@ -86664,6 +87112,7 @@ function PostActionToast({
 }
 function _PostActionToast({
   actionType,
+  customMessage,
   onNavigate,
   onDismiss
 }) {
@@ -86718,7 +87167,7 @@ function _PostActionToast({
     dismiss();
   }
   if (!visible && !sliding) return null;
-  const msg = actionType ? MESSAGES[actionType] : "";
+  const msg = customMessage ?? (actionType ? MESSAGES[actionType] : "");
   const icon = actionType ? ICONS[actionType] : "✓";
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "output",
@@ -86734,10 +87183,10 @@ function _PostActionToast({
         background: "rgba(0,10,22,0.92)",
         backdropFilter: "blur(20px)",
         WebkitBackdropFilter: "blur(20px)",
-        border: `1px solid ${CYAN$g}44`,
-        borderLeft: `3px solid ${CYAN$g}`,
+        border: `1px solid ${CYAN$h}44`,
+        borderLeft: `3px solid ${CYAN$h}`,
         borderRadius: 10,
-        boxShadow: `0 0 24px ${CYAN$g}18, 0 4px 32px rgba(0,0,0,0.55)`,
+        boxShadow: `0 0 24px ${CYAN$h}18, 0 4px 32px rgba(0,0,0,0.55)`,
         animation: sliding ? "slideOutToRight 0.35s cubic-bezier(0.4,0,1,1) forwards" : "slideInFromRight 0.38s cubic-bezier(0.22,1,0.36,1) forwards",
         overflow: "hidden"
       },
@@ -86747,7 +87196,7 @@ function _PostActionToast({
           {
             style: {
               height: 1,
-              background: `linear-gradient(90deg, ${CYAN$g}, transparent)`
+              background: `linear-gradient(90deg, ${CYAN$h}, transparent)`
             }
           }
         ),
@@ -86778,7 +87227,7 @@ function _PostActionToast({
                           style: {
                             fontSize: 10,
                             fontWeight: 700,
-                            color: CYAN$g,
+                            color: CYAN$h,
                             letterSpacing: 0.5
                           },
                           children: msg
@@ -86797,7 +87246,7 @@ function _PostActionToast({
                     style: {
                       background: "transparent",
                       border: "none",
-                      color: TEXT_DIM$9,
+                      color: TEXT_DIM$a,
                       fontSize: 14,
                       cursor: "pointer",
                       lineHeight: 1,
@@ -86829,9 +87278,9 @@ function _PostActionToast({
                       flex: 1,
                       padding: "5px 4px",
                       background: "rgba(0,255,204,0.07)",
-                      border: `1px solid ${CYAN$g}33`,
+                      border: `1px solid ${CYAN$h}33`,
                       borderRadius: 6,
-                      color: CYAN$g,
+                      color: CYAN$h,
                       fontSize: 7.5,
                       fontWeight: 700,
                       letterSpacing: 0.8,
@@ -86852,9 +87301,9 @@ function _PostActionToast({
                       flex: 1,
                       padding: "5px 4px",
                       background: "rgba(0,255,204,0.07)",
-                      border: `1px solid ${CYAN$g}33`,
+                      border: `1px solid ${CYAN$h}33`,
                       borderRadius: 6,
-                      color: CYAN$g,
+                      color: CYAN$h,
                       fontSize: 7.5,
                       fontWeight: 700,
                       letterSpacing: 0.8,
@@ -86875,9 +87324,9 @@ function _PostActionToast({
                       flex: 1,
                       padding: "5px 4px",
                       background: "rgba(0,255,204,0.07)",
-                      border: `1px solid ${CYAN$g}33`,
+                      border: `1px solid ${CYAN$h}33`,
                       borderRadius: 6,
-                      color: CYAN$g,
+                      color: CYAN$h,
                       fontSize: 7.5,
                       fontWeight: 700,
                       letterSpacing: 0.8,
@@ -86906,7 +87355,7 @@ function _PostActionToast({
                 {
                   style: {
                     height: "100%",
-                    background: CYAN$g,
+                    background: CYAN$h,
                     borderRadius: 1,
                     animation: "toastProgress 8s linear forwards"
                   }
@@ -86919,6 +87368,1964 @@ function _PostActionToast({
       ]
     }
   );
+}
+const CYAN$g = "#00ffcc";
+const CYAN_DIM$9 = "rgba(0,255,204,0.35)";
+const TEAL = "#00bcd4";
+const BG = "rgba(0,10,20,0.85)";
+const BORDER$f = "rgba(0,255,204,0.22)";
+const TEXT$9 = "#e0f4ff";
+const TEXT_DIM$9 = "rgba(224,244,255,0.55)";
+const BIOME_COLORS$1 = {
+  Temperate: "#4a7c59",
+  Desert: "#c8a96e",
+  Arctic: "#a8d8ea",
+  Tropical: "#2d6a4f",
+  Ocean: "#1a4a6e",
+  DeepOcean: "#0d2d45",
+  Volcanic: "#c0392b",
+  AsteroidImpact: "#7b5ea7",
+  Forest: "#4a7c59",
+  Grassland: "#4a7c59",
+  Mountain: "#a8d8ea"
+};
+const BIOME_ICONS = {
+  Temperate: "🌿",
+  Desert: "🏜️",
+  Arctic: "❄️",
+  Tropical: "🌴",
+  Ocean: "🌊",
+  DeepOcean: "🌑",
+  Volcanic: "🌋",
+  AsteroidImpact: "☄️",
+  Forest: "🌳",
+  Grassland: "🌾",
+  Mountain: "⛰️"
+};
+function formatIcpPrice(priceE8s, icpUsdPrice) {
+  const icp = Number(priceE8s) / 1e8;
+  const icpStr = icp.toFixed(4);
+  if (icpUsdPrice === null) return `${icpStr} ICP`;
+  const usd = (icp * icpUsdPrice).toFixed(2);
+  return `${icpStr} ICP (~${usd})`;
+}
+function getPlotPriceE8s(efficiency) {
+  if (efficiency >= 90) return 3e9;
+  if (efficiency >= 80) return 9e8;
+  return 25e7;
+}
+function getRarity$1(efficiency) {
+  if (efficiency >= 90) return { label: "EPIC", color: "#fbbf24" };
+  if (efficiency >= 80) return { label: "RARE", color: "#a855f7" };
+  return { label: "COMMON", color: "#22c55e" };
+}
+function formatFrntr(n) {
+  if (n >= 1e6) return `${(n / 1e6).toFixed(2)}M`;
+  if (n >= 1e3) return `${(n / 1e3).toFixed(2)}K`;
+  return n.toFixed(n < 10 ? 6 : 4);
+}
+const STYLE_ID = "plot-panel-keyframes";
+function ensureKeyframes() {
+  if (document.getElementById(STYLE_ID)) return;
+  const el = document.createElement("style");
+  el.id = STYLE_ID;
+  el.textContent = [
+    "@keyframes particleFloat {",
+    "  0%   { transform:translateY(0px);  opacity:0.7; }",
+    "  50%  { opacity:1; }",
+    "  100% { transform:translateY(-35px); opacity:0; }",
+    "}",
+    "@keyframes upgradeFlash {",
+    "  0%,100% { box-shadow:0 0 8px #22c55e; border-color:#22c55e; }",
+    "  50%     { box-shadow:0 0 24px #22c55e,0 0 48px #22c55e66; }",
+    "}",
+    ".plot-info-panel-backdrop {",
+    "  position:fixed; inset:0; background:rgba(0,0,0,0.45); backdrop-filter:blur(2px); -webkit-backdrop-filter:blur(2px); z-index:49; pointer-events:auto;",
+    "}",
+    ".plot-info-panel {",
+    "  width:380px !important;",
+    "}",
+    "@media (max-width:639px) {",
+    "  .plot-info-panel { width:100vw !important; border-radius:16px 0 0 16px !important; }",
+    "}"
+  ].join("\n");
+  document.head.appendChild(el);
+}
+const PARTICLES = [
+  { top: "15%", left: "8%", delay: "0s", dur: "3.2s", size: 2 },
+  { top: "35%", left: "92%", delay: "0.7s", dur: "4.1s", size: 3 },
+  { top: "55%", left: "15%", delay: "1.3s", dur: "3.7s", size: 2 },
+  { top: "70%", left: "80%", delay: "0.4s", dur: "4.5s", size: 2 },
+  { top: "25%", left: "50%", delay: "2.1s", dur: "3.4s", size: 3 },
+  { top: "80%", left: "40%", delay: "1.8s", dur: "4.0s", size: 2 },
+  { top: "10%", left: "72%", delay: "0.9s", dur: "3.9s", size: 2 },
+  { top: "60%", left: "60%", delay: "2.5s", dur: "3.6s", size: 3 }
+];
+function PlotInfoPanel({ onClose } = {}) {
+  reactExports.useEffect(() => {
+    ensureKeyframes();
+  }, []);
+  const selectedPlotId = useGameStore((s2) => s2.selectedPlotId);
+  const plots = useGameStore((s2) => s2.plots);
+  const selectPlot = useGameStore((s2) => s2.selectPlot);
+  const icpUsdPrice = useGameStore((s2) => s2.icpUsdPrice);
+  const confirmedFrntBal = useGameStore((s2) => s2.confirmedFrntBalance);
+  const accruedFrntr = useGameStore((s2) => s2.accruedFrntSinceSync);
+  const setFrntrBalance = useGameStore((s2) => s2.setFrntrBalance);
+  const spendFrntr = useGameStore((s2) => s2.spendFrntr);
+  const generatorTiers = useGameStore((s2) => s2.generatorTiers);
+  const plotsOwned = useGameStore((s2) => s2.player.plotsOwned);
+  const { actor } = useActor(createActor);
+  const [activeTab, setActiveTab] = reactExports.useState("stats");
+  const [fetchedPriceE8s, setFetchedPriceE8s] = reactExports.useState(null);
+  const [surveyCost, setSurveyCost] = reactExports.useState(0);
+  const [surveyView, setSurveyView] = reactExports.useState(null);
+  const [surveyLoading, setSurveyLoading] = reactExports.useState(false);
+  const [surveyError, setSurveyError] = reactExports.useState("");
+  const [surveyTimer, setSurveyTimer] = reactExports.useState(0);
+  const [surveyCollectConfirmOpen, setSurveyCollectConfirmOpen] = reactExports.useState(false);
+  const [surveyReportData, setSurveyReportData] = reactExports.useState(null);
+  const [upgradeLoading, setUpgradeLoading] = reactExports.useState(false);
+  const [upgradeStatus, setUpgradeStatus] = reactExports.useState("idle");
+  const [upgradeError, setUpgradeError] = reactExports.useState("");
+  const [claimLoading, setClaimLoading] = reactExports.useState(false);
+  const [claimError, setClaimError] = reactExports.useState("");
+  const [claimSuccess, setClaimSuccess] = reactExports.useState(false);
+  const [claimConfirmOpen, setClaimConfirmOpen] = reactExports.useState(false);
+  const [surveyConfirmOpen, setSurveyConfirmOpen] = reactExports.useState(false);
+  const [upgradeConfirmOpen, setUpgradeConfirmOpen] = reactExports.useState(false);
+  const [postActionType, setPostActionType] = reactExports.useState(null);
+  const [unclaimedSecs, setUnclaimedSecs] = reactExports.useState(0);
+  const intervalRef = reactExports.useRef(null);
+  const plot = selectedPlotId !== null ? plots.find((p2) => p2.id === selectedPlotId) ?? null : null;
+  const plotIdStr = plot ? String(plot.id) : "";
+  const isOwnedByMe = plot ? plotsOwned.includes(plotIdStr) : false;
+  const currentTier = plot ? generatorTiers[plotIdStr] ?? plot.generatorTier ?? 0 : 0;
+  const dailyRate = TIER_DAILY_RATES[currentTier] ?? 7;
+  const displayBal = confirmedFrntBal + accruedFrntr;
+  reactExports.useEffect(() => {
+    setActiveTab("stats");
+    setFetchedPriceE8s(null);
+    setSurveyView(null);
+    setSurveyError("");
+    setSurveyCost(0);
+    setUpgradeStatus("idle");
+    setUpgradeError("");
+    setClaimError("");
+    setClaimSuccess(false);
+    setUnclaimedSecs(0);
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    if (!actor || selectedPlotId === null) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const price = await actor.getPlotPriceById(String(selectedPlotId));
+        if (!cancelled) setFetchedPriceE8s(price);
+      } catch (_e2) {
+        if (!cancelled && plot)
+          setFetchedPriceE8s(BigInt(getPlotPriceE8s(plot.efficiency)));
+      }
+    })();
+    (async () => {
+      try {
+        const cost = await actor.getSurveyCost(String(selectedPlotId));
+        if (!cancelled) setSurveyCost(Number(cost) / 1e8);
+      } catch (_e2) {
+        if (!cancelled) setSurveyCost(100);
+      }
+    })();
+    (async () => {
+      var _a3;
+      try {
+        const res = await actor.getSurveyStatus(String(selectedPlotId));
+        if (!cancelled && "ok" in res) {
+          const remaining = Number(
+            res.ok.remainingSeconds ?? res.ok.secondsRemaining ?? 0
+          );
+          setSurveyView({
+            status: res.ok.status,
+            secondsRemaining: remaining,
+            resourcePercentage: res.ok.result ? Number(res.ok.result.resourcePercentage) : void 0,
+            bonusInfo: (_a3 = res.ok.result) == null ? void 0 : _a3.bonusInfo,
+            remainingSeconds: remaining,
+            estimatedReward: res.ok.estimatedReward ? Number(res.ok.estimatedReward) : void 0,
+            isCollectable: res.ok.isCollectable ?? false,
+            biome: res.ok.biome ?? "",
+            resourcePct: res.ok.resourcePct ? Number(res.ok.resourcePct) : void 0
+          });
+          if (res.ok.status === SurveyStatus.InProgress) {
+            setSurveyTimer(remaining);
+          }
+        }
+      } catch (_e2) {
+      }
+    })();
+    intervalRef.current = setInterval(() => {
+      if (!cancelled) setUnclaimedSecs((s2) => s2 + 1);
+    }, 1e3);
+    return () => {
+      cancelled = true;
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [actor, selectedPlotId]);
+  const isVisible = selectedPlotId !== null && plot !== null;
+  const biomeColor = plot ? BIOME_COLORS$1[plot.biome] ?? "#4a7c59" : "#4a7c59";
+  const biomeIcon = plot ? BIOME_ICONS[plot.biome] ?? "🌍" : "🌍";
+  const rarity = plot ? getRarity$1(plot.efficiency) : { label: "COMMON", color: "#22c55e" };
+  const efficiency = plot ? Math.max(0, Math.min(100, plot.efficiency)) : 0;
+  const effColor2 = efficiency >= 85 ? "#22c55e" : efficiency >= 70 ? "#f59e0b" : "#ef4444";
+  const priceE8s = fetchedPriceE8s ?? (plot ? BigInt(getPlotPriceE8s(plot.efficiency)) : null);
+  const perSecond = dailyRate / 86400;
+  const unclaimedEst = isOwnedByMe ? unclaimedSecs * perSecond : 0;
+  const nextTier = Math.min(6, currentTier + 1);
+  const upgradeCost = UPGRADE_COSTS[nextTier] ?? 0;
+  const canAfford = displayBal >= upgradeCost;
+  const isMaxTier = currentTier >= 6;
+  const openSurveyConfirm = () => setSurveyConfirmOpen(true);
+  const handleCancelSurvey = () => {
+    (async () => {
+      try {
+        await (actor == null ? void 0 : actor.logCancelledAction(
+          "purchaseSurveyReport",
+          (plot == null ? void 0 : plot.id) ? String(plot.id) : null,
+          null,
+          "User cancelled survey purchase"
+        ));
+      } catch {
+      }
+    })();
+    setSurveyConfirmOpen(false);
+  };
+  async function executeSurvey() {
+    var _a3;
+    if (!actor || !plot) return;
+    setSurveyLoading(true);
+    setSurveyError("");
+    try {
+      spendFrntr(surveyCost);
+      const res = await actor.startSurvey(plotIdStr);
+      if ("ok" in res) {
+        const statusRes = await actor.getSurveyStatus(plotIdStr);
+        if ("ok" in statusRes) {
+          setPostActionType("survey");
+          setSurveyView({
+            status: statusRes.ok.status,
+            secondsRemaining: Number(statusRes.ok.secondsRemaining),
+            resourcePercentage: statusRes.ok.result ? Number(statusRes.ok.result.resourcePercentage) : void 0,
+            bonusInfo: (_a3 = statusRes.ok.result) == null ? void 0 : _a3.bonusInfo
+          });
+        }
+      } else {
+        setSurveyError(res.err ?? "Survey failed");
+      }
+    } catch (_e2) {
+      setSurveyError("Survey failed — please retry");
+    } finally {
+      setSurveyLoading(false);
+    }
+  }
+  const openUpgradeConfirm = () => setUpgradeConfirmOpen(true);
+  const handleCancelUpgrade = () => {
+    (async () => {
+      try {
+        await (actor == null ? void 0 : actor.logCancelledAction(
+          "upgradeGenerator",
+          (plot == null ? void 0 : plot.id) ? String(plot.id) : null,
+          null,
+          "User cancelled upgrade"
+        ));
+      } catch {
+      }
+    })();
+    setUpgradeConfirmOpen(false);
+  };
+  async function executeUpgrade() {
+    if (!actor || !plot || !canAfford || isMaxTier) return;
+    setUpgradeLoading(true);
+    setUpgradeStatus("idle");
+    setUpgradeError("");
+    try {
+      const res = await actor.upgradeGenerator(plotIdStr);
+      if ("ok" in res) {
+        spendFrntr(upgradeCost);
+        setUpgradeStatus("success");
+        setPostActionType("upgrade");
+        setTimeout(() => setUpgradeStatus("idle"), 3e3);
+        try {
+          const state2 = await actor.getPlayerState();
+          setFrntrBalance(state2.frntBalance);
+        } catch (_e2) {
+        }
+      } else {
+        const errStr = typeof res.err === "string" ? res.err : JSON.stringify(res.err);
+        setUpgradeError(errStr);
+        setUpgradeStatus("error");
+      }
+    } catch (_e2) {
+      setUpgradeError("Upgrade failed — please retry");
+      setUpgradeStatus("error");
+    } finally {
+      setUpgradeLoading(false);
+    }
+  }
+  const openClaimConfirm = () => setClaimConfirmOpen(true);
+  const handleCancelClaim = () => {
+    (async () => {
+      try {
+        await (actor == null ? void 0 : actor.logCancelledAction(
+          "claimAccumulatedTokens",
+          (plot == null ? void 0 : plot.id) ? String(plot.id) : null,
+          null,
+          "User cancelled token claim"
+        ));
+      } catch {
+      }
+    })();
+    setClaimConfirmOpen(false);
+  };
+  async function executeClaim() {
+    if (!actor || !plot || !isOwnedByMe) return;
+    setClaimLoading(true);
+    setClaimError("");
+    setClaimSuccess(false);
+    try {
+      const res = await actor.claimAccumulatedTokens(plotIdStr);
+      if ("ok" in res) {
+        setClaimSuccess(true);
+        setPostActionType("claim");
+        setUnclaimedSecs(0);
+        setTimeout(() => setClaimSuccess(false), 3e3);
+        try {
+          const state2 = await actor.getPlayerState();
+          setFrntrBalance(state2.frntBalance);
+        } catch (_e2) {
+        }
+      } else {
+        setClaimError(res.err ?? "Claim failed");
+      }
+    } catch (_e2) {
+      setClaimError("Claim failed — please retry");
+    } finally {
+      setClaimLoading(false);
+    }
+  }
+  const labelStyle = {
+    fontSize: 8,
+    letterSpacing: 1.5,
+    color: CYAN_DIM$9,
+    fontFamily: "monospace",
+    textTransform: "uppercase"
+  };
+  const BOTTOM_NAV_H = 64;
+  const panelStyle = {
+    background: BG,
+    backdropFilter: "blur(22px)",
+    WebkitBackdropFilter: "blur(22px)",
+    border: `1px solid ${BORDER$f}`,
+    borderRight: "none",
+    borderTopRightRadius: 0,
+    borderBottomRightRadius: 0,
+    borderRadius: 14,
+    position: "fixed",
+    top: 56,
+    right: 0,
+    bottom: `calc(${BOTTOM_NAV_H}px + env(safe-area-inset-bottom, 0px))`,
+    width: 380,
+    maxHeight: `calc(100vh - 56px - ${BOTTOM_NAV_H}px - env(safe-area-inset-bottom, 0px))`,
+    overflowY: "auto",
+    overflowX: "hidden",
+    zIndex: 50,
+    padding: 0,
+    boxSizing: "border-box",
+    // Static glow border — no animation pulse per design spec
+    boxShadow: "0 0 0 1px rgba(0,255,204,0.35), 0 0 28px rgba(0,255,204,0.22), 0 0 64px rgba(0,188,212,0.10), inset 0 0 18px rgba(0,255,204,0.04)"
+  };
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(AnimatePresence, { children: isVisible && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      motion.div,
+      {
+        className: "plot-info-panel-backdrop",
+        initial: { opacity: 0 },
+        animate: { opacity: 1 },
+        exit: { opacity: 0 },
+        transition: { type: "tween", duration: 0.2, ease: "easeOut" },
+        onClick: () => {
+          selectPlot(null);
+          onClose == null ? void 0 : onClose();
+        },
+        "aria-hidden": "true"
+      },
+      "plot-info-backdrop"
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      motion.div,
+      {
+        "data-ocid": "plot_info.panel",
+        className: "plot-info-panel",
+        style: panelStyle,
+        initial: { x: "100%" },
+        animate: { x: 0 },
+        exit: { x: "100%" },
+        transition: {
+          type: "tween",
+          duration: 0.42,
+          ease: [0.16, 1, 0.3, 1]
+        },
+        children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
+            {
+              "aria-hidden": "true",
+              style: {
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundImage: "repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,255,255,0.025) 3px,rgba(0,255,255,0.025) 4px)",
+                pointerEvents: "none",
+                borderRadius: 14,
+                zIndex: 0
+              }
+            }
+          ),
+          isVisible && PARTICLES.map((p2) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
+            {
+              "aria-hidden": "true",
+              style: {
+                position: "absolute",
+                top: p2.top,
+                left: p2.left,
+                width: p2.size,
+                height: p2.size,
+                borderRadius: "50%",
+                background: CYAN$g,
+                boxShadow: `0 0 ${p2.size * 3}px ${CYAN$g}`,
+                animation: `particleFloat ${p2.dur} ${p2.delay} ease-in-out infinite`,
+                pointerEvents: "none",
+                zIndex: 1
+              }
+            },
+            `${p2.top}-${p2.left}`
+          )),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              style: {
+                position: "relative",
+                zIndex: 2,
+                padding: "14px 14px 18px",
+                scrollSnapAlign: "start",
+                minHeight: "calc(100vh - 90px)"
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "button",
+                  {
+                    type: "button",
+                    "data-ocid": "plot_info.close_button",
+                    onClick: () => {
+                      selectPlot(null);
+                      onClose == null ? void 0 : onClose();
+                    },
+                    "aria-label": "Close panel",
+                    style: {
+                      position: "absolute",
+                      top: 10,
+                      right: 10,
+                      background: "rgba(0,255,204,0.08)",
+                      border: `1px solid ${BORDER$f}`,
+                      borderRadius: 6,
+                      color: CYAN$g,
+                      fontSize: 14,
+                      cursor: "pointer",
+                      lineHeight: 1,
+                      padding: "3px 7px",
+                      transition: "all 0.15s"
+                    },
+                    children: "×"
+                  }
+                ),
+                plot && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { marginBottom: 10, paddingRight: 28 }, children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "div",
+                      {
+                        style: {
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                          marginBottom: 4
+                        },
+                        children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                            "span",
+                            {
+                              style: {
+                                fontSize: 13,
+                                fontWeight: 700,
+                                color: CYAN$g,
+                                fontFamily: "monospace",
+                                letterSpacing: 1
+                              },
+                              children: [
+                                "PLOT #",
+                                plot.id
+                              ]
+                            }
+                          ),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "span",
+                            {
+                              style: {
+                                fontSize: 9,
+                                fontWeight: 700,
+                                color: rarity.color,
+                                background: `${rarity.color}18`,
+                                border: `1px solid ${rarity.color}55`,
+                                borderRadius: 4,
+                                padding: "2px 6px",
+                                letterSpacing: 1,
+                                fontFamily: "monospace"
+                              },
+                              children: rarity.label
+                            }
+                          )
+                        ]
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "div",
+                      {
+                        style: {
+                          fontSize: 9,
+                          color: "rgba(0,255,204,0.4)",
+                          fontFamily: "monospace"
+                        },
+                        children: [
+                          plot.lat.toFixed(2),
+                          "°N · ",
+                          plot.lng.toFixed(2),
+                          "°E"
+                        ]
+                      }
+                    )
+                  ] }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "div",
+                    {
+                      style: {
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        padding: "4px 10px",
+                        borderRadius: 6,
+                        background: `${biomeColor}18`,
+                        border: `1px solid ${biomeColor}66`,
+                        marginBottom: 12
+                      },
+                      children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 10 }, children: biomeIcon }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "span",
+                          {
+                            style: {
+                              fontSize: 9,
+                              fontWeight: 700,
+                              color: biomeColor,
+                              letterSpacing: 1.5,
+                              fontFamily: "monospace",
+                              textTransform: "uppercase"
+                            },
+                            children: plot.biome
+                          }
+                        )
+                      ]
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        display: "flex",
+                        gap: 2,
+                        marginBottom: 14,
+                        borderBottom: `1px solid ${BORDER$f}`
+                      },
+                      children: ["stats", "economy", "survey", "upgrade"].map(
+                        (tab) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "button",
+                          {
+                            type: "button",
+                            "data-ocid": `plot_info.${tab}.tab`,
+                            onClick: () => setActiveTab(tab),
+                            style: {
+                              flex: 1,
+                              background: activeTab === tab ? `${CYAN$g}14` : "transparent",
+                              border: "none",
+                              borderBottom: activeTab === tab ? `2px solid ${CYAN$g}` : "2px solid transparent",
+                              color: activeTab === tab ? CYAN$g : TEXT_DIM$9,
+                              fontSize: 8,
+                              fontWeight: 700,
+                              letterSpacing: 1,
+                              fontFamily: "monospace",
+                              textTransform: "uppercase",
+                              cursor: "pointer",
+                              padding: "6px 2px",
+                              transition: "all 0.15s"
+                            },
+                            children: tab
+                          },
+                          tab
+                        )
+                      )
+                    }
+                  ),
+                  activeTab === "stats" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { "data-ocid": "plot_info.stats.panel", children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { marginBottom: 14 }, children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                        "div",
+                        {
+                          style: {
+                            display: "flex",
+                            justifyContent: "space-between",
+                            marginBottom: 4
+                          },
+                          children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: labelStyle, children: "RESOURCE YIELD" }),
+                            /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                              "span",
+                              {
+                                style: {
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                  color: effColor2,
+                                  fontFamily: "monospace"
+                                },
+                                children: [
+                                  efficiency >= 80 ? "High Yield" : efficiency >= 65 ? "Med Yield" : "Low Yield",
+                                  " ",
+                                  "· ",
+                                  efficiency,
+                                  "%"
+                                ]
+                              }
+                            )
+                          ]
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "div",
+                        {
+                          style: {
+                            height: 5,
+                            background: "rgba(255,255,255,0.07)",
+                            borderRadius: 3,
+                            overflow: "hidden"
+                          },
+                          children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "div",
+                            {
+                              style: {
+                                height: "100%",
+                                width: `${efficiency}%`,
+                                background: `linear-gradient(90deg,${effColor2},${effColor2}88)`,
+                                borderRadius: 3,
+                                transition: "width 0.5s ease",
+                                boxShadow: `0 0 6px ${effColor2}66`
+                              }
+                            }
+                          )
+                        }
+                      )
+                    ] }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "div",
+                      {
+                        style: {
+                          display: "flex",
+                          justifyContent: "space-between",
+                          marginBottom: 10
+                        },
+                        children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: labelStyle, children: "EFFICIENCY" }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                            "span",
+                            {
+                              style: {
+                                fontSize: 9,
+                                color: effColor2,
+                                fontFamily: "monospace",
+                                fontWeight: 700
+                              },
+                              children: [
+                                efficiency,
+                                "%"
+                              ]
+                            }
+                          )
+                        ]
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "div",
+                      {
+                        style: {
+                          display: "flex",
+                          justifyContent: "space-between",
+                          marginBottom: 10
+                        },
+                        children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: labelStyle, children: "OWNER" }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "span",
+                            {
+                              style: {
+                                fontSize: 9,
+                                color: TEXT$9,
+                                fontFamily: "monospace"
+                              },
+                              children: !plot.owner ? "UNOWNED" : plot.isOwnedByMe ? "YOU" : `${plot.owner.slice(0, 8)}…${plot.owner.slice(-4)}`
+                            }
+                          )
+                        ]
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "div",
+                      {
+                        style: {
+                          display: "flex",
+                          justifyContent: "space-between",
+                          marginBottom: 14
+                        },
+                        children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: labelStyle, children: "REGION" }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                            "span",
+                            {
+                              style: {
+                                fontSize: 9,
+                                color: TEXT_DIM$9,
+                                fontFamily: "monospace"
+                              },
+                              children: [
+                                plot.lat >= 0 ? "N" : "S",
+                                Math.abs(plot.lat).toFixed(1),
+                                "° ·",
+                                " ",
+                                plot.lng >= 0 ? "E" : "W",
+                                Math.abs(plot.lng).toFixed(1),
+                                "°"
+                              ]
+                            }
+                          )
+                        ]
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { marginBottom: 14 }, children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { ...labelStyle, marginBottom: 6 }, children: "SUB-PARCELS" }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "flex", gap: 4 }, children: ["n", "ne", "se", "s", "sw", "nw", "c"].map(
+                        (slot) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                          "div",
+                          {
+                            title: "Coming Soon",
+                            style: {
+                              flex: 1,
+                              aspectRatio: "1",
+                              background: "rgba(100,100,120,0.12)",
+                              border: "1px solid rgba(100,100,140,0.3)",
+                              borderRadius: 4,
+                              display: "flex",
+                              flexDirection: "column",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              gap: 1
+                            },
+                            children: [
+                              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 8 }, children: "🔒" }),
+                              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                "span",
+                                {
+                                  style: {
+                                    fontSize: 5,
+                                    color: "rgba(160,160,180,0.5)",
+                                    fontFamily: "monospace"
+                                  },
+                                  children: "SOON"
+                                }
+                              )
+                            ]
+                          },
+                          `subparcel-${slot}`
+                        )
+                      ) })
+                    ] }),
+                    !plot.owner && priceE8s !== null && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "div",
+                      {
+                        "data-ocid": "plot_info.price_display",
+                        style: {
+                          padding: "8px 10px",
+                          background: "rgba(0,255,204,0.06)",
+                          border: `1px solid ${BORDER$f}`,
+                          borderRadius: 8,
+                          fontSize: 10,
+                          color: CYAN$g,
+                          fontFamily: "monospace",
+                          textAlign: "center",
+                          letterSpacing: 0.5
+                        },
+                        children: formatIcpPrice(priceE8s, icpUsdPrice)
+                      }
+                    )
+                  ] }),
+                  activeTab === "economy" && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { "data-ocid": "plot_info.economy.panel", children: !isOwnedByMe ? /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "div",
+                    {
+                      style: {
+                        textAlign: "center",
+                        padding: "24px 0",
+                        color: TEXT_DIM$9,
+                        fontSize: 10,
+                        fontFamily: "monospace",
+                        letterSpacing: 1
+                      },
+                      children: [
+                        "Purchase this plot to",
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("br", {}),
+                        "activate token generation"
+                      ]
+                    }
+                  ) : /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "div",
+                      {
+                        style: {
+                          padding: "10px 12px",
+                          background: `${CYAN$g}0a`,
+                          border: `1px solid ${CYAN$g}22`,
+                          borderRadius: 8,
+                          marginBottom: 12
+                        },
+                        children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { ...labelStyle, marginBottom: 4 }, children: "GENERATOR TIER" }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                            "div",
+                            {
+                              style: {
+                                fontSize: 12,
+                                fontWeight: 700,
+                                color: CYAN$g,
+                                fontFamily: "monospace"
+                              },
+                              children: [
+                                "Tier ",
+                                currentTier,
+                                " — ",
+                                TIER_NAMES[currentTier]
+                              ]
+                            }
+                          )
+                        ]
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { marginBottom: 14 }, children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { ...labelStyle, marginBottom: 6 }, children: "TOKEN GENERATION" }),
+                      [
+                        {
+                          label: "/SECOND",
+                          val: (dailyRate / 86400).toFixed(8)
+                        },
+                        {
+                          label: "/MINUTE",
+                          val: (dailyRate / 1440).toFixed(6)
+                        },
+                        {
+                          label: "/HOUR",
+                          val: (dailyRate / 24).toFixed(4)
+                        },
+                        { label: "/DAY", val: dailyRate.toFixed(2) }
+                      ].map(({ label, val }) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                        "div",
+                        {
+                          style: {
+                            display: "flex",
+                            justifyContent: "space-between",
+                            padding: "4px 0",
+                            borderBottom: "1px solid rgba(0,255,204,0.07)"
+                          },
+                          children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: labelStyle, children: label }),
+                            /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                              "span",
+                              {
+                                style: {
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                  color: TEAL,
+                                  fontFamily: "monospace"
+                                },
+                                children: [
+                                  val,
+                                  " FRNTR"
+                                ]
+                              }
+                            )
+                          ]
+                        },
+                        label
+                      ))
+                    ] }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "div",
+                      {
+                        style: {
+                          padding: "10px 12px",
+                          background: "rgba(0,188,212,0.08)",
+                          border: "1px solid rgba(0,188,212,0.25)",
+                          borderRadius: 8,
+                          marginBottom: 12
+                        },
+                        children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                            "div",
+                            {
+                              style: {
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                marginBottom: 4
+                              },
+                              children: [
+                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: labelStyle, children: "UNCLAIMED (EST.)" }),
+                                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                                  "span",
+                                  {
+                                    style: {
+                                      fontSize: 11,
+                                      fontWeight: 700,
+                                      color: TEAL,
+                                      fontFamily: "monospace"
+                                    },
+                                    children: [
+                                      formatFrntr(unclaimedEst),
+                                      " FRNTR"
+                                    ]
+                                  }
+                                )
+                              ]
+                            }
+                          ),
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                            "div",
+                            {
+                              style: {
+                                fontSize: 8,
+                                color: CYAN_DIM$9,
+                                fontFamily: "monospace"
+                              },
+                              children: [
+                                (dailyRate / 86400).toFixed(8),
+                                "/sec"
+                              ]
+                            }
+                          )
+                        ]
+                      }
+                    ),
+                    claimSuccess ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "div",
+                      {
+                        "data-ocid": "plot_info.claim.success_state",
+                        style: {
+                          padding: "10px",
+                          background: "rgba(34,197,94,0.1)",
+                          border: "1px solid rgba(34,197,94,0.4)",
+                          borderRadius: 8,
+                          textAlign: "center",
+                          fontSize: 10,
+                          color: "#22c55e",
+                          fontFamily: "monospace",
+                          fontWeight: 700,
+                          letterSpacing: 1
+                        },
+                        children: "✓ TOKENS CLAIMED"
+                      }
+                    ) : /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "button",
+                      {
+                        type: "button",
+                        "data-ocid": "plot_info.claim.button",
+                        onClick: openClaimConfirm,
+                        disabled: claimLoading,
+                        style: {
+                          width: "100%",
+                          padding: "10px",
+                          background: claimLoading ? "rgba(0,255,204,0.06)" : `linear-gradient(135deg,${CYAN$g}22,${TEAL}18)`,
+                          border: `1px solid ${CYAN$g}55`,
+                          borderRadius: 8,
+                          color: claimLoading ? CYAN_DIM$9 : CYAN$g,
+                          fontSize: 10,
+                          fontWeight: 700,
+                          letterSpacing: 2,
+                          cursor: claimLoading ? "wait" : "pointer",
+                          fontFamily: "monospace",
+                          transition: "all 0.15s",
+                          boxShadow: claimLoading ? "none" : `0 0 12px ${CYAN$g}22`
+                        },
+                        children: claimLoading ? "CLAIMING..." : "CLAIM TOKENS"
+                      }
+                    ),
+                    claimError && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "div",
+                      {
+                        "data-ocid": "plot_info.claim.error_state",
+                        style: {
+                          fontSize: 9,
+                          color: "#ef4444",
+                          marginTop: 6,
+                          fontFamily: "monospace",
+                          textAlign: "center"
+                        },
+                        children: claimError
+                      }
+                    )
+                  ] }) }),
+                  activeTab === "survey" && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { "data-ocid": "plot_info.survey.panel", children: !isOwnedByMe ? /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "div",
+                    {
+                      style: {
+                        textAlign: "center",
+                        padding: "24px 0",
+                        color: TEXT_DIM$9,
+                        fontSize: 10,
+                        fontFamily: "monospace",
+                        letterSpacing: 1
+                      },
+                      children: [
+                        "Purchase this plot to",
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("br", {}),
+                        "unlock survey features"
+                      ]
+                    }
+                  ) : surveyView === null ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "div",
+                      {
+                        style: {
+                          padding: "12px",
+                          background: "rgba(0,188,212,0.06)",
+                          border: "1px solid rgba(0,188,212,0.2)",
+                          borderRadius: 8,
+                          marginBottom: 14
+                        },
+                        children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "div",
+                            {
+                              style: {
+                                fontSize: 10,
+                                fontWeight: 700,
+                                color: TEXT$9,
+                                fontFamily: "monospace",
+                                marginBottom: 4
+                              },
+                              children: "SURVEY REPORT"
+                            }
+                          ),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "div",
+                            {
+                              style: {
+                                fontSize: 9,
+                                color: TEXT_DIM$9,
+                                fontFamily: "monospace",
+                                lineHeight: 1.5
+                              },
+                              children: "Unlock detailed resource data and yield predictions for this plot."
+                            }
+                          )
+                        ]
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "div",
+                      {
+                        style: {
+                          display: "flex",
+                          justifyContent: "space-between",
+                          marginBottom: 14
+                        },
+                        children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: labelStyle, children: "SURVEY COST" }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                            "span",
+                            {
+                              style: {
+                                fontSize: 10,
+                                color: CYAN$g,
+                                fontFamily: "monospace",
+                                fontWeight: 700
+                              },
+                              children: [
+                                surveyCost.toFixed(2),
+                                " FRNTR"
+                              ]
+                            }
+                          )
+                        ]
+                      }
+                    ),
+                    surveyError && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "div",
+                      {
+                        "data-ocid": "plot_info.survey.error_state",
+                        style: {
+                          fontSize: 9,
+                          color: "#ef4444",
+                          marginBottom: 8,
+                          fontFamily: "monospace"
+                        },
+                        children: surveyError
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "button",
+                      {
+                        type: "button",
+                        "data-ocid": "plot_info.survey.button",
+                        onClick: openSurveyConfirm,
+                        disabled: surveyLoading || displayBal < surveyCost,
+                        style: {
+                          width: "100%",
+                          padding: "10px",
+                          background: displayBal >= surveyCost ? `linear-gradient(135deg,${TEAL}22,${CYAN$g}18)` : "rgba(100,100,120,0.1)",
+                          border: `1px solid ${displayBal >= surveyCost ? TEAL : "rgba(100,100,140,0.3)"}`,
+                          borderRadius: 8,
+                          color: displayBal >= surveyCost ? TEAL : "rgba(160,160,180,0.5)",
+                          fontSize: 10,
+                          fontWeight: 700,
+                          letterSpacing: 2,
+                          cursor: surveyLoading || displayBal < surveyCost ? "not-allowed" : "pointer",
+                          fontFamily: "monospace",
+                          transition: "all 0.15s"
+                        },
+                        children: surveyLoading ? "INITIATING..." : displayBal < surveyCost ? "INSUFFICIENT FRNTR" : "PURCHASE SURVEY"
+                      }
+                    )
+                  ] }) : surveyView.status === SurveyStatus.InProgress || surveyView.secondsRemaining > 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "div",
+                      {
+                        style: {
+                          padding: "12px",
+                          background: "rgba(245,158,11,0.08)",
+                          border: "1px solid rgba(245,158,11,0.25)",
+                          borderRadius: 8,
+                          marginBottom: 14,
+                          textAlign: "center"
+                        },
+                        children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "div",
+                            {
+                              style: {
+                                fontSize: 11,
+                                fontWeight: 700,
+                                color: "#f59e0b",
+                                fontFamily: "monospace",
+                                marginBottom: 6
+                              },
+                              children: "SURVEYING..."
+                            }
+                          ),
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                            "div",
+                            {
+                              style: {
+                                fontSize: 10,
+                                color: TEXT$9,
+                                fontFamily: "monospace",
+                                marginBottom: 4
+                              },
+                              children: [
+                                "⏱",
+                                " ",
+                                String(Math.floor(surveyTimer / 60)).padStart(
+                                  2,
+                                  "0"
+                                ),
+                                ":",
+                                String(surveyTimer % 60).padStart(2, "0"),
+                                " ",
+                                "remaining"
+                              ]
+                            }
+                          ),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "div",
+                            {
+                              style: {
+                                fontSize: 8,
+                                color: CYAN_DIM$9,
+                                fontFamily: "monospace"
+                              },
+                              children: (surveyView == null ? void 0 : surveyView.estimatedReward) ? `Est. reward: ~${(surveyView.estimatedReward / 1e8).toFixed(2)} FRNTR` : "Analyzing plot data..."
+                            }
+                          )
+                        ]
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "div",
+                      {
+                        style: {
+                          display: "flex",
+                          justifyContent: "space-between",
+                          marginBottom: 8
+                        },
+                        children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: labelStyle, children: "BIOME" }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "span",
+                            {
+                              style: {
+                                fontSize: 9,
+                                color: biomeColor,
+                                fontFamily: "monospace"
+                              },
+                              children: plot.biome
+                            }
+                          )
+                        ]
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "div",
+                      {
+                        style: {
+                          display: "flex",
+                          justifyContent: "space-between",
+                          marginBottom: 8
+                        },
+                        children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: labelStyle, children: "RESOURCE %" }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                            "span",
+                            {
+                              style: {
+                                fontSize: 9,
+                                color: effColor2,
+                                fontFamily: "monospace",
+                                fontWeight: 700
+                              },
+                              children: [
+                                efficiency,
+                                "%"
+                              ]
+                            }
+                          )
+                        ]
+                      }
+                    )
+                  ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "div",
+                      {
+                        style: {
+                          padding: "12px",
+                          background: "rgba(34,197,94,0.08)",
+                          border: "1px solid rgba(34,197,94,0.3)",
+                          borderRadius: 8,
+                          marginBottom: 14
+                        },
+                        children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "div",
+                            {
+                              style: {
+                                fontSize: 11,
+                                fontWeight: 700,
+                                color: "#22c55e",
+                                fontFamily: "monospace",
+                                marginBottom: 2
+                              },
+                              children: "✓ SURVEY COMPLETE"
+                            }
+                          ),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "div",
+                            {
+                              style: {
+                                fontSize: 8,
+                                color: TEXT_DIM$9,
+                                fontFamily: "monospace"
+                              },
+                              children: "Detailed resource data unlocked"
+                            }
+                          )
+                        ]
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "div",
+                      {
+                        style: {
+                          display: "flex",
+                          justifyContent: "space-between",
+                          marginBottom: 8
+                        },
+                        children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: labelStyle, children: "BIOME" }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "span",
+                            {
+                              style: {
+                                fontSize: 9,
+                                color: biomeColor,
+                                fontFamily: "monospace"
+                              },
+                              children: plot.biome
+                            }
+                          )
+                        ]
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "div",
+                      {
+                        style: {
+                          display: "flex",
+                          justifyContent: "space-between",
+                          marginBottom: 8
+                        },
+                        children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: labelStyle, children: "RESOURCE DENSITY" }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "span",
+                            {
+                              style: {
+                                fontSize: 9,
+                                color: effColor2,
+                                fontFamily: "monospace",
+                                fontWeight: 700
+                              },
+                              children: surveyView.resourcePercentage !== void 0 ? `${surveyView.resourcePercentage}%` : `${efficiency}%`
+                            }
+                          )
+                        ]
+                      }
+                    ),
+                    surveyView.bonusInfo && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "div",
+                      {
+                        style: {
+                          display: "flex",
+                          justifyContent: "space-between",
+                          marginBottom: 8
+                        },
+                        children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: labelStyle, children: "SPECIAL" }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "span",
+                            {
+                              style: {
+                                fontSize: 9,
+                                color: TEAL,
+                                fontFamily: "monospace"
+                              },
+                              children: surveyView.bonusInfo
+                            }
+                          )
+                        ]
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "div",
+                      {
+                        style: {
+                          padding: "10px 12px",
+                          background: "rgba(0,188,212,0.06)",
+                          border: "1px solid rgba(0,188,212,0.2)",
+                          borderRadius: 8,
+                          marginBottom: 12
+                        },
+                        children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { ...labelStyle, marginBottom: 6 }, children: "PREDICTION MODEL" }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                            "div",
+                            {
+                              style: {
+                                fontSize: 9,
+                                color: TEXT_DIM$9,
+                                fontFamily: "monospace",
+                                lineHeight: 1.5
+                              },
+                              children: [
+                                "Projected yield: ",
+                                Math.floor(efficiency * 12),
+                                "–",
+                                Math.floor(efficiency * 18),
+                                " FRNTR"
+                              ]
+                            }
+                          ),
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                            "div",
+                            {
+                              style: {
+                                fontSize: 8,
+                                color: CYAN_DIM$9,
+                                fontFamily: "monospace",
+                                marginTop: 2
+                              },
+                              children: [
+                                "Based on biome · efficiency · tier ",
+                                currentTier
+                              ]
+                            }
+                          )
+                        ]
+                      }
+                    ),
+                    (surveyView == null ? void 0 : surveyView.isCollectable) ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "button",
+                      {
+                        type: "button",
+                        "data-ocid": "plot_info.survey.collect_button",
+                        onClick: () => setSurveyCollectConfirmOpen(true),
+                        style: {
+                          width: "100%",
+                          padding: "10px",
+                          background: "rgba(34,197,94,0.15)",
+                          border: "1px solid rgba(34,197,94,0.6)",
+                          borderRadius: 8,
+                          color: "rgba(34,197,94,1)",
+                          fontSize: 10,
+                          fontWeight: 700,
+                          letterSpacing: 2,
+                          cursor: "pointer",
+                          fontFamily: "monospace"
+                        },
+                        children: "✓ COLLECT REPORT"
+                      }
+                    ) : /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "button",
+                      {
+                        type: "button",
+                        "data-ocid": "plot_info.survey.collect_button",
+                        disabled: true,
+                        style: {
+                          width: "100%",
+                          padding: "10px",
+                          background: "rgba(34,197,94,0.08)",
+                          border: "1px solid rgba(34,197,94,0.3)",
+                          borderRadius: 8,
+                          color: "rgba(34,197,94,0.5)",
+                          fontSize: 10,
+                          fontWeight: 700,
+                          letterSpacing: 2,
+                          cursor: "not-allowed",
+                          fontFamily: "monospace"
+                        },
+                        children: surveyTimer > 0 ? `READY IN ${String(Math.floor(surveyTimer / 60)).padStart(2, "0")}:${String(surveyTimer % 60).padStart(2, "0")}` : "PENDING..."
+                      }
+                    ),
+                    surveyReportData && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "div",
+                      {
+                        style: {
+                          marginTop: 10,
+                          padding: "10px 12px",
+                          borderRadius: 8,
+                          background: "rgba(0,255,200,0.05)",
+                          border: "1px solid rgba(0,255,200,0.2)"
+                        },
+                        children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "div",
+                            {
+                              style: {
+                                fontSize: 9,
+                                color: "#67e8f9",
+                                letterSpacing: 1.2,
+                                marginBottom: 6
+                              },
+                              children: "SURVEY REPORT"
+                            }
+                          ),
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                            "div",
+                            {
+                              style: {
+                                fontSize: 10,
+                                color: "#e2e8f0",
+                                marginBottom: 4
+                              },
+                              children: [
+                                "Biome:",
+                                " ",
+                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: "#a5f3fc" }, children: surveyReportData.biome })
+                              ]
+                            }
+                          ),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "div",
+                            {
+                              style: {
+                                fontSize: 10,
+                                color: "#e2e8f0",
+                                marginBottom: 4
+                              },
+                              children: "Resource Richness:"
+                            }
+                          ),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "div",
+                            {
+                              style: {
+                                height: 6,
+                                borderRadius: 3,
+                                background: "rgba(255,255,255,0.1)",
+                                marginBottom: 8
+                              },
+                              children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                "div",
+                                {
+                                  style: {
+                                    height: "100%",
+                                    borderRadius: 3,
+                                    background: "linear-gradient(90deg, #06b6d4, #10b981)",
+                                    width: `${surveyReportData.resourcePct}%`
+                                  }
+                                }
+                              )
+                            }
+                          ),
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                            "div",
+                            {
+                              style: {
+                                fontSize: 9,
+                                color: "#94a3b8",
+                                letterSpacing: 0.5
+                              },
+                              children: [
+                                "MINING ANALYSIS:",
+                                " ",
+                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: "#475569" }, children: "COMING SOON" })
+                              ]
+                            }
+                          ),
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                            "div",
+                            {
+                              style: {
+                                marginTop: 6,
+                                fontSize: 10,
+                                color: "#34d399"
+                              },
+                              children: [
+                                "Reward: +",
+                                (surveyReportData.rewardE8s / 1e8).toFixed(4),
+                                " ",
+                                "FRNTR"
+                              ]
+                            }
+                          )
+                        ]
+                      }
+                    ),
+                    surveyCollectConfirmOpen && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      ActionConfirmModal,
+                      {
+                        isOpen: surveyCollectConfirmOpen,
+                        actionType: "survey",
+                        title: "Collect Survey Report",
+                        details: [
+                          {
+                            label: "Plot",
+                            value: String(selectedPlotId || "")
+                          },
+                          {
+                            label: "Reward",
+                            value: `~${(surveyView == null ? void 0 : surveyView.estimatedReward) ? (surveyView.estimatedReward / 1e8).toFixed(2) : "?"} FRNTR`
+                          }
+                        ],
+                        warningText: "Once collected, the survey report is finalized.",
+                        onConfirm: async () => {
+                          setSurveyCollectConfirmOpen(false);
+                          try {
+                            const result = await actor.claimSurveyReward(
+                              String(selectedPlotId || "")
+                            );
+                            if ("ok" in result) {
+                              setSurveyReportData({
+                                biome: (surveyView == null ? void 0 : surveyView.biome) || "",
+                                resourcePct: (surveyView == null ? void 0 : surveyView.resourcePct) || 0,
+                                rewardE8s: Number(result.ok.rewardE8s)
+                              });
+                            }
+                          } catch (e) {
+                            console.error("Survey collect failed", e);
+                          }
+                        },
+                        onCancel: () => setSurveyCollectConfirmOpen(false)
+                      }
+                    )
+                  ] }) }),
+                  activeTab === "upgrade" && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { "data-ocid": "plot_info.upgrade.panel", children: !isOwnedByMe ? /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "div",
+                    {
+                      style: {
+                        textAlign: "center",
+                        padding: "24px 0",
+                        color: TEXT_DIM$9,
+                        fontSize: 10,
+                        fontFamily: "monospace",
+                        letterSpacing: 1
+                      },
+                      children: [
+                        "Purchase this plot to",
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("br", {}),
+                        "unlock generator upgrades"
+                      ]
+                    }
+                  ) : isMaxTier ? /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "div",
+                    {
+                      style: {
+                        textAlign: "center",
+                        padding: "24px 0",
+                        color: "#fbbf24",
+                        fontSize: 10,
+                        fontFamily: "monospace",
+                        letterSpacing: 1
+                      },
+                      children: [
+                        "⭐ MAX TIER REACHED",
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("br", {}),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: TEXT_DIM$9, fontSize: 9 }, children: "Singularity Drive active" })
+                      ]
+                    }
+                  ) : /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "div",
+                      {
+                        style: {
+                          padding: "10px 12px",
+                          background: `${CYAN$g}08`,
+                          border: `1px solid ${CYAN$g}18`,
+                          borderRadius: 8,
+                          marginBottom: 10
+                        },
+                        children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { ...labelStyle, marginBottom: 3 }, children: "CURRENT TIER" }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                            "div",
+                            {
+                              style: {
+                                fontSize: 11,
+                                fontWeight: 700,
+                                color: CYAN$g,
+                                fontFamily: "monospace"
+                              },
+                              children: [
+                                "Tier ",
+                                currentTier,
+                                " — ",
+                                TIER_NAMES[currentTier]
+                              ]
+                            }
+                          ),
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                            "div",
+                            {
+                              style: {
+                                fontSize: 9,
+                                color: TEXT_DIM$9,
+                                fontFamily: "monospace",
+                                marginTop: 2
+                              },
+                              children: [
+                                dailyRate,
+                                " FRNTR/day"
+                              ]
+                            }
+                          )
+                        ]
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "div",
+                      {
+                        style: {
+                          textAlign: "center",
+                          color: CYAN_DIM$9,
+                          fontSize: 14,
+                          marginBottom: 6
+                        },
+                        children: "↓"
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "div",
+                      {
+                        style: {
+                          padding: "10px 12px",
+                          background: `${TEAL}0a`,
+                          border: `1px solid ${TEAL}30`,
+                          borderRadius: 8,
+                          marginBottom: 12
+                        },
+                        children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { ...labelStyle, marginBottom: 3 }, children: "NEXT TIER" }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                            "div",
+                            {
+                              style: {
+                                fontSize: 11,
+                                fontWeight: 700,
+                                color: TEAL,
+                                fontFamily: "monospace"
+                              },
+                              children: [
+                                "Tier ",
+                                nextTier,
+                                " — ",
+                                TIER_NAMES[nextTier]
+                              ]
+                            }
+                          ),
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                            "div",
+                            {
+                              style: {
+                                fontSize: 9,
+                                color: TEXT_DIM$9,
+                                fontFamily: "monospace",
+                                marginTop: 2
+                              },
+                              children: [
+                                TIER_DAILY_RATES[nextTier],
+                                " FRNTR/day · +",
+                                (TIER_DAILY_RATES[nextTier] ?? 0) - dailyRate,
+                                " ",
+                                "bonus"
+                              ]
+                            }
+                          )
+                        ]
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "div",
+                      {
+                        style: {
+                          display: "flex",
+                          justifyContent: "space-between",
+                          marginBottom: 4
+                        },
+                        children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: labelStyle, children: "UPGRADE COST" }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                            "span",
+                            {
+                              style: {
+                                fontSize: 10,
+                                fontWeight: 700,
+                                color: canAfford ? TEAL : "#ef4444",
+                                fontFamily: "monospace"
+                              },
+                              children: [
+                                upgradeCost.toLocaleString(),
+                                " FRNTR"
+                              ]
+                            }
+                          )
+                        ]
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "div",
+                      {
+                        style: {
+                          display: "flex",
+                          justifyContent: "space-between",
+                          marginBottom: 14
+                        },
+                        children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: labelStyle, children: "YOUR BALANCE" }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                            "span",
+                            {
+                              style: {
+                                fontSize: 10,
+                                fontWeight: 700,
+                                color: canAfford ? "#22c55e" : "#ef4444",
+                                fontFamily: "monospace"
+                              },
+                              children: [
+                                formatFrntr(displayBal),
+                                " FRNTR"
+                              ]
+                            }
+                          )
+                        ]
+                      }
+                    ),
+                    !canAfford && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "div",
+                      {
+                        "data-ocid": "plot_info.upgrade.insufficient",
+                        style: {
+                          fontSize: 9,
+                          color: "#ef4444",
+                          marginBottom: 8,
+                          fontFamily: "monospace",
+                          textAlign: "center",
+                          letterSpacing: 1
+                        },
+                        children: [
+                          "INSUFFICIENT FRNTR — need",
+                          " ",
+                          (upgradeCost - displayBal).toLocaleString(),
+                          " more"
+                        ]
+                      }
+                    ),
+                    upgradeStatus === "success" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "div",
+                      {
+                        "data-ocid": "plot_info.upgrade.success_state",
+                        style: {
+                          padding: "10px",
+                          background: "rgba(34,197,94,0.1)",
+                          border: "1px solid rgba(34,197,94,0.4)",
+                          animation: "upgradeFlash 0.6s ease 3",
+                          borderRadius: 8,
+                          textAlign: "center",
+                          fontSize: 10,
+                          color: "#22c55e",
+                          fontFamily: "monospace",
+                          fontWeight: 700,
+                          letterSpacing: 1
+                        },
+                        children: "✓ UPGRADE COMPLETE"
+                      }
+                    ) : /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "button",
+                      {
+                        type: "button",
+                        "data-ocid": "plot_info.upgrade.button",
+                        onClick: openUpgradeConfirm,
+                        disabled: !canAfford || upgradeLoading,
+                        style: {
+                          width: "100%",
+                          padding: "11px",
+                          background: canAfford ? `linear-gradient(135deg,${CYAN$g}20,${TEAL}18)` : "rgba(100,100,120,0.1)",
+                          border: canAfford ? `1px solid ${CYAN$g}55` : "1px solid rgba(100,100,140,0.25)",
+                          borderRadius: 8,
+                          color: canAfford ? CYAN$g : "rgba(160,160,180,0.4)",
+                          fontSize: 10,
+                          fontWeight: 700,
+                          letterSpacing: 2,
+                          cursor: canAfford && !upgradeLoading ? "pointer" : "not-allowed",
+                          fontFamily: "monospace",
+                          transition: "all 0.15s",
+                          boxShadow: canAfford ? `0 0 16px ${CYAN$g}22` : "none"
+                        },
+                        children: upgradeLoading ? "UPGRADING..." : `UPGRADE TO TIER ${nextTier}`
+                      }
+                    ),
+                    upgradeStatus === "error" && upgradeError && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "div",
+                      {
+                        "data-ocid": "plot_info.upgrade.error_state",
+                        style: {
+                          fontSize: 9,
+                          color: "#ef4444",
+                          marginTop: 6,
+                          fontFamily: "monospace",
+                          textAlign: "center"
+                        },
+                        children: upgradeError
+                      }
+                    )
+                  ] }) })
+                ] })
+              ]
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            ActionConfirmModal,
+            {
+              isOpen: claimConfirmOpen,
+              onConfirm: () => {
+                setClaimConfirmOpen(false);
+                executeClaim();
+              },
+              onCancel: handleCancelClaim,
+              title: "Claim Tokens",
+              actionType: "claim",
+              details: [
+                { label: "Plot", value: (plot == null ? void 0 : plot.id) ? String(plot.id) : "" }
+              ],
+              warningText: "This action is permanent and cannot be undone."
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            ActionConfirmModal,
+            {
+              isOpen: surveyConfirmOpen,
+              onConfirm: () => {
+                setSurveyConfirmOpen(false);
+                executeSurvey();
+              },
+              onCancel: handleCancelSurvey,
+              title: "Purchase Survey",
+              actionType: "survey",
+              details: [
+                { label: "Plot", value: (plot == null ? void 0 : plot.id) ? String(plot.id) : "" }
+              ],
+              warningText: "Survey cost will be deducted from your balance. Cannot be undone."
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            ActionConfirmModal,
+            {
+              isOpen: upgradeConfirmOpen,
+              onConfirm: () => {
+                setUpgradeConfirmOpen(false);
+                executeUpgrade();
+              },
+              onCancel: handleCancelUpgrade,
+              title: "Upgrade Generator",
+              actionType: "upgrade",
+              details: [
+                { label: "Plot", value: (plot == null ? void 0 : plot.id) ? String(plot.id) : "" }
+              ],
+              warningText: "Upgrade cost will be burned. This cannot be undone."
+            }
+          ),
+          postActionType && /* @__PURE__ */ jsxRuntimeExports.jsx(
+            PostActionToast,
+            {
+              actionType: postActionType,
+              message: "Action completed.",
+              onNavigate: (tab) => window.dispatchEvent(
+                new CustomEvent("navigate-tab", { detail: tab })
+              ),
+              onClose: () => setPostActionType(null)
+            }
+          )
+        ]
+      },
+      "plot-info-panel"
+    )
+  ] }) });
 }
 function effColor(eff) {
   if (eff >= 90) return "#4ade80";
@@ -87091,6 +89498,7 @@ function PlotTile({ plotId, index: index2 }) {
   const spendFrntr = useGameStore((s2) => s2.spendFrntr);
   const setFrntrBalance = useGameStore((s2) => s2.setFrntrBalance);
   const incrementClaimCount = useGameStore((s2) => s2.incrementClaimCount);
+  const selectPlot = useGameStore((s2) => s2.selectPlot);
   const { actor } = useActor(createActor);
   const [claiming, setClaiming] = reactExports.useState(false);
   const [upgrading, setUpgrading] = reactExports.useState(false);
@@ -87236,8 +89644,13 @@ function PlotTile({ plotId, index: index2 }) {
           border: `1px solid ${borderColor}`,
           boxShadow: hovered ? `0 0 28px ${shadowColor}, 0 4px 20px rgba(0,0,0,0.4), inset 0 1px 0 rgba(0,255,204,0.12)` : `0 0 12px ${shadowColor}, inset 0 1px 0 rgba(0,255,204,0.06)`,
           transition: "border-color 0.25s, box-shadow 0.25s",
-          cursor: "default",
+          cursor: "pointer",
           minWidth: 0
+        },
+        onClick: (e) => {
+          const target = e.target;
+          if (target.closest("button")) return;
+          selectPlot(Number(plotId));
         },
         children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(ScanLines, {}),
@@ -87821,12 +90234,13 @@ function PlotTile({ plotId, index: index2 }) {
       }
     ),
     postActionType && /* @__PURE__ */ jsxRuntimeExports.jsx(
-      _PostActionToast,
+      PostActionToast,
       {
         actionType: postActionType,
+        message: "",
         onNavigate: () => {
         },
-        onDismiss: () => setPostActionType(null)
+        onClose: () => setPostActionType(null)
       }
     )
   ] });
@@ -88303,93 +90717,98 @@ function Inventory() {
   const plotsOwned = useGameStore((s2) => s2.player.plotsOwned);
   const allPlots = useGameStore((s2) => s2.plots);
   const player = useGameStore((s2) => s2.player);
+  const selectedPlotId = useGameStore((s2) => s2.selectedPlotId);
+  const selectPlot = useGameStore((s2) => s2.selectPlot);
   const ownedPlotData = plotsOwned.map((id2) => allPlots.find((p2) => String(p2.id) === id2)).filter((p2) => !!p2);
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-    "div",
-    {
-      "data-ocid": "inventory.page",
-      style: {
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
-        overflowY: "auto",
-        padding: "12px 12px 16px",
-        scrollbarWidth: "thin",
-        scrollbarColor: "rgba(0,255,204,0.2) transparent"
-      },
-      children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(InventoryHeader, {}),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(InventorySummary, { plots: ownedPlotData }),
-        player.isAdmin && /* @__PURE__ */ jsxRuntimeExports.jsx(LiquiditySeedingPanel, {}),
-        plotsOwned.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs(
-          "div",
-          {
-            style: {
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              marginBottom: 8
-            },
-            children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "div",
-                {
-                  style: {
-                    width: 3,
-                    height: 12,
-                    borderRadius: 2,
-                    background: "linear-gradient(180deg,#00ffcc,#0088aa)"
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+    selectedPlotId !== null && /* @__PURE__ */ jsxRuntimeExports.jsx(PlotInfoPanel, { onClose: () => selectPlot(null) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "div",
+      {
+        "data-ocid": "inventory.page",
+        style: {
+          display: "flex",
+          flexDirection: "column",
+          height: "100%",
+          overflowY: "auto",
+          padding: "12px 12px 16px",
+          scrollbarWidth: "thin",
+          scrollbarColor: "rgba(0,255,204,0.2) transparent"
+        },
+        children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(InventoryHeader, {}),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(InventorySummary, { plots: ownedPlotData }),
+          player.isAdmin && /* @__PURE__ */ jsxRuntimeExports.jsx(LiquiditySeedingPanel, {}),
+          plotsOwned.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              style: {
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                marginBottom: 8
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      width: 3,
+                      height: 12,
+                      borderRadius: 2,
+                      background: "linear-gradient(180deg,#00ffcc,#0088aa)"
+                    }
                   }
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "span",
-                {
-                  style: {
-                    fontSize: 8.5,
-                    fontWeight: 700,
-                    color: "#00ffcc",
-                    letterSpacing: "0.22em"
-                  },
-                  children: "OWNED TERRITORIES"
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "span",
-                {
-                  style: {
-                    fontSize: 9,
-                    fontFamily: "monospace",
-                    fontWeight: 700,
-                    padding: "1px 7px",
-                    borderRadius: 4,
-                    background: "rgba(0,255,204,0.08)",
-                    border: "1px solid rgba(0,255,204,0.18)",
-                    color: "#e0f4ff",
-                    marginLeft: "auto"
-                  },
-                  children: plotsOwned.length
-                }
-              )
-            ]
-          }
-        ),
-        plotsOwned.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx(EmptyState, {}) : /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "div",
-          {
-            "data-ocid": "inventory.list",
-            style: {
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-              gap: 10,
-              paddingBottom: 16
-            },
-            children: plotsOwned.map((plotId, idx) => /* @__PURE__ */ jsxRuntimeExports.jsx(PlotTile, { plotId, index: idx + 1 }, plotId))
-          }
-        )
-      ]
-    }
-  );
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "span",
+                  {
+                    style: {
+                      fontSize: 8.5,
+                      fontWeight: 700,
+                      color: "#00ffcc",
+                      letterSpacing: "0.22em"
+                    },
+                    children: "OWNED TERRITORIES"
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "span",
+                  {
+                    style: {
+                      fontSize: 9,
+                      fontFamily: "monospace",
+                      fontWeight: 700,
+                      padding: "1px 7px",
+                      borderRadius: 4,
+                      background: "rgba(0,255,204,0.08)",
+                      border: "1px solid rgba(0,255,204,0.18)",
+                      color: "#e0f4ff",
+                      marginLeft: "auto"
+                    },
+                    children: plotsOwned.length
+                  }
+                )
+              ]
+            }
+          ),
+          plotsOwned.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx(EmptyState, {}) : /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
+            {
+              "data-ocid": "inventory.list",
+              style: {
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+                gap: 10,
+                paddingBottom: 16
+              },
+              children: plotsOwned.map((plotId, idx) => /* @__PURE__ */ jsxRuntimeExports.jsx(PlotTile, { plotId, index: idx + 1 }, plotId))
+            }
+          )
+        ]
+      }
+    )
+  ] });
 }
 function useLeaderboardPrizes() {
   const { actor, isFetching } = useActor(createActor);
@@ -88435,7 +90854,6 @@ function useLeaderboardPrizes() {
     },
     enabled: !!actor && !isFetching,
     staleTime: 3e4,
-    // refresh every 30s
     refetchInterval: 3e4
   });
 }
@@ -88544,7 +90962,7 @@ const createLucideIcon = (iconName, iconNode) => {
  * This source code is licensed under the ISC license.
  * See the LICENSE file in the root directory of this source tree.
  */
-const __iconNode$l = [
+const __iconNode$m = [
   ["path", { d: "M12 7v14", key: "1akyts" }],
   [
     "path",
@@ -88554,50 +90972,72 @@ const __iconNode$l = [
     }
   ]
 ];
-const BookOpen = createLucideIcon("book-open", __iconNode$l);
+const BookOpen = createLucideIcon("book-open", __iconNode$m);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
  * This source code is licensed under the ISC license.
  * See the LICENSE file in the root directory of this source tree.
  */
-const __iconNode$k = [["path", { d: "m6 9 6 6 6-6", key: "qrunsl" }]];
-const ChevronDown = createLucideIcon("chevron-down", __iconNode$k);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$j = [["path", { d: "m9 18 6-6-6-6", key: "mthhwq" }]];
-const ChevronRight = createLucideIcon("chevron-right", __iconNode$j);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$i = [["path", { d: "m18 15-6-6-6 6", key: "153udz" }]];
-const ChevronUp = createLucideIcon("chevron-up", __iconNode$i);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$h = [
-  ["path", { d: "M21.801 10A10 10 0 1 1 17 3.335", key: "yps3ct" }],
-  ["path", { d: "m9 11 3 3L22 4", key: "1pflzl" }]
+const __iconNode$l = [
+  ["path", { d: "M3 3v16a2 2 0 0 0 2 2h16", key: "c24i48" }],
+  ["path", { d: "M18 17V9", key: "2bz60n" }],
+  ["path", { d: "M13 17V5", key: "1frdt8" }],
+  ["path", { d: "M8 17v-3", key: "17ska0" }]
 ];
-const CircleCheckBig = createLucideIcon("circle-check-big", __iconNode$h);
+const ChartColumn = createLucideIcon("chart-column", __iconNode$l);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
  * This source code is licensed under the ISC license.
  * See the LICENSE file in the root directory of this source tree.
  */
-const __iconNode$g = [["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }]];
-const Circle = createLucideIcon("circle", __iconNode$g);
+const __iconNode$k = [
+  ["line", { x1: "18", x2: "18", y1: "20", y2: "10", key: "1xfpm4" }],
+  ["line", { x1: "12", x2: "12", y1: "20", y2: "4", key: "be30l9" }],
+  ["line", { x1: "6", x2: "6", y1: "20", y2: "14", key: "1r4le6" }]
+];
+const ChartNoAxesColumn = createLucideIcon("chart-no-axes-column", __iconNode$k);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$j = [["path", { d: "m6 9 6 6 6-6", key: "qrunsl" }]];
+const ChevronDown = createLucideIcon("chevron-down", __iconNode$j);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$i = [["path", { d: "m9 18 6-6-6-6", key: "mthhwq" }]];
+const ChevronRight = createLucideIcon("chevron-right", __iconNode$i);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$h = [["path", { d: "m18 15-6-6-6 6", key: "153udz" }]];
+const ChevronUp = createLucideIcon("chevron-up", __iconNode$h);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$g = [
+  [
+    "path",
+    {
+      d: "M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z",
+      key: "96xj49"
+    }
+  ]
+];
+const Flame = createLucideIcon("flame", __iconNode$g);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
@@ -88608,22 +91048,6 @@ const __iconNode$f = [
   [
     "path",
     {
-      d: "M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z",
-      key: "96xj49"
-    }
-  ]
-];
-const Flame = createLucideIcon("flame", __iconNode$f);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$e = [
-  [
-    "path",
-    {
       d: "M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2",
       key: "18mbvz"
     }
@@ -88631,7 +91055,19 @@ const __iconNode$e = [
   ["path", { d: "M6.453 15h11.094", key: "3shlmq" }],
   ["path", { d: "M8.5 2h7", key: "csnxdl" }]
 ];
-const FlaskConical = createLucideIcon("flask-conical", __iconNode$e);
+const FlaskConical = createLucideIcon("flask-conical", __iconNode$f);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$e = [
+  ["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }],
+  ["path", { d: "M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20", key: "13o1zl" }],
+  ["path", { d: "M2 12h20", key: "9i4pu4" }]
+];
+const Globe = createLucideIcon("globe", __iconNode$e);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
@@ -88639,11 +91075,12 @@ const FlaskConical = createLucideIcon("flask-conical", __iconNode$e);
  * See the LICENSE file in the root directory of this source tree.
  */
 const __iconNode$d = [
-  ["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }],
-  ["path", { d: "M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20", key: "13o1zl" }],
-  ["path", { d: "M2 12h20", key: "9i4pu4" }]
+  ["rect", { width: "7", height: "9", x: "3", y: "3", rx: "1", key: "10lvy0" }],
+  ["rect", { width: "7", height: "5", x: "14", y: "3", rx: "1", key: "16une8" }],
+  ["rect", { width: "7", height: "9", x: "14", y: "12", rx: "1", key: "1hutg5" }],
+  ["rect", { width: "7", height: "5", x: "3", y: "16", rx: "1", key: "ldoo1y" }]
 ];
-const Globe = createLucideIcon("globe", __iconNode$d);
+const LayoutDashboard = createLucideIcon("layout-dashboard", __iconNode$d);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
@@ -88651,19 +91088,6 @@ const Globe = createLucideIcon("globe", __iconNode$d);
  * See the LICENSE file in the root directory of this source tree.
  */
 const __iconNode$c = [
-  ["rect", { width: "7", height: "9", x: "3", y: "3", rx: "1", key: "10lvy0" }],
-  ["rect", { width: "7", height: "5", x: "14", y: "3", rx: "1", key: "16une8" }],
-  ["rect", { width: "7", height: "9", x: "14", y: "12", rx: "1", key: "1hutg5" }],
-  ["rect", { width: "7", height: "5", x: "3", y: "16", rx: "1", key: "ldoo1y" }]
-];
-const LayoutDashboard = createLucideIcon("layout-dashboard", __iconNode$c);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$b = [
   [
     "path",
     {
@@ -88674,14 +91098,14 @@ const __iconNode$b = [
   ["path", { d: "M15 5.764v15", key: "1pn4in" }],
   ["path", { d: "M9 3.236v15", key: "1uimfh" }]
 ];
-const Map$1 = createLucideIcon("map", __iconNode$b);
+const Map$1 = createLucideIcon("map", __iconNode$c);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
  * This source code is licensed under the ISC license.
  * See the LICENSE file in the root directory of this source tree.
  */
-const __iconNode$a = [
+const __iconNode$b = [
   [
     "path",
     {
@@ -88693,7 +91117,21 @@ const __iconNode$a = [
   ["polyline", { points: "3.29 7 12 12 20.71 7", key: "ousv84" }],
   ["path", { d: "m7.5 4.27 9 5.15", key: "1c824w" }]
 ];
-const Package = createLucideIcon("package", __iconNode$a);
+const Package = createLucideIcon("package", __iconNode$b);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$a = [
+  ["path", { d: "M4.9 19.1C1 15.2 1 8.8 4.9 4.9", key: "1vaf9d" }],
+  ["path", { d: "M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5", key: "u1ii0m" }],
+  ["circle", { cx: "12", cy: "12", r: "2", key: "1c9p78" }],
+  ["path", { d: "M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5", key: "1j5fej" }],
+  ["path", { d: "M19.1 4.9C23 8.8 23 15.1 19.1 19", key: "10b0cb" }]
+];
+const Radio = createLucideIcon("radio", __iconNode$a);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
@@ -88701,13 +91139,12 @@ const Package = createLucideIcon("package", __iconNode$a);
  * See the LICENSE file in the root directory of this source tree.
  */
 const __iconNode$9 = [
-  ["path", { d: "M4.9 19.1C1 15.2 1 8.8 4.9 4.9", key: "1vaf9d" }],
-  ["path", { d: "M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5", key: "u1ii0m" }],
-  ["circle", { cx: "12", cy: "12", r: "2", key: "1c9p78" }],
-  ["path", { d: "M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5", key: "1j5fej" }],
-  ["path", { d: "M19.1 4.9C23 8.8 23 15.1 19.1 19", key: "10b0cb" }]
+  ["path", { d: "M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8", key: "v9h5vc" }],
+  ["path", { d: "M21 3v5h-5", key: "1q7to0" }],
+  ["path", { d: "M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16", key: "3uifl3" }],
+  ["path", { d: "M8 16H3v5", key: "1cv678" }]
 ];
-const Radio = createLucideIcon("radio", __iconNode$9);
+const RefreshCw = createLucideIcon("refresh-cw", __iconNode$9);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
@@ -88715,12 +91152,10 @@ const Radio = createLucideIcon("radio", __iconNode$9);
  * See the LICENSE file in the root directory of this source tree.
  */
 const __iconNode$8 = [
-  ["path", { d: "M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8", key: "v9h5vc" }],
-  ["path", { d: "M21 3v5h-5", key: "1q7to0" }],
-  ["path", { d: "M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16", key: "3uifl3" }],
-  ["path", { d: "M8 16H3v5", key: "1cv678" }]
+  ["path", { d: "M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8", key: "1357e3" }],
+  ["path", { d: "M3 3v5h5", key: "1xhq8a" }]
 ];
-const RefreshCw = createLucideIcon("refresh-cw", __iconNode$8);
+const RotateCcw = createLucideIcon("rotate-ccw", __iconNode$8);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
@@ -88728,17 +91163,6 @@ const RefreshCw = createLucideIcon("refresh-cw", __iconNode$8);
  * See the LICENSE file in the root directory of this source tree.
  */
 const __iconNode$7 = [
-  ["path", { d: "M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8", key: "1357e3" }],
-  ["path", { d: "M3 3v5h5", key: "1xhq8a" }]
-];
-const RotateCcw = createLucideIcon("rotate-ccw", __iconNode$7);
-/**
- * @license lucide-react v0.511.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
-const __iconNode$6 = [
   [
     "path",
     {
@@ -88747,7 +91171,20 @@ const __iconNode$6 = [
     }
   ]
 ];
-const Shield = createLucideIcon("shield", __iconNode$6);
+const Shield = createLucideIcon("shield", __iconNode$7);
+/**
+ * @license lucide-react v0.511.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const __iconNode$6 = [
+  ["polyline", { points: "14.5 17.5 3 6 3 3 6 3 17.5 14.5", key: "1hfsw2" }],
+  ["line", { x1: "13", x2: "19", y1: "19", y2: "13", key: "1vrmhu" }],
+  ["line", { x1: "16", x2: "20", y1: "16", y2: "20", key: "1bron3" }],
+  ["line", { x1: "19", x2: "21", y1: "21", y2: "19", key: "13pww6" }]
+];
+const Sword = createLucideIcon("sword", __iconNode$6);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
@@ -88755,12 +91192,11 @@ const Shield = createLucideIcon("shield", __iconNode$6);
  * See the LICENSE file in the root directory of this source tree.
  */
 const __iconNode$5 = [
-  ["polyline", { points: "14.5 17.5 3 6 3 3 6 3 17.5 14.5", key: "1hfsw2" }],
-  ["line", { x1: "13", x2: "19", y1: "19", y2: "13", key: "1vrmhu" }],
-  ["line", { x1: "16", x2: "20", y1: "16", y2: "20", key: "1bron3" }],
-  ["line", { x1: "19", x2: "21", y1: "21", y2: "19", key: "13pww6" }]
+  ["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }],
+  ["circle", { cx: "12", cy: "12", r: "6", key: "1vlfrh" }],
+  ["circle", { cx: "12", cy: "12", r: "2", key: "1c9p78" }]
 ];
-const Sword = createLucideIcon("sword", __iconNode$5);
+const Target = createLucideIcon("target", __iconNode$5);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
@@ -88768,11 +91204,10 @@ const Sword = createLucideIcon("sword", __iconNode$5);
  * See the LICENSE file in the root directory of this source tree.
  */
 const __iconNode$4 = [
-  ["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }],
-  ["circle", { cx: "12", cy: "12", r: "6", key: "1vlfrh" }],
-  ["circle", { cx: "12", cy: "12", r: "2", key: "1c9p78" }]
+  ["path", { d: "M16 7h6v6", key: "box55l" }],
+  ["path", { d: "m22 7-8.5 8.5-5-5L2 17", key: "1t1m79" }]
 ];
-const Target = createLucideIcon("target", __iconNode$4);
+const TrendingUp = createLucideIcon("trending-up", __iconNode$4);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
@@ -88780,10 +91215,17 @@ const Target = createLucideIcon("target", __iconNode$4);
  * See the LICENSE file in the root directory of this source tree.
  */
 const __iconNode$3 = [
-  ["path", { d: "M16 7h6v6", key: "box55l" }],
-  ["path", { d: "m22 7-8.5 8.5-5-5L2 17", key: "1t1m79" }]
+  [
+    "path",
+    {
+      d: "m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3",
+      key: "wmoenq"
+    }
+  ],
+  ["path", { d: "M12 9v4", key: "juzpu7" }],
+  ["path", { d: "M12 17h.01", key: "p32p05" }]
 ];
-const TrendingUp = createLucideIcon("trending-up", __iconNode$3);
+const TriangleAlert = createLucideIcon("triangle-alert", __iconNode$3);
 /**
  * @license lucide-react v0.511.0 - ISC
  *
@@ -88828,7 +91270,7 @@ const __iconNode = [
 const Zap = createLucideIcon("zap", __iconNode);
 const CYAN$f = "#00ffcc";
 const GOLD$6 = "#ffd700";
-const AMBER$1 = "#f59e0b";
+const AMBER$2 = "#f59e0b";
 const BORDER$e = "rgba(0,255,204,0.18)";
 const PANEL$1 = "rgba(0,20,40,0.72)";
 const TEXT_DIM$8 = "rgba(224,244,255,0.45)";
@@ -88887,7 +91329,7 @@ function LeaderboardPrizes() {
       place: 3,
       label: "3RD PLACE",
       pct: prizeDistribution.third,
-      color: AMBER$1,
+      color: AMBER$2,
       medal: "🥉"
     }
   ];
@@ -91706,7 +94148,7 @@ function Skeleton2({ className, ...props }) {
 }
 const CYAN$e = "#00ffcc";
 const GOLD$5 = "#ffd700";
-const AMBER = "#f59e0b";
+const AMBER$1 = "#f59e0b";
 const BORDER$d = "rgba(0,255,204,0.18)";
 const PANEL = "rgba(0,20,40,0.72)";
 const TEXT$8 = "#e0f4ff";
@@ -92227,7 +94669,7 @@ function Leaderboard() {
                   const isTop3 = entry.rank <= 3;
                   const rowBg = entry.isMe ? "rgba(0,255,204,0.08)" : isTop3 ? `rgba(0,255,204,${0.04 - idx * 0.01})` : "transparent";
                   const borderColor = entry.isMe ? "rgba(0,255,204,0.25)" : "rgba(0,255,204,0.06)";
-                  const rankColor = entry.rank === 1 ? GOLD$5 : entry.rank === 2 ? "#c0c0c0" : entry.rank === 3 ? AMBER : TEXT_DIM$7;
+                  const rankColor = entry.rank === 1 ? GOLD$5 : entry.rank === 2 ? "#c0c0c0" : entry.rank === 3 ? AMBER$1 : TEXT_DIM$7;
                   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
                     motion.div,
                     {
@@ -92378,7 +94820,7 @@ function Leaderboard() {
                               fontSize: 11,
                               fontWeight: 800,
                               fontFamily: "monospace",
-                              color: entry.isMe ? GOLD$5 : AMBER
+                              color: entry.isMe ? GOLD$5 : AMBER$1
                             },
                             children: entry.score.toLocaleString()
                           }
@@ -92602,21 +95044,24 @@ function usePlayerSync() {
     };
     const syncGlobalStats = async () => {
       try {
-        const [g2, t, treasury, gameStats] = await Promise.all([
-          actor.getGlobalStats(),
-          actor.getTokenomics(),
-          actor.getTreasuryBalances().catch(() => ({
-            devPot: 0n,
-            leaderboardPot: 0n,
-            liquidityPot: 0n
-          })),
-          actor.getGameStats().catch(() => null)
-        ]);
+        const [g2, t, treasury, gameStats, leaderboardStats] = await Promise.all(
+          [
+            actor.getGlobalStats(),
+            actor.getTokenomics(),
+            actor.getTreasuryBalances().catch(() => ({
+              devPot: 0n,
+              leaderboardPot: 0n,
+              liquidityPot: 0n
+            })),
+            actor.getGameStats().catch(() => null),
+            actor.getLeaderboardStats().catch(() => null)
+          ]
+        );
         const stats = {
           totalPlotsOwned: Number(g2.totalPlotsOwned),
           totalFRNTRInCirculation: Number(g2.circulatingSupply),
           totalFRNTRBurned: Number(g2.totalBurned),
-          totalFRNTRMined: 0,
+          totalFRNTRMined: leaderboardStats ? Number(leaderboardStats.totalFRNTRMined) / 1e8 : 0,
           activePlayerCount: Number(g2.activePlayers),
           currentDailyEmissionRate: Number(t.emissionRate),
           leaderboardPrizePool: 0,
@@ -92754,6 +95199,752 @@ const CYAN$d = "#00ffcc";
 const BORDER$c = "rgba(0,255,204,0.22)";
 const TEXT$7 = "#e0f4ff";
 const TEXT_DIM$6 = "rgba(224,244,255,0.45)";
+const BIOME_COLORS = {
+  Temperate: "#22c55e",
+  Desert: "#eab308",
+  Ocean: "#3b82f6",
+  DeepOcean: "#1e3a5f",
+  Arctic: "#a5f3fc",
+  Tropical: "#f97316",
+  Volcanic: "#ef4444",
+  AsteroidImpact: "#a855f7"
+};
+function truncatePrincipal(p2) {
+  if (p2.length <= 16) return p2;
+  return `${p2.slice(0, 8)}…${p2.slice(-4)}`;
+}
+function formatRelativeTime(ns) {
+  const nowMs = Date.now();
+  const tsMs = Number(ns / 1000000n);
+  const diffSec = Math.floor((nowMs - tsMs) / 1e3);
+  if (diffSec < 60) return `${diffSec}s ago`;
+  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
+  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
+  return `${Math.floor(diffSec / 86400)}d ago`;
+}
+function formatAnomalyType(t) {
+  return t.replace(/_/g, " ").replace(/\b\w/g, (c2) => c2.toUpperCase());
+}
+function formatICP(e8s) {
+  return (Number(e8s) / 1e8).toFixed(2);
+}
+function SectionHeader({ label }) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "div",
+    {
+      style: {
+        fontSize: 8,
+        fontWeight: 700,
+        color: TEXT_DIM$6,
+        letterSpacing: 2.5,
+        textTransform: "uppercase",
+        marginBottom: 8,
+        paddingBottom: 4,
+        borderBottom: `1px solid ${BORDER$c}`
+      },
+      children: label
+    }
+  );
+}
+function StatBox({
+  label,
+  value,
+  color: color2
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "div",
+    {
+      style: {
+        flex: 1,
+        padding: "8px 10px",
+        borderRadius: 8,
+        background: "rgba(0,255,204,0.04)",
+        border: `1px solid ${BORDER$c}`,
+        backdropFilter: "blur(8px)",
+        minWidth: 0
+      },
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "div",
+          {
+            style: {
+              fontSize: 7,
+              color: TEXT_DIM$6,
+              letterSpacing: 1.5,
+              marginBottom: 3
+            },
+            children: label
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "div",
+          {
+            style: {
+              fontSize: 18,
+              fontWeight: 900,
+              color: color2 ?? CYAN$d,
+              fontFamily: "monospace",
+              letterSpacing: 0.5,
+              lineHeight: 1
+            },
+            children: value
+          }
+        )
+      ]
+    }
+  );
+}
+function AnalyticsTab({
+  actor
+}) {
+  const [analytics, setAnalytics] = reactExports.useState(null);
+  const [analyticsLoading, setAnalyticsLoading] = reactExports.useState(false);
+  const [revenuePeriod, setRevenuePeriod] = reactExports.useState("day");
+  const [revenueData, setRevenueData] = reactExports.useState(null);
+  const [revenueLoading, setRevenueLoading] = reactExports.useState(false);
+  const [anomalies, setAnomalies] = reactExports.useState(null);
+  const [anomalyCount, setAnomalyCount] = reactExports.useState(0);
+  const [anomalyLoading, setAnomalyLoading] = reactExports.useState(false);
+  reactExports.useEffect(() => {
+    if (!actor) return;
+    setAnalyticsLoading(true);
+    actor.getPlayerAnalytics().then((d2) => setAnalytics(d2)).catch(() => {
+    }).finally(() => setAnalyticsLoading(false));
+    setAnomalyLoading(true);
+    actor.getAnomalies().then((d2) => {
+      setAnomalies(d2.anomalies);
+      setAnomalyCount(Number(d2.totalCount));
+    }).catch(() => {
+    }).finally(() => setAnomalyLoading(false));
+  }, [actor]);
+  reactExports.useEffect(() => {
+    if (!actor) return;
+    setRevenueLoading(true);
+    const period = {
+      __kind__: revenuePeriod
+    };
+    actor.getRevenueByPeriod(period).then((d2) => setRevenueData(d2)).catch(() => {
+    }).finally(() => setRevenueLoading(false));
+  }, [actor, revenuePeriod]);
+  const dauBars = analytics ? [
+    {
+      label: "Today",
+      value: Number(analytics.activeLast24h),
+      period: "24h"
+    },
+    {
+      label: "This Week",
+      value: Number(analytics.activeLast7d),
+      period: "7d"
+    },
+    {
+      label: "This Month",
+      value: Number(analytics.activeLast30d),
+      period: "30d"
+    }
+  ] : [];
+  const dauMax = Math.max(...dauBars.map((b2) => b2.value), 1);
+  const funnelStages = analytics ? [
+    { label: "Logged In", count: Number(analytics.loggedIn) },
+    { label: "Bought Plot", count: Number(analytics.boughtPlot) },
+    { label: "Upgraded", count: Number(analytics.upgradedPlot) },
+    { label: "Claimed", count: Number(analytics.claimedTokens) }
+  ] : [];
+  const topBiomes = (analytics == null ? void 0 : analytics.topBiomes) ?? [];
+  const maxBiomeCount = Math.max(...topBiomes.map(([, c2]) => Number(c2)), 1);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 18 }, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(SectionHeader, { label: "Player Activity" }),
+      analyticsLoading ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 10, color: TEXT_DIM$6, padding: "8px 0" }, children: "Loading…" }) : analytics ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", gap: 6, marginBottom: 12 }, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            StatBox,
+            {
+              label: "TOTAL PLAYERS",
+              value: Number(analytics.totalPlayersEver).toLocaleString()
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            StatBox,
+            {
+              label: "ACTIVE 24H",
+              value: Number(analytics.activeLast24h).toLocaleString(),
+              color: "#22c55e"
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            StatBox,
+            {
+              label: "ACTIVE 7D",
+              value: Number(analytics.activeLast7d).toLocaleString(),
+              color: "#86efac"
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            StatBox,
+            {
+              label: "ACTIVE 30D",
+              value: Number(analytics.activeLast30d).toLocaleString()
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            style: {
+              padding: "12px 14px",
+              borderRadius: 8,
+              background: "rgba(0,0,0,0.35)",
+              border: `1px solid ${BORDER$c}`,
+              backdropFilter: "blur(8px)"
+            },
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "div",
+                {
+                  style: {
+                    fontSize: 7,
+                    color: TEXT_DIM$6,
+                    letterSpacing: 2,
+                    marginBottom: 12
+                  },
+                  children: "DAILY ACTIVE USERS"
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "div",
+                {
+                  style: {
+                    display: "flex",
+                    alignItems: "flex-end",
+                    gap: 16,
+                    height: 80
+                  },
+                  children: dauBars.map((bar) => {
+                    const heightPct = Math.max(bar.value / dauMax * 100, 4);
+                    return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "div",
+                      {
+                        style: {
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          gap: 4,
+                          flex: 1
+                        },
+                        children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "div",
+                            {
+                              style: {
+                                fontSize: 9,
+                                fontWeight: 700,
+                                color: CYAN$d,
+                                fontFamily: "monospace"
+                              },
+                              children: bar.value.toLocaleString()
+                            }
+                          ),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "div",
+                            {
+                              style: {
+                                width: "100%",
+                                height: `${heightPct}%`,
+                                minHeight: 4,
+                                borderRadius: 4,
+                                background: `linear-gradient(to top, ${CYAN$d}cc, ${CYAN$d}44)`,
+                                boxShadow: `0 0 8px ${CYAN$d}66`,
+                                transition: "height 0.4s ease"
+                              }
+                            }
+                          ),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "div",
+                            {
+                              style: {
+                                fontSize: 7,
+                                color: TEXT_DIM$6,
+                                letterSpacing: 1
+                              },
+                              children: bar.label
+                            }
+                          ),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 6, color: TEXT_DIM$6 }, children: bar.period })
+                        ]
+                      },
+                      bar.period
+                    );
+                  })
+                }
+              )
+            ]
+          }
+        )
+      ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 9, color: TEXT_DIM$6 }, children: "No data available." })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(SectionHeader, { label: "Conversion Funnel" }),
+      analytics && funnelStages.length > 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "div",
+        {
+          style: {
+            padding: "12px 14px",
+            borderRadius: 8,
+            background: "rgba(0,0,0,0.35)",
+            border: `1px solid ${BORDER$c}`,
+            backdropFilter: "blur(8px)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 8
+          },
+          children: funnelStages.map((stage, i2) => {
+            const prevCount = i2 === 0 ? funnelStages[0].count : funnelStages[i2 - 1].count;
+            const pct = prevCount > 0 ? Math.round(stage.count / prevCount * 100) : 0;
+            const maxCount = funnelStages[0].count || 1;
+            const barWidthPct = Math.max(stage.count / maxCount * 100, 2);
+            return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "div",
+                {
+                  style: {
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginBottom: 3
+                  },
+                  children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "span",
+                      {
+                        style: { fontSize: 8, color: TEXT$7, letterSpacing: 0.5 },
+                        children: [
+                          i2 + 1,
+                          ". ",
+                          stage.label
+                        ]
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "span",
+                      {
+                        style: {
+                          fontSize: 8,
+                          color: CYAN$d,
+                          fontFamily: "monospace"
+                        },
+                        children: [
+                          stage.count.toLocaleString(),
+                          i2 > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                            "span",
+                            {
+                              style: {
+                                fontSize: 7,
+                                color: pct >= 50 ? "#22c55e" : pct >= 20 ? "#eab308" : "#ef4444",
+                                marginLeft: 6
+                              },
+                              children: [
+                                "(",
+                                pct,
+                                "%)"
+                              ]
+                            }
+                          )
+                        ]
+                      }
+                    )
+                  ]
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "div",
+                {
+                  style: {
+                    height: 6,
+                    borderRadius: 3,
+                    background: "rgba(255,255,255,0.06)",
+                    overflow: "hidden"
+                  },
+                  children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        width: `${barWidthPct}%`,
+                        height: "100%",
+                        borderRadius: 3,
+                        background: i2 === 0 ? CYAN$d : pct >= 50 ? "#22c55e" : pct >= 20 ? "#eab308" : "#ef4444",
+                        boxShadow: `0 0 6px ${CYAN$d}55`,
+                        transition: "width 0.4s ease"
+                      }
+                    }
+                  )
+                }
+              )
+            ] }, stage.label);
+          })
+        }
+      ) : analyticsLoading ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 10, color: TEXT_DIM$6, padding: "8px 0" }, children: "Loading…" }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 9, color: TEXT_DIM$6 }, children: "No funnel data." })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(SectionHeader, { label: "Revenue by Period" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "flex", gap: 4, marginBottom: 10 }, children: ["day", "week", "month"].map((p2) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          type: "button",
+          "data-ocid": `admin.revenue_period_${p2}`,
+          onClick: () => setRevenuePeriod(p2),
+          style: {
+            flex: 1,
+            padding: "5px 0",
+            borderRadius: 6,
+            border: `1px solid ${revenuePeriod === p2 ? CYAN$d : BORDER$c}`,
+            background: revenuePeriod === p2 ? "rgba(0,255,204,0.12)" : "rgba(0,255,204,0.03)",
+            color: revenuePeriod === p2 ? CYAN$d : TEXT_DIM$6,
+            fontSize: 8,
+            fontWeight: 700,
+            letterSpacing: 1.5,
+            textTransform: "uppercase",
+            cursor: "pointer",
+            transition: "all 0.15s"
+          },
+          children: p2 === "day" ? "Day" : p2 === "week" ? "Week" : "Month"
+        },
+        p2
+      )) }),
+      revenueLoading ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 10, color: TEXT_DIM$6, padding: "8px 0" }, children: "Loading…" }) : revenueData ? /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        "div",
+        {
+          style: {
+            padding: "12px 14px",
+            borderRadius: 8,
+            background: "rgba(0,0,0,0.35)",
+            border: `1px solid ${BORDER$c}`,
+            backdropFilter: "blur(8px)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 10
+          },
+          children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", gap: 6 }, children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                StatBox,
+                {
+                  label: "TOTAL ICP",
+                  value: `${formatICP(revenueData.totalIcpE8s)} ICP`,
+                  color: CYAN$d
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                StatBox,
+                {
+                  label: "USD EQUIV",
+                  value: `${revenueData.usdEquivalent.toFixed(2)}`,
+                  color: "#86efac"
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                StatBox,
+                {
+                  label: "TRANSACTIONS",
+                  value: Number(revenueData.transactionCount).toLocaleString()
+                }
+              )
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "div",
+                {
+                  style: {
+                    fontSize: 7,
+                    color: TEXT_DIM$6,
+                    letterSpacing: 2,
+                    marginBottom: 6
+                  },
+                  children: "TREASURY SPLIT"
+                }
+              ),
+              [
+                {
+                  label: "Developer (25%)",
+                  value: revenueData.devSplitE8s,
+                  pct: 25,
+                  color: "#818cf8"
+                },
+                {
+                  label: "Leaderboard (25%)",
+                  value: revenueData.leaderboardSplitE8s,
+                  pct: 25,
+                  color: "#fbbf24"
+                },
+                {
+                  label: "Liquidity (50%)",
+                  value: revenueData.liquiditySplitE8s,
+                  pct: 50,
+                  color: CYAN$d
+                }
+              ].map((split2) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { marginBottom: 6 }, children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "div",
+                  {
+                    style: {
+                      display: "flex",
+                      justifyContent: "space-between",
+                      marginBottom: 2
+                    },
+                    children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 7, color: TEXT_DIM$6 }, children: split2.label }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                        "span",
+                        {
+                          style: {
+                            fontSize: 7,
+                            color: split2.color,
+                            fontFamily: "monospace"
+                          },
+                          children: [
+                            formatICP(split2.value),
+                            " ICP"
+                          ]
+                        }
+                      )
+                    ]
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      height: 5,
+                      borderRadius: 3,
+                      background: "rgba(255,255,255,0.06)",
+                      overflow: "hidden"
+                    },
+                    children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "div",
+                      {
+                        style: {
+                          width: `${split2.pct}%`,
+                          height: "100%",
+                          borderRadius: 3,
+                          background: split2.color,
+                          boxShadow: `0 0 6px ${split2.color}55`
+                        }
+                      }
+                    )
+                  }
+                )
+              ] }, split2.label))
+            ] })
+          ]
+        }
+      ) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 9, color: TEXT_DIM$6 }, children: "No revenue data." })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(SectionHeader, { label: "Top Biomes" }),
+      analyticsLoading ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 10, color: TEXT_DIM$6, padding: "8px 0" }, children: "Loading…" }) : topBiomes.length > 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "div",
+        {
+          style: {
+            padding: "10px 14px",
+            borderRadius: 8,
+            background: "rgba(0,0,0,0.35)",
+            border: `1px solid ${BORDER$c}`,
+            backdropFilter: "blur(8px)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 7
+          },
+          children: topBiomes.map(([biome, count], idx) => {
+            const cnt = Number(count);
+            const barW = Math.max(cnt / maxBiomeCount * 100, 2);
+            const biomeColor = BIOME_COLORS[biome] ?? CYAN$d;
+            return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "div",
+                {
+                  style: {
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginBottom: 3
+                  },
+                  children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { style: { fontSize: 8, color: TEXT$7 }, children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "span",
+                        {
+                          style: {
+                            display: "inline-block",
+                            width: 8,
+                            height: 8,
+                            borderRadius: 2,
+                            background: biomeColor,
+                            marginRight: 5,
+                            verticalAlign: "middle",
+                            boxShadow: `0 0 4px ${biomeColor}88`
+                          }
+                        }
+                      ),
+                      "#",
+                      idx + 1,
+                      " ",
+                      biome
+                    ] }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "span",
+                      {
+                        style: {
+                          fontSize: 8,
+                          color: biomeColor,
+                          fontFamily: "monospace",
+                          fontWeight: 700
+                        },
+                        children: cnt.toLocaleString()
+                      }
+                    )
+                  ]
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "div",
+                {
+                  style: {
+                    height: 5,
+                    borderRadius: 3,
+                    background: "rgba(255,255,255,0.06)",
+                    overflow: "hidden"
+                  },
+                  children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        width: `${barW}%`,
+                        height: "100%",
+                        borderRadius: 3,
+                        background: biomeColor,
+                        boxShadow: `0 0 6px ${biomeColor}55`,
+                        transition: "width 0.4s ease"
+                      }
+                    }
+                  )
+                }
+              )
+            ] }, biome);
+          })
+        }
+      ) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 9, color: TEXT_DIM$6 }, children: "No biome data." })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(SectionHeader, { label: "Anomaly Alerts" }),
+      anomalyLoading ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 10, color: TEXT_DIM$6, padding: "8px 0" }, children: "Loading…" }) : anomalies !== null ? /* @__PURE__ */ jsxRuntimeExports.jsx(jsxRuntimeExports.Fragment, { children: anomalyCount === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "div",
+        {
+          "data-ocid": "admin.anomaly_status",
+          style: {
+            padding: "10px 14px",
+            borderRadius: 8,
+            background: "rgba(34,197,94,0.08)",
+            border: "1px solid rgba(34,197,94,0.35)",
+            fontSize: 9,
+            color: "#22c55e",
+            fontWeight: 700,
+            letterSpacing: 0.5,
+            display: "flex",
+            alignItems: "center",
+            gap: 6
+          },
+          children: "✓ No anomalies detected"
+        }
+      ) : /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            style: {
+              fontSize: 9,
+              color: "#ef4444",
+              fontWeight: 700,
+              marginBottom: 8,
+              display: "flex",
+              alignItems: "center",
+              gap: 6
+            },
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(TriangleAlert, { size: 12 }),
+              anomalyCount,
+              " ",
+              anomalyCount === 1 ? "anomaly" : "anomalies",
+              " ",
+              "detected"
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "div",
+          {
+            style: { display: "flex", flexDirection: "column", gap: 6 },
+            children: anomalies.map((a2, i2) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "div",
+              {
+                "data-ocid": `admin.anomaly.item.${i2 + 1}`,
+                style: {
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  background: "rgba(239,68,68,0.06)",
+                  border: "1px solid rgba(239,68,68,0.35)",
+                  backdropFilter: "blur(8px)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 4
+                },
+                children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "div",
+                    {
+                      style: {
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center"
+                      },
+                      children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "span",
+                          {
+                            style: {
+                              fontSize: 8,
+                              fontWeight: 700,
+                              color: "#fca5a5",
+                              letterSpacing: 0.5
+                            },
+                            children: formatAnomalyType(a2.anomalyType)
+                          }
+                        ),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 7, color: TEXT_DIM$6 }, children: formatRelativeTime(a2.timestamp) })
+                      ]
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      className: "font-mono",
+                      style: { fontSize: 8, color: TEXT_DIM$6 },
+                      children: truncatePrincipal(a2.principal.toString())
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: { fontSize: 8, color: TEXT$7, lineHeight: 1.5 },
+                      children: a2.details
+                    }
+                  )
+                ]
+              },
+              `${a2.principal.toString()}-${i2}`
+            ))
+          }
+        )
+      ] }) }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 9, color: TEXT_DIM$6 }, children: "Failed to load anomalies." })
+    ] })
+  ] });
+}
 function AdminButton({
   label,
   icon: Icon2,
@@ -92800,6 +95991,9 @@ function AdminPanel() {
     cyclesFormatted,
     loading: cyclesLoading
   } = useCanisterCycles();
+  const [activeTab, setActiveTab] = reactExports.useState(
+    "control"
+  );
   const [mintLoading, setMintLoading] = reactExports.useState(false);
   const [resetLoading, setResetLoading] = reactExports.useState(false);
   const [reseedLoading, setReseedLoading] = reactExports.useState(false);
@@ -92978,343 +96172,379 @@ function AdminPanel() {
             }
           )
         ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "flex", gap: 4 }, children: [
+          { id: "control", label: "CONTROL", icon: Shield },
+          { id: "analytics", label: "ANALYTICS", icon: ChartNoAxesColumn }
+        ].map(({ id: id2, label, icon: Icon2 }) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "button",
+          {
+            type: "button",
+            "data-ocid": `admin.tab_${id2}`,
+            onClick: () => setActiveTab(id2),
+            style: {
+              flex: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 5,
+              padding: "6px 8px",
+              borderRadius: 7,
+              border: `1px solid ${activeTab === id2 ? CYAN$d : BORDER$c}`,
+              background: activeTab === id2 ? "rgba(0,255,204,0.12)" : "rgba(0,255,204,0.03)",
+              color: activeTab === id2 ? CYAN$d : TEXT_DIM$6,
+              fontSize: 8,
+              fontWeight: 700,
+              letterSpacing: 1.5,
+              cursor: "pointer",
+              transition: "all 0.15s",
+              boxShadow: activeTab === id2 ? `0 0 8px ${CYAN$d}33` : "none"
+            },
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Icon2, { size: 11 }),
+              label
+            ]
+          },
+          id2
+        )) }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { height: 1, background: BORDER$c } }),
-        (() => {
-          const isCritical = cycles !== null && cycles < CYCLES_CRITICAL;
-          const isWarning = cycles !== null && cycles >= CYCLES_CRITICAL && cycles < CYCLES_WARNING;
-          const accentColor = isCritical ? "#ff4444" : isWarning ? "#ffcc00" : CYAN$d;
-          const bgColor = isCritical ? "rgba(255,68,68,0.08)" : isWarning ? "rgba(255,204,0,0.07)" : "rgba(0,255,204,0.04)";
-          const borderColor = isCritical ? "rgba(255,68,68,0.35)" : isWarning ? "rgba(255,204,0,0.35)" : BORDER$c;
-          return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        activeTab === "control" ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+          (() => {
+            const isCritical = cycles !== null && cycles < CYCLES_CRITICAL;
+            const isWarning = cycles !== null && cycles >= CYCLES_CRITICAL && cycles < CYCLES_WARNING;
+            const accentColor = isCritical ? "#ff4444" : isWarning ? "#ffcc00" : CYAN$d;
+            const bgColor = isCritical ? "rgba(255,68,68,0.08)" : isWarning ? "rgba(255,204,0,0.07)" : "rgba(0,255,204,0.04)";
+            const borderColor = isCritical ? "rgba(255,68,68,0.35)" : isWarning ? "rgba(255,204,0,0.35)" : BORDER$c;
+            return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "div",
+              {
+                "data-ocid": "admin.cycles_card",
+                style: {
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  background: bgColor,
+                  border: `1px solid ${borderColor}`,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 4,
+                  backdropFilter: "blur(8px)"
+                },
+                children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "div",
+                    {
+                      style: {
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 8
+                      },
+                      children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "span",
+                          {
+                            style: {
+                              fontSize: 7,
+                              color: TEXT_DIM$6,
+                              letterSpacing: 1.5,
+                              textTransform: "uppercase"
+                            },
+                            children: "CANISTER CYCLES"
+                          }
+                        ),
+                        (isCritical || isWarning) && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "span",
+                          {
+                            style: {
+                              fontSize: 7,
+                              fontWeight: 700,
+                              letterSpacing: 1.5,
+                              color: accentColor,
+                              textTransform: "uppercase",
+                              padding: "1px 6px",
+                              borderRadius: 6,
+                              background: isCritical ? "rgba(255,68,68,0.15)" : "rgba(255,204,0,0.12)",
+                              border: `1px solid ${accentColor}55`
+                            },
+                            children: isCritical ? "⚠ CRITICAL" : "⚠ LOW"
+                          }
+                        )
+                      ]
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      "data-ocid": "admin.cycles_value",
+                      style: {
+                        fontSize: 20,
+                        fontWeight: 900,
+                        color: accentColor,
+                        letterSpacing: 1,
+                        fontFamily: "monospace",
+                        textShadow: `0 0 10px ${accentColor}99`,
+                        lineHeight: 1.1
+                      },
+                      children: cyclesLoading ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 11, color: TEXT_DIM$6 }, children: "Loading…" }) : cyclesFormatted
+                    }
+                  ),
+                  isCritical && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      "data-ocid": "admin.cycles_warning",
+                      style: {
+                        fontSize: 8,
+                        color: "#ff8888",
+                        letterSpacing: 0.3,
+                        marginTop: 2
+                      },
+                      children: "⚠ Critical — top up canister cycles immediately."
+                    }
+                  ),
+                  isWarning && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      "data-ocid": "admin.cycles_warning",
+                      style: {
+                        fontSize: 8,
+                        color: "#ffdd66",
+                        letterSpacing: 0.3,
+                        marginTop: 2
+                      },
+                      children: "⚠ Below 1T cycles — consider topping up soon."
+                    }
+                  )
+                ]
+              }
+            );
+          })(),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
             "div",
             {
-              "data-ocid": "admin.cycles_card",
               style: {
-                padding: "10px 12px",
+                padding: "8px 12px",
                 borderRadius: 8,
-                background: bgColor,
-                border: `1px solid ${borderColor}`,
-                display: "flex",
-                flexDirection: "column",
-                gap: 4,
-                backdropFilter: "blur(8px)"
+                background: "rgba(0,255,204,0.04)",
+                border: `1px solid ${BORDER$c}`
               },
               children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "div",
                   {
                     style: {
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: 8
+                      fontSize: 7,
+                      color: TEXT_DIM$6,
+                      letterSpacing: 1.5,
+                      marginBottom: 3
                     },
-                    children: [
-                      /* @__PURE__ */ jsxRuntimeExports.jsx(
-                        "span",
-                        {
-                          style: {
-                            fontSize: 7,
-                            color: TEXT_DIM$6,
-                            letterSpacing: 1.5,
-                            textTransform: "uppercase"
-                          },
-                          children: "CANISTER CYCLES"
-                        }
-                      ),
-                      (isCritical || isWarning) && /* @__PURE__ */ jsxRuntimeExports.jsx(
-                        "span",
-                        {
-                          style: {
-                            fontSize: 7,
-                            fontWeight: 700,
-                            letterSpacing: 1.5,
-                            color: accentColor,
-                            textTransform: "uppercase",
-                            padding: "1px 6px",
-                            borderRadius: 6,
-                            background: isCritical ? "rgba(255,68,68,0.15)" : "rgba(255,204,0,0.12)",
-                            border: `1px solid ${accentColor}55`
-                          },
-                          children: isCritical ? "⚠ CRITICAL" : "⚠ LOW"
-                        }
-                      )
-                    ]
+                    children: "ADMIN PRINCIPAL"
                   }
                 ),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
                   "div",
                   {
-                    "data-ocid": "admin.cycles_value",
-                    style: {
-                      fontSize: 20,
-                      fontWeight: 900,
-                      color: accentColor,
-                      letterSpacing: 1,
-                      fontFamily: "monospace",
-                      textShadow: `0 0 10px ${accentColor}99`,
-                      lineHeight: 1.1
-                    },
-                    children: cyclesLoading ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 11, color: TEXT_DIM$6 }, children: "Loading…" }) : cyclesFormatted
-                  }
-                ),
-                isCritical && /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "div",
-                  {
-                    "data-ocid": "admin.cycles_warning",
-                    style: {
-                      fontSize: 8,
-                      color: "#ff8888",
-                      letterSpacing: 0.3,
-                      marginTop: 2
-                    },
-                    children: "⚠ Critical — top up canister cycles immediately."
-                  }
-                ),
-                isWarning && /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "div",
-                  {
-                    "data-ocid": "admin.cycles_warning",
-                    style: {
-                      fontSize: 8,
-                      color: "#ffdd66",
-                      letterSpacing: 0.3,
-                      marginTop: 2
-                    },
-                    children: "⚠ Below 1T cycles — consider topping up soon."
+                    className: "font-mono",
+                    style: { fontSize: 9, color: TEXT$7, wordBreak: "break-all" },
+                    children: player.principal ?? "—"
                   }
                 )
               ]
             }
-          );
-        })(),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs(
-          "div",
-          {
-            style: {
-              padding: "8px 12px",
-              borderRadius: 8,
-              background: "rgba(0,255,204,0.04)",
-              border: `1px solid ${BORDER$c}`
-            },
-            children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "div",
-                {
-                  style: {
-                    fontSize: 7,
-                    color: TEXT_DIM$6,
-                    letterSpacing: 1.5,
-                    marginBottom: 3
-                  },
-                  children: "ADMIN PRINCIPAL"
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "div",
-                {
-                  className: "font-mono",
-                  style: { fontSize: 9, color: TEXT$7, wordBreak: "break-all" },
-                  children: player.principal ?? "—"
-                }
-              )
-            ]
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 8 }, children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "div",
-            {
-              style: {
-                fontSize: 8,
-                color: TEXT_DIM$6,
-                letterSpacing: 2,
-                marginBottom: 2
-              },
-              children: "ACTIONS"
-            }
           ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { "data-ocid": "admin.mint_button", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-            AdminButton,
-            {
-              label: "Mint to Self (Faucet)",
-              icon: Zap,
-              onClick: handleMintToSelf,
-              loading: mintLoading
-            }
-          ) }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            AdminButton,
-            {
-              label: "Reseed Plots",
-              icon: RefreshCw,
-              onClick: handleReseedPlots,
-              loading: reseedLoading
-            }
-          ),
-          !showConfirm ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-            AdminButton,
-            {
-              label: "Reset All State",
-              icon: RotateCcw,
-              onClick: () => setShowConfirm(true),
-              danger: true
-            }
-          ) : /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "div",
-            {
-              style: {
-                borderRadius: 8,
-                border: "1px solid rgba(255,68,68,0.4)",
-                background: "rgba(255,68,68,0.07)",
-                padding: "10px 12px",
-                display: "flex",
-                flexDirection: "column",
-                gap: 8
-              },
-              children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "div",
-                  {
-                    style: {
-                      fontSize: 9,
-                      color: "#ff6666",
-                      fontWeight: 700,
-                      letterSpacing: 0.5
-                    },
-                    children: "This wipes ALL player data and plots. Confirm?"
-                  }
-                ),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", gap: 6 }, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 8 }, children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "div",
+              {
+                style: {
+                  fontSize: 8,
+                  color: TEXT_DIM$6,
+                  letterSpacing: 2,
+                  marginBottom: 2
+                },
+                children: "ACTIONS"
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { "data-ocid": "admin.mint_button", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+              AdminButton,
+              {
+                label: "Mint to Self (Faucet)",
+                icon: Zap,
+                onClick: handleMintToSelf,
+                loading: mintLoading
+              }
+            ) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              AdminButton,
+              {
+                label: "Reseed Plots",
+                icon: RefreshCw,
+                onClick: handleReseedPlots,
+                loading: reseedLoading
+              }
+            ),
+            !showConfirm ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+              AdminButton,
+              {
+                label: "Reset All State",
+                icon: RotateCcw,
+                onClick: () => setShowConfirm(true),
+                danger: true
+              }
+            ) : /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "div",
+              {
+                style: {
+                  borderRadius: 8,
+                  border: "1px solid rgba(255,68,68,0.4)",
+                  background: "rgba(255,68,68,0.07)",
+                  padding: "10px 12px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8
+                },
+                children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "button",
+                    "div",
                     {
-                      type: "button",
-                      "data-ocid": "admin.confirm_button",
-                      onClick: handleResetAll,
-                      disabled: resetLoading,
                       style: {
-                        flex: 1,
-                        padding: "8px",
-                        borderRadius: 6,
-                        background: "rgba(255,68,68,0.2)",
-                        border: "1px solid rgba(255,68,68,0.5)",
+                        fontSize: 9,
                         color: "#ff6666",
-                        fontSize: 10,
                         fontWeight: 700,
-                        cursor: resetLoading ? "not-allowed" : "pointer",
-                        letterSpacing: 1
+                        letterSpacing: 0.5
                       },
-                      children: resetLoading ? "RESETTING..." : "CONFIRM"
+                      children: "This wipes ALL player data and plots. Confirm?"
                     }
                   ),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "button",
-                    {
-                      type: "button",
-                      "data-ocid": "admin.cancel_button",
-                      onClick: () => setShowConfirm(false),
-                      style: {
-                        flex: 1,
-                        padding: "8px",
-                        borderRadius: 6,
-                        background: "rgba(0,255,204,0.06)",
-                        border: `1px solid ${BORDER$c}`,
-                        color: CYAN$d,
-                        fontSize: 10,
-                        fontWeight: 700,
-                        cursor: "pointer",
-                        letterSpacing: 1
-                      },
-                      children: "CANCEL"
-                    }
-                  )
-                ] })
-              ]
-            }
-          )
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { marginBottom: 12 }, children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "div",
-            {
-              style: {
-                fontSize: 9,
-                color: TEXT_DIM$6,
-                letterSpacing: 1.5,
-                textTransform: "uppercase",
-                marginBottom: 6
-              },
-              children: "LEADERBOARD MAINTENANCE"
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "button",
-            {
-              type: "button",
-              onClick: () => setShowPurgeConfirm(true),
-              disabled: isPurging,
-              style: {
-                width: "100%",
-                padding: "8px 12px",
-                borderRadius: 6,
-                background: "rgba(220,38,38,0.1)",
-                border: "1px solid rgba(220,38,38,0.4)",
-                color: "#f87171",
-                fontSize: 10,
-                letterSpacing: 0.8,
-                cursor: isPurging ? "not-allowed" : "pointer",
-                opacity: isPurging ? 0.5 : 1
-              },
-              children: isPurging ? "PURGING..." : "PURGE TEST PLAYERS"
-            }
-          ),
-          purgeResult && /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "div",
-            {
-              style: {
-                marginTop: 6,
-                fontSize: 9,
-                color: purgeResult.startsWith("Error") ? "#f87171" : "#34d399",
-                letterSpacing: 0.5
-              },
-              children: purgeResult
-            }
-          )
-        ] }),
-        showPurgeConfirm && /* @__PURE__ */ jsxRuntimeExports.jsx(
-          _ActionConfirmModal,
-          {
-            isOpen: showPurgeConfirm,
-            actionType: "purchase",
-            title: "Purge Test Players",
-            details: [
-              {
-                label: "Action",
-                value: "Remove all test/placeholder leaderboard entries"
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", gap: 6 }, children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "button",
+                      {
+                        type: "button",
+                        "data-ocid": "admin.confirm_button",
+                        onClick: handleResetAll,
+                        disabled: resetLoading,
+                        style: {
+                          flex: 1,
+                          padding: "8px",
+                          borderRadius: 6,
+                          background: "rgba(255,68,68,0.2)",
+                          border: "1px solid rgba(255,68,68,0.5)",
+                          color: "#ff6666",
+                          fontSize: 10,
+                          fontWeight: 700,
+                          cursor: resetLoading ? "not-allowed" : "pointer",
+                          letterSpacing: 1
+                        },
+                        children: resetLoading ? "RESETTING..." : "CONFIRM"
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "button",
+                      {
+                        type: "button",
+                        "data-ocid": "admin.cancel_button",
+                        onClick: () => setShowConfirm(false),
+                        style: {
+                          flex: 1,
+                          padding: "8px",
+                          borderRadius: 6,
+                          background: "rgba(0,255,204,0.06)",
+                          border: `1px solid ${BORDER$c}`,
+                          color: CYAN$d,
+                          fontSize: 10,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          letterSpacing: 1
+                        },
+                        children: "CANCEL"
+                      }
+                    )
+                  ] })
+                ]
               }
-            ],
-            warningText: "This cannot be undone. All test player entries will be permanently removed.",
-            onConfirm: handlePurgeTestPlayers,
-            onCancel: () => setShowPurgeConfirm(false)
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "div",
-          {
-            style: {
-              padding: "8px 12px",
-              borderRadius: 8,
-              background: "rgba(0,10,20,0.4)",
-              border: `1px solid ${BORDER$c}`,
-              fontSize: 8,
-              color: TEXT_DIM$6,
-              lineHeight: 1.7,
-              letterSpacing: 0.3
-            },
-            children: "⚡ Admin panel is only visible to the registered admin principal. Reset All State is irreversible — use before mainnet migration only."
-          }
-        )
+            )
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { marginBottom: 12 }, children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "div",
+              {
+                style: {
+                  fontSize: 9,
+                  color: TEXT_DIM$6,
+                  letterSpacing: 1.5,
+                  textTransform: "uppercase",
+                  marginBottom: 6
+                },
+                children: "LEADERBOARD MAINTENANCE"
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "button",
+              {
+                type: "button",
+                onClick: () => setShowPurgeConfirm(true),
+                disabled: isPurging,
+                style: {
+                  width: "100%",
+                  padding: "8px 12px",
+                  borderRadius: 6,
+                  background: "rgba(220,38,38,0.1)",
+                  border: "1px solid rgba(220,38,38,0.4)",
+                  color: "#f87171",
+                  fontSize: 10,
+                  letterSpacing: 0.8,
+                  cursor: isPurging ? "not-allowed" : "pointer",
+                  opacity: isPurging ? 0.5 : 1
+                },
+                children: isPurging ? "PURGING..." : "PURGE TEST PLAYERS"
+              }
+            ),
+            purgeResult && /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "div",
+              {
+                style: {
+                  marginTop: 6,
+                  fontSize: 9,
+                  color: purgeResult.startsWith("Error") ? "#f87171" : "#34d399",
+                  letterSpacing: 0.5
+                },
+                children: purgeResult
+              }
+            )
+          ] }),
+          showPurgeConfirm && /* @__PURE__ */ jsxRuntimeExports.jsx(
+            _ActionConfirmModal,
+            {
+              isOpen: showPurgeConfirm,
+              actionType: "purchase",
+              title: "Purge Test Players",
+              details: [
+                {
+                  label: "Action",
+                  value: "Remove all test/placeholder leaderboard entries"
+                }
+              ],
+              warningText: "This cannot be undone. All test player entries will be permanently removed.",
+              onConfirm: handlePurgeTestPlayers,
+              onCancel: () => setShowPurgeConfirm(false)
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
+            {
+              style: {
+                padding: "8px 12px",
+                borderRadius: 8,
+                background: "rgba(0,10,20,0.4)",
+                border: `1px solid ${BORDER$c}`,
+                fontSize: 8,
+                color: TEXT_DIM$6,
+                lineHeight: 1.7,
+                letterSpacing: 0.3
+              },
+              children: "⚡ Admin panel is only visible to the registered admin principal. Reset All State is irreversible — use before mainnet migration only."
+            }
+          )
+        ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx(AnalyticsTab, { actor })
       ]
     }
   );
@@ -94025,11 +97255,66 @@ const BORDER$9 = "rgba(0,255,204,0.22)";
 const GOLD$4 = "#ffd700";
 const TEXT$5 = "#e0f4ff";
 const TEXT_DIM$4 = "rgba(224,244,255,0.45)";
+const AMBER = "#da913c";
+const AMBER_DIM = "rgba(218,145,60,0.45)";
+const AMBER_BORDER = "rgba(218,145,60,0.25)";
 function fmtFrntr(n) {
   if (Number.isNaN(n) || n === void 0) return "0.00000000";
-  if (n >= 1e6) return n.toFixed(2);
+  if (n >= 1e6) return `${(n / 1e6).toFixed(2)}M`;
   if (n >= 1e3) return n.toFixed(4);
   return n.toFixed(8);
+}
+function fmtShort(n) {
+  if (Number.isNaN(n) || n === void 0) return "0";
+  if (n >= 1e6) return `${(n / 1e6).toFixed(2)}M`;
+  if (n >= 1e3) return `${(n / 1e3).toFixed(1)}K`;
+  return n.toFixed(2);
+}
+const MINERALS = [
+  {
+    id: "iron",
+    name: "Iron",
+    emoji: "⛏️",
+    color: "#b0c4de",
+    desc: "Core structural resource. Powers base construction and defensive fortifications across all terrain biomes."
+  },
+  {
+    id: "fuel",
+    name: "Fuel",
+    emoji: "🛢️",
+    color: AMBER,
+    desc: "Energy currency for missile launches, rapid deployment, and generator boost cycles."
+  },
+  {
+    id: "crystal",
+    name: "Crystal",
+    emoji: "💎",
+    color: "#7dd3fc",
+    desc: "Advanced tech component. Required for Neural Matrix upgrades and precision targeting systems."
+  },
+  {
+    id: "rare_earth",
+    name: "Rare Earth",
+    emoji: "🌐",
+    color: "#a78bfa",
+    desc: "Ultra-rare compound found in Volcanic and Asteroid biomes. Unlocks Apex Nexus tier and exotic weaponry."
+  },
+  {
+    id: "exotic",
+    name: "Exotic Matter",
+    emoji: "✨",
+    color: "#f0abfc",
+    desc: "Phase-shifted material from deep-ocean anomalies. Future: enables dimensional relay structures."
+  }
+];
+const MISSIONS_LS_KEY = "frontier_missions_v1";
+function loadMissions() {
+  try {
+    const raw = localStorage.getItem(MISSIONS_LS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
 }
 function CommandCenter() {
   const player = useGameStore((s2) => s2.player);
@@ -94037,77 +97322,54 @@ function CommandCenter() {
   const totalFRNTRBurned = useGameStore((s2) => s2.totalFRNTRBurned);
   const plots = useGameStore((s2) => s2.plots);
   const accruedFrntSinceSync = useGameStore((s2) => s2.accruedFrntSinceSync);
+  const confirmedFrntBalance = useGameStore((s2) => s2.confirmedFrntBalance);
   const setFrntrBalance = useGameStore((s2) => s2.setFrntrBalance);
+  const claimAllFrntr = useGameStore((s2) => s2.claimAllFrntr);
   const incrementClaimCount = useGameStore((s2) => s2.incrementClaimCount);
   const addFrntr = useGameStore((s2) => s2.addFrntr);
+  const claimCount = useGameStore((s2) => s2.claimCount);
   const { actor } = useActor(createActor);
   const [isClaiming, setIsClaiming] = reactExports.useState(false);
   const [activeTab, setActiveTab] = reactExports.useState("tokens");
   const [auditOpen, setAuditOpen] = reactExports.useState(false);
-  const MISSIONS_LS_KEY = "frontier_missions_v1";
-  const loadMissions = () => {
-    try {
-      const raw = localStorage.getItem(MISSIONS_LS_KEY);
-      return raw ? JSON.parse(raw) : {};
-    } catch {
-      return {};
-    }
-  };
+  const [liveStats, setLiveStats] = reactExports.useState(null);
+  const [livePlayerState, setLivePlayerState] = reactExports.useState(null);
+  const [missions, setMissions] = reactExports.useState(loadMissions);
   const saveMissions = reactExports.useCallback((m2) => {
     try {
       localStorage.setItem(MISSIONS_LS_KEY, JSON.stringify(m2));
     } catch {
     }
   }, []);
-  const [missions, setMissions] = reactExports.useState(loadMissions);
   const MISSION_DEFS = reactExports.useMemo(
     () => [
       {
         id: "first_plot",
         title: "Purchase your first plot",
-        desc: "Buy any hex territory on the globe",
         reward: 200,
         check: () => player.plotsOwned.length >= 1
       },
       {
         id: "tier2_upgrade",
         title: "Upgrade a plot to tier 2",
-        desc: "Reach Ion Capacitor tier on any plot",
         reward: 350,
         check: () => Object.values(generatorTiers).some((t) => t >= 2)
       },
       {
-        id: "tier3_upgrade",
-        title: "Upgrade a plot to tier 3",
-        desc: "Reach Fusion Core tier on any plot",
-        reward: 500,
-        check: () => Object.values(generatorTiers).some((t) => t >= 3)
-      },
-      {
         id: "acc_1000",
         title: "Accumulate 1,000 FRNTR",
-        desc: "Hold at least 1,000 FRNTR in your balance",
         reward: 300,
         check: () => player.frntBalance >= 1e3
       },
       {
-        id: "acc_5000",
-        title: "Accumulate 5,000 FRNTR",
-        desc: "Hold at least 5,000 FRNTR in your balance",
-        reward: 750,
-        check: () => player.frntBalance >= 5e3
-      },
-      {
         id: "five_plots",
         title: "Own 5 plots",
-        desc: "Expand your territory to 5 hex plots",
         reward: 1e3,
         check: () => player.plotsOwned.length >= 5
       },
       {
         id: "claim_10",
         title: "Claim tokens 10 times",
-        desc: "Use the Claim All button 10 times",
         reward: 400,
         check: () => (useGameStore.getState().claimCount ?? 0) >= 10
       }
@@ -94129,12 +97391,7 @@ function CommandCenter() {
             next[m2.id] = { completed: true, claimed: true };
             changed = true;
             (async () => {
-              if (!actor) {
-                ue.error("Not connected — mission reward not credited", {
-                  duration: 5e3
-                });
-                return;
-              }
+              if (!actor) return;
               try {
                 const result = await actor.completeMission(m2.id);
                 if (result.__kind__ === "ok") {
@@ -94142,14 +97399,8 @@ function CommandCenter() {
                   ue.success(`Mission complete! +${m2.reward} FRNTR`, {
                     duration: 4e3
                   });
-                } else {
-                  ue.error(`Mission failed: ${result.err}`, {
-                    duration: 5e3
-                  });
                 }
-              } catch (e) {
-                const msg = e instanceof Error ? e.message : String(e);
-                ue.error(`Mission error: ${msg}`, { duration: 5e3 });
+              } catch {
               }
             })();
           }
@@ -94166,45 +97417,106 @@ function CommandCenter() {
     }, 1e3);
     return () => clearInterval(interval);
   }, []);
+  const fetchedRef = reactExports.useRef(false);
+  reactExports.useEffect(() => {
+    if (!actor || fetchedRef.current) return;
+    fetchedRef.current = true;
+    (async () => {
+      try {
+        const [stats, playerState] = await Promise.all([
+          actor.getGameStats(),
+          actor.getPlayerState()
+        ]);
+        setLiveStats({
+          totalFrntrBurned: Number(stats.totalFrntrBurned) / 1e8,
+          globalDailyOutput: Number(stats.totalDailyOutput) / 1e8,
+          globalUnclaimed: Number(stats.globalUnclaimedTokens) / 1e8,
+          totalPlots: Number(stats.totalPlots)
+        });
+        setLivePlayerState({
+          totalDailyRate: Number(playerState.totalDailyRate) / 1e8,
+          totalUnclaimed: Number(playerState.totalUnclaimed) / 1e8,
+          burnContributed: Number(playerState.burnContributed) / 1e8,
+          confirmedBalance: Number(playerState.confirmedBalance) / 1e8
+        });
+        if (playerState.confirmedBalance > 0n) {
+          setFrntrBalance(playerState.confirmedBalance);
+        }
+      } catch {
+      }
+    })();
+  }, [actor, setFrntrBalance]);
   const ownedPlotData = reactExports.useMemo(
     () => plots.filter((p2) => player.plotsOwned.includes(String(p2.id))),
     [plots, player.plotsOwned]
   );
   const totalDailyFrntr = reactExports.useMemo(() => {
+    if ((livePlayerState == null ? void 0 : livePlayerState.totalDailyRate) && livePlayerState.totalDailyRate > 0) {
+      return livePlayerState.totalDailyRate;
+    }
     return ownedPlotData.reduce((sum, plot) => {
       const tier = generatorTiers[String(plot.id)] ?? 0;
       return sum + (TIER_DAILY_RATES[tier] ?? 7);
     }, 0);
-  }, [ownedPlotData, generatorTiers]);
-  const displayBalance = useGameStore(
-    (s2) => s2.confirmedFrntBalance + s2.accruedFrntSinceSync
-  );
+  }, [ownedPlotData, generatorTiers, livePlayerState]);
+  const displayBalance = confirmedFrntBalance + accruedFrntSinceSync;
+  const displayUnclaimed = (livePlayerState == null ? void 0 : livePlayerState.totalUnclaimed) ?? accruedFrntSinceSync;
+  const displayBurned = (livePlayerState == null ? void 0 : livePlayerState.burnContributed) ?? totalFRNTRBurned;
   const perHourRate = totalDailyFrntr / 24;
   const perMinRate = totalDailyFrntr / 1440;
   const perSecRate = totalDailyFrntr / 86400;
-  const displayBurned = totalFRNTRBurned;
   const highestTier = reactExports.useMemo(() => {
     if (player.plotsOwned.length === 0) return 0;
     return Math.max(
       ...player.plotsOwned.map((id2) => generatorTiers[id2] ?? 0)
     );
   }, [player.plotsOwned, generatorTiers]);
+  const tierCounts = reactExports.useMemo(() => {
+    const counts = {};
+    for (const id2 of player.plotsOwned) {
+      const tier = generatorTiers[id2] ?? 0;
+      counts[tier] = (counts[tier] ?? 0) + 1;
+    }
+    return counts;
+  }, [player.plotsOwned, generatorTiers]);
+  const avgEfficiency = reactExports.useMemo(() => {
+    if (ownedPlotData.length === 0) return 0;
+    return ownedPlotData.reduce((sum, p2) => sum + (p2.efficiency ?? 88), 0) / ownedPlotData.length;
+  }, [ownedPlotData]);
+  const missionsDone = reactExports.useMemo(
+    () => Object.values(missions).filter((m2) => m2.completed).length,
+    [missions]
+  );
+  const plotCount = player.plotsOwned.length;
+  const canClaim = plotCount > 0 && !isClaiming && !!actor;
   const handleClaimAll = async () => {
-    if (!actor || isClaiming || player.plotsOwned.length === 0) return;
+    if (!actor || isClaiming || plotCount === 0) return;
     setIsClaiming(true);
     try {
       const res = await actor.claimAllPlots();
       if ("ok" in res) {
         const { amount, plotsClaimed } = res.ok;
         const claimed = Number(amount) / 1e8;
+        claimAllFrntr(claimed);
+        incrementClaimCount();
         ue.success(
-          `Claimed ${fmtFrntr(claimed)} FRNTR from ${Number(plotsClaimed)} plot${Number(plotsClaimed) !== 1 ? "s" : ""}!`,
+          `Claimed ${fmtShort(claimed)} FRNTR from ${Number(plotsClaimed)} plot${Number(plotsClaimed) !== 1 ? "s" : ""}!`,
           { duration: 4e3 }
         );
-        incrementClaimCount();
         try {
           const state2 = await actor.getPlayerState();
-          if (state2) setFrntrBalance(state2.frntBalance);
+          if (state2 == null ? void 0 : state2.confirmedBalance) {
+            setFrntrBalance(state2.confirmedBalance);
+          } else if (state2 == null ? void 0 : state2.frntBalance) {
+            setFrntrBalance(state2.frntBalance);
+          }
+          const stats = await actor.getGameStats();
+          setLiveStats({
+            totalFrntrBurned: Number(stats.totalFrntrBurned) / 1e8,
+            globalDailyOutput: Number(stats.totalDailyOutput) / 1e8,
+            globalUnclaimed: Number(stats.globalUnclaimedTokens) / 1e8,
+            totalPlots: Number(stats.totalPlots)
+          });
         } catch {
           addFrntr(claimed);
         }
@@ -94219,8 +97531,11 @@ function CommandCenter() {
       setIsClaiming(false);
     }
   };
-  const plotCount = player.plotsOwned.length;
-  const canClaim = plotCount > 0 && !isClaiming && !!actor;
+  const tabs = [
+    { id: "tokens", label: "TOKEN ECONOMY" },
+    { id: "mining", label: "MINING", subLabel: "COMING SOON" },
+    { id: "commander", label: "COMMANDER STATS" }
+  ];
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "div",
     {
@@ -94241,30 +97556,51 @@ function CommandCenter() {
             onClose: () => setAuditOpen(false)
           }
         ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "flex", gap: 6 }, children: ["tokens", "missions"].map((tab) => /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "button",
-          {
-            type: "button",
-            "data-ocid": `command.${tab}.tab`,
-            onClick: () => setActiveTab(tab),
-            style: {
-              flex: 1,
-              padding: "7px 0",
-              borderRadius: 6,
-              background: activeTab === tab ? "rgba(0,255,204,0.12)" : "rgba(0,10,20,0.5)",
-              border: `1px solid ${activeTab === tab ? `${CYAN$9}66` : BORDER$9}`,
-              color: activeTab === tab ? CYAN$9 : TEXT_DIM$4,
-              fontSize: 7,
-              fontWeight: 700,
-              letterSpacing: 1.5,
-              cursor: "pointer",
-              textTransform: "uppercase",
-              borderBottom: activeTab === tab ? `2px solid ${CYAN$9}` : "1px solid transparent"
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "cmd-tab-list", style: { display: "flex", gap: 4 }, children: tabs.map((tab) => {
+          const isActive = activeTab === tab.id;
+          const isMining = tab.id === "mining";
+          return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "button",
+            {
+              type: "button",
+              "data-ocid": `command.${tab.id}.tab`,
+              onClick: () => setActiveTab(tab.id),
+              style: {
+                flex: 1,
+                padding: "6px 4px 5px",
+                borderRadius: "6px 6px 0 0",
+                background: isActive ? isMining ? "rgba(218,145,60,0.12)" : "rgba(0,255,204,0.12)" : "rgba(0,10,20,0.5)",
+                border: `1px solid ${isActive ? isMining ? `${AMBER}66` : `${CYAN$9}66` : BORDER$9}`,
+                borderBottom: isActive ? `2px solid ${isMining ? AMBER : CYAN$9}` : "1px solid transparent",
+                color: isActive ? isMining ? AMBER : CYAN$9 : TEXT_DIM$4,
+                fontSize: 6.5,
+                fontWeight: 700,
+                letterSpacing: 1,
+                cursor: "pointer",
+                textTransform: "uppercase",
+                lineHeight: 1.3,
+                textShadow: isActive ? `0 0 8px ${isMining ? AMBER : CYAN$9}66` : "none",
+                transition: "all 0.15s"
+              },
+              children: [
+                tab.label,
+                tab.subLabel && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      fontSize: 5.5,
+                      color: isActive ? AMBER_DIM : "rgba(218,145,60,0.3)",
+                      letterSpacing: 1,
+                      marginTop: 1
+                    },
+                    children: tab.subLabel
+                  }
+                )
+              ]
             },
-            children: tab === "tokens" ? "TOKEN ECONOMY" : "MISSIONS"
-          },
-          tab
-        )) }),
+            tab.id
+          );
+        }) }),
         activeTab === "tokens" && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs(
             "div",
@@ -94283,12 +97619,12 @@ function CommandCenter() {
                       fontSize: 8,
                       color: TEXT_DIM$4,
                       letterSpacing: 2,
-                      marginBottom: 4
+                      marginBottom: 2
                     },
-                    children: "YOUR FRNTR BALANCE"
+                    children: "CONFIRMED WALLET BALANCE"
                   }
                 ),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(
                   "div",
                   {
                     style: {
@@ -94297,18 +97633,39 @@ function CommandCenter() {
                       color: CYAN$9,
                       fontFamily: "monospace",
                       textShadow: `0 0 12px ${CYAN$9}`,
+                      marginBottom: 1
+                    },
+                    children: [
+                      fmtShort(confirmedFrntBalance),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 11, marginLeft: 5, opacity: 0.7 }, children: "FRNTR" })
+                    ]
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 8, color: TEXT_DIM$4, marginBottom: 6 }, children: "ACCRUING NOW" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "div",
+                  {
+                    style: {
+                      fontSize: 16,
+                      fontWeight: 700,
+                      color: "#a855f7",
+                      fontFamily: "monospace",
                       marginBottom: 2
                     },
-                    children: fmtFrntr(displayBalance)
+                    children: [
+                      "+",
+                      fmtFrntr(accruedFrntSinceSync),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 10, marginLeft: 4, opacity: 0.7 }, children: "FRNTR" })
+                    ]
                   }
                 ),
                 /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { fontSize: 8, color: CYAN_DIM$5, marginBottom: 10 }, children: [
                   "+",
-                  totalDailyFrntr.toFixed(2),
-                  " FRNTR/day  ·  +",
-                  perHourRate.toFixed(4),
+                  fmtShort(perHourRate),
                   "/hr  ·  +",
-                  perSecRate.toFixed(8),
+                  fmtShort(perMinRate),
+                  "/min  ·  +",
+                  perSecRate.toFixed(6),
                   "/sec"
                 ] }),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -94319,16 +97676,15 @@ function CommandCenter() {
                     onClick: () => setAuditOpen(true),
                     style: {
                       width: "100%",
-                      padding: "7px 0",
+                      padding: "6px 0",
                       borderRadius: 6,
                       background: "rgba(0,255,204,0.04)",
                       border: `1px solid ${BORDER$9}`,
                       color: CYAN_DIM$5,
-                      fontSize: 9,
+                      fontSize: 8,
                       fontWeight: 700,
                       letterSpacing: 1.5,
                       cursor: "pointer",
-                      fontFamily: "monospace",
                       marginBottom: 6
                     },
                     children: "🔐 AUDIT LOG"
@@ -94343,7 +97699,7 @@ function CommandCenter() {
                     disabled: !canClaim,
                     style: {
                       width: "100%",
-                      padding: "9px 0",
+                      padding: "10px 0",
                       borderRadius: 6,
                       background: canClaim ? "linear-gradient(135deg, rgba(0,255,204,0.18), rgba(0,255,204,0.07))" : "rgba(255,255,255,0.03)",
                       border: `1px solid ${canClaim ? `${CYAN$9}99` : BORDER$9}`,
@@ -94356,7 +97712,7 @@ function CommandCenter() {
                       textShadow: canClaim ? `0 0 8px ${CYAN$9}88` : "none",
                       transition: "all 0.2s"
                     },
-                    children: isClaiming ? "CLAIMING…" : plotCount === 0 ? "CLAIM ALL — (no plots owned)" : `CLAIM ALL — ${plotCount} plot${plotCount !== 1 ? "s" : ""} / ${totalDailyFrntr.toFixed(2)} FRNTR/day`
+                    children: isClaiming ? "CLAIMING…" : plotCount === 0 ? "CLAIM ALL — (no plots)" : `CLAIM ALL — ${plotCount} plot${plotCount !== 1 ? "s" : ""} · ${fmtShort(totalDailyFrntr)} FRNTR/day`
                   }
                 )
               ]
@@ -94395,13 +97751,13 @@ function CommandCenter() {
                     children: [
                       {
                         label: "PER HOUR",
-                        value: perHourRate.toFixed(4),
+                        value: fmtShort(perHourRate),
                         color: GOLD$4
                       },
-                      { label: "PER MIN", value: perMinRate.toFixed(6), color: CYAN$9 },
+                      { label: "PER MIN", value: perMinRate.toFixed(4), color: CYAN$9 },
                       {
                         label: "PER SEC",
-                        value: perSecRate.toFixed(8),
+                        value: perSecRate.toFixed(6),
                         color: "#22c55e"
                       }
                     ].map((r2) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
@@ -94438,14 +97794,14 @@ function CommandCenter() {
                 {
                   icon: Globe,
                   label: "Plots Owned",
-                  value: plotCount,
+                  value: String(plotCount),
                   color: CYAN$9,
-                  sub: `${totalDailyFrntr.toFixed(2)} FRNTR/day`
+                  sub: `${fmtShort(totalDailyFrntr)} FRNTR/day`
                 },
                 {
                   icon: Flame,
                   label: "FRNTR Burned",
-                  value: fmtFrntr(displayBurned),
+                  value: fmtShort(displayBurned),
                   color: "#ef4444",
                   sub: "your upgrades"
                 },
@@ -94454,14 +97810,14 @@ function CommandCenter() {
                   label: "Highest Tier",
                   value: TIER_NAMES[highestTier] ?? "Outpost",
                   color: GOLD$4,
-                  sub: `Tier ${highestTier} generator`
+                  sub: `Tier ${highestTier}`
                 },
                 {
                   icon: Zap,
-                  label: "Accruing Now",
-                  value: fmtFrntr(accruedFrntSinceSync),
+                  label: "Unclaimed",
+                  value: fmtShort(displayUnclaimed),
                   color: "#a855f7",
-                  sub: "since last sync"
+                  sub: "across all plots"
                 }
               ].map((stat) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
                 "div",
@@ -94501,7 +97857,8 @@ function CommandCenter() {
                           fontSize: 12,
                           fontWeight: 900,
                           color: stat.color,
-                          fontFamily: "monospace"
+                          fontFamily: "monospace",
+                          wordBreak: "break-word"
                         },
                         children: stat.value
                       }
@@ -94512,119 +97869,523 @@ function CommandCenter() {
                 stat.label
               ))
             }
-          )
-        ] }),
-        activeTab === "missions" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 10 }, children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
+          ),
+          liveStats && /* @__PURE__ */ jsxRuntimeExports.jsxs(
             "div",
             {
               style: {
-                fontSize: 8,
-                color: TEXT_DIM$4,
-                letterSpacing: 2,
-                marginBottom: 2
+                background: "rgba(0,10,20,0.4)",
+                border: `1px solid ${BORDER$9}`,
+                borderRadius: 8,
+                padding: "10px 14px"
               },
-              children: "ACTIVE MISSIONS"
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      fontSize: 7,
+                      color: TEXT_DIM$4,
+                      letterSpacing: 2,
+                      marginBottom: 6
+                    },
+                    children: "GLOBAL TOKEN ECONOMY"
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: 6
+                    },
+                    children: [
+                      {
+                        label: "TOTAL BURNED",
+                        value: fmtShort(liveStats.totalFrntrBurned),
+                        color: "#ef4444"
+                      },
+                      {
+                        label: "GLOBAL/DAY",
+                        value: fmtShort(liveStats.globalDailyOutput),
+                        color: GOLD$4
+                      },
+                      {
+                        label: "UNCLAIMED",
+                        value: fmtShort(liveStats.globalUnclaimed),
+                        color: "#a855f7"
+                      },
+                      {
+                        label: "PLOTS LIVE",
+                        value: String(liveStats.totalPlots),
+                        color: CYAN$9
+                      }
+                    ].map((item) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "div",
+                        {
+                          style: {
+                            fontSize: 6.5,
+                            color: TEXT_DIM$4,
+                            letterSpacing: 1.5
+                          },
+                          children: item.label
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "div",
+                        {
+                          style: {
+                            fontSize: 10,
+                            fontWeight: 700,
+                            color: item.color,
+                            fontFamily: "monospace"
+                          },
+                          children: item.value
+                        }
+                      )
+                    ] }, item.label))
+                  }
+                )
+              ]
+            }
+          )
+        ] }),
+        activeTab === "mining" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 10 }, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              style: {
+                background: "linear-gradient(135deg, rgba(218,145,60,0.08), rgba(0,10,20,0.5))",
+                border: `1px solid ${AMBER_BORDER}`,
+                borderRadius: 10,
+                padding: "10px 14px",
+                textAlign: "center"
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      fontSize: 8,
+                      color: AMBER,
+                      letterSpacing: 2,
+                      marginBottom: 3
+                    },
+                    children: "⛰️ MINERAL EXTRACTION SYSTEM"
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 7, color: AMBER_DIM, lineHeight: 1.5 }, children: "Mining operations unlock in a future phase. Acquire plots now to pre-position across high-yield biomes." })
+              ]
             }
           ),
-          MISSION_DEFS.map((m2) => {
-            const state2 = missions[m2.id] ?? {
-              completed: false,
-              claimed: false
-            };
-            const isDone = state2.completed;
-            return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-              "div",
-              {
-                "data-ocid": `command.mission.${m2.id}`,
-                style: {
-                  background: isDone ? "rgba(0,255,204,0.07)" : "rgba(0,10,20,0.5)",
-                  border: `1px solid ${isDone ? `${CYAN$9}55` : BORDER$9}`,
-                  borderRadius: 10,
-                  padding: "12px 14px",
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: 10
-                },
-                children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { flexShrink: 0, marginTop: 2 }, children: isDone ? /* @__PURE__ */ jsxRuntimeExports.jsx(CircleCheckBig, { size: 16, color: CYAN$9 }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Circle, { size: 16, color: "rgba(255,255,255,0.25)" }) }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { flex: 1, minWidth: 0 }, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
+            {
+              style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 },
+              children: MINERALS.map((mineral) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "div",
+                {
+                  "data-ocid": `command.mining.${mineral.id}.card`,
+                  style: {
+                    background: "rgba(10,8,4,0.65)",
+                    border: `1px solid ${AMBER_BORDER}`,
+                    borderRadius: 10,
+                    padding: "12px 10px",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: 5,
+                    position: "relative",
+                    boxShadow: "0 0 10px rgba(218,145,60,0.08), inset 0 0 8px rgba(218,145,60,0.04)",
+                    transition: "border-color 0.2s, box-shadow 0.2s",
+                    cursor: "default"
+                  },
+                  onMouseEnter: (e) => {
+                    e.currentTarget.style.borderColor = "rgba(218,145,60,0.5)";
+                    e.currentTarget.style.boxShadow = "0 0 16px rgba(218,145,60,0.15), inset 0 0 12px rgba(218,145,60,0.07)";
+                  },
+                  onMouseLeave: (e) => {
+                    e.currentTarget.style.borderColor = AMBER_BORDER;
+                    e.currentTarget.style.boxShadow = "0 0 10px rgba(218,145,60,0.08), inset 0 0 8px rgba(218,145,60,0.04)";
+                  },
+                  children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsx(
                       "div",
                       {
                         style: {
-                          fontSize: 10,
+                          position: "absolute",
+                          top: 7,
+                          right: 7,
+                          background: "rgba(218,145,60,0.18)",
+                          border: `1px solid ${AMBER_BORDER}`,
+                          borderRadius: 3,
+                          padding: "2px 5px",
+                          fontSize: 5.5,
+                          color: AMBER,
                           fontWeight: 700,
-                          color: isDone ? CYAN$9 : TEXT$5,
-                          letterSpacing: 0.5,
-                          marginBottom: 3
+                          letterSpacing: 1,
+                          textTransform: "uppercase"
                         },
-                        children: m2.title
+                        children: "SOON"
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 24, lineHeight: 1 }, children: mineral.emoji }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "div",
+                      {
+                        style: {
+                          fontSize: 9,
+                          fontWeight: 700,
+                          color: mineral.color,
+                          letterSpacing: 1,
+                          textTransform: "uppercase"
+                        },
+                        children: mineral.name
                       }
                     ),
                     /* @__PURE__ */ jsxRuntimeExports.jsx(
                       "div",
                       {
                         style: {
-                          fontSize: 8,
+                          fontSize: 6.5,
                           color: TEXT_DIM$4,
-                          letterSpacing: 0.3,
-                          marginBottom: 6
+                          textAlign: "center",
+                          lineHeight: 1.5
                         },
-                        children: m2.desc
+                        children: mineral.desc
                       }
-                    ),
+                    )
+                  ]
+                },
+                mineral.id
+              ))
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              style: {
+                background: "rgba(0,10,20,0.4)",
+                border: `1px solid ${BORDER$9}`,
+                borderRadius: 8,
+                padding: "10px 14px",
+                textAlign: "center"
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  ChartColumn,
+                  {
+                    size: 16,
+                    color: AMBER_DIM,
+                    style: { margin: "0 auto 6px" }
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { fontSize: 7.5, color: TEXT_DIM$4, lineHeight: 1.6 }, children: [
+                  "Mining rates are determined by",
+                  " ",
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: AMBER }, children: "biome type" }),
+                  " and",
+                  " ",
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN$9 }, children: "generator tier" }),
+                  ". Own plots across diverse biomes to maximize your mineral portfolio when extraction goes live."
+                ] })
+              ]
+            }
+          )
+        ] }),
+        activeTab === "commander" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 10 }, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              style: {
+                background: "rgba(0,20,40,0.55)",
+                border: `1px solid ${BORDER$9}`,
+                borderRadius: 10,
+                padding: "12px 14px"
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "div",
+                  {
+                    style: {
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      marginBottom: 10
+                    },
+                    children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(Globe, { size: 12, color: CYAN$9 }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 8, color: TEXT_DIM$4, letterSpacing: 2 }, children: "TERRITORY BREAKDOWN" })
+                    ]
+                  }
+                ),
+                plotCount === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      fontSize: 8,
+                      color: TEXT_DIM$4,
+                      textAlign: "center",
+                      padding: "8px 0"
+                    },
+                    children: "No plots owned yet"
+                  }
+                ) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "flex", flexDirection: "column", gap: 5 }, children: Object.entries(TIER_NAMES).map(([tierStr, name]) => {
+                  const tier = Number(tierStr);
+                  const count = tierCounts[tier] ?? 0;
+                  if (count === 0) return null;
+                  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "div",
+                    {
+                      style: { display: "flex", alignItems: "center", gap: 8 },
+                      children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "div",
+                          {
+                            style: {
+                              width: 6,
+                              height: 6,
+                              borderRadius: "50%",
+                              background: tier === 0 ? TEXT_DIM$4 : tier <= 2 ? CYAN$9 : tier <= 4 ? GOLD$4 : "#f0abfc",
+                              flexShrink: 0
+                            }
+                          }
+                        ),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { flex: 1, fontSize: 8, color: TEXT$5 }, children: name }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                          "div",
+                          {
+                            style: {
+                              fontSize: 9,
+                              fontWeight: 700,
+                              color: tier === 0 ? TEXT_DIM$4 : tier <= 2 ? CYAN$9 : GOLD$4,
+                              fontFamily: "monospace"
+                            },
+                            children: [
+                              count,
+                              "x"
+                            ]
+                          }
+                        ),
+                        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                          "div",
+                          {
+                            style: {
+                              fontSize: 7,
+                              color: TEXT_DIM$4,
+                              fontFamily: "monospace",
+                              minWidth: 50,
+                              textAlign: "right"
+                            },
+                            children: [
+                              fmtShort(count * (TIER_DAILY_RATES[tier] ?? 7)),
+                              "/day"
+                            ]
+                          }
+                        )
+                      ]
+                    },
+                    tier
+                  );
+                }) })
+              ]
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
+            {
+              style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 },
+              children: [
+                {
+                  icon: ChartColumn,
+                  label: "AVG EFFICIENCY",
+                  value: `${avgEfficiency.toFixed(1)}%`,
+                  color: avgEfficiency >= 90 ? "#22c55e" : avgEfficiency >= 75 ? GOLD$4 : "#ef4444",
+                  sub: "fleet average"
+                },
+                {
+                  icon: Flame,
+                  label: "TOTAL BURNED",
+                  value: fmtShort(displayBurned),
+                  color: "#ef4444",
+                  sub: "from upgrades"
+                },
+                {
+                  icon: TrendingUp,
+                  label: "DAILY OUTPUT",
+                  value: fmtShort(totalDailyFrntr),
+                  color: CYAN$9,
+                  sub: "FRNTR / day"
+                },
+                {
+                  icon: Zap,
+                  label: "TOTAL EARNED",
+                  value: fmtShort(displayBalance),
+                  color: GOLD$4,
+                  sub: "all-time FRNTR"
+                }
+              ].map((stat) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "div",
+                {
+                  style: {
+                    background: "rgba(0,10,20,0.5)",
+                    border: `1px solid ${BORDER$9}`,
+                    borderRadius: 8,
+                    padding: "10px"
+                  },
+                  children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsxs(
                       "div",
                       {
                         style: {
-                          display: "inline-flex",
+                          display: "flex",
                           alignItems: "center",
-                          gap: 4,
-                          padding: "3px 8px",
-                          borderRadius: 4,
-                          background: isDone ? "rgba(255,215,0,0.12)" : "rgba(255,215,0,0.06)",
-                          border: "1px solid rgba(255,215,0,0.3)"
+                          gap: 5,
+                          marginBottom: 4
                         },
                         children: [
-                          /* @__PURE__ */ jsxRuntimeExports.jsx(Target, { size: 9, color: "#ffd700" }),
-                          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(stat.icon, { size: 11, color: stat.color }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(
                             "span",
                             {
-                              style: {
-                                fontSize: 8,
-                                color: "#ffd700",
-                                fontWeight: 700,
-                                letterSpacing: 1
-                              },
-                              children: [
-                                "+",
-                                m2.reward,
-                                " FRNTR"
-                              ]
+                              style: { fontSize: 7, color: TEXT_DIM$4, letterSpacing: 1.5 },
+                              children: stat.label
                             }
                           )
                         ]
                       }
                     ),
-                    state2.claimed && /* @__PURE__ */ jsxRuntimeExports.jsx(
-                      "span",
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "div",
                       {
                         style: {
-                          marginLeft: 6,
-                          fontSize: 7,
-                          color: CYAN_DIM$5,
-                          letterSpacing: 1
+                          fontSize: 12,
+                          fontWeight: 900,
+                          color: stat.color,
+                          fontFamily: "monospace",
+                          wordBreak: "break-word"
                         },
-                        children: "CLAIMED"
+                        children: stat.value
                       }
-                    )
-                  ] })
-                ]
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 7, color: TEXT_DIM$4, marginTop: 2 }, children: stat.sub })
+                  ]
+                },
+                stat.label
+              ))
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              style: {
+                background: "rgba(0,10,20,0.45)",
+                border: `1px solid ${BORDER$9}`,
+                borderRadius: 10,
+                padding: "12px 14px"
               },
-              m2.id
-            );
-          })
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "div",
+                  {
+                    style: {
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      marginBottom: 10
+                    },
+                    children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(Sword, { size: 11, color: GOLD$4 }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 8, color: TEXT_DIM$4, letterSpacing: 2 }, children: "CONQUEST METRICS" })
+                    ]
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "div",
+                  {
+                    style: {
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr 1fr",
+                      gap: 8
+                    },
+                    children: [
+                      {
+                        label: "MISSIONS",
+                        value: String(missionsDone),
+                        color: CYAN$9,
+                        sub: "completed"
+                      },
+                      {
+                        label: "CLAIMS",
+                        value: String(claimCount),
+                        color: GOLD$4,
+                        sub: "all-time"
+                      },
+                      {
+                        label: "COMBAT",
+                        value: "—",
+                        color: TEXT_DIM$4,
+                        sub: "coming soon"
+                      }
+                    ].map((item) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "div",
+                        {
+                          style: {
+                            fontSize: 6.5,
+                            color: TEXT_DIM$4,
+                            letterSpacing: 1,
+                            marginBottom: 2
+                          },
+                          children: item.label
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "div",
+                        {
+                          style: {
+                            fontSize: 14,
+                            fontWeight: 900,
+                            color: item.color,
+                            fontFamily: "monospace"
+                          },
+                          children: item.value
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 6.5, color: TEXT_DIM$4 }, children: item.sub })
+                    ] }, item.label))
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "div",
+                  {
+                    style: {
+                      marginTop: 10,
+                      padding: "6px 10px",
+                      borderRadius: 6,
+                      background: "rgba(218,145,60,0.05)",
+                      border: `1px solid ${AMBER_BORDER}`,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8
+                    },
+                    children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(Shield, { size: 10, color: AMBER_DIM }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "div",
+                        {
+                          style: { fontSize: 7, color: AMBER_DIM, letterSpacing: 0.5 },
+                          children: "Survey reports, faction wars, and leaderboard rank coming in next phases."
+                        }
+                      )
+                    ]
+                  }
+                )
+              ]
+            }
+          )
         ] })
       ]
     }
@@ -107686,6 +111447,7 @@ function MapBottomSheet({
   const [upgradeError, setUpgradeError] = reactExports.useState(null);
   const [claimStatus, setClaimStatus] = reactExports.useState("idle");
   const [postActionType, setPostActionType] = reactExports.useState(null);
+  const [postActionMessage, setPostActionMessage] = reactExports.useState("Plot purchased!");
   const { actor } = useActor(createActor);
   const selectedPlotId = useGameStore((s2) => s2.selectedPlotId);
   const plots = useGameStore((s2) => s2.plots);
@@ -107776,9 +111538,11 @@ function MapBottomSheet({
   const isOwned = (plot == null ? void 0 : plot.owner) !== null && (plot == null ? void 0 : plot.owner) !== void 0;
   const isOwnPlot = isOwned && ((plot == null ? void 0 : plot.owner) === playerPrincipal || selectedPlotId !== null && player.plotsOwned.includes(String(selectedPlotId)));
   const isEnemyPlot = isOwned && !isOwnPlot;
+  const isPriceFetching = fetchedPriceE8s === null && localPriceE8s === null;
   const activePriceE8s = fetchedPriceE8s ?? localPriceE8s ?? 200000000n;
   const icpFloat = Number(activePriceE8s) / 1e8;
-  const icpPriceDisplay = icpUsdPrice ? `${icpFloat.toFixed(4)} ICP (~${(icpFloat * icpUsdPrice).toFixed(2)})` : `${icpFloat.toFixed(4)} ICP ($ unavailable)`;
+  const usdEquiv = icpUsdPrice && icpUsdPrice > 0 ? `~${(icpFloat * icpUsdPrice).toFixed(2)}` : null;
+  const icpPriceDisplay = usdEquiv ? `${icpFloat.toFixed(2)} ICP (${usdEquiv})` : `${icpFloat.toFixed(2)} ICP (price feed updating...)`;
   async function handlePurchase() {
     if (!plot || isPurchasing) return;
     setPurchaseError(null);
@@ -107788,7 +111552,9 @@ function MapBottomSheet({
     if (!plot || isPurchasing) return;
     setShowPurchaseConfirm(false);
     setPurchaseError(null);
-    const shortId = String(plot.id).slice(0, 8);
+    String(plot.id).slice(0, 8);
+    const paidIcpStr = icpFloat.toFixed(2);
+    const paidUsdStr = usdEquiv ? ` (${usdEquiv})` : "";
     const result = await purchasePlot(String(plot.id));
     if (result.success) {
       onClose();
@@ -107796,10 +111562,13 @@ function MapBottomSheet({
       setPlotHoverCard({
         plotId: plot.id,
         owner: player.principal ?? "You",
-        action: `Plot acquired! ${plot.biome} plot ${shortId}`,
+        action: `Plot acquired! Paid ${paidIcpStr} ICP${paidUsdStr}`,
         nextStep: "Open Command Center to track FRNTR generation."
       });
       setPostActionType("purchase");
+      setPostActionMessage(
+        `Plot purchased! ${icpFloat.toFixed(2)} ICP${usdEquiv ? ` (${usdEquiv})` : ""}`
+      );
     } else {
       setPurchaseError(result.message);
     }
@@ -108037,16 +111806,16 @@ function MapBottomSheet({
                       type: "button",
                       "data-ocid": "map.primary_button",
                       onClick: handlePurchase,
-                      disabled: isPurchasing,
+                      disabled: isPurchasing || isPriceFetching,
                       style: {
                         ...actionBtnStyle(
                           "#00ffcc",
-                          isPurchasing ? "rgba(0,255,204,0.06)" : "rgba(0,255,204,0.12)"
+                          isPurchasing || isPriceFetching ? "rgba(0,255,204,0.06)" : "rgba(0,255,204,0.12)"
                         ),
-                        opacity: isPurchasing ? 0.6 : 1,
-                        cursor: isPurchasing ? "not-allowed" : "pointer"
+                        opacity: isPurchasing || isPriceFetching ? 0.6 : 1,
+                        cursor: isPurchasing || isPriceFetching ? "not-allowed" : "pointer"
                       },
-                      children: isPurchasing ? "PROCESSING…" : `PURCHASE — ${icpPriceDisplay}`
+                      children: isPriceFetching ? "⟳ Price loading…" : isPurchasing ? "PROCESSING…" : `PURCHASE — ${icpPriceDisplay}`
                     }
                   ),
                   purchaseError && /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -108243,7 +112012,7 @@ function MapBottomSheet({
       PostActionToast,
       {
         actionType: postActionType,
-        message: "Plot purchased!",
+        message: postActionMessage,
         onNavigate: (tab) => window.dispatchEvent(
           new CustomEvent("navigate-tab", { detail: tab })
         ),
@@ -108261,7 +112030,7 @@ function useMissions() {
   const [loading2, setLoading] = reactExports.useState(false);
   const [error, setError] = reactExports.useState(null);
   const completedMissionIds = playerMissions.filter((pm) => pm.completed).map((pm) => pm.mission.id);
-  const loadMissions = reactExports.useCallback(async () => {
+  const loadMissions2 = reactExports.useCallback(async () => {
     if (!actor || !isAuthenticated) return;
     setLoading(true);
     setError(null);
@@ -108293,7 +112062,7 @@ function useMissions() {
           setFrntrBalance(
             BigInt(Math.round(confirmedFrntBalance * 1e8 + rewardAmount))
           );
-          await loadMissions();
+          await loadMissions2();
           return true;
         }
         ue.error(res.err || "Failed to claim reward", { duration: 5e3 });
@@ -108304,14 +112073,14 @@ function useMissions() {
         return false;
       }
     },
-    [actor, confirmedFrntBalance, setFrntrBalance, loadMissions]
+    [actor, confirmedFrntBalance, setFrntrBalance, loadMissions2]
   );
   return {
     playerMissions,
     completedMissionIds,
     loading: loading2,
     error,
-    loadMissions,
+    loadMissions: loadMissions2,
     completeMission
   };
 }
@@ -108439,7 +112208,7 @@ function MissionsTab() {
     completedMissionIds,
     loading: loading2,
     error,
-    loadMissions,
+    loadMissions: loadMissions2,
     completeMission
   } = useMissions();
   const [claiming, setClaiming] = reactExports.useState(null);
@@ -108449,8 +112218,8 @@ function MissionsTab() {
   const [postMissionType, setPostMissionType] = reactExports.useState(null);
   const [filterMode, setFilterMode] = reactExports.useState("all");
   reactExports.useEffect(() => {
-    loadMissions();
-  }, [loadMissions]);
+    loadMissions2();
+  }, [loadMissions2]);
   const handleClaim = (missionId, rewardE8s) => {
     setPendingMissionId(missionId);
     setPendingReward(rewardE8s);
@@ -108523,7 +112292,7 @@ function MissionsTab() {
                 {
                   type: "button",
                   "data-ocid": "missions.refresh_button",
-                  onClick: loadMissions,
+                  onClick: loadMissions2,
                   disabled: loading2,
                   style: {
                     fontSize: 8,
@@ -110718,6 +114487,12 @@ function UniversePanel({ onClose, inline = false }) {
   const setTreasuryState = useGameStore((s2) => s2.setTreasuryState);
   const [frntrIcpPrice, _setFrntrIcpPrice] = reactExports.useState(null);
   const [snapshotExpanded, setSnapshotExpanded] = reactExports.useState(false);
+  const [emissionSchedule, setEmissionSchedule] = reactExports.useState(null);
+  const [treasuryLastUpdated, setTreasuryLastUpdated] = reactExports.useState(
+    null
+  );
+  const [economyHealth, setEconomyHealth] = React$4.useState(null);
+  const [healthExpanded, setHealthExpanded] = React$4.useState(true);
   const [icpPrice, setIcpPrice] = reactExports.useState(10);
   const [icpPriceLastUpdated, setIcpPriceLastUpdated] = reactExports.useState(
     Date.now()
@@ -110810,37 +114585,60 @@ function UniversePanel({ onClose, inline = false }) {
       ]);
     });
   }, [actor]);
+  reactExports.useEffect(() => {
+    if (!actor) return;
+    const fetchEmissionSchedule = async () => {
+      try {
+        const result = await actor.getEmissionSchedule();
+        setEmissionSchedule(result);
+      } catch (e) {
+        console.error("[UniversePanel] getEmissionSchedule error", e);
+      }
+    };
+    fetchEmissionSchedule();
+    const id2 = setInterval(fetchEmissionSchedule, 6e4);
+    return () => clearInterval(id2);
+  }, [actor]);
+  React$4.useEffect(() => {
+    if (!actor) return;
+    const fetchHealth = async () => {
+      try {
+        const data = await actor.getEconomyHealth();
+        setEconomyHealth(data);
+      } catch (e) {
+        console.warn("getEconomyHealth failed", e);
+      }
+    };
+    fetchHealth();
+    const interval = setInterval(fetchHealth, 6e4);
+    return () => clearInterval(interval);
+  }, [actor]);
   const [potBalances, setPotBalances] = reactExports.useState({ dev: 0, leaderboard: 0, liquidity: 0 });
   reactExports.useEffect(() => {
     if (!actor) return;
-    const fetchPots = () => {
-      actor.getTreasuryBalances().then((res) => {
+    const fetchTreasuryWithTimestamp = async () => {
+      try {
+        const result = await actor.getTreasuryBalancesWithTimestamp();
         setPotBalances({
-          dev: Number(res.devPot) / 1e8,
-          leaderboard: Number(res.leaderboardPot) / 1e8,
-          liquidity: Number(res.liquidityPot) / 1e8
+          dev: Number(result.devPot) / 1e8,
+          leaderboard: Number(result.leaderboardPot) / 1e8,
+          liquidity: Number(result.liquidityPot) / 1e8
         });
-      }).catch(() => {
-      });
+        setTreasuryLastUpdated(result.lastUpdated);
+        setTreasuryState({
+          developer: result.devPot,
+          leaderboard: result.leaderboardPot,
+          liquidity: result.liquidityPot
+        });
+      } catch (e) {
+        console.error(
+          "[UniversePanel] getTreasuryBalancesWithTimestamp error",
+          e
+        );
+      }
     };
-    fetchPots();
-    const id2 = setInterval(fetchPots, 1e4);
-    return () => clearInterval(id2);
-  }, [actor]);
-  reactExports.useEffect(() => {
-    if (!actor) return;
-    const fetchTreasury = () => {
-      actor.getTreasuryState().then(
-        (res) => setTreasuryState({
-          developer: res.developer,
-          leaderboard: res.leaderboard,
-          liquidity: res.liquidity
-        })
-      ).catch(() => {
-      });
-    };
-    fetchTreasury();
-    const id2 = setInterval(fetchTreasury, 1e4);
+    fetchTreasuryWithTimestamp();
+    const id2 = setInterval(fetchTreasuryWithTimestamp, 3e4);
     return () => clearInterval(id2);
   }, [actor, setTreasuryState]);
   const allPlots = useGameStore((s2) => s2.plots);
@@ -111327,9 +115125,174 @@ function UniversePanel({ onClose, inline = false }) {
               ]
             },
             g2.tier
-          )) })
+          )) }),
+          emissionSchedule && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              className: "mt-4 space-y-1 border-t border-white/10 pt-3",
+              style: {
+                marginTop: 12,
+                paddingTop: 12,
+                borderTop: "1px solid rgba(255,255,255,0.1)"
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "div",
+                  {
+                    className: "flex justify-between text-sm",
+                    style: {
+                      display: "flex",
+                      justifyContent: "space-between",
+                      fontSize: 12,
+                      marginBottom: 4
+                    },
+                    children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: "#9ca3af" }, children: "Total Mined" }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { style: { color: "#4ade80" }, children: [
+                        (Number(emissionSchedule.totalFRNTRMined) / 1e8).toLocaleString(void 0, { maximumFractionDigits: 0 }),
+                        " ",
+                        "FRNTR"
+                      ] })
+                    ]
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "div",
+                  {
+                    className: "flex justify-between text-sm",
+                    style: {
+                      display: "flex",
+                      justifyContent: "space-between",
+                      fontSize: 12,
+                      marginBottom: 4
+                    },
+                    children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: "#9ca3af" }, children: "Remaining" }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { style: { color: "#22d3ee" }, children: [
+                        (Number(emissionSchedule.remainingMineable) / 1e8).toLocaleString(void 0, { maximumFractionDigits: 0 }),
+                        " ",
+                        "FRNTR"
+                      ] })
+                    ]
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "div",
+                  {
+                    className: "flex justify-between text-sm",
+                    style: {
+                      display: "flex",
+                      justifyContent: "space-between",
+                      fontSize: 12,
+                      marginBottom: 4
+                    },
+                    children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: "#9ca3af" }, children: "Supply Mined" }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { style: { color: "#facc15" }, children: [
+                        Number(emissionSchedule.percentMined).toFixed(1),
+                        "%"
+                      ] })
+                    ]
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "div",
+                  {
+                    className: "flex justify-between text-sm",
+                    style: {
+                      display: "flex",
+                      justifyContent: "space-between",
+                      fontSize: 12,
+                      marginBottom: 4
+                    },
+                    children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: "#9ca3af" }, children: "Daily Emission" }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { style: { color: "#f9fafb" }, children: [
+                        (Number(emissionSchedule.currentDailyEmissionRate) / 1e8).toLocaleString(void 0, { maximumFractionDigits: 0 }),
+                        " ",
+                        "FRNTR/day"
+                      ] })
+                    ]
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "div",
+                  {
+                    className: "flex justify-between text-sm",
+                    style: {
+                      display: "flex",
+                      justifyContent: "space-between",
+                      fontSize: 12
+                    },
+                    children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: "#9ca3af" }, children: "Est. Days Left" }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: "#f9fafb" }, children: Number(emissionSchedule.projectedDaysRemaining) > 0 ? Number(
+                        emissionSchedule.projectedDaysRemaining
+                      ).toLocaleString() : "∞" })
+                    ]
+                  }
+                )
+              ]
+            }
+          )
         ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(SectionTitle, { children: "Treasury Status" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            style: {
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              marginBottom: 8
+            },
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(SectionTitle, { children: "Treasury Status" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "button",
+                {
+                  type: "button",
+                  onClick: async () => {
+                    if (!actor) return;
+                    try {
+                      const result = await actor.getTreasuryBalancesWithTimestamp();
+                      setPotBalances({
+                        dev: Number(result.devPot) / 1e8,
+                        leaderboard: Number(result.leaderboardPot) / 1e8,
+                        liquidity: Number(result.liquidityPot) / 1e8
+                      });
+                      setTreasuryLastUpdated(result.lastUpdated);
+                      setTreasuryState({
+                        developer: result.devPot,
+                        leaderboard: result.leaderboardPot,
+                        liquidity: result.liquidityPot
+                      });
+                    } catch (e) {
+                      console.error(e);
+                    }
+                  },
+                  style: {
+                    fontSize: 11,
+                    color: "#22d3ee",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    textDecoration: "underline",
+                    padding: 0
+                  },
+                  children: "Refresh"
+                }
+              ),
+              treasuryLastUpdated && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { style: { fontSize: 11, color: "#6b7280" }, children: [
+                "Updated",
+                " ",
+                Math.floor(
+                  (Date.now() - Number(treasuryLastUpdated) / 1e6) / 1e3
+                ),
+                "s ago"
+              ] })
+            ]
+          }
+        ),
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { marginBottom: 10 }, children: frntrIcpPrice !== null && frntrIcpPrice > 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs(
           "span",
           {
@@ -112117,6 +116080,270 @@ function UniversePanel({ onClose, inline = false }) {
                   ]
                 }
               ) }) })
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            style: {
+              borderTop: `1px solid ${BORDER$1}`,
+              paddingTop: 16,
+              marginTop: 8
+            },
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "button",
+                {
+                  type: "button",
+                  style: {
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    cursor: "pointer",
+                    marginBottom: healthExpanded ? 12 : 0,
+                    background: "none",
+                    border: "none",
+                    padding: 0,
+                    width: "100%",
+                    textAlign: "left"
+                  },
+                  onClick: () => setHealthExpanded((h2) => !h2),
+                  "aria-expanded": healthExpanded,
+                  children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(SectionTitle, { children: "ECONOMY HEALTH" }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: CYAN_DIM$1, fontSize: 12 }, children: healthExpanded ? "▲" : "▼" })
+                  ]
+                }
+              ),
+              healthExpanded && economyHealth && (() => {
+                const score = Number(economyHealth.healthScore);
+                const scoreColor = score >= 70 ? "#22c55e" : score >= 40 ? "#eab308" : "#ef4444";
+                const statusBg = score >= 70 ? "rgba(34,197,94,0.15)" : score >= 40 ? "rgba(234,179,8,0.15)" : "rgba(239,68,68,0.15)";
+                return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "div",
+                    {
+                      style: {
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        marginBottom: 12
+                      },
+                      children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "div",
+                          {
+                            style: {
+                              width: 80,
+                              height: 80,
+                              borderRadius: "50%",
+                              background: `conic-gradient(${scoreColor} ${score * 3.6}deg, rgba(255,255,255,0.05) 0deg)`,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              position: "relative"
+                            },
+                            children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                              "div",
+                              {
+                                style: {
+                                  width: 60,
+                                  height: 60,
+                                  borderRadius: "50%",
+                                  background: "rgba(0,0,0,0.8)",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  alignItems: "center",
+                                  justifyContent: "center"
+                                },
+                                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                  "span",
+                                  {
+                                    style: {
+                                      color: scoreColor,
+                                      fontSize: 18,
+                                      fontWeight: 700,
+                                      lineHeight: 1
+                                    },
+                                    children: score
+                                  }
+                                )
+                              }
+                            )
+                          }
+                        ),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "div",
+                          {
+                            style: {
+                              marginTop: 6,
+                              padding: "2px 10px",
+                              borderRadius: 4,
+                              background: statusBg,
+                              color: scoreColor,
+                              fontSize: 11,
+                              fontWeight: 700,
+                              letterSpacing: 1
+                            },
+                            children: economyHealth.healthStatus
+                          }
+                        )
+                      ]
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      style: {
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr",
+                        gap: 6,
+                        marginBottom: 10
+                      },
+                      children: [
+                        {
+                          label: "Inflation Rate",
+                          value: economyHealth.inflationRate.toFixed(2),
+                          note: "< 2 healthy"
+                        },
+                        {
+                          label: "Circulation Ratio",
+                          value: economyHealth.circulationRatio.toFixed(2),
+                          note: ""
+                        },
+                        {
+                          label: "Emission Pace",
+                          value: `${economyHealth.emissionPacePercent.toFixed(1)}%`,
+                          note: economyHealth.emissionPaceStatus.replace("_", " ")
+                        },
+                        {
+                          label: "Days Remaining",
+                          value: Number(
+                            economyHealth.projectedDaysRemaining
+                          ).toLocaleString(),
+                          note: ""
+                        }
+                      ].map(({ label, value, note }) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                        "div",
+                        {
+                          style: {
+                            background: "rgba(255,255,255,0.04)",
+                            border: `1px solid ${BORDER$1}`,
+                            borderRadius: 6,
+                            padding: "6px 8px"
+                          },
+                          children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsx(
+                              "div",
+                              {
+                                style: {
+                                  color: TEXT_DIM,
+                                  fontSize: 9,
+                                  letterSpacing: 1,
+                                  marginBottom: 2
+                                },
+                                children: label
+                              }
+                            ),
+                            /* @__PURE__ */ jsxRuntimeExports.jsx(
+                              "div",
+                              {
+                                style: { color: CYAN$1, fontSize: 14, fontWeight: 600 },
+                                children: value
+                              }
+                            ),
+                            note && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { color: TEXT_DIM, fontSize: 9 }, children: note })
+                          ]
+                        },
+                        label
+                      ))
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { marginBottom: 4 }, children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "div",
+                      {
+                        style: {
+                          color: TEXT_DIM,
+                          fontSize: 9,
+                          letterSpacing: 1,
+                          marginBottom: 6
+                        },
+                        children: "TREASURY RUNWAY"
+                      }
+                    ),
+                    [
+                      {
+                        label: "Dev",
+                        months: economyHealth.treasuryRunwayDevMonths
+                      },
+                      {
+                        label: "Leaderboard",
+                        months: economyHealth.treasuryRunwayLeaderboardMonths
+                      },
+                      {
+                        label: "Liquidity",
+                        months: economyHealth.treasuryRunwayLiquidityMonths
+                      }
+                    ].map(({ label, months }) => {
+                      const capped = Math.min(months, 24);
+                      const pct = capped / 24 * 100;
+                      const barColor = months >= 12 ? "#22c55e" : months >= 3 ? "#eab308" : "#ef4444";
+                      return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { marginBottom: 5 }, children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                          "div",
+                          {
+                            style: {
+                              display: "flex",
+                              justifyContent: "space-between",
+                              marginBottom: 2
+                            },
+                            children: [
+                              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: TEXT_DIM, fontSize: 10 }, children: label }),
+                              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: barColor, fontSize: 10 }, children: months >= 999 ? "∞" : `${months.toFixed(1)}mo` })
+                            ]
+                          }
+                        ),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "div",
+                          {
+                            style: {
+                              background: "rgba(255,255,255,0.06)",
+                              borderRadius: 2,
+                              height: 4
+                            },
+                            children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                              "div",
+                              {
+                                style: {
+                                  width: `${pct}%`,
+                                  height: "100%",
+                                  background: barColor,
+                                  borderRadius: 2,
+                                  transition: "width 0.5s ease"
+                                }
+                              }
+                            )
+                          }
+                        )
+                      ] }, label);
+                    })
+                  ] })
+                ] });
+              })(),
+              healthExpanded && !economyHealth && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "div",
+                {
+                  style: {
+                    color: TEXT_DIM,
+                    fontSize: 11,
+                    textAlign: "center",
+                    padding: "12px 0"
+                  },
+                  children: "Loading health data..."
+                }
+              )
             ]
           }
         ),

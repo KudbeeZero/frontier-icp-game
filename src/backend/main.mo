@@ -193,6 +193,10 @@ type PlayerState = {
   stable var stableMissionStatus   : [(Principal, [(Text, Bool, ?Int)])]   = [];
   // Player claim counts (for mission tracking)
   stable var stablePlayerClaimCounts : [(Principal, Nat)]                  = [];
+  // Player survey counts (for #surveyCount mission requirement)
+  stable var stablePlayerSurveyCounts : [(Principal, Nat)]                 = [];
+  // Per-player burn contributions: principal -> total FRNTR burned by this player (in e8s)
+  stable var stablePlayerBurnContributions : [(Principal, Nat)]            = [];
   stable var stableStatsState      : (Nat, Nat, Nat)                       = (0, 0, 0); // (totalFRNTRBurned, totalFRNTRMined, activePlayers)
   stable var stablePlotSoldCount   : Nat                                   = 0;
   stable var stableSubParcels      : [(Text, SubParcel)]                   = [];
@@ -205,6 +209,11 @@ type PlayerState = {
   // Economy snapshots — periodic point-in-time records of global economy state.
   stable var stableEconomySnapshots : [Types.EconomySnapshot]                  = [];
   stable var stableLastSnapshotTime : Int                                       = 0;
+  // Analytics & Economy Health stable vars
+  stable var stablePlayerActivity  : [(Principal, Int)]             = [];
+  stable var stableFunnelCounters  : (Nat, Nat, Nat, Nat)           = (0, 0, 0, 0);
+  stable var stableRevenueHistory  : [(Int, Nat)]                   = [];
+  stable var stableAnomalyLog      : [(Principal, Text, Int, Text)] = [];
   // ICP/USD price oracle — cached from XRC canister, updated every 15 minutes in heartbeat.
   // Units: micro-USD (e.g. 1_000_000 = $1.00, 12_340_000 = $12.34).
   // Initial fallback: $10.00 until first successful XRC fetch.
@@ -247,7 +256,10 @@ type PlayerState = {
     )
   );
   // Player claim counts
-  let playerClaimCounts = Map.fromIter<Principal, Nat>(stablePlayerClaimCounts.vals());
+  let playerClaimCounts  = Map.fromIter<Principal, Nat>(stablePlayerClaimCounts.vals());
+  let playerSurveyCounts = Map.fromIter<Principal, Nat>(stablePlayerSurveyCounts.vals());
+  // Per-player burn contributions map
+  let playerBurnContributions = Map.fromIter<Principal, Nat>(stablePlayerBurnContributions.vals());
   // Sub-parcels map: subParcelId (Text) -> SubParcel
   let subParcels     = Map.fromIter<Text, SubParcel>(stableSubParcels.vals());
   // Survey map: surveyKey -> Survey
@@ -256,6 +268,16 @@ type PlayerState = {
   let actionAuditLog = Map.fromIter<Int, GameTypes.ActionAuditEntry>(stableActionAuditLog.vals());
   // Auto-increment counter for audit log entries
   let auditState = { var nextIndex : Int = stableActionAuditLog.size() };
+  // Analytics data structures
+  let playerActivity = Map.fromIter(stablePlayerActivity.vals());
+  var revenueHistory : [(Int, Nat)] = stableRevenueHistory;
+  var anomalyLog : [(Principal, Text, Int, Text)] = stableAnomalyLog;
+  let funnelCounters = {
+    var loggedIn      : Nat = stableFunnelCounters.0;
+    var boughtPlot    : Nat = stableFunnelCounters.1;
+    var upgradedPlot  : Nat = stableFunnelCounters.2;
+    var claimedTokens : Nat = stableFunnelCounters.3;
+  };
   // Economy snapshots — growable list populated by heartbeat and upgrade hooks
   var economySnapshots : [Types.EconomySnapshot] = stableEconomySnapshots;
   var lastSnapshotTime : Int = stableLastSnapshotTime;
@@ -269,6 +291,35 @@ type PlayerState = {
   };
   // Plot sold counter — loaded from stable var
   let plotSoldState = { var count : Nat = stablePlotSoldCount };
+  /// Helper: bump playerActivity timestamp for a caller.
+  private func bumpActivity(p : Principal) {
+    playerActivity.add(p, Time.now());
+  };
+
+  /// Helper: append to revenueHistory (capped at 10_000).
+  private func addRevenueEntry(ts : Int, icpE8s : Nat) {
+    let current = revenueHistory;
+    if (current.size() >= 10_000) {
+      revenueHistory := Array.tabulate<(Int, Nat)>(current.size(), func(i) {
+        if (i < current.size() - 1) current[i + 1] else (ts, icpE8s)
+      });
+    } else {
+      revenueHistory := current.concat([(ts, icpE8s)]);
+    };
+  };
+
+  /// Helper: append to anomalyLog (capped at 1_000).
+  private func addAnomaly(p : Principal, anomalyType : Text, ts : Int, details : Text) {
+    let current = anomalyLog;
+    if (current.size() >= 1_000) {
+      anomalyLog := Array.tabulate<(Principal, Text, Int, Text)>(current.size(), func(i) {
+        if (i < current.size() - 1) current[i + 1] else (p, anomalyType, ts, details)
+      });
+    } else {
+      anomalyLog := current.concat([(p, anomalyType, ts, details)]);
+    };
+  };
+
   /// Helper: build a TokenTypes.Account for a principal with no subaccount.
   private func toFrntrAccount(p : Principal) : TokenTypes.Account {
     { owner = p; subaccount = null };
@@ -591,6 +642,9 @@ type PlayerState = {
 
     logAuditEntry(caller, "claimAccumulatedTokens", "confirmed", ?plotId, ?accrued, null,
       "Claimed " # accrued.toText() # " e8s from plot " # plotId);
+    funnelCounters.claimedTokens += 1;
+    bumpActivity(caller);
+    if (accrued > 10_000_000_000_000) { addAnomaly(caller, "large_claim", Time.now(), "Claimed >100K FRNTR in one transaction") };
     #ok(accrued);
   };
 
@@ -676,6 +730,9 @@ type PlayerState = {
 
     logAuditEntry(caller, "claimAllPlots", "confirmed", null, ?totalAccrued, null,
       "Claimed " # totalAccrued.toText() # " e8s across " # claimedCount.toText() # " plots");
+    funnelCounters.claimedTokens += 1;
+    bumpActivity(caller);
+    if (totalAccrued > 10_000_000_000_000) { addAnomaly(caller, "large_claim", Time.now(), "Claimed >100K FRNTR via claimAll") };
     #ok({ amount = totalAccrued; plotsClaimed = claimedCount });
   };
 
@@ -990,6 +1047,9 @@ type PlayerState = {
     // Transfer confirmed — now safely update tier and burn counter
     statsState.totalFRNTRBurned += cost;
     generatorTiers.add(plotId, nextTier);
+    // Update per-player burn contributions
+    let prevBurnGen : Nat = switch (playerBurnContributions.get(caller)) { case (?n) n; case (null) 0 };
+    playerBurnContributions.add(caller, prevBurnGen + cost);
 
     // Notify treasury with the tax amount (non-blocking — ignore failures)
     if (treasuryState.treasuryPrincipal != "aaaaa-aa") {
@@ -1012,6 +1072,8 @@ type PlayerState = {
     logAuditEntry(caller, "upgradeGenerator", "confirmed", ?plotId, ?cost,
       ?GameLib.tierName(nextTier),
       "Upgraded plot " # plotId # " to " # GameLib.tierName(nextTier) # " for " # cost.toText() # " e8s");
+    funnelCounters.upgradedPlot += 1;
+    bumpActivity(caller);
     #ok(view);
   };
 
@@ -1179,28 +1241,34 @@ type PlayerState = {
   };
 
   public shared ({ caller }) func getPlayerState() : async {
-    ownedPlots         : [Text];
-    plotIds            : [Text];
-    frntBalance        : Nat;
-    icpBalance         : Nat;
-    resourceBalances   : [(GameTypes.ResourceType, Float)];
-    generatorTiersMap  : [(Text, Nat)];
-    username           : ?Text;
-    lastFaucetTime     : ?Int;
-    iron               : Nat;
-    fuel               : Nat;
-    crystal            : Nat;
-    plotsOwned         : Nat;
-    combatVictories    : Nat;
-    totalFRNTRBurned   : Float;
+    ownedPlots          : [Text];
+    plotIds             : [Text];
+    frntBalance         : Nat;
+    confirmedBalance    : Nat;
+    icpBalance          : Nat;
+    resourceBalances    : [(GameTypes.ResourceType, Float)];
+    generatorTiersMap   : [(Text, Nat)];
+    username            : ?Text;
+    lastFaucetTime      : ?Int;
+    iron                : Nat;
+    fuel                : Nat;
+    crystal             : Nat;
+    plotsOwned          : Nat;
+    combatVictories     : Nat;
+    totalFRNTRBurned    : Float;
     passiveIncomePerDay : Float;
+    totalDailyRate      : Nat;
+    totalUnclaimed      : Nat;
+    burnContributed     : Nat;
   } {
     if (caller.isAnonymous()) {
       return {
-        ownedPlots = []; plotIds = []; frntBalance = 0; icpBalance = 0; resourceBalances = [];
+        ownedPlots = []; plotIds = []; frntBalance = 0; confirmedBalance = 0;
+        icpBalance = 0; resourceBalances = [];
         generatorTiersMap = []; username = null; lastFaucetTime = null;
         iron = 0; fuel = 0; crystal = 0; plotsOwned = 0;
         combatVictories = 0; totalFRNTRBurned = 0.0; passiveIncomePerDay = 0.0;
+        totalDailyRate = 0; totalUnclaimed = 0; burnContributed = 0;
       };
     };
     let base = switch (players.get(caller)) {
@@ -1210,6 +1278,10 @@ type PlayerState = {
 
     var ownedList : [Text] = [];
     var genList : [(Text, Nat)] = [];
+    var callerDailyRate : Nat = 0;
+    var callerUnclaimed : Nat = 0;
+    let nowNs : Int = Time.now();
+    let dayNs : Int = 86_400_000_000_000;
     for ((plotId, plot) in plots.entries()) {
       if (plot.owner == ?caller) {
         ownedList := ownedList.concat([plotId]);
@@ -1224,6 +1296,16 @@ type PlayerState = {
           case (?#TierVI)  { 6 };
         };
         genList := genList.concat([(plotId, tierNat)]);
+        let dailyRate : Nat = if (tierNat < TIER_DAILY_RATES.size()) TIER_DAILY_RATES[tierNat] else 0;
+        callerDailyRate += dailyRate;
+        let lastClaim : Int = switch (plotClaimTimes.get(plotId)) {
+          case (?t) { t };
+          case (null) { switch (claimTimes.get(caller)) { case (?t) t; case (null) 0 } };
+        };
+        if (lastClaim > 0 and nowNs > lastClaim) {
+          let elapsedSec : Int = (nowNs - lastClaim) / 1_000_000_000;
+          callerUnclaimed += Int.abs(elapsedSec) * dailyRate / 86400;
+        };
       };
     };
 
@@ -1249,10 +1331,17 @@ type PlayerState = {
     };
     let icpBalance : Nat = await icpLedger.icrc1_balance_of({ owner = caller; subaccount = null });
 
+    // burnContributed: per-player burn contributions stored in playerBurnContributions map
+    let burnContributed : Nat = switch (playerBurnContributions.get(caller)) {
+      case (?n) { n };
+      case (null) { 0 };
+    };
+
     {
       ownedPlots          = ownedList;
       plotIds             = ownedList;
       frntBalance;
+      confirmedBalance    = frntBalance;
       icpBalance;
       resourceBalances;
       generatorTiersMap   = genList;
@@ -1265,6 +1354,9 @@ type PlayerState = {
       combatVictories     = base.combatVictories;
       totalFRNTRBurned    = base.totalFRNTRBurned;
       passiveIncomePerDay = computePassiveIncomePerDay(caller);
+      totalDailyRate      = callerDailyRate;
+      totalUnclaimed      = callerUnclaimed;
+      burnContributed;
     };
   };
 
@@ -1470,6 +1562,7 @@ func missileStats(missileType : Text) : MissileStats {
     let player = switch (players.get(caller)) {
       case (null) {
         statsState.activePlayers += 1;
+        funnelCounters.loggedIn += 1;
         let newPlayer : PlayerState = emptyPlayerState();
         players.add(caller, newPlayer);
         newPlayer;
@@ -1543,6 +1636,9 @@ func missileStats(missileType : Text) : MissileStats {
 
     logAuditEntry(caller, "purchasePlot", "confirmed", ?plotId, ?icpAmt, null,
       "Purchased plot " # plotId # " for " # icpAmt.toText() # " e8s ICP");
+    funnelCounters.boughtPlot += 1;
+    bumpActivity(caller);
+    addRevenueEntry(Time.now(), icpAmt);
     #ok("Purchase successful, congrats!");
   };
 
@@ -1944,6 +2040,74 @@ func missileStats(missileType : Text) : MissileStats {
       devPot         = devBal;
       leaderboardPot = ldrBal;
       liquidityPot   = liqBal;
+    };
+  };
+
+  /// Same as getTreasuryBalances() but also returns the timestamp of the
+  /// query so the frontend can display "last updated X seconds ago".
+  public func getTreasuryBalancesWithTimestamp() : async {
+    devPot        : Nat;
+    leaderboardPot : Nat;
+    liquidityPot  : Nat;
+    lastUpdated   : Int;
+  } {
+    let icpLedgerBal = actor(ICP_LEDGER_ID) : actor {
+      icrc1_balance_of : ({ owner : Principal; subaccount : ?Blob }) -> async Nat;
+    };
+    let self = Principal.fromText(selfPrincipalText);
+    let mkSub = func(index : Nat8) : Blob {
+      let bytes : [Nat8] = Array.tabulate<Nat8>(32, func(i) { if (i == 31) index else 0 });
+      Blob.fromArray(bytes);
+    };
+    let devBal = await icpLedgerBal.icrc1_balance_of({ owner = self; subaccount = ?mkSub(1) });
+    let ldrBal = await icpLedgerBal.icrc1_balance_of({ owner = self; subaccount = ?mkSub(2) });
+    let liqBal = await icpLedgerBal.icrc1_balance_of({ owner = self; subaccount = ?mkSub(3) });
+    {
+      devPot         = devBal;
+      leaderboardPot = ldrBal;
+      liquidityPot   = liqBal;
+      lastUpdated    = Time.now();
+    };
+  };
+
+  /// Returns the FRNTR emission schedule: how much has been mined, how much
+  /// remains, the current daily rate, and a projection of days until exhaustion.
+  /// Uses calcTotalGlobalDailyOutput() (sync, iterates stable state) so this
+  /// can be a query function.
+  public query func getEmissionSchedule() : async {
+    totalMineableSupply    : Nat;
+    totalFRNTRMined        : Nat;
+    remainingMineable      : Nat;
+    percentMined           : Nat;
+    currentDailyEmissionRate : Nat;
+    projectedDaysRemaining : Nat;
+  } {
+    // 5 billion FRNTR in e8s
+    let totalMineableSupply : Nat = 5_000_000_000 * 100_000_000;
+    let totalFRNTRMined     : Nat = statsState.totalFRNTRMined;
+    let remainingMineable   : Nat = if (totalFRNTRMined >= totalMineableSupply) {
+      0
+    } else {
+      totalMineableSupply - totalFRNTRMined
+    };
+    let percentMined : Nat = if (totalMineableSupply == 0) {
+      0
+    } else {
+      (totalFRNTRMined * 100) / totalMineableSupply
+    };
+    let currentDailyEmissionRate : Nat = calcTotalGlobalDailyOutput();
+    let projectedDaysRemaining   : Nat = if (currentDailyEmissionRate == 0) {
+      0
+    } else {
+      remainingMineable / currentDailyEmissionRate
+    };
+    {
+      totalMineableSupply;
+      totalFRNTRMined;
+      remainingMineable;
+      percentMined;
+      currentDailyEmissionRate;
+      projectedDaysRemaining;
     };
   };
 
@@ -2351,6 +2515,9 @@ func missileStats(missileType : Text) : MissileStats {
 
     // Track the burn in global stats
     statsState.totalFRNTRBurned += cost;
+    // Update per-player burn contributions
+    let prevBurnSurvey : Nat = switch (playerBurnContributions.get(caller)) { case (?n) n; case (null) 0 };
+    playerBurnContributions.add(caller, prevBurnSurvey + cost);
 
     let thirtyMinNs : Nat = 1_800_000_000_000;
     let record : GameTypes.Survey = {
@@ -2661,24 +2828,67 @@ func missileStats(missileType : Text) : MissileStats {
     #ok(award);
   };
 
-  /// Thin wrapper around completeSurvey — returns the SurveyResult report alongside the
-  /// token award so the frontend can display both in a single call.
-  /// Returns #err if the survey timer is not yet complete or no survey exists.
-  /// Thin wrapper around completeSurvey — returns the SurveyResult report alongside the
-  /// token award so the frontend can display both in a single call.
+  /// Lightweight query: returns a compact timer status for the frontend countdown.
+  /// status = "locked" | "pending" | "ready" | "claimed"
+  /// timeRemainingSeconds = 0 when locked, ready, or claimed; countdown seconds when pending.
+  public query func getSurveyTimerStatus(plotId : Text, surveyor : Principal)
+      : async { status : Text; timeRemainingSeconds : Nat; plotId : Text } {
+    let key = surveyKey(plotId, surveyor);
+    let defaultResult = { status = "locked"; timeRemainingSeconds = 0; plotId };
+    let record = switch (surveys.get(key)) {
+      case (null)  { return defaultResult };
+      case (?r)    { r };
+    };
+    switch (record.status) {
+      case (#Locked)    { defaultResult };
+      case (#Completed) { { status = "claimed"; timeRemainingSeconds = 0; plotId } };
+      case (#InProgress) {
+        let now : Int = Time.now();
+        let unlockTime : Int = record.startTime + record.duration.toInt();
+        if (now >= unlockTime) {
+          { status = "ready"; timeRemainingSeconds = 0; plotId }
+        } else {
+          let remaining : Nat = Int.abs(unlockTime - now) / 1_000_000_000;
+          { status = "pending"; timeRemainingSeconds = remaining; plotId }
+        };
+      };
+    };
+  };
+
+  /// Collect survey reward in one call: returns the report + token award.
+  /// Server-side enforced: REJECTS if the 30-minute timer has not expired (based on
+  /// canister Time.now(), not client time). Also rejects double-claims.
   /// Returns #err if the survey timer is not yet complete or no survey exists.
   public shared ({ caller }) func claimSurveyReward(plotId : Text)
       : async { #ok : { report : GameTypes.SurveyResult; rewardE8s : Nat }; #err : Text } {
     if (caller.isAnonymous()) { return #err("Must be authenticated") };
 
-    // Guard: ensure a survey record exists before delegating to completeSurvey.
     let key = surveyKey(plotId, caller);
-    switch (surveys.get(key)) {
+
+    // Guard 1: survey must exist.
+    let record = switch (surveys.get(key)) {
       case (null) { return #err("No active survey found for this plot") };
-      case (?_)   {};
+      case (?r)   { r };
     };
 
-    // Delegate minting + status update to completeSurvey.
+    // Guard 2: prevent double-claim — already collected.
+    switch (record.status) {
+      case (#Locked)    { return #err("Survey has not been started for this plot") };
+      case (#Completed) { return #err("Survey reward already collected for this plot") };
+      case (#InProgress) {}; // proceed to timer check
+    };
+
+    // Guard 3: server-side timer enforcement — canister time, not client time.
+    let now : Int = Time.now();
+    let unlockTime : Int = record.startTime + record.duration.toInt();
+    if (now < unlockTime) {
+      let remaining : Nat = Int.abs(unlockTime - now) / 1_000_000_000;
+      return #err(
+        "Survey not ready. " # remaining.toText() # " seconds remaining before you can collect."
+      );
+    };
+
+    // Timer has expired — delegate minting + status update to completeSurvey.
     switch (await completeSurvey(plotId)) {
       case (#err(e)) { return #err(e) };
       case (#ok(awardE8s)) {
@@ -2694,6 +2904,9 @@ func missileStats(missileType : Text) : MissileStats {
             buildSurveyResult(plotId);
           };
         };
+        // Increment survey count for mission tracking
+        let prevSurveyCount : Nat = switch (playerSurveyCounts.get(caller)) { case (?n) n; case (null) 0 };
+        playerSurveyCounts.add(caller, prevSurveyCount + 1);
         #ok({ report; rewardE8s = awardE8s });
       };
     };
@@ -2826,6 +3039,14 @@ func missileStats(missileType : Text) : MissileStats {
     lastPriceValue;
   };
 
+  /// Returns the cached ICP/USD price as a Nat in whole cents (e.g. 1045 = $10.45).
+  /// Safe for frontend consumption without floating-point issues.
+  /// Returns 0 if the price has never been fetched.
+  public query func getIcpUsdPriceNat() : async Nat {
+    let cents : Float = lastPriceValue * 100.0;
+    if (cents <= 0.0) { 0 } else { Int.abs(cents.toInt()) };
+  };
+
   /// Returns the currently approved DEX canister principal for liquidity withdrawals.
   /// Set via setApprovedLiquidityCanister (admin only).
   public query func getApprovedLiquidityCanister() : async ?Text {
@@ -2843,6 +3064,7 @@ func missileStats(missileType : Text) : MissileStats {
     #holdFRNTR     : Nat;
     #claimTokens   : Nat;
     #reachLeaderboardTop : Nat;
+    #surveyCount   : Nat;
   };
 
   type Mission = {
@@ -2864,8 +3086,53 @@ func missileStats(missileType : Text) : MissileStats {
     { id = "mission_8"; title = "Leaderboard Contender"; description = "Reach top 10 on the leaderboard";   rewardE8s = 3_000_000_000; requirement = #reachLeaderboardTop(10) },
   ];
 
+  /// Flat MissionDefinition type for frontend consumption.
+  public type MissionDefinition = {
+    id               : Text;
+    title            : Text;
+    description      : Text;
+    reward           : Nat;
+    requirementType  : Text;
+    requirementValue : Nat;
+  };
+
   /// Returns the full mission list.
   public query func getMissions() : async [Mission] { MISSIONS };
+
+  /// Returns flat MissionDefinition records for easy frontend use.
+  public query func getMissionDefinitions() : async [MissionDefinition] {
+    MISSIONS.map<Mission, MissionDefinition>(func(m) {
+      let (reqType, reqValue) : (Text, Nat) = switch (m.requirement) {
+        case (#purchasePlots(n))       { ("purchasePlots",       n) };
+        case (#upgradeToTier(n))       { ("upgradeToTier",       n) };
+        case (#surveyPlot)             { ("surveyPlot",          1) };
+        case (#holdFRNTR(n))           { ("holdFRNTR",           n) };
+        case (#claimTokens(n))         { ("claimTokens",         n) };
+        case (#reachLeaderboardTop(n)) { ("reachLeaderboardTop", n) };
+        case (#surveyCount(n))         { ("surveyCount",         n) };
+      };
+      {
+        id               = m.id;
+        title            = m.title;
+        description      = m.description;
+        reward           = m.rewardE8s;
+        requirementType  = reqType;
+        requirementValue = reqValue;
+      };
+    });
+  };
+
+  /// Returns [Text] of completed mission IDs for the caller.
+  public shared query ({ caller }) func getPlayerCompletedMissions() : async [Text] {
+    switch (missionStatus.get(caller)) {
+      case (null) { [] };
+      case (?inner) {
+        inner.toArray()
+          .filter(func((_, (ok, _))) { ok })
+          .map<(Text, (Bool, ?Int)), Text>(func((mid, _)) { mid });
+      };
+    };
+  };
 
   /// Returns each mission with the caller's completion status.
   public shared query ({ caller }) func getPlayerMissions() : async [{ mission : Mission; completed : Bool }] {
@@ -2942,6 +3209,10 @@ func missileStats(missileType : Text) : MissileStats {
           if (p == caller) { found := rank <= n; break search };
         };
         found;
+      };
+      case (#surveyCount(n)) {
+        let count = switch (playerSurveyCounts.get(caller)) { case (?c) c; case (null) 0 };
+        count >= n;
       };
     };
   };
@@ -3220,6 +3491,140 @@ func missileStats(missileType : Text) : MissileStats {
     }
   };
 
+
+  public query func getEconomyHealth() : async {
+    healthScore: Nat;
+    healthStatus: Text;
+    inflationRate: Float;
+    circulationRatio: Float;
+    emissionPacePercent: Float;
+    emissionPaceStatus: Text;
+    projectedDaysRemaining: Nat;
+    treasuryRunwayDevMonths: Float;
+    treasuryRunwayLeaderboardMonths: Float;
+    treasuryRunwayLiquidityMonths: Float;
+  } {
+    let minedF = Float.fromInt(statsState.totalFRNTRMined);
+    let burnedF = Float.fromInt(statsState.totalFRNTRBurned);
+    let inflationRate = minedF / Float.max(1.0, burnedF);
+    let totalUnclaimed = calcGlobalUnclaimedTokens();
+    let circulationRatio = minedF / Float.max(1.0, Float.fromInt(totalUnclaimed));
+    let totalMineable : Float = 500_000_000_000_000_000.0;
+    let emissionPacePercent = (minedF / totalMineable) * 100.0;
+    let dailyRate = calcTotalGlobalDailyOutput();
+    let projectedDays : Nat = if (dailyRate == 0) 99999 else {
+      let capE8s : Nat = 500_000_000_000_000_000;
+      let remaining = if (statsState.totalFRNTRMined < capE8s) capE8s - statsState.totalFRNTRMined else 0;
+      remaining / dailyRate
+    };
+    let now = Time.now();
+    let thirtyDaysNs : Int = 2_592_000_000_000_000;
+    var rev30d : Nat = 0;
+    for ((ts, amt) in revenueHistory.vals()) {
+      if (ts > now - thirtyDaysNs) { rev30d += amt };
+    };
+    let monthlyF = Float.fromInt(rev30d);
+    let devRunway = if (monthlyF < 1.0) 999.0 else Float.fromInt(treasuryPots.devPot) / monthlyF;
+    let lbRunway = if (monthlyF < 1.0) 999.0 else Float.fromInt(treasuryPots.leaderboardPot) / monthlyF;
+    let liqRunway = if (monthlyF < 1.0) 999.0 else Float.fromInt(treasuryPots.liquidityPot) / monthlyF;
+    var score : Int = 100;
+    if (inflationRate > 5.0) { score -= 30 } else if (inflationRate > 2.0) { score -= 15 };
+    if (circulationRatio < 0.2) { score -= 30 } else if (circulationRatio < 0.5) { score -= 20 };
+    if (emissionPacePercent > 90.0) { score -= 20 };
+    if (devRunway < 3.0) { score -= 15 };
+    if (lbRunway < 3.0) { score -= 15 };
+    if (liqRunway < 3.0) { score -= 15 };
+    let clampedScore = if (score < 0) 0 else if (score > 100) 100 else score;
+    let healthScore : Nat = Int.abs(clampedScore);
+    let healthStatus = if (healthScore >= 70) "HEALTHY" else if (healthScore >= 40) "WARNING" else "CRITICAL";
+    let emissionPaceStatus = if (emissionPacePercent > 60.0) "AHEAD" else if (emissionPacePercent < 20.0) "BEHIND" else "ON_TRACK";
+    { healthScore; healthStatus; inflationRate; circulationRatio; emissionPacePercent; emissionPaceStatus; projectedDaysRemaining = projectedDays; treasuryRunwayDevMonths = devRunway; treasuryRunwayLeaderboardMonths = lbRunway; treasuryRunwayLiquidityMonths = liqRunway }
+  };
+
+  public shared query(msg) func getPlayerAnalytics() : async {
+    totalPlayersEver: Nat;
+    activeLast24h: Nat;
+    activeLast7d: Nat;
+    activeLast30d: Nat;
+    loggedIn: Nat;
+    boughtPlot: Nat;
+    upgradedPlot: Nat;
+    claimedTokens: Nat;
+    topBiomes: [(Text, Nat)];
+    averagePlotsPerPlayer: Float;
+    averageTokensPerPlayer: Float;
+  } {
+    assert(msg.caller.toText() == adminState.adminPrincipal);
+    let now2 = Time.now();
+    let dayNs : Int = 86_400_000_000_000;
+    var a24 : Nat = 0; var a7d : Nat = 0; var a30d : Nat = 0;
+    for ((_, ts) in playerActivity.entries()) {
+      if (ts > now2 - dayNs) { a24 += 1 };
+      if (ts > now2 - 7 * dayNs) { a7d += 1 };
+      if (ts > now2 - 30 * dayNs) { a30d += 1 };
+    };
+    var biomeCountsArr : [(Text, Nat)] = [];
+    for ((_, plot) in plots.entries()) {
+      let b = plot.biome;
+      var found = false;
+      var newArr : [(Text, Nat)] = [];
+      for ((k, v) in biomeCountsArr.vals()) {
+        if (k == b) { newArr := newArr.concat([(k, v + 1)]); found := true }
+        else { newArr := newArr.concat([(k, v)]) };
+      };
+      if (not found) { newArr := newArr.concat([(b, 1)]) };
+      biomeCountsArr := newArr;
+    };
+    let sortedBiomes = biomeCountsArr.sort(func(a : (Text,Nat), bv : (Text,Nat)) : Order.Order {
+      if (a.1 > bv.1) #less else if (a.1 < bv.1) #greater else #equal
+    });
+    let top8 = if (sortedBiomes.size() > 8) Array.tabulate(8, func i = sortedBiomes[i]) else sortedBiomes;
+    let pc = players.size();
+    let ptc = plots.size();
+    var totalBal : Nat = 0;
+    for ((_, p) in players.entries()) { totalBal += p.frntBalance };
+    { totalPlayersEver = pc; activeLast24h = a24; activeLast7d = a7d; activeLast30d = a30d; loggedIn = funnelCounters.loggedIn; boughtPlot = funnelCounters.boughtPlot; upgradedPlot = funnelCounters.upgradedPlot; claimedTokens = funnelCounters.claimedTokens; topBiomes = top8; averagePlotsPerPlayer = Float.fromInt(ptc) / Float.max(1.0, Float.fromInt(pc)); averageTokensPerPlayer = Float.fromInt(totalBal) / Float.max(1.0, Float.fromInt(pc)) }
+  };
+
+  public shared query(msg) func getRevenueByPeriod(period : { #day; #week; #month }) : async {
+    totalIcpE8s: Nat;
+    devSplitE8s: Nat;
+    leaderboardSplitE8s: Nat;
+    liquiditySplitE8s: Nat;
+    usdEquivalent: Float;
+    transactionCount: Nat;
+  } {
+    assert(msg.caller.toText() == adminState.adminPrincipal);
+    let now3 = Time.now();
+    let windowNs : Int = switch(period) {
+      case (#day) 86_400_000_000_000;
+      case (#week) 604_800_000_000_000;
+      case (#month) 2_592_000_000_000_000;
+    };
+    var total : Nat = 0; var cnt : Nat = 0;
+    for ((ts, amt) in revenueHistory.vals()) {
+      if (ts > now3 - windowNs) { total += amt; cnt += 1 };
+    };
+    let devS = total / 4;
+    let lbS = total / 4;
+    let liqS = total - devS - lbS;
+    { totalIcpE8s = total; devSplitE8s = devS; leaderboardSplitE8s = lbS; liquiditySplitE8s = liqS; usdEquivalent = Float.fromInt(total) / 100_000_000.0 * 10.0; transactionCount = cnt }
+  };
+
+  public shared query(msg) func getAnomalies() : async {
+    anomalies: [{ principal: Principal; anomalyType: Text; timestamp: Int; details: Text }];
+    totalCount: Nat;
+  } {
+    assert(msg.caller.toText() == adminState.adminPrincipal);
+    let mapped = anomalyLog.map(
+      func((p, t, ts, d)) = { principal = p; anomalyType = t; timestamp = ts; details = d }
+    );
+    let sorted2 = mapped.sort(func(a : { timestamp: Int; principal: Principal; anomalyType: Text; details: Text }, b : { timestamp: Int; principal: Principal; anomalyType: Text; details: Text }) : Order.Order {
+      if (a.timestamp > b.timestamp) #less else if (a.timestamp < b.timestamp) #greater else #equal
+    });
+    { anomalies = sorted2; totalCount = sorted2.size() }
+  };
+
   system func preupgrade() {
     takeSnapshot("canister_upgrade");
     stableEconomySnapshots := economySnapshots;
@@ -3245,12 +3650,16 @@ func missileStats(missileType : Text) : MissileStats {
     stableTreasuryPots   := (treasuryPots.devPot, treasuryPots.leaderboardPot, treasuryPots.liquidityPot);
     stableSurveys          := surveys.toArray();
     stablePlotClaimTimes   := plotClaimTimes.toArray();
-    stablePlayerClaimCounts := playerClaimCounts.toArray();
-    stableActionAuditLog    := actionAuditLog.toArray();
-    stablePlotClaimTimes    := plotClaimTimes.toArray();
-    stablePlayerClaimCounts := playerClaimCounts.toArray();
-    stableEconomySnapshots  := economySnapshots;
-    stableLastSnapshotTime  := lastSnapshotTime;
+    stablePlayerClaimCounts  := playerClaimCounts.toArray();
+    stablePlayerSurveyCounts := playerSurveyCounts.toArray();
+    stablePlayerBurnContributions := playerBurnContributions.toArray();
+    stableActionAuditLog     := actionAuditLog.toArray();
+    stableEconomySnapshots   := economySnapshots;
+    stableLastSnapshotTime   := lastSnapshotTime;
+    stablePlayerActivity := playerActivity.entries().toArray();
+    stableFunnelCounters := (funnelCounters.loggedIn, funnelCounters.boughtPlot, funnelCounters.upgradedPlot, funnelCounters.claimedTokens);
+    stableRevenueHistory := revenueHistory;
+    stableAnomalyLog := anomalyLog;
     // Serialize missionStatus nested maps
     let missionArr = missionStatus.toArray();
     stableMissionStatus := missionArr.map<(Principal, Map.Map<Text, (Bool, ?Int)>), (Principal, [(Text, Bool, ?Int)])>(
@@ -3276,9 +3685,14 @@ func missileStats(missileType : Text) : MissileStats {
     stableSubParcels       := [];
     stableSurveys          := [];
     stablePlotClaimTimes   := [];
-    stablePlayerClaimCounts := [];
-    stableMissionStatus    := [];
+    stablePlayerClaimCounts  := [];
+    stablePlayerSurveyCounts := [];
+    stableMissionStatus      := [];
+    stablePlayerBurnContributions := [];
     stableActionAuditLog   := [];
+    stablePlayerActivity := [];
+    stableRevenueHistory := [];
+    stableAnomalyLog := [];
     economySnapshots       := [];
     lastSnapshotTime       := 0;
     // Note: auditState.nextIndex intentionally keeps its heap value after upgrade;

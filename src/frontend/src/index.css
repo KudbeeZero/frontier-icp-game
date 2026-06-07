@@ -93,6 +93,15 @@
     --z-toast: 110;
     --z-overlay: 200;
     --z-critical: 9999;
+
+    --mining-card-glow: rgba(218, 145, 60, 0.3);
+    --mining-card-glow-active: rgba(218, 145, 60, 0.5);
+    --mining-card-border: rgba(218, 145, 60, 0.25);
+    --cmd-tab-active-bg: rgba(100, 220, 230, 0.15);
+    --cmd-tab-active-border: rgba(100, 220, 230, 0.6);
+    --cmd-panel-width: 320px;
+    --cmd-panel-gap: 12px;
+    --cmd-tab-height: 48px;
   }
 
   * {
@@ -496,4 +505,77 @@
   letter-spacing: 0.1em;
   color: oklch(var(--muted-foreground));
   margin-bottom: 0.25rem;
+}
+
+.mining-card-coming-soon {
+  background: rgba(30, 20, 10, 0.6);
+  border: 1px solid var(--mining-card-border);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 8px;
+  padding: 1rem;
+  box-shadow: 0 0 16px var(--mining-card-glow);
+  transition: all 0.3s ease-out;
+}
+
+.mining-card-coming-soon:hover {
+  border-color: rgba(218, 145, 60, 0.4);
+  box-shadow: 0 0 24px var(--mining-card-glow-active);
+}
+
+.cmd-tab {
+  padding: 0.75rem 1rem;
+  height: var(--cmd-tab-height);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px 6px 0 0;
+  cursor: pointer;
+  transition: all 0.2s ease-out;
+  border: 1px solid transparent;
+  border-bottom: none;
+  color: oklch(var(--muted-foreground));
+  font-weight: 500;
+}
+
+.cmd-tab:hover {
+  color: oklch(var(--foreground));
+  background: rgba(100, 220, 230, 0.08);
+}
+
+.cmd-tab.active {
+  background: var(--cmd-tab-active-bg);
+  border: 1px solid var(--cmd-tab-active-border);
+  border-bottom: 1px solid var(--cmd-tab-active-bg);
+  color: oklch(var(--primary));
+  box-shadow: 0 -4px 12px rgba(100, 220, 230, 0.2);
+}
+
+.cmd-panel-container {
+  width: var(--cmd-panel-width);
+  display: flex;
+  flex-direction: column;
+  gap: var(--cmd-panel-gap);
+  padding: 1rem;
+  @apply glass-dark;
+  border-radius: 12px;
+  border: 1px solid rgba(100, 220, 230, 0.3);
+}
+
+.cmd-tab-list {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid rgba(100, 220, 230, 0.2);
+  margin-bottom: 0.5rem;
+  padding-bottom: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.cmd-tab-content {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 300px;
+  padding-right: 0.5rem;
 }

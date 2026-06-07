@@ -79,21 +79,27 @@ module {
   // ---------------------------------------------------------------------------
 
   /// Build a GlobalStats snapshot from raw counters.
+  /// dailyEmission must be pre-computed by the caller (tier-accurate sum across all owned plots).
   public func buildGlobalStats(
-    plotsSold        : Nat,
-    totalFRNTRBurned : Nat,
-    totalFRNTRMined  : Nat,
-    activePlayers    : Nat,
+    plotsSold            : Nat,
+    totalFRNTRBurned     : Nat,
+    totalFRNTRMined      : Nat,
+    activePlayers        : Nat,
+    dailyEmission        : Nat,
+    totalUnclaimedTokens : Nat,
+    totalPlayers         : Nat,
   ) : CoreTypes.GlobalStats {
     let circulating : Nat =
       PRE_MINTED + totalFRNTRMined -
       (if (totalFRNTRBurned > PRE_MINTED + totalFRNTRMined) { PRE_MINTED + totalFRNTRMined } else { totalFRNTRBurned });
     {
-      circulatingSupply = circulating;
-      totalBurned       = totalFRNTRBurned;
-      totalPlotsOwned   = plotsSold;
-      activePlayers     = activePlayers;
-      dailyEmission     = plotsSold * 7;
+      circulatingSupply    = circulating;
+      totalBurned          = totalFRNTRBurned;
+      totalPlotsOwned      = plotsSold;
+      activePlayers        = activePlayers;
+      dailyEmission        = dailyEmission;
+      totalUnclaimedTokens = totalUnclaimedTokens;
+      totalPlayers         = totalPlayers;
     };
   };
 

@@ -5,11 +5,13 @@ module {
   /// Snapshot of global game economy stats — returned by getGlobalStats.
   /// Field names are intentionally short for clean frontend binding.
   public type GlobalStats = {
-    circulatingSupply : Nat;   // FRNTR currently in circulation (pre-minted minus burned, plus mined)
-    totalBurned       : Nat;   // total FRNTR removed from supply
-    totalPlotsOwned   : Nat;   // plots owned across all players
-    activePlayers     : Nat;   // number of distinct players with at least one interaction
-    dailyEmission     : Nat;   // current FRNTR emitted per day across all plots
+    circulatingSupply    : Nat;   // FRNTR currently in circulation (pre-minted minus burned, plus mined)
+    totalBurned          : Nat;   // total FRNTR removed from supply
+    totalPlotsOwned      : Nat;   // plots owned across all players
+    activePlayers        : Nat;   // number of distinct players with at least one interaction
+    dailyEmission        : Nat;   // current FRNTR emitted per day across all plots (tier-accurate)
+    totalUnclaimedTokens : Nat;   // total FRNTR accumulated but not yet claimed across all owned plots
+    totalPlayers         : Nat;   // total distinct players registered in the game
   };
 
   /// Full tokenomics snapshot — returned by getTokenomics.
